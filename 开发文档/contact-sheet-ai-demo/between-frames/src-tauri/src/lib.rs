@@ -41,10 +41,26 @@ pub fn run() {
             );
             app.manage(commands::Backend {
                 agent,
-                store,
-                cache,
+                store: store.clone(),
+                cache: cache.clone(),
                 imports: importer::ImportManager::default(),
                 grants: Default::default(),
+            });
+            // 启动后异步清一次孤儿缓存（M1-09）：不阻塞启动，失败只记录不影响使用。
+            let sweep_store = store.clone();
+            let sweep_cache = cache.clone();
+            tauri::async_runtime::spawn(async move {
+                let limit = std::env::var("BETWEEN_FRAMES_CACHE_LIMIT_BYTES")
+                    .ok()
+                    .and_then(|value| value.trim().parse::<u64>().ok())
+                    .unwrap_or(image_pipeline::DEFAULT_CACHE_LIMIT_BYTES);
+                if let Ok(hashes) = sweep_store.photo_hashes().await
+                    && let Ok(reclaimed) =
+                        image_pipeline::sweep_orphans(&sweep_cache, &hashes, limit)
+                    && reclaimed > 0
+                {
+                    eprintln!("缓存配额清理：回收 {reclaimed} 字节孤儿缓存");
+                }
             });
             Ok(())
         })

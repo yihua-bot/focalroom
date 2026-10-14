@@ -247,6 +247,14 @@ impl Store {
     pub async fn insert_photo(&self, id: &str, prepared: &PreparedPhoto) -> Result<bool> {
         CommandHandler::new(self).import_photo(id, prepared).await
     }
+    /// 全部照片的内容指纹（缓存清理的 live 集合；缓存按 hash 跨项目共享）。
+    pub async fn photo_hashes(&self) -> Result<Vec<String>> {
+        Ok(
+            sqlx::query_scalar("SELECT DISTINCT content_sha256 FROM photos")
+                .fetch_all(&self.pool)
+                .await?,
+        )
+    }
     pub async fn relink(
         &self,
         id: &str,

@@ -37,6 +37,75 @@ pub fn fingerprint(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+pub const DEFAULT_CACHE_LIMIT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// 缓存配额清理（M1-09 / M5）：删除不被任何 photo 行引用的孤儿缓存
+/// （重复导入、取消导入、照片删除后的残留）。被引用的缓存不动——
+/// UI 路径始终有效，零体验影响；引用缓存的淘汰需要懒重建支持，留真实用户反馈后评估。
+/// 返回清理的字节数；单文件删除失败跳过（只读卷等）不阻塞。
+pub fn sweep_orphans(cache: &Path, live_hashes: &[String], limit_bytes: u64) -> Result<u64> {
+    let entries = match std::fs::read_dir(cache) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => {
+            return Err(AppError::new(
+                "INVALID_PATH",
+                format!("缓存目录不可读：{error}"),
+            ));
+        }
+    };
+    let mut orphans: Vec<(PathBuf, std::time::SystemTime, u64)> = vec![];
+    let mut live_bytes: u64 = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        // 仅清理本应用命名规则的缓存文件（{hash}-320.jpg / {hash}-1400.jpg）。
+        let owned = match name
+            .strip_suffix("-320.jpg")
+            .or(name.strip_suffix("-1400.jpg"))
+        {
+            Some(hash) => hash,
+            None => continue,
+        };
+        let metadata = match entry.metadata() {
+            Ok(metadata) => metadata,
+            Err(_) => continue,
+        };
+        let size = metadata.len();
+        if live_hashes.iter().any(|live| live == owned) {
+            live_bytes += size;
+        } else {
+            let modified = metadata
+                .modified()
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            orphans.push((path, modified, size));
+        }
+    }
+    // 配额约束总占用（引用 + 孤儿）：超限时按最旧优先删孤儿，直到回到限额内。
+    let mut total = live_bytes;
+    for (_, _, size) in &orphans {
+        total += size;
+    }
+    if total <= limit_bytes {
+        return Ok(0);
+    }
+    orphans.sort_by_key(|(_, modified, _)| *modified);
+    let mut reclaimed = 0_u64;
+    for (path, _, size) in orphans {
+        if total <= limit_bytes {
+            break;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            reclaimed += size;
+            total = total.saturating_sub(size);
+        }
+    }
+    Ok(reclaimed)
+}
+
 pub fn prepare(path: &Path, cache: &Path) -> Result<PreparedPhoto> {
     let path = path.canonicalize()?;
     let extension = path

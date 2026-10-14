@@ -13,18 +13,19 @@ M4 报告归档于 [V1-M4-TEST-REPORT.md](V1-M4-TEST-REPORT.md)；M3 真实模�
 | 性能基线 | Release：导入 2.9s/200 张（70 张/秒）、决策 p95 23.0ms、投影 3.4ms | perf_baseline（--ignored 手动运行，退化守卫） | passed | 数字为本机（Apple Silicon），非跨硬件承诺 |
 | Beta 旅程 | 意图→导入 200→选片+备注→Mock 委托→双草案→假设纠正（AG-11 旅程级）→局部采纳→诊断→重启一致 | beta-journey E2E（真实后端 52.2s） | passed | 真实模型版本待 key |
 | 隐私文档 | PRIVACY.md（照片/上传/密钥/导出/诊断/边界） | 文档评审 | — | 证据删除语义待产品决定 |
-| M0–M4 回归 | 全部能力保留 | 43 Rust + 24 单测 + 16 预览 + 3 集成 | passed | — |
+| 缓存配额清理（M1-09 补） | 孤儿缓存（无 photo 引用）按最旧回收，默认 2GB；引用缓存/原图不动 | cache_quota 2 项测试 + verify-all 全量 | passed | 引用缓存淘汰待懒重建 |
+| M0–M4 回归 | 全部能力保留 | 45 Rust + 28 单测 + 16 预览 + 3 集成 | passed | — |
 
 ## 自动化结果（2026-10-14 18:30 全量复验）
 
 | 检查 | 结果 |
 |---|---|
-| cargo test（target-v1，debug） | passed，43 tests（agent_runtime 13、agent_vision 4、agent_memory 4、command_history 10、local_core 10、keychain 2） |
+| cargo test（target-v1，debug） | passed，45 tests（agent_runtime 13、agent_vision 4、agent_memory 4、command_history 10、local_core 10、keychain 2、cache_quota 2） |
 | cargo test --release --test perf_baseline | passed（数字见上，--ignored 手动运行） |
 | cargo fmt / 严格 Clippy（含 integration-harness） | passed，0 warnings |
 | cargo build --release --bin between-frames | passed（unsigned） |
 | npm run typecheck / npm run lint | passed，0 warnings（eslint 忽略构建产物目录） |
-| npm run test | passed，6 files / 24 tests |
+| npm run test | passed，7 files / 28 tests |
 | npm run test:e2e | passed，16 tests |
 | CARGO_TARGET_DIR="target-v1" npm run test:integration | passed，3 tests（agent-core、local-core、beta-journey 52.2s） |
 
