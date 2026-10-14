@@ -1,0 +1,482 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Between Frames M1 GUI command request v1.1",
+  "type": "object",
+  "properties": {
+    "commandId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "expectedProjectRevision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "causationId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 160
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "command": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "CreateProject"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "brief": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 1500
+            }
+          },
+          "required": [
+            "type",
+            "title",
+            "brief"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "UpdateProject"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "brief": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 1500
+            }
+          },
+          "required": [
+            "type",
+            "title",
+            "brief"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "UpdateProjectBrief"
+            },
+            "brief": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 1500
+            }
+          },
+          "required": [
+            "type",
+            "brief"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ArchiveProject"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RestoreProject"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SetPhotoDecision"
+            },
+            "photoIds": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1000,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "keep",
+                "reject",
+                "undecided"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "photoIds",
+            "status"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SetPhotoRating"
+            },
+            "photoIds": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1000,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            },
+            "rating": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            }
+          },
+          "required": [
+            "type",
+            "photoIds",
+            "rating"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SetPhotoNote"
+            },
+            "photoId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "note": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "type",
+            "photoId",
+            "note"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ReorderSequence"
+            },
+            "orderedPhotoIds": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 10000,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            }
+          },
+          "required": [
+            "type",
+            "orderedPhotoIds"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RecordComparison"
+            },
+            "leftId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "rightId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "preference": {
+              "type": "string",
+              "enum": [
+                "left",
+                "right",
+                "uncertain"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "type",
+            "leftId",
+            "rightId",
+            "preference",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SaveSequenceVersion"
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          },
+          "required": [
+            "type",
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RestoreSequenceVersion"
+            },
+            "versionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "type",
+            "versionId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "UndoCommandGroup"
+            },
+            "transactionGroupId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "type",
+            "transactionGroupId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RedoCommandGroup"
+            },
+            "transactionGroupId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "type",
+            "transactionGroupId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "ApplyDraft"
+            },
+            "draftId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "expectedDraftRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "approvedPhotoIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "minItems": 1,
+              "maxItems": 500,
+              "uniqueItems": true
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "partial",
+                "full"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "draftId",
+            "expectedDraftRevision",
+            "approvedPhotoIds",
+            "mode"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "RebaseDraft"
+            },
+            "draftId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "expectedDraftRevision": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type",
+            "draftId",
+            "expectedDraftRevision"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "UpdateDraft"
+            },
+            "draftId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "expectedDraftRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "orderedPhotoIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "minItems": 1,
+              "maxItems": 500,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "type",
+            "draftId",
+            "expectedDraftRevision",
+            "orderedPhotoIds"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "DiscardDraft"
+            },
+            "draftId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "expectedDraftRevision": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type",
+            "draftId",
+            "expectedDraftRevision"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "commandId",
+    "projectId",
+    "expectedProjectRevision",
+    "causationId",
+    "idempotencyKey",
+    "command"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.1",
+  "events": [
+    {
+      "logical": "project.changed",
+      "transport": "project:changed",
+      "constant": "PROJECT_CHANGED_EVENT"
+    },
+    {
+      "logical": "photos.imported",
+      "transport": "photos:imported",
+      "constant": "PHOTOS_IMPORTED_EVENT"
+    },
+    {
+      "logical": "agent.task.updated",
+      "transport": "agent:task:updated",
+      "constant": "AGENT_TASK_UPDATED_EVENT"
+    },
+    {
+      "logical": "draft.updated",
+      "transport": "draft:updated",
+      "constant": "DRAFT_UPDATED_EVENT"
+    }
+  ]
+}

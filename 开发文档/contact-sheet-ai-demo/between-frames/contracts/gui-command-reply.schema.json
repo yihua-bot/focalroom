@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Between Frames GUI command reply v1.1",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "type": "boolean"
+    },
+    "data": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "requestId",
+            "revision",
+            "changed",
+            "transactionGroupId",
+            "project"
+          ],
+          "properties": {
+            "requestId": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer"
+            },
+            "changed": {
+              "type": "boolean"
+            },
+            "transactionGroupId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "project": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "message",
+            "retryable",
+            "currentRevision"
+          ],
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "currentRevision": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "revision": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "requestId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "ok",
+    "data",
+    "error",
+    "revision",
+    "requestId"
+  ],
+  "additionalProperties": false
+}

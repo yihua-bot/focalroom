@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "requestId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "command": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "StartTask"
+            },
+            "goal": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "selectedPhotoIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "maxItems": 500,
+              "uniqueItems": true
+            },
+            "targetCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "budget": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "maxModelTurns": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                },
+                "maxToolCalls": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
+                },
+                "maxDurationSeconds": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 7200
+                },
+                "maxCloudImages": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 0
+                },
+                "maxCostMinorUsd": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "maxContextTokens": {
+                  "type": "integer",
+                  "minimum": 128,
+                  "maximum": 256000
+                },
+                "maxTotalTokens": {
+                  "type": "integer",
+                  "minimum": 128,
+                  "maximum": 2000000
+                },
+                "maxOutputTokens": {
+                  "type": "integer",
+                  "minimum": 128,
+                  "maximum": 16000
+                }
+              },
+              "required": [
+                "maxModelTurns",
+                "maxToolCalls",
+                "maxDurationSeconds",
+                "maxCloudImages",
+                "maxCostMinorUsd",
+                "maxContextTokens",
+                "maxTotalTokens",
+                "maxOutputTokens"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "goal",
+            "selectedPhotoIds",
+            "targetCount",
+            "budget"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "PauseTask"
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "type",
+            "taskId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "CancelTask"
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "type",
+            "taskId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "ResumeTask"
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "budget": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "maxModelTurns": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                },
+                "maxToolCalls": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
+                },
+                "maxDurationSeconds": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 7200
+                },
+                "maxCloudImages": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 0
+                },
+                "maxCostMinorUsd": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "maxContextTokens": {
+                  "type": "integer",
+                  "minimum": 128,
+                  "maximum": 256000
+                },
+                "maxTotalTokens": {
+                  "type": "integer",
+                  "minimum": 128,
+                  "maximum": 2000000
+                },
+                "maxOutputTokens": {
+                  "type": "integer",
+                  "minimum": 128,
+                  "maximum": 16000
+                }
+              },
+              "required": [
+                "maxModelTurns",
+                "maxToolCalls",
+                "maxDurationSeconds",
+                "maxCloudImages",
+                "maxCostMinorUsd",
+                "maxContextTokens",
+                "maxTotalTokens",
+                "maxOutputTokens"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "taskId",
+            "budget"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "SubmitFeedback"
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "answer": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "type",
+            "taskId",
+            "answer"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "CloseTask"
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "type",
+            "taskId"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "requestId",
+    "projectId",
+    "command"
+  ]
+}

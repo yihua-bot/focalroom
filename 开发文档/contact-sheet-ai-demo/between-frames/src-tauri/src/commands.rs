@@ -1,0 +1,327 @@
+use crate::{
+    db::Store,
+    domain::{AppError, ImportJob, Project, Result},
+    export::{self, ExportReceipt},
+    image_pipeline,
+    importer::ImportManager,
+};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use tauri::{AppHandle, Emitter, State};
+use tauri_plugin_dialog::DialogExt;
+use tokio::sync::Mutex;
+
+type ImportGrants = Arc<Mutex<HashMap<String, (String, Vec<PathBuf>)>>>;
+
+pub struct Backend {
+    pub agent: crate::agent::runtime::AgentEngine,
+    pub store: Store,
+    pub cache: PathBuf,
+    pub imports: ImportManager,
+    pub grants: ImportGrants,
+}
+
+#[tauri::command]
+pub async fn list_projects(
+    state: State<'_, Backend>,
+    archived: Option<bool>,
+) -> Result<Vec<Project>> {
+    state.store.list(archived.unwrap_or(false)).await
+}
+#[tauri::command]
+pub async fn get_project(state: State<'_, Backend>, project_id: String) -> Result<Project> {
+    state.store.get(&project_id).await
+}
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiReply {
+    ok: bool,
+    data: Option<crate::command_handler::CommandReceipt>,
+    error: Option<serde_json::Value>,
+    revision: Option<i64>,
+    request_id: String,
+}
+#[tauri::command]
+pub async fn execute_gui_command(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    request: crate::command_handler::GuiCommandRequest,
+) -> Result<GuiReply> {
+    let draft_change = matches!(
+        request.command,
+        crate::commands_generated::GuiCommand::ApplyDraft { .. }
+            | crate::commands_generated::GuiCommand::RebaseDraft { .. }
+            | crate::commands_generated::GuiCommand::UpdateDraft { .. }
+            | crate::commands_generated::GuiCommand::DiscardDraft { .. }
+    );
+    let request_id = request.command_id.clone();
+    let project_id = request.project_id.clone();
+    Ok(
+        match crate::command_handler::CommandHandler::new(&state.store)
+            .execute_gui(request)
+            .await
+        {
+            Ok(receipt) => {
+                if receipt.changed {
+                    let _ = app.emit(crate::commands_generated::PROJECT_CHANGED_EVENT, serde_json::json!({"projectId":project_id,"revision":receipt.revision,"requestId":request_id}));
+                    let _ = app.emit(
+                        crate::commands_generated::AGENT_TASK_UPDATED_EVENT,
+                        serde_json::json!({"projectId":project_id,"requestId":request_id}),
+                    );
+                    if draft_change {
+                        let _ = app.emit(
+                            crate::commands_generated::DRAFT_UPDATED_EVENT,
+                            serde_json::json!({"projectId":project_id,"requestId":request_id}),
+                        );
+                    }
+                }
+                GuiReply {
+                    ok: true,
+                    revision: Some(receipt.revision),
+                    data: Some(receipt),
+                    error: None,
+                    request_id,
+                }
+            }
+            Err(error) => GuiReply {
+                ok: false,
+                data: None,
+                revision: error.current_revision,
+                error: Some(
+                    serde_json::json!({"code":error.code,"message":error.message,"retryable":error.retriable,"currentRevision":error.current_revision}),
+                ),
+                request_id,
+            },
+        },
+    )
+}
+
+#[tauri::command]
+pub async fn choose_import(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    folder: bool,
+) -> Result<Option<String>> {
+    state.store.get(&project_id).await?;
+    let paths = tokio::task::spawn_blocking(move || {
+        let dialog = app.dialog().file().set_title("选择照片，原文件只读引用");
+        let paths = if folder {
+            dialog.blocking_pick_folder().map(|path| vec![path])
+        } else {
+            dialog
+                .add_filter("照片", image_pipeline::EXTENSIONS)
+                .blocking_pick_files()
+        };
+        paths
+            .map(|items| {
+                items
+                    .into_iter()
+                    .map(|item| {
+                        item.into_path()
+                            .map_err(|error| AppError::new("INVALID_PATH", error.to_string()))
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()
+    })
+    .await
+    .map_err(|error| AppError::new("DIALOG", error.to_string()))??;
+    if let Some(paths) = paths {
+        let token = crate::domain::id();
+        state
+            .grants
+            .lock()
+            .await
+            .insert(token.clone(), (project_id, paths));
+        Ok(Some(token))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
+pub async fn import_photos(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    selection_token: String,
+) -> Result<String> {
+    let (owner, paths) = state
+        .grants
+        .lock()
+        .await
+        .remove(&selection_token)
+        .ok_or_else(|| {
+            AppError::new("PATH_NOT_AUTHORIZED", "请先通过系统文件选择器授权照片路径")
+        })?;
+    if owner != project_id {
+        return Err(AppError::new("PATH_NOT_AUTHORIZED", "文件授权不属于此项目"));
+    }
+    state
+        .imports
+        .start(
+            state.store.clone(),
+            state.cache.clone(),
+            project_id,
+            paths,
+            move |job| {
+                let _ = app.emit("import_progress", job);
+                if job.status != "running" {
+                    let _ = app.emit(
+                        crate::commands_generated::PHOTOS_IMPORTED_EVENT,
+                        serde_json::json!({"projectId":job.project_id,"jobId":job.job_id}),
+                    );
+                }
+            },
+        )
+        .await
+}
+#[tauri::command]
+pub async fn get_import_job(state: State<'_, Backend>, job_id: String) -> Result<ImportJob> {
+    state.imports.get(&job_id).await
+}
+#[tauri::command]
+pub async fn cancel_import(state: State<'_, Backend>, job_id: String) -> Result<()> {
+    state.imports.cancel(&job_id).await
+}
+
+#[tauri::command]
+pub async fn retry_import(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    job_id: String,
+) -> Result<String> {
+    let job = state.imports.get(&job_id).await?;
+    if job.status == "running" || job.failures.is_empty() {
+        return Err(AppError::new("INVALID_INPUT", "没有可重试的失败照片"));
+    }
+    let paths = job
+        .failures
+        .iter()
+        .map(|failure| PathBuf::from(&failure.path))
+        .collect();
+    state
+        .imports
+        .start(
+            state.store.clone(),
+            state.cache.clone(),
+            job.project_id,
+            paths,
+            move |progress| {
+                let _ = app.emit("import_progress", progress);
+                if progress.status != "running" { let _ = app.emit(crate::commands_generated::PHOTOS_IMPORTED_EVENT, serde_json::json!({"projectId":progress.project_id,"jobId":progress.job_id})); }
+            },
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn relink_photo(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    photo_id: String,
+    expected_revision: i64,
+) -> Result<Option<Project>> {
+    let project = state.store.get(&project_id).await?;
+    if !project.photos.iter().any(|photo| photo.id == photo_id) {
+        return Err(AppError::new("NOT_FOUND", "照片不在该项目中"));
+    }
+    let cache = state.cache.clone();
+    let prepared = tokio::task::spawn_blocking(move || {
+        let Some(path) = app
+            .dialog()
+            .file()
+            .set_title("重新定位原图（必须为同一文件）")
+            .add_filter("照片", image_pipeline::EXTENSIONS)
+            .blocking_pick_file()
+        else {
+            return Ok(None);
+        };
+        let path = path
+            .into_path()
+            .map_err(|error| AppError::new("INVALID_PATH", error.to_string()))?;
+        image_pipeline::prepare(&path, &cache).map(Some)
+    })
+    .await
+    .map_err(|error| AppError::new("BACKGROUND", error.to_string()))??;
+    if let Some(prepared) = prepared {
+        state
+            .store
+            .relink(&project_id, &photo_id, &prepared, expected_revision)
+            .await
+            .map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
+pub async fn export_project(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    format: String,
+    include_paths: Option<bool>,
+) -> Result<Option<ExportReceipt>> {
+    if !["json", "csv", "html"].contains(&format.as_str()) {
+        return Err(AppError::new("INVALID_INPUT", "导出格式不合法"));
+    }
+    let snapshot = state.store.get(&project_id).await?;
+    tokio::task::spawn_blocking(move || {
+        let filename = format!("between-frames-{}.{}", snapshot.id, format);
+        let Some(path) = app
+            .dialog()
+            .file()
+            .set_title("导出编辑快照（选择新的文件名）")
+            .set_file_name(&filename)
+            .add_filter("导出文件", &[format.as_str()])
+            .blocking_save_file()
+        else {
+            return Ok(None);
+        };
+        let path = path
+            .into_path()
+            .map_err(|error| AppError::new("INVALID_PATH", error.to_string()))?;
+        export::write_with_options(&snapshot, &format, &path, include_paths.unwrap_or(false))
+            .map(Some)
+    })
+    .await
+    .map_err(|error| AppError::new("BACKGROUND", error.to_string()))?
+}
+
+#[tauri::command]
+pub async fn get_agent_projection(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<crate::agent::types::AgentProjection> {
+    crate::agent::store::projection(&state.store, &project_id).await
+}
+#[tauri::command]
+pub async fn agent_request(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    request: crate::agent::types::AgentRequest,
+) -> Result<serde_json::Value> {
+    let request_id = request.request_id.clone();
+    let project_id = request.project_id.clone();
+    let result = crate::command_handler::CommandHandler::new(&state.store)
+        .agent_request(request)
+        .await;
+    Ok(match result {
+        Ok(task) => {
+            let id = task.id.clone();
+            let _ = app.emit(
+                crate::commands_generated::AGENT_TASK_UPDATED_EVENT,
+                serde_json::json!({"projectId":project_id,"requestId":request_id}),
+            );
+            if task.state == "queued" {
+                state.agent.dispatch(&id).await;
+            }
+            serde_json::json!({"ok":true,"data":{"taskId":id},"error":null,"revision":null,"requestId":request_id})
+        }
+        Err(e) => {
+            serde_json::json!({"ok":false,"data":null,"error":{"code":e.code,"message":e.message,"retryable":e.retriable},"revision":e.current_revision,"requestId":request_id})
+        }
+    })
+}

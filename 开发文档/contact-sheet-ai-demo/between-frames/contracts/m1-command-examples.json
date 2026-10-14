@@ -1,0 +1,223 @@
+[
+  {
+    "commandId": "sample-CreateProject",
+    "projectId": "project-a",
+    "expectedProjectRevision": 0,
+    "causationId": null,
+    "idempotencyKey": "key-CreateProject",
+    "command": {
+      "type": "CreateProject",
+      "title": "sample",
+      "brief": "sample"
+    }
+  },
+  {
+    "commandId": "sample-UpdateProject",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-UpdateProject",
+    "command": {
+      "type": "UpdateProject",
+      "title": "sample",
+      "brief": "sample"
+    }
+  },
+  {
+    "commandId": "sample-UpdateProjectBrief",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-UpdateProjectBrief",
+    "command": {
+      "type": "UpdateProjectBrief",
+      "brief": "sample"
+    }
+  },
+  {
+    "commandId": "sample-ArchiveProject",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-ArchiveProject",
+    "command": {
+      "type": "ArchiveProject"
+    }
+  },
+  {
+    "commandId": "sample-RestoreProject",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-RestoreProject",
+    "command": {
+      "type": "RestoreProject"
+    }
+  },
+  {
+    "commandId": "sample-SetPhotoDecision",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-SetPhotoDecision",
+    "command": {
+      "type": "SetPhotoDecision",
+      "photoIds": [
+        "photo-a"
+      ],
+      "status": "keep"
+    }
+  },
+  {
+    "commandId": "sample-SetPhotoRating",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-SetPhotoRating",
+    "command": {
+      "type": "SetPhotoRating",
+      "photoIds": [
+        "photo-a"
+      ],
+      "rating": 4
+    }
+  },
+  {
+    "commandId": "sample-SetPhotoNote",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-SetPhotoNote",
+    "command": {
+      "type": "SetPhotoNote",
+      "photoId": "sample",
+      "note": "sample"
+    }
+  },
+  {
+    "commandId": "sample-ReorderSequence",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-ReorderSequence",
+    "command": {
+      "type": "ReorderSequence",
+      "orderedPhotoIds": [
+        "photo-a"
+      ]
+    }
+  },
+  {
+    "commandId": "sample-RecordComparison",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-RecordComparison",
+    "command": {
+      "type": "RecordComparison",
+      "leftId": "sample",
+      "rightId": "sample",
+      "preference": "left",
+      "reason": "sample"
+    }
+  },
+  {
+    "commandId": "sample-SaveSequenceVersion",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-SaveSequenceVersion",
+    "command": {
+      "type": "SaveSequenceVersion",
+      "label": "sample"
+    }
+  },
+  {
+    "commandId": "sample-RestoreSequenceVersion",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-RestoreSequenceVersion",
+    "command": {
+      "type": "RestoreSequenceVersion",
+      "versionId": "sample"
+    }
+  },
+  {
+    "commandId": "sample-UndoCommandGroup",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-UndoCommandGroup",
+    "command": {
+      "type": "UndoCommandGroup",
+      "transactionGroupId": "sample"
+    }
+  },
+  {
+    "commandId": "sample-RedoCommandGroup",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-RedoCommandGroup",
+    "command": {
+      "type": "RedoCommandGroup",
+      "transactionGroupId": "sample"
+    }
+  },
+  {
+    "commandId": "sample-ApplyDraft",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-ApplyDraft",
+    "command": {
+      "type": "ApplyDraft",
+      "draftId": "draft-a",
+      "expectedDraftRevision": 1,
+      "approvedPhotoIds": [
+        "photo-a"
+      ],
+      "mode": "partial"
+    }
+  },
+  {
+    "commandId": "sample-RebaseDraft",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-RebaseDraft",
+    "command": {
+      "type": "RebaseDraft",
+      "draftId": "draft-a",
+      "expectedDraftRevision": 1
+    }
+  },
+  {
+    "commandId": "sample-UpdateDraft",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-UpdateDraft",
+    "command": {
+      "type": "UpdateDraft",
+      "draftId": "draft-a",
+      "expectedDraftRevision": 1,
+      "orderedPhotoIds": [
+        "photo-a"
+      ]
+    }
+  },
+  {
+    "commandId": "sample-DiscardDraft",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-DiscardDraft",
+    "command": {
+      "type": "DiscardDraft",
+      "draftId": "draft-a",
+      "expectedDraftRevision": 1
+    }
+  }
+]

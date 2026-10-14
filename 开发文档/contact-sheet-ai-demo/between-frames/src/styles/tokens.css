@@ -1,0 +1,20 @@
+:root {
+  --background: #101113;
+  --surface: #17191b;
+  --surface-raised: #202225;
+  --border: #303235;
+  --text: #f0efe9;
+  --muted: #92938f;
+  --accent: #c7ba94;
+  --keep: #9eb69b;
+  --reject: #bf8578;
+  --serif: Georgia, 'Songti SC', serif;
+  --sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  color-scheme: dark;
+}
