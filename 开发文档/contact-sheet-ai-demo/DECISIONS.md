@@ -1,5 +1,11 @@
 # 工程决策
 
+## v1.0 M5 Beta 工程准备验收（2026-10-14）
+
+Keychain 经系统 security 命令集成（无新依赖），解析顺序 env（开发显式）→ 钥匙串（用户存储），GUI 提供存入/移除；写入瞬间进程参数可见为已知权衡，PRIVACY 如实声明。性能以可复现基线测试固化并以宽松守卫防退化：Release 200 张导入 2.9s（70 张/秒）、决策 p95 23ms、投影 3.4ms，均优于规格目标（≤120s / <150ms）；Debug 数字保留对照。诊断命令明示脱敏边界；Beta 旅程 E2E 以真实后端串起完整剧本（含 AG-11 旅程级纠正），作为真实用户 Beta 前的自动化底座。
+
+发布流程项如实未做：签名/公证（无证书）、DMG、真实用户试用。本轮自动化：43 Rust（keychain 2）、24 单测、16 预览、3 集成（beta-journey 52.2s）、release 构建与 perf 基线、typecheck/lint/严格 Clippy/fmt 通过。**六阶段工程实现至此全部落地，停止等待整体评审。** 见 [ADR 0008](docs/ADR/0008-v1-m5-beta-readiness.md)、[测试报告](docs/TEST-REPORT.md)、[文件清单](docs/V1-M5-FILES.md)、[隐私说明](docs/PRIVACY.md)。下文保留各轮历史决定。
+
 ## v1.0 M4 偏好记忆验收（2026-10-14）
 
 L2 证据 dedup_key=command_id：幂等回放命中同一回执不增行，撤销/重做不产生（也不伪造反）证据；Agent 草案在独立通道，结构性排除于证据之外。L3 假设为确定性 2-gram 聚合（≥2 条独立证据才生成、默认 project_local），纠正即 corrected+停用检索且同表述不复活（AG-11 实测）。检索按确认状态/证据数/时间排序，假设与证据 ID 绑定返回；ContextBuilder 每轮限量注入 3 条。FTS5 未引入：v1 假设基数小，过滤+排序与 LIKE 语义等价（ADR 0007），量增后作性能优化。证据不提供删除入口（append-only 审计，留产品评审）。

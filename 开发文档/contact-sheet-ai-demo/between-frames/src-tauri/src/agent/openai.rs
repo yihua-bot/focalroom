@@ -26,10 +26,7 @@ pub struct OpenAiConfig {
 }
 impl OpenAiConfig {
     pub fn from_env() -> Option<Self> {
-        let api_key = std::env::var(KEY_ENV).ok()?.trim().to_owned();
-        if api_key.is_empty() {
-            return None;
-        }
+        let (api_key, _source) = crate::keychain::resolve_api_key()?;
         Some(Self {
             base_url: std::env::var(BASE_URL_ENV)
                 .ok()

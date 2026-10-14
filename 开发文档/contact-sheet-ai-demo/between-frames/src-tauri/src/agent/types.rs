@@ -272,6 +272,7 @@ pub struct AiConfig {
     pub model_id: String,
     pub ready: bool,
     pub api_key_tail: Option<String>,
+    pub key_source: Option<String>,
     pub base_url: String,
     pub prompt_version: String,
 }

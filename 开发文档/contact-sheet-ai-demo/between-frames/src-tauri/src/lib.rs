@@ -10,6 +10,7 @@ mod edit_state;
 pub mod export;
 pub mod image_pipeline;
 pub mod importer;
+pub mod keychain;
 mod resource_commands;
 use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -52,6 +53,9 @@ pub fn run() {
             commands::get_agent_projection,
             commands::get_ai_config,
             commands::get_memory_projection,
+            commands::store_api_key,
+            commands::delete_api_key,
+            commands::get_diagnostics,
             commands::correct_hypothesis,
             commands::set_hypothesis_enabled,
             commands::set_privacy_consent,

@@ -333,6 +333,57 @@ pub async fn set_privacy_consent(
     .await
 }
 #[tauri::command]
+pub fn store_api_key(key: String) -> Result<serde_json::Value> {
+    crate::keychain::store_api_key(key.trim())?;
+    Ok(serde_json::json!({"ok": true, "keySource": "keychain"}))
+}
+#[tauri::command]
+pub fn delete_api_key() -> Result<serde_json::Value> {
+    // 条目不存在视为已删除，保持幂等。
+    let _ = crate::keychain::delete_api_key();
+    Ok(serde_json::json!({"ok": true, "keySource": null}))
+}
+#[tauri::command]
+pub async fn get_diagnostics(state: State<'_, Backend>) -> Result<serde_json::Value> {
+    let mut counts = serde_json::Map::new();
+    for (label, table) in [
+        ("projects", "projects"),
+        ("photos", "photos"),
+        ("decisions", "photo_decisions"),
+        ("agentTasks", "agent_tasks"),
+        ("drafts", "drafts"),
+        ("toolCalls", "tool_calls"),
+        ("observations", "photo_observations"),
+        ("evidence", "preference_evidence"),
+        ("hypotheses", "preference_hypotheses"),
+    ] {
+        let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+            .fetch_one(&state.store.pool)
+            .await
+            .unwrap_or(0);
+        counts.insert(label.into(), count.into());
+    }
+    let failed_tasks: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM agent_tasks WHERE state='failed'")
+            .fetch_one(&state.store.pool)
+            .await
+            .unwrap_or(0);
+    let migrations: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE success=1")
+            .fetch_one(&state.store.pool)
+            .await
+            .unwrap_or(0);
+    let config = state.agent.ai_config();
+    Ok(serde_json::json!({
+        "appVersion": env!("CARGO_PKG_VERSION"),
+        "provider": {"providerId": config.provider_id, "ready": config.ready, "keySource": config.key_source},
+        "database": counts,
+        "failedAgentTasks": failed_tasks,
+        "migrationsApplied": migrations,
+        "notice": "诊断不含照片内容、API key、本地路径或备注文本",
+    }))
+}
+#[tauri::command]
 pub async fn get_memory_projection(
     state: State<'_, Backend>,
     project_id: String,

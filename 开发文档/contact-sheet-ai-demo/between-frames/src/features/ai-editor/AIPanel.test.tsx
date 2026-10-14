@@ -7,7 +7,7 @@ import type { AiConfig, AgentProjection, TaskCommand } from '../../domain/agent'
 import type { Project } from '../../domain/models';
 
 const project = { id: 'p1', title: 't', brief: '', revision: 3, photos: [{ id: 'a', status: 'undecided' }], sequence: [], events: [] } as unknown as Project;
-const readyConfig: AiConfig = { providerId: 'openai', modelId: 'gpt-test', ready: true, apiKeyTail: 'abcd', baseUrl: 'https://x', promptVersion: 'm3-openai-1', consent: null };
+const readyConfig: AiConfig = { providerId: 'openai', modelId: 'gpt-test', ready: true, apiKeyTail: 'abcd', keySource: 'keychain', baseUrl: 'https://x', promptVersion: 'm3-openai-1', consent: null };
 const emptyProjection: AgentProjection = { tasks: [], drafts: [] };
 
 function makeRepository(overrides: Partial<{ consent: AiConfig['consent'] }> = {}) {

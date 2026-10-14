@@ -31,7 +31,40 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
  const [consentPrompt, setConsentPrompt] = useState(false);
  const configQuery = useQuery({ queryKey: ['ai-config', project.id], queryFn: () => repository!.agent.aiConfig(project.id), enabled: Boolean(repository), staleTime: 30_000 });
  const config = configQuery.data;
- const providerLabel = config ? (config.ready ? `真实模型 ${config.modelId}${config.apiKeyTail ? ` ···${config.apiKeyTail}` : ''}` : '本地 Mock（未配置 API Key）') : '';
+ const providerLabel = config ? (config.ready ? `真实模型 ${config.modelId}${config.apiKeyTail ? ` ···${config.apiKeyTail}` : ''}（密钥：${config.keySource === 'keychain' ? '钥匙串' : '环境变量'}）` : '本地 Mock（未配置 API Key）') : '';
+ const [apiKey, setApiKey] = useState('');
+ const [configBusy, setConfigBusy] = useState(false);
+ const [configNote, setConfigNote] = useState('');
+ const saveKey = async () => {
+  if (!repository || configBusy || !apiKey.trim()) return; setConfigBusy(true); setConfigNote('');
+  try {
+   const { invoke } = await import('@tauri-apps/api/core');
+   await invoke('store_api_key', { key: apiKey.trim() });
+   setApiKey(''); setConfigNote('已存入系统钥匙串；重启应用后生效。');
+   void configQuery.refetch();
+  } catch (error) { setConfigNote(error instanceof Error ? error.message : String(error)); }
+  finally { setConfigBusy(false); }
+ };
+ const removeKey = async () => {
+  if (!repository || configBusy) return; setConfigBusy(true); setConfigNote('');
+  try {
+   const { invoke } = await import('@tauri-apps/api/core');
+   await invoke('delete_api_key');
+   setConfigNote('已从钥匙串移除；重启应用后生效。');
+   void configQuery.refetch();
+  } catch (error) { setConfigNote(error instanceof Error ? error.message : String(error)); }
+  finally { setConfigBusy(false); }
+ };
+ const copyDiagnostics = async () => {
+  if (!repository || configBusy) return; setConfigBusy(true); setConfigNote('');
+  try {
+   const { invoke } = await import('@tauri-apps/api/core');
+   const diagnostics = await invoke('get_diagnostics');
+   await navigator.clipboard.writeText(JSON.stringify(diagnostics, null, 1));
+   setConfigNote('诊断信息已复制（不含照片、密钥与路径）。');
+  } catch (error) { setConfigNote(error instanceof Error ? error.message : String(error)); }
+  finally { setConfigBusy(false); }
+ };
  const visionWanted = budget.maxCloudImages > 0 && Boolean(config?.ready);
  const consentActive = config?.consent && config.consent.mode !== 'deny' && config.consent.quota - config.consent.used > 0 ? config.consent : null;
  useEffect(() => {
@@ -67,7 +100,17 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
  const drafts = query.data?.drafts.filter(draft => !task || draft.taskId === task.id) ?? [];
  const draft = query.data?.drafts.find(item => item.id === draftId);
  return <section className="ai-panel agent-panel"><Sparkles size={27} strokeWidth={1} /><h3>摄影编辑{config ? (config.ready ? ' · 真实模型' : ' · 本地 Mock') : ''}</h3><p className="micro">{providerLabel && `提供方：${providerLabel}。`}验证受控工具闭环。AI 不直接修改正式选片；云端图像仅在明确授权后上传。</p>
-  {!repository && <p className="info-card">浏览器为内存 UI 预览。本地 Mock 任务和草案审批请在 Between Frames M2 Review 桌面版运行。</p>}
+  {!repository && <p className="info-card">浏览器为内存 UI 预览。本地 Mock 任务和草案审批请在桌面版运行。</p>}
+  {repository && <details className="ai-config"><summary>模型与密钥 · 诊断</summary>
+   <p className="micro">{providerLabel}。密钥存入 macOS 钥匙串，不写入数据库或日志；也可用环境变量 BETWEEN_FRAMES_OPENAI_API_KEY。</p>
+   <div className="agent-task-actions">
+    <input type="password" aria-label="API Key（存入钥匙串）" placeholder="sk-..." disabled={configBusy} value={apiKey} maxLength={4096} onChange={event => setApiKey(event.target.value)} />
+    <Button size="small" disabled={configBusy || !apiKey.trim()} onClick={() => { void saveKey(); }}>存入钥匙串</Button>
+    {config?.keySource === 'keychain' && <Button size="small" disabled={configBusy} onClick={() => { void removeKey(); }}>移除钥匙串密钥</Button>}
+    <Button size="small" disabled={configBusy} onClick={() => { void copyDiagnostics(); }}>复制诊断信息</Button>
+   </div>
+   {configNote && <p className="micro" role="status">{configNote}</p>}
+  </details>}
   <Button size="small" disabled={busy} onClick={() => { if (!composerOpen && task) { setBudget(task.budget); setBudgetEdited(false); } setComposerOpen(open => !open); }}>{composerOpen ? '收起委托与预算' : '编辑委托与预算'}</Button>
   {composerOpen && <form className="agent-form" onSubmit={event => { event.preventDefault(); startFlow(); }}>
    <label>编辑目标<textarea aria-label="Agent 编辑目标" disabled={busy} required maxLength={4000} value={goal} onChange={event => setGoal(event.target.value)} /></label>

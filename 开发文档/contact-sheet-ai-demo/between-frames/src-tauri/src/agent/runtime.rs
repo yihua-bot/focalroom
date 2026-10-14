@@ -48,32 +48,25 @@ impl AgentEngine {
     }
     pub fn ai_config(&self) -> AiConfig {
         match &self.openai {
-            Some(provider) => AiConfig {
-                provider_id: super::PROVIDER_OPENAI.into(),
-                model_id: provider.model_id().into(),
-                ready: true,
-                api_key_tail: Some(
-                    std::env::var(super::openai::KEY_ENV)
-                        .map(|k| {
-                            k.chars()
-                                .rev()
-                                .take(4)
-                                .collect::<Vec<_>>()
-                                .into_iter()
-                                .rev()
-                                .collect()
-                        })
-                        .unwrap_or_default(),
-                ),
-                base_url: std::env::var(super::openai::BASE_URL_ENV)
-                    .unwrap_or_else(|_| super::openai::DEFAULT_BASE_URL.into()),
-                prompt_version: super::prompt_version(super::PROVIDER_OPENAI).into(),
-            },
+            Some(provider) => {
+                let resolved = crate::keychain::resolve_api_key();
+                AiConfig {
+                    provider_id: super::PROVIDER_OPENAI.into(),
+                    model_id: provider.model_id().into(),
+                    ready: true,
+                    api_key_tail: resolved.as_ref().map(|(key, _)| crate::keychain::tail(key)),
+                    key_source: resolved.as_ref().map(|(_, source)| (*source).to_owned()),
+                    base_url: std::env::var(super::openai::BASE_URL_ENV)
+                        .unwrap_or_else(|_| super::openai::DEFAULT_BASE_URL.into()),
+                    prompt_version: super::prompt_version(super::PROVIDER_OPENAI).into(),
+                }
+            }
             None => AiConfig {
                 provider_id: super::PROVIDER_ID.into(),
                 model_id: super::MODEL_ID.into(),
                 ready: false,
                 api_key_tail: None,
+                key_source: None,
                 base_url: String::new(),
                 prompt_version: super::PROMPT_VERSION.into(),
             },

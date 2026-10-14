@@ -31,6 +31,36 @@ impl Harness {
             "get_agent_projection" => {
                 json!(between_frames_lib::agent::projection(&self.store, id).await?)
             }
+            "store_api_key" => {
+                let key = string(args, "key")?.to_owned();
+                between_frames_lib::keychain::store_api_key(&key)?;
+                json!({"ok": true, "keySource": "keychain"})
+            }
+            "delete_api_key" => {
+                let _ = between_frames_lib::keychain::delete_api_key();
+                json!({"ok": true, "keySource": null})
+            }
+            "get_diagnostics" => {
+                let config = self.agent.ai_config();
+                let photos: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photos")
+                    .fetch_one(&self.store.pool)
+                    .await
+                    .unwrap_or(0);
+                let tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM agent_tasks")
+                    .fetch_one(&self.store.pool)
+                    .await
+                    .unwrap_or(0);
+                let evidence: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM preference_evidence")
+                    .fetch_one(&self.store.pool)
+                    .await
+                    .unwrap_or(0);
+                json!({
+                    "appVersion": env!("CARGO_PKG_VERSION"),
+                    "provider": {"providerId": config.provider_id, "ready": config.ready, "keySource": config.key_source},
+                    "photos": photos, "agentTasks": tasks, "evidence": evidence,
+                    "notice": "诊断不含照片内容、API key、本地路径或备注文本",
+                })
+            }
             "get_memory_projection" => serde_json::to_value(
                 between_frames_lib::agent::memory::projection(&self.store, id).await?,
             )
