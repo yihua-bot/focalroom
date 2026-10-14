@@ -146,7 +146,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       <div className="dialog-actions"><Button onClick={() => setDialog(null)}>取消</Button><Button variant="primary" onClick={() => {
         void repository.archive(dialog.project.id).then(() => { setDialog(null); refresh(); }).catch(error => setNotice(`归档失败：${String(error)}`));
       }}>确认归档</Button></div></Modal>}
-    {dialog?.kind === 'enlarge' && <Lightbox photos={navigable} activeId={dialog.photo.id} onClose={() => setDialog(null)} onNavigate={photo => { ui.select(photo.id); setDialog({ kind: 'enlarge', photo }); }} />}
+    {dialog?.kind === 'enlarge' && <Lightbox photos={navigable} activeId={dialog.photo.id} onClose={() => setDialog(null)} onNavigate={photo => { ui.select(photo.id); setDialog({ kind: 'enlarge', photo }); }} onDecide={(id, status) => decide(id, status)} onRate={(id, rating) => project && act(() => repository.rate(project.id, [id], rating), rating ? `人工评分已保存：${rating} 星` : '人工评分已清除')} />}
     {dialog?.kind === 'help' && <Modal title={zh.help} description={zh.helpHint} onClose={() => setDialog(null)}><dl className="shortcut-list">
       <dt><kbd>K / X / U</kbd></dt><dd>将选区明确设为保留 / 淘汰 / 待定；重复按键不会撤销</dd><dt><kbd>0–5</kbd></dt><dd>人工星级；0 清除评分</dd>
       <dt><kbd>← →</kbd></dt><dd>切换照片；Shift + 方向键扩展选区</dd><dt><kbd>C</kbd></dt><dd>比较选中的两张；未选两张时比较当前与下一张</dd>
