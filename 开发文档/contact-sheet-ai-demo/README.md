@@ -6,7 +6,8 @@
 
 现有工程复用，先按新 M0 补齐/复验 GUI 与 200 张测试图→25 张序列的离线重启，再完成 M1 统一命令、版本、Undo/Redo 和幂等。M2 才实现动态 Mock Agent，M3 接真实视觉，M4 记忆，M5 Beta。新初始 SQL 与当前数据库不兼容，升级需专用兼容 migration。
 
-当前 **v1.0 M0–M5 工程实现全部完成，停止等待整体评审**：M5 补齐 Keychain 密钥存储（env→钥匙串解析链）、脱敏诊断命令、性能基线（Release：200 张导入 2.9s、决策 p95 23ms，均优于规格目标）、Beta 完整旅程 E2E（意图→选片→委托→草案→假设纠正→采纳→重启一致）与隐私文档。43 Rust 测试、24 前端单测、16 预览 E2E、3 真实后端集成旅程全部通过。**规格符合性终审**：[V1.0-COMPLIANCE](docs/V1.0-COMPLIANCE.md)——P0 十二条与 AG-01–15 全矩阵逐条核对，可自动化范围内全部满足，无 Mock 假通过项。
+当前 **v1.0 M0–M5 工程实现全部完成，停止等待整体评审**：M5 补齐 Keychain 密钥存储（env→钥匙串解析链）、脱敏诊断命令、性能基线（Release：200 张导入 2.9s、决策 p95 23ms，均优于规格目标）、Beta 完整旅程 E2E（意图→选片→委托→草案→假设纠正→采纳→重启一致）与隐私文档。43 Rust 测试、24 前端单测、16 预览 E2E、3 真实后端集成旅程全部通过。**v1.1 迭代已开始**：第一轮交付版本对比（任意两版 diff：新增/移除/移位/人工判断变化）与新建项目模板；项目标签与版式增强在后续轮次。
+**规格符合性终审**：[V1.0-COMPLIANCE](docs/V1.0-COMPLIANCE.md)——P0 十二条与 AG-01–15 全矩阵逐条核对，可自动化范围内全部满足，无 Mock 假通过项。
 **待外部条件**：签名/公证需开发者证书、20 位用户 Beta 需真人、真实模型 E2E 需 API Key。
 
 Beta 试用包（unsigned debug，arm64）：`between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames M5 Review.app`（独立 identifier，不影响既有数据）；试用指引见 [BETA-GUIDE](docs/BETA-GUIDE.md)，隐私边界见 [PRIVACY](docs/PRIVACY.md)。契约检查已覆盖 GUI 与 Agent 两类契约（`npm run contracts:check`）。
