@@ -32,3 +32,23 @@ for (const [name, content] of [['../src/domain/commands.generated.ts', ts], ['..
   } else await writeFile(url, content);
 }
 console.log('M1 command contracts: OK');
+
+// —— Agent 契约静态校验（M5 补）：结构合法性 + 关键约束防误改 ——
+const tools = JSON.parse(await readFile(new URL('../contracts/agent-tool-contracts.json', import.meta.url), 'utf8'));
+if (!Array.isArray(tools.tools) || tools.tools.length === 0) throw new Error('agent-tool-contracts：tools 非数组或为空');
+const names = tools.tools.map(tool => tool.name);
+if (new Set(names).size !== names.length) throw new Error('agent-tool-contracts：工具名重复');
+const required = ['get_project_context','list_photos','search_photos','inspect_photos','compare_photos','retrieve_preferences','get_sequence','create_selection_draft','update_draft_sequence','evaluate_draft','request_feedback','finish_task'];
+for (const name of required) if (!names.includes(name)) throw new Error(`agent-tool-contracts：缺少工具 ${name}`);
+for (const tool of tools.tools) {
+  if (tool.strict !== true) throw new Error(`工具 ${tool.name} 未启用 strict`);
+  if (typeof tool.description !== 'string' || !tool.description) throw new Error(`工具 ${tool.name} 缺少描述`);
+  if (tool.access && ['shell','sql','network'].includes(tool.access)) throw new Error(`工具 ${tool.name} 声明了越权访问级别`);
+}
+const taskSchema = JSON.parse(await readFile(new URL('../contracts/agent-task-request.schema.json', import.meta.url), 'utf8'));
+const start = taskSchema.properties.command.oneOf.find(branch => branch.properties?.type?.const === 'StartTask');
+if (!start) throw new Error('agent-task-request：缺少 StartTask');
+if (!('consentId' in start.properties)) throw new Error('agent-task-request：StartTask 缺少 consentId');
+const budget = start.properties.budget;
+if (budget.properties.maxCloudImages.maximum !== 100) throw new Error('agent-task-request：云端图像上限应为 100');
+console.log('Agent contracts: OK');

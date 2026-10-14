@@ -8,6 +8,8 @@
 
 当前 **v1.0 M0–M5 工程实现全部完成，停止等待整体评审**：M5 补齐 Keychain 密钥存储（env→钥匙串解析链）、脱敏诊断命令、性能基线（Release：200 张导入 2.9s、决策 p95 23ms，均优于规格目标）、Beta 完整旅程 E2E（意图→选片→委托→草案→假设纠正→采纳→重启一致）与隐私文档。43 Rust 测试、24 前端单测、16 预览 E2E、3 真实后端集成旅程全部通过。**待外部条件**：签名/公证需开发者证书、20 位用户 Beta 需真人、真实模型 E2E 需 API Key。
 
+Beta 试用包（unsigned debug，arm64）：`between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames M5 Review.app`（独立 identifier，不影响既有数据）；试用指引见 [BETA-GUIDE](docs/BETA-GUIDE.md)，隐私边界见 [PRIVACY](docs/PRIVACY.md)。契约检查已覆盖 GUI 与 Agent 两类契约（`npm run contracts:check`）。
+
 本机评审应用：`between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames M1 Review.app`，使用新的 `studio.betweenframes.m1review` 数据目录，用户原应用和 M0 Review DB 未升级。浏览器预览为 `http://localhost:1420/`，真实存档使用桌面版。详见 [`测试与剩余问题`](docs/TEST-REPORT.md)、[`文件变更`](docs/V1-M1-FILES.md)、[`ADR 0004`](docs/ADR/0004-v1-m1-command-history.md)、[`M0 历史报告`](docs/V1-M0-TEST-REPORT.md)。记忆/上下文补充进入 [`后续约束`](docs/MEMORY-CONTEXT-ADDENDUM.md)，不提前实现。
 
 需求接入的历史差异见 [`V1.0-ADOPTION`](docs/V1.0-ADOPTION.md)、[`ADR 0002`](docs/ADR/0002-adopt-v10.md)。当前工程目录已位于 `开发文档/contact-sheet-ai-demo/`。

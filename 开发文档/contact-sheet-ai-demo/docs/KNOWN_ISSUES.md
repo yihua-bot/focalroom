@@ -44,7 +44,7 @@
 - API key 仅环境变量（不落 SQLite/日志/前端，界面仅脱敏尾号）；macOS Keychain 留 M5。base_url/model 可环境覆盖，兼容网关与测试。
 - 视觉输入为最长边 1400px 重编码 JPEG（无 EXIF/GPS）；观察缓存键 hash+model+prompt+kind，无 TTL；观察引用幻觉 photo_id 时整体丢弃、配额按真实传输扣减（隐私语义）。
 - 费用为保守估算（每图 1 美分 + 每千 token 1 美分）非账单；预算触顶转 paused，恢复需显式调整。
-- `contracts:check` 仍仅覆盖 M1 GUI 契约；agent 契约由 Rust 运行时校验与集成测试覆盖。
+- `contracts:check` 已覆盖 GUI 与 Agent 契约（M5 补齐；agent 契约另由 Rust 运行时校验与集成测试覆盖）。
 - 集成测试依赖 target-v1 的 feature harness；旧二进制残留会以 unknown field consentId 失败，复现命令含重建步骤。
 
 ## v1.0 M4 已测能力与边界（2026-10-14）
