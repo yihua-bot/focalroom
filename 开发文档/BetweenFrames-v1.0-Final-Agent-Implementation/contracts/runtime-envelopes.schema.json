@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Between Frames v1.0 Agent task envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "task_id": { "type": "string", "minLength": 1 },
+    "project_id": { "type": "string", "minLength": 1 },
+    "goal": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "base_project_revision": { "type": "integer", "minimum": 0 },
+    "allowed_photo_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "provider_id": { "type": "string", "minLength": 1 },
+    "model_id": { "type": "string", "minLength": 1 },
+    "budget": { "$ref": "#/$defs/budget" },
+    "image_consent_id": { "type": ["string", "null"] },
+    "state": { "enum": ["queued", "planning", "running", "needs_input", "review_ready", "completed", "paused", "stale", "failed", "cancelled", "interrupted"] }
+  },
+  "required": ["task_id", "project_id", "goal", "base_project_revision", "allowed_photo_ids", "provider_id", "model_id", "budget", "image_consent_id", "state"],
+  "$defs": {
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_model_turns": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "max_tool_calls": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "max_duration_seconds": { "type": "integer", "minimum": 1, "maximum": 7200 },
+        "max_cloud_images": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "max_cost_minor_usd": { "type": "integer", "minimum": 0, "maximum": 100000 }
+      },
+      "required": ["max_model_turns", "max_tool_calls", "max_duration_seconds", "max_cloud_images", "max_cost_minor_usd"]
+    }
+  }
+}

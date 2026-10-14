@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BetweenFramesEditProposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project_id", "run_summary", "suggestions", "sequence", "open_questions"],
+  "properties": {
+    "project_id": {"type": "string"},
+    "run_summary": {"type": "string"},
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["photo_id", "action", "narrative_role", "reason", "evidence_photo_ids", "uncertainty"],
+        "properties": {
+          "photo_id": {"type": "string"},
+          "action": {"type": "string", "enum": ["keep", "review", "skip"]},
+          "narrative_role": {"type": "string", "enum": ["opening", "transition", "anchor", "echo", "closing", "none"]},
+          "reason": {"type": "string"},
+          "evidence_photo_ids": {"type": "array", "items": {"type": "string"}},
+          "uncertainty": {"type": "string", "enum": ["low", "medium", "high"]}
+        }
+      }
+    },
+    "sequence": {"type": "array", "items": {"type": "string"}},
+    "open_questions": {"type": "array", "items": {"type": "string"}}
+  }
+}

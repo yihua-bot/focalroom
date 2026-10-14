@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# 日志
+*.log
+
+# 编辑器
+.idea
+*.suo
+*.sw?
+
+# 依赖与构建产物（工程子目录另有一份细分 .gitignore）
+node_modules/
+dist/
+target/
+target-v1/
+test-results/
+playwright-report/
+src-tauri/gen/schemas/
+
+# 本地环境
+*.local

@@ -1,0 +1,60 @@
+# 工程决策
+
+## v1.0 M1 命令与恢复验收（2026-10-14）
+
+唯一 CommandHandler 负责正式写入。14 类 GUI 命令从机器契约生成，后端注入身份；幂等别名、完整命令、补偿目标和回执持久化，授权先于回放。Undo/Redo 追加补偿事件，比较只逻辑撤回；命名版本恢复是可撤销编辑。版本保存/项目新建/资源导入不占人工撤销栈，旧日志不伪造追溯撤销。
+
+0003 仅增加六张 M1 表，保留旧 migration；临时旧库验证包含 WAL 的一致性备份与恢复。最终原生使用新 M1 Review identifier，原用户 DB 和 M0 Review 保持原状。十二表重启一致、200 源 hash 不变；重启后重做追加一条补偿，不复制比较行。CSV/JSON 默认不输出已知资源路径字段，人工输入仍原文保留。
+
+DRY 以单一契约生成双方命令/事件；SRP 分离事务、编辑、状态、资源和审计；DIP 保持 Repository 边界；KISS/YAGNI 不引入 AI 空模块或新依赖。Tauri 点号事件名问题已通过映射修正并用最终原生包验收。**当前停止 M1 等待评审，M2 未启动。** 见 [ADR 0004](docs/ADR/0004-v1-m1-command-history.md)、[测试报告](docs/TEST-REPORT.md)、[文件清单](docs/V1-M1-FILES.md)。下文保留各轮历史决定。
+
+## v1.0 M0 GUI 验收（2026-10-13）
+
+多选、搜索、明确 K/X/U、人工 0–5 星、Loupe、同步/独立比较、面板折叠与快捷键隔离已实现。评分使用新增 0002 兼容 migration，原 0001 保留。批量事务校验完整选区，重复状态 no-op 不改变序列。共享 PhotoViewport 避免两套缩放逻辑，100% 明确针对缓存预览。
+
+原生验收使用独立 Review identifier；200→25 完整退出重启、六表一致、200 个源 SHA256 不变。旧用户应用数据库当时未升级。M1 当时尚未实现，随后用户评审通过并授权继续。见 [ADR 0003](docs/ADR/0003-v1-m0-gui.md)、[历史测试报告](docs/V1-M0-TEST-REPORT.md)。
+
+## v1.0 最终需求基线（2026-10-13）
+
+主规格为 `planning-v1.0/docs/FINAL-IMPLEMENTATION-SPEC.md`，v0.2 与下文作为历史。现有工程已位于 `开发文档/contact-sheet-ai-demo/`。复用已有 GUI/本地核心，先完成新版 M0 测试图 25 张离线旅程及 GUI 缺口，再补 M1 命令/幂等/版本/撤销；M2 使用动态 ModelProvider → 工具 → 反馈循环，不做固定 pipeline。新包自检仅证明新库 24 表与静态资料，未证明应用 Agent 已实现。草案 items/schema、旧库 paused CHECK 等差异及兼容升级原则见 [ADR 0002](docs/ADR/0002-adopt-v10.md) 和 [接入记录](docs/V1.0-ADOPTION.md)。本轮没有修改运行代码或实际数据库。
+
+## v0.2 需求基线更新（2026-10-13）
+
+用户提交新版产品需求。原样归档到 `planning-v0.2/`，以后按 DEVELOPMENT-SPEC v0.2 评估实现。现有 GUI/导入/缓存/事务继续复用，先补新 M0 的统一命令边界与新 M1 的命令幂等、版本、撤销、多选及导出隐私；M2 改为 Agent Runtime + 工具 + 两份持久化草案，旧 AIRun/AISuggestion 计划停止沿用。新 0001 仅为 fresh schema，不能覆写/直接升级既有 DB。包内重新初始化 M0 的文字是新项目模板，不能据此清空工程或撤销已有评审。具体见 [ADR 0001](docs/ADR/0001-adopt-v02.md)、[需求接入记录](docs/V0.2-ADOPTION.md)。下文保留 v0.1 历史。
+
+## M1 原生拖动修正（2026-10-13）
+
+用户要求继续开发，先完成 M1 剩余验收。序列独立把手使用立即激活的 PointerSensor，移除 6px 距离阈值，确保只有一次有效移动时也能更新位移。继续使用现有 dnd-kit 键盘/取消/排序和 Repository 持久化接口，不新增拖动状态机或依赖。原生鼠标排序与完整重启通过；关闭 Tauri 文件拖放处理器的试验未解决问题，已恢复原配置。临时事件诊断代码已移除。真实用户图库尚未提供，严格停留在 M1，未提前创建 M2 表或服务。证据见 [M1-DRAG-TEST-REPORT.md](docs/M1-DRAG-TEST-REPORT.md)。
+
+## M1 更新（2026-10-13）
+
+用户已评审通过 M0 并授权继续。当前实现仅到 M1，不进入 AI 里程碑。
+
+- 桌面默认使用 `TauriRepository`，浏览器与组件测试仍显式使用内存示例。`ProjectRepository` 保持 UI 调用边界，IPC 返回值通过 Zod 校验。
+- SQLite 使用 sqlx 迁移、WAL、外键和单写连接。人工状态、序列投影、备注与 append-only 事件在同一事务中提交；revision 检查拒绝旧窗口覆盖。重启时只迁移应用新建的本地数据库。
+- M1 迁移仅建立本地核心表，不提前建立 AI 服务。比较事件支持 `preferred_photo_id=NULL` 表达“不确定”；与原 SQL 草案只允许明确偏好的定义相比，这是执行规范要求的补充。
+- 项目删除实现为归档/恢复，保留元数据、人工事件和原图。用户需在 UI 确认归档，没有永久清除入口。
+- 文件选择在 Rust 使用系统 Dialog，生成绑定项目的一次性授权 token；前端不能传任意路径给导入，也不能执行 SQL。资源协议只在运行时授权本应用的缓存目录。
+- 导入任务先返回 ID，再后台扫描目录；扫描逐项检查取消标记。每张照片独立提交，解码阶段取消在当前解码返回时生效，未提交照片不进入项目，已完成部分保留。失败逐张显示，可以重试；重复判断使用 SHA256，不将相似照片自动删除。
+- Rust image 解码 JPEG/PNG/WebP/TIFF 并处理 EXIF orientation；macOS HEIC/RAW 使用固定 `/usr/bin/sips` 作为平台回退，参数不经 shell。已验证 HEIC 与 Canon CR2 sRAW 样本，其他 RAW 按平台支持返回逐张失败。
+- 原图不复制到项目、不改写；320px 网格缓存与最长边 1400px 预览仅缩小、不放大小图。解码内存限制 256 MiB，文件大小上限 512 MiB。
+- 100 张以上网格采用 TanStack Virtual，密度与检查器收起仍可使用。备注草稿按照片保留在 UI 中，保存后写入 SQLite。
+- 导出从持久化快照生成 JSON/CSV/接触印相 HTML；只创建新文件，拒绝覆盖任意已有文件，返回导出 SHA256。HTML 只嵌入小尺寸缓存，CSV 防公式注入。
+- 集成测试通过测试专用 stdio Rust harness 驱动真实 Store/ImagePipeline，并以 loopback 桥接 Playwright。该 harness 受 Cargo feature 限制，生产应用不编译或启动测试 HTTP 服务；系统文件选择器在测试中使用固定夹具替代，未据此宣称原生对话框已验收。
+- M0 UI 继续保持独立组件；新增服务没有引入云同步、登录、模型、AI Provider 或个人审美推断。
+
+---
+
+日期：2026-10-13（Asia/Shanghai）。当前验收范围：M0，完成后停止等待 UI/UX 评审。
+
+1. **工程目录**：原仓库仅有 Demo，没有既有 React/Rust 工程，也没有 Git 仓库。独立工程放在 `between-frames/`；保留原 Demo 与文档，不创建提交或推送。
+2. **阶段优先级**：以执行指令的 M0 定义和用户当前要求为范围。照片导入、SQLite、真实项目存档、导出和生产事件事务属于 M1；AI Provider/MockProvider 属于 M2。AIPanel / PreferencePanel / ExportDialog 在 M0 仅交付可评审 UI，人工事件是本次内存预览记录。
+3. **业务与 UI 分离**：`ProjectRepository` 为调用边界，M0 只注入 `MockRepository`。TanStack Query 保持仓库快照，Zustand 仅管理 UI 状态。避免未来更换持久化时重写视觉组件（DIP/SRP）。
+4. **布局与构图**：沿用 Demo 的暗房三栏、品牌米金、Georgia/Songti SC 标题与入选底带；照片默认 `object-fit: contain`，不沿用 Demo 静默裁切。比较只记录偏好、不自动保留或淘汰（规格优先）。
+5. **组件基建**：Tailwind v4 + shadcn 风格 Button（CVA/clsx/tailwind-merge）+ Radix Dialog 提供焦点陷阱与 Esc。应用排版用语义样式与统一 tokens，避免为 M0 引入整套未使用控件（KISS/YAGNI/DRY）。
+6. **路由**：M0 只需要项目列表和单项目编辑，使用 Hash + React `useSyncExternalStore`，支持后退与静态桌面包；无需服务端路由或额外路由框架。
+7. **权限**：Tauri 只授权 `core:default`，不启用文件、opener、shell 或 HTTP 插件；生产 CSP 仅允许本地资源与 Tauri IPC。后续导入授权将在 M1 按实际业务添加。
+8. **素材引用**：Vite 引用父目录 `assets/` 并在构建时打包；开发服务器显式授权工程和该素材目录。图片保持外部资源，不以内嵌 base64 进入业务数据。
+9. **未提前实现**：SQL migrations、图像流水线、模型、个人偏好推断、撤销/重做、序列历史和虚拟列表均留在对应后续阶段。M0 28 张图使用原生 lazy loading。
+10. **格式支持冲突**：执行指令 M1 提到 HEIC/RAW，规格书则将它们标为可选平台解码或后续功能。M0 不实现导入；进入 M1 时应根据解码器可用性明确支持范围，不能宣称所有格式均支持。
+11. **工具链**：使用官方 Tauri create-tauri-app React/TS 模板，依赖实际版本由 `package-lock.json` 和 `Cargo.lock` 固定。官方参考：[项目初始化](https://v2.tauri.app/start/create-project/)、[最小权限](https://v2.tauri.app/security/capabilities/)、[Vite 配置](https://vite.dev/guide/)。

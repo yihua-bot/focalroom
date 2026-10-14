@@ -1,0 +1,55 @@
+{
+  "revision": 204,
+  "kept": [
+    [
+      "frame-024.jpg",
+      "keep"
+    ],
+    [
+      "frame-199.jpg",
+      "keep"
+    ]
+  ],
+  "drafts": [
+    [
+      "方案 A · 人工线索",
+      "pending",
+      1
+    ],
+    [
+      "方案 B · 反向节奏",
+      "applied",
+      3
+    ]
+  ],
+  "calls": [
+    [
+      "dca68534-f7cd-4def-8d78-267c66ba6fef-1",
+      "get_project_context"
+    ],
+    [
+      "dca68534-f7cd-4def-8d78-267c66ba6fef-2",
+      "list_photos"
+    ],
+    [
+      "dca68534-f7cd-4def-8d78-267c66ba6fef-3",
+      "create_selection_draft"
+    ],
+    [
+      "dca68534-f7cd-4def-8d78-267c66ba6fef-4",
+      "evaluate_draft"
+    ],
+    [
+      "dca68534-f7cd-4def-8d78-267c66ba6fef-5",
+      "create_selection_draft"
+    ],
+    [
+      "dca68534-f7cd-4def-8d78-267c66ba6fef-7",
+      "evaluate_draft"
+    ],
+    [
+      "dca68534-f7cd-4def-8d78-267c66ba6fef-8",
+      "finish_task"
+    ]
+  ]
+}

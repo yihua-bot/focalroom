@@ -1,0 +1,28 @@
+{
+  "taskId": "0ba80b1f-2e18-4208-b3a1-5a3decb14b3d",
+  "state": "review_ready",
+  "scopeCount": 2,
+  "trace": [
+    "get_project_context",
+    "get_sequence",
+    "create_selection_draft",
+    "evaluate_draft",
+    "create_selection_draft",
+    "evaluate_draft",
+    "finish_task"
+  ],
+  "usage": {
+    "modelTurns": 7,
+    "toolCalls": 7,
+    "inputEstimate": 72433,
+    "outputEstimate": 2531,
+    "cloudImages": 0,
+    "costMinorUsd": 0
+  },
+  "promptVersion": "m2-mock-1",
+  "providerId": "mock",
+  "modelId": "metadata-mock-1",
+  "formalRevision": 211,
+  "formalSequenceCount": 25,
+  "totalDrafts": 4
+}

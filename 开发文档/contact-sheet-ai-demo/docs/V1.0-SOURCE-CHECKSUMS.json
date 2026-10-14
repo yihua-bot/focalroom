@@ -1,0 +1,19 @@
+{
+  "sourceDirectory": "/Users/yihua/Documents/film/开发文档/BetweenFrames-v1.0-Final-Agent-Implementation",
+  "version": "1.0.0",
+  "files": {
+    "README.md": "a4c6b20e97c84f9a46cf4c0b7c485bc1d13287902c7cb6026f4c301aa719edca",
+    "AGENT-EXECUTION.md": "65f1375ef5c2d2e46f18fec6cdcf7b91733f2e1f5623834b9d0e60dace0dcb24",
+    "docs/FINAL-IMPLEMENTATION-SPEC.md": "2c3dd089399fa7f64c1b0228639b399796a61bde418febe8d3103e5ea585ecd3",
+    "docs/FINAL-IMPLEMENTATION-SPEC.docx": "a720f37b1bd963761480678275d33deade9900e258b482ec3d6534ef35cb239f",
+    "contracts/agent-tool-contracts.json": "d2f9281e120b69eca08d3b6c611b87efa94a12e06e0a13ad8cc529493a73a1a3",
+    "contracts/command-envelope.schema.json": "8da0b36ad659ca3291f14db50e1932a50b65c90c11e01771caf88f8e77d486fb",
+    "contracts/runtime-envelopes.schema.json": "14684d39d5f7c2e0c10f109c124f24d53d6666141707f9da0018fe0ea34d889f",
+    "migrations/0001_init.sql": "a513a1dcb76e26e5fdbb9c660ff3a119b4fb10a68f9254baf1f3e6753bfe13a5",
+    "migrations/0002_runtime_hardening.sql": "e1471813b7c463e0c5e60de69739e8ebae8cf7e359c1347d3f4e8c1f5897cbee",
+    "tests/verify_kit.py": "a6c02038c87c0c026083fd8d6299bb880b32d5ebb9d23c16320605af8f90729f",
+    "tests/AGENT-ACCEPTANCE-MATRIX.json": "fe8a360288160de80130bbeebdfec03986f02cc2a717af56d2d5ef6178d0353d",
+    "reference/legacy-demo.html": "dc04afe093c1b1ab40721a20dc09b885dd8684edcd470051b919e31e4d8c1ddb",
+    "reference/ui-preview.png": "d6a1c8c2d7485af72340ebd1eb43bec77e85e10a31996f35fa2197bb09732cfd"
+  }
+}

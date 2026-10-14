@@ -1,0 +1,353 @@
+{
+  "version": "0.2.0",
+  "notes": {
+    "model_contract": "将access字段从发送给模型的function定义移除；access仅由可信PolicyGate消费。",
+    "schema": "strict=true requires all properties in required and additionalProperties=false.",
+    "authoritative": "Rust backend validates ID scope, count, authorization and revisions."
+  },
+  "tools": [
+    {
+      "name": "get_project_context",
+      "description": "读取当前项目目标、版本、计数；仅限当前已授权项目。",
+      "strict": true,
+      "access": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_photos",
+      "description": "按正式人工状态分页读取已导入照片摘要。",
+      "strict": true,
+      "access": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "keep",
+              "reject",
+              "undecided",
+              null
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "project_id",
+          "status",
+          "limit",
+          "cursor"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "search_photos",
+      "description": "在已导入项目内按文本、已有视觉描述和元数据检索；不得访问互联网图库。",
+      "strict": true,
+      "access": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "query",
+          "limit"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "inspect_photos",
+      "description": "对当前项目明确授权范围内的缩略预览分析，最多每次12张；不可访问原始图。",
+      "strict": true,
+      "access": "read_image_authorization_required",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "photo_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "项目中已存在的photo_id"
+          }
+        },
+        "required": [
+          "project_id",
+          "photo_ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "compare_photos",
+      "description": "按当前项目意图比较2-4张图的叙事功能，并区分事实与解读。",
+      "strict": true,
+      "access": "read_image_authorization_required",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "photo_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "brief": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "photo_ids",
+          "brief"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "retrieve_preferences",
+      "description": "只返回附有真实人类行为证据的偏好信息。",
+      "strict": true,
+      "access": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "project_local",
+              "global_confirmed"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "scope",
+          "limit"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_sequence",
+      "description": "读取正式序列与项目当前revision。",
+      "strict": true,
+      "access": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "create_selection_draft",
+      "description": "只能创建可审核草案，不得写正式人类选择。",
+      "strict": true,
+      "access": "draft_write",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "base_project_revision": {
+            "type": "integer"
+          },
+          "ordered_photo_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "title",
+          "base_project_revision",
+          "ordered_photo_ids",
+          "summary"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_draft_sequence",
+      "description": "更新本任务拥有的草案排序，检查draft revision和photo IDs。",
+      "strict": true,
+      "access": "draft_write",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "expected_draft_revision": {
+            "type": "integer"
+          },
+          "ordered_photo_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "project_id",
+          "draft_id",
+          "expected_draft_revision",
+          "ordered_photo_ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "evaluate_draft",
+      "description": "返回草案约束检查、重复/缺失和与正式序列的差异，读取但不修改。",
+      "strict": true,
+      "access": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "draft_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "request_feedback",
+      "description": "提问一个高价值问题，任务进入needs_input。",
+      "strict": true,
+      "access": "ask_human",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "project_id",
+          "question",
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "finish_task",
+      "description": "提交本任务生成的草案ID和摘要，进入review_ready；不能自动批准。",
+      "strict": true,
+      "access": "finish",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "draft_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "task_id",
+          "draft_ids",
+          "summary"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

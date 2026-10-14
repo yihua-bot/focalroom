@@ -1,0 +1,16 @@
+{
+  "sourceDirectory": "/Users/yihua/Downloads/betweenframes-v0.2",
+  "version": "0.2.0",
+  "files": {
+    "README.md": "eccd7b234139b5e46fe95d9cafa27658d8b10f4d8c820073c8e0ec971923be12",
+    "AGENT-EXECUTION.md": "2c8d4d5919a968a1df56cf9a0edfb652b10826485e030ab78c605fa27b5fa245",
+    "docs/DEVELOPMENT-SPEC.md": "f8d67f5573832ba1c481b056c05be619ea7bd3fbac65a4a1e42eabd4ff92a014",
+    "contracts/agent-tool-contracts.json": "d45edefc0edda802a24be502feb7690709f053cf49fcfae1cffe5158c0aa3a00",
+    "contracts/command-envelope.schema.json": "eeabe36eaab32afd57c069c46605a09c499d46859c42006a66518410ee2110ba",
+    "migrations/0001_init.sql": "92db1b8b230e56d17225ec09287acf3ba15af4583cb25a40845690b7286fcd72",
+    "tests/ACCEPTANCE-CASES.json": "72ceee57d0b042ddad9f577462b0f38a5f89f2402248ac76627f63caa64f934d",
+    "tests/validate_contracts.py": "4b113bf7160c0df29a8956e25c6bb84e8c48b5b78c316f2a5e1bca7650eb4be1",
+    "reference/legacy-interactive-demo.html": "2ce4acd9654b302af9d617e70c1f73e6af32301291dd500aad14a32822a48780",
+    "reference/legacy-ui-preview.png": "d6a1c8c2d7485af72340ebd1eb43bec77e85e10a31996f35fa2197bb09732cfd"
+  }
+}

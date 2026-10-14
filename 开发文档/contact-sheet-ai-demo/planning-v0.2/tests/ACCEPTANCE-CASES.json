@@ -1,0 +1,55 @@
+{
+  "version": "0.2.0",
+  "cases": [
+    {
+      "id": "offline-workflow",
+      "step": "导入200张 -> K/X -> 对比 -> 拖拽20张 -> 保存版本 -> 导出",
+      "expect": "无网络/无Key完成；restart后数据一致"
+    },
+    {
+      "id": "agent-mock-loop",
+      "step": "Agent Mock get_project_context/list_photos/create_selection_draft/finish_task",
+      "expect": "任务和草案真实写数据库，正式选择不变化"
+    },
+    {
+      "id": "no-unapproved-write",
+      "step": "模型试图ApplyDraft或直接SetPhotoDecision",
+      "expect": "PolicyGate拒绝，正式状态/事件无变化"
+    },
+    {
+      "id": "cross-project-photo",
+      "step": "Agent draft包含其他项目photo_id",
+      "expect": "后端拒绝，SQLite cross-project trigger同样拒绝"
+    },
+    {
+      "id": "revision-conflict",
+      "step": "Agent草案baseRevision=3；GUI修改正式序列至4；用户申请批准旧草案",
+      "expect": "返回REVISION_CONFLICT并显示差异，不覆盖revision4"
+    },
+    {
+      "id": "undo-agent-approval",
+      "step": "用户批准20张草案->撤销整个事务组",
+      "expect": "正式状态、排序恢复，审计日志仍保留"
+    },
+    {
+      "id": "cancel-midrun",
+      "step": "Model等待中点取消",
+      "expect": "后续工具不执行，正式工作区可继续"
+    },
+    {
+      "id": "privacy-no-consent",
+      "step": "用户关闭云端分析并开始手动选片",
+      "expect": "AI provider network 0 requests，密钥不出现在前端日志"
+    },
+    {
+      "id": "idempotent-retry",
+      "step": "同一commandId两次提交",
+      "expect": "两次同一结果、1组events，不重复应用"
+    },
+    {
+      "id": "missing-original",
+      "step": "移动原始图片后重新打开项目",
+      "expect": "仍显示缓存预览/missing；允许重新关联；不视为删除"
+    }
+  ]
+}

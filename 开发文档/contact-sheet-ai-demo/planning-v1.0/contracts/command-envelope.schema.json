@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Between Frames Domain Command Envelope v1.0",
+  "type": "object",
+  "properties": {
+    "commandId": {
+      "type": "string"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "actorType": {
+      "type": "string",
+      "enum": [
+        "human",
+        "agent",
+        "system"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "gui_direct",
+        "human_accept_agent",
+        "human_restore",
+        "agent_draft",
+        "system_import"
+      ]
+    },
+    "expectedProjectRevision": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "causationId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "command": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SetPhotoDecision"
+            },
+            "photoIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "keep",
+                "reject",
+                "undecided"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "photoIds",
+            "status"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SetPhotoNote"
+            },
+            "photoId": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "photoId",
+            "note"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "UpdateProjectBrief"
+            },
+            "brief": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "brief"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ReorderSequence"
+            },
+            "orderedPhotoIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "orderedPhotoIds"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "CreateDraft"
+            },
+            "baseProjectRevision": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "orderedPhotoIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "summary": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "baseProjectRevision",
+            "title",
+            "orderedPhotoIds",
+            "summary"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "UpdateDraft"
+            },
+            "draftId": {
+              "type": "string"
+            },
+            "expectedDraftRevision": {
+              "type": "integer"
+            },
+            "orderedPhotoIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "draftId",
+            "expectedDraftRevision",
+            "orderedPhotoIds"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ApplyDraft"
+            },
+            "draftId": {
+              "type": "string"
+            },
+            "acceptedPhotoIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "approvedRemovals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "applyOrder": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "draftId",
+            "acceptedPhotoIds",
+            "approvedRemovals",
+            "applyOrder"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RecordComparison"
+            },
+            "leftId": {
+              "type": "string"
+            },
+            "rightId": {
+              "type": "string"
+            },
+            "preference": {
+              "type": "string",
+              "enum": [
+                "left",
+                "right",
+                "uncertain"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "leftId",
+            "rightId",
+            "preference",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SaveSequenceVersion"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RestoreSequenceVersion"
+            },
+            "versionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "versionId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "UndoCommandGroup"
+            },
+            "transactionGroupId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "transactionGroupId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SetPreferenceFeedback"
+            },
+            "hypothesisId": {
+              "type": "string"
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "confirm",
+                "correct",
+                "reject"
+              ]
+            },
+            "correction": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "hypothesisId",
+            "action",
+            "correction"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    }
+  },
+  "required": [
+    "commandId",
+    "projectId",
+    "actorType",
+    "source",
+    "expectedProjectRevision",
+    "causationId",
+    "command",
+    "idempotencyKey"
+  ],
+  "additionalProperties": false
+}
