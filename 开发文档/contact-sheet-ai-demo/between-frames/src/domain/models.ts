@@ -85,6 +85,7 @@ export interface ImportJob {
 export interface ExportReceipt { path: string; sha256: string; bytes: number }
 
 export interface DesktopProjectRepository extends ProjectRepository, DraftRepository {
+  memory: import('./memory').MemoryRepository;
   readonly mode: 'desktop';
   subscribe(onChange: (projectId: string, revision?: number) => void): Promise<() => void>;
   archive(id: string): Promise<void>;

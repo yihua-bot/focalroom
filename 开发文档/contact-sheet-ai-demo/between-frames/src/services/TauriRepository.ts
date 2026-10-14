@@ -1,4 +1,5 @@
 import { TauriAgentRepository } from './TauriAgentRepository';
+import { TauriMemoryRepository } from './TauriMemoryRepository';
 import type { SelectionDraft } from '../domain/agent';
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { z } from 'zod';
@@ -28,6 +29,7 @@ async function command<T>(name: string, args?: Record<string, unknown>): Promise
 export class TauriRepository implements DesktopProjectRepository {
   readonly mode = 'desktop' as const;
   readonly agent = new TauriAgentRepository();
+  readonly memory = new TauriMemoryRepository();
   private snapshots = new Map<string, Project>();
 
   private map(raw: unknown): Project {

@@ -31,6 +31,32 @@ impl Harness {
             "get_agent_projection" => {
                 json!(between_frames_lib::agent::projection(&self.store, id).await?)
             }
+            "get_memory_projection" => serde_json::to_value(
+                between_frames_lib::agent::memory::projection(&self.store, id).await?,
+            )
+            .unwrap(),
+            "correct_hypothesis" => serde_json::to_value(
+                between_frames_lib::agent::memory::correct(
+                    &self.store,
+                    between_frames_lib::agent::memory::HypothesisCorrection {
+                        hypothesis_id: args["hypothesisId"].as_i64().unwrap_or(0),
+                        project_id: id.to_owned(),
+                        correction: string(args, "correction")?.to_owned(),
+                    },
+                )
+                .await?,
+            )
+            .unwrap(),
+            "set_hypothesis_enabled" => serde_json::to_value(
+                between_frames_lib::agent::memory::set_enabled(
+                    &self.store,
+                    id,
+                    args["hypothesisId"].as_i64().unwrap_or(0),
+                    args["enabled"].as_bool().unwrap_or(false),
+                )
+                .await?,
+            )
+            .unwrap(),
             "get_ai_config" => {
                 let mut config = serde_json::to_value(self.agent.ai_config()).unwrap();
                 config["consent"] = serde_json::to_value(

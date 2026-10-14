@@ -6,7 +6,7 @@
 
 现有工程复用，先按新 M0 补齐/复验 GUI 与 200 张测试图→25 张序列的离线重启，再完成 M1 统一命令、版本、Undo/Redo 和幂等。M2 才实现动态 Mock Agent，M3 接真实视觉，M4 记忆，M5 Beta。新初始 SQL 与当前数据库不兼容，升级需专用兼容 migration。
 
-当前 **v1.0 M3 已实现并通过自动化验收，停止等待评审**：OpenAIProvider（Responses API tool calling，store:false 本地保存协议）、图像 consent 授权（本次任务/本项目可撤回/禁止云端）、1400px 预览上传与视觉观察缓存（幻觉 photo_id 丢弃、传输即扣配额）、图像/费用预算放开与触顶暂停、provider 按 key 自动分流。无 key 时回落本地 Mock，全功能不受影响。37 Rust 测试（含 AG-04 零外发等 4 项视觉场景）、24 前端单测、16 预览 E2E、2 真实后端集成旅程全部通过；**真实模型 E2E 待 API Key 补验**。M4 记忆引擎未启动。
+当前 **v1.0 M4 已实现并通过自动化验收，停止等待评审**：在 M3 基础上落地长期审美记忆——L2 人工偏好证据（六类人工命令、因果去重、Agent 草案结构性不计证据）、L3 可纠正假设（确定性物化、纠正后停用且不复活）、retrieve_preferences 证据化检索（假设绑定证据 ID）、Memory Studio（证据时间线/假设卡/纠正/停用）。41 Rust 测试、24 前端单测、16 预览 E2E、2 真实后端集成旅程全部通过；**M3 真实模型 E2E 仍待 API Key 补验**。M5（Keychain/签名/性能/Beta）未启动。
 
 本机评审应用：`between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames M1 Review.app`，使用新的 `studio.betweenframes.m1review` 数据目录，用户原应用和 M0 Review DB 未升级。浏览器预览为 `http://localhost:1420/`，真实存档使用桌面版。详见 [`测试与剩余问题`](docs/TEST-REPORT.md)、[`文件变更`](docs/V1-M1-FILES.md)、[`ADR 0004`](docs/ADR/0004-v1-m1-command-history.md)、[`M0 历史报告`](docs/V1-M0-TEST-REPORT.md)。记忆/上下文补充进入 [`后续约束`](docs/MEMORY-CONTEXT-ADDENDUM.md)，不提前实现。
 

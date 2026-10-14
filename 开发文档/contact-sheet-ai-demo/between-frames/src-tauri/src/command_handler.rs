@@ -195,6 +195,10 @@ impl<'a> CommandHandler<'a> {
                 .execute(&mut *tx)
                 .await?;
         }
+        // L2 偏好证据：仅实际生效的人工命令（幂等回放不重复记录；撤销/重做不产生证据）。
+        if changed {
+            crate::agent::memory::record_from_command(&mut tx, &request, &now).await?;
+        }
         let group = if changed && undoable {
             Some(event_id.clone())
         } else {

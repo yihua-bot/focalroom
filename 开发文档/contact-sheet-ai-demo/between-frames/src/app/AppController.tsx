@@ -116,7 +116,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       onRelink={local ? () => { act(async () => (await repository.relink(project.id, active.id)) ?? project); } : undefined}
       onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
       : <EmptyState title="选择一张照片" hint="点击网格，开始检查画面。" />)
-      : ui.panel === 'ai' ? <AIPanel repository={local ? repository : undefined} project={project} selectedIds={selectedIds} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /> : <PreferencePanel events={project.events} />}
+      : ui.panel === 'ai' ? <AIPanel repository={local ? repository : undefined} project={project} selectedIds={selectedIds} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /> : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
   </aside> : undefined;
   return <><AppShell inspector={panel} collapsed={!ui.sidebarOpen} nav={<SideNav project={navProject} page={route.page} view={ui.view} local={local}
     onView={view => { if (!navProject) return; if (route.page === 'projects') navigate(navProject.id); ui.setView(view); }}

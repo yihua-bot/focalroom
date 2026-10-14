@@ -333,6 +333,39 @@ pub async fn set_privacy_consent(
     .await
 }
 #[tauri::command]
+pub async fn get_memory_projection(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<crate::agent::memory::MemoryProjection> {
+    crate::agent::memory::projection(&state.store, &project_id).await
+}
+#[tauri::command]
+pub async fn correct_hypothesis(
+    state: State<'_, Backend>,
+    project_id: String,
+    hypothesis_id: i64,
+    correction: String,
+) -> Result<crate::agent::memory::HypothesisView> {
+    crate::agent::memory::correct(
+        &state.store,
+        crate::agent::memory::HypothesisCorrection {
+            hypothesis_id,
+            project_id,
+            correction,
+        },
+    )
+    .await
+}
+#[tauri::command]
+pub async fn set_hypothesis_enabled(
+    state: State<'_, Backend>,
+    project_id: String,
+    hypothesis_id: i64,
+    enabled: bool,
+) -> Result<crate::agent::memory::HypothesisView> {
+    crate::agent::memory::set_enabled(&state.store, &project_id, hypothesis_id, enabled).await
+}
+#[tauri::command]
 pub async fn agent_request(
     app: AppHandle,
     state: State<'_, Backend>,

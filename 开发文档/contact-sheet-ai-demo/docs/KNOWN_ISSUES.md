@@ -13,6 +13,7 @@
 | V1-05 | M2 受控 Mock Runtime 已实现并验收：动态循环、任务/暂停/预算/检查点、工具 receipt 与草案审批（AG-01/02/03/05–10/13/14/15 自动化通过）；等待本轮评审 | M2 completed |
 | V1-06 | M3 已实现并自动化验收（OpenAIProvider/consent/观察缓存/预算放开，AG-04 等视觉场景通过）；**真实模型 E2E 待 API Key 补验**；真实 token/费用、AG-01/02/03 真实样本未跑 | M3 completed（待补验） / M4 记忆未启动 |
 | V1-07 | 代表性 12–24MP 图库、目标 Mac 性能和至少 20 位 Beta 用户尚未验证 | 性能/Beta；不是基础 M0 测试图库前置条件 |
+| V1-08 | M4 已验收（L2 证据去重/L3 假设物化/AG-11 纠正不复活/检索注入/Memory Studio）；假设为关键词规则非语义理解、跨项目 opt-in 与 FTS5 未实现、证据删除入口未提供 | M4 completed / 后续优化 |
 
 本轮原始需求包自检通过不等于上述应用能力已实现，15 条 AG 场景未宣称通过。
 
@@ -46,7 +47,15 @@
 - `contracts:check` 仍仅覆盖 M1 GUI 契约；agent 契约由 Rust 运行时校验与集成测试覆盖。
 - 集成测试依赖 target-v1 的 feature harness；旧二进制残留会以 unknown field consentId 失败，复现命令含重建步骤。
 
-以下 M2/M1/M0/v0.2/v0.1 内容为各轮历史，当前状态以上文和 M3 报告为准。
+## v1.0 M4 已测能力与边界（2026-10-14）
+
+- 自动化：41 Rust（agent_memory 4：去重/确定性物化、AG-11、Agent 草案零证据、检索与白名单拒绝、撤销不影响证据）、24 单测、16 预览、2 集成；typecheck/lint/严格 Clippy/fmt 通过。见 [当前报告](TEST-REPORT.md)。
+- 假设由证据文本 2-gram 聚合生成（≥2 条独立证据），statement 明示证据来源；不做语义理解，不生成跨项目假设。
+- 纠正即停用检索且同表述不复活；停用可恢复；Memory Studio 显示证据链接与反例计数。
+- retrieve_preferences 限项目内 scope（跨项目在工具 schema 白名单层拒绝）；ContextBuilder 每轮最多注入 3 条假设。
+- 证据仅六类人工命令产生，append-only 不提供删除；撤销/重做/幂等重放不改变计数。
+
+以下 M3/M2/M1/M0/v0.2/v0.1 内容为各轮历史，当前状态以上文和 M4 报告为准。
 
 ## v1.0 M0 已测能力与边界
 

@@ -143,17 +143,19 @@ pub(crate) async fn execute(
             if a["scope"] != "project_local" {
                 return Err(AppError::new(
                     "PERMISSION_DENIED",
-                    "跨项目记忆未实现，不能读取其他项目",
+                    "跨项目记忆未开放；仅项目内证据支持的偏好可检索",
                 ));
             }
+            let limit = a["limit"].as_u64().unwrap_or(5).min(10) as usize;
+            let memory = super::memory::retrievable(tx, &task.project_id, limit).await?;
             let mut facts = photos(tx, task).await?;
             facts.retain(|p| {
                 p["rating"].as_i64().unwrap_or(0) > 0
                     || p["note"].as_str().is_some_and(|s| !s.is_empty())
             });
-            facts.truncate(a["limit"].as_u64().unwrap() as usize);
+            facts.truncate(limit);
             Ok(
-                json!({"human_facts":facts,"hypotheses":[],"mode":"project_facts_only","notice":"未生成长期偏好"}),
+                json!({"hypotheses":memory["hypotheses"],"human_facts":facts,"mode":"evidence_backed_project_local","notice":"假设来自人工证据的确定性推断，附证据 ID；纠正后不再检索。Agent 草案不计为证据"}),
             )
         }
         "create_selection_draft" => {

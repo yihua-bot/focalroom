@@ -1,5 +1,11 @@
 # 工程决策
 
+## v1.0 M4 偏好记忆验收（2026-10-14）
+
+L2 证据 dedup_key=command_id：幂等回放命中同一回执不增行，撤销/重做不产生（也不伪造反）证据；Agent 草案在独立通道，结构性排除于证据之外。L3 假设为确定性 2-gram 聚合（≥2 条独立证据才生成、默认 project_local），纠正即 corrected+停用检索且同表述不复活（AG-11 实测）。检索按确认状态/证据数/时间排序，假设与证据 ID 绑定返回；ContextBuilder 每轮限量注入 3 条。FTS5 未引入：v1 假设基数小，过滤+排序与 LIKE 语义等价（ADR 0007），量增后作性能优化。证据不提供删除入口（append-only 审计，留产品评审）。
+
+过程修正：测试 receipt 快照 revision 滞后一步属既定行为（gui 辅助改回读权威状态）；幂等重放断言改为证据计数语义。本轮自动化：41 Rust（agent_memory 4）、24 单测、16 预览、2 集成、typecheck/lint/严格 Clippy/fmt 通过。**当前停止 M4 等待评审，M5 未启动。** 见 [ADR 0007](docs/ADR/0007-v1-m4-preference-memory.md)、[测试报告](docs/TEST-REPORT.md)、[文件清单](docs/V1-M4-FILES.md)、[计划](docs/PLAN-V1-M4.md)。下文保留各轮历史决定。
+
 ## v1.0 M3 真实视觉与授权验收（2026-10-14）
 
 OpenAIProvider 走 Responses API tool calling（reqwest/rustls），store:false 由本地 checkpoint 保存并重发多轮 function_call/output；视觉观察是工具执行器内的独立子请求，预取持读事务、网络在写事务外，避免长事务持锁。授权三态（本次任务/本项目/禁止），配额按**真实传输张数**扣减——幻觉 photo_id 的观察被整体丢弃但传输已发生、配额仍扣，隐私语义优先；观察缓存键 hash+model+prompt+kind，命中零上传。API key 仅环境变量进内存、不落库不进前端（Keychain 留 M5，ADR 0006）；费用为保守估算（1 美分/图 + 1 美分/千 token）非账单。provider 由后端按 key 决定，checkpoint 校验 providerId/promptVersion 防跨 provider 续跑。
