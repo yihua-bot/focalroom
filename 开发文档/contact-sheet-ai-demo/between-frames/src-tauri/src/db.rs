@@ -248,6 +248,36 @@ impl Store {
         CommandHandler::new(self).import_photo(id, prepared).await
     }
     /// 全部照片的内容指纹（缓存清理的 live 集合；缓存按 hash 跨项目共享）。
+    /// 项目标签（v1.1）：组织元数据走独立通道——不占人工撤销栈、不改
+    /// revision（不使草案 stale）。校验：1–24 字符、去重、每项目 ≤12 个。
+    pub async fn set_project_tags(&self, project_id: &str, tags: &[String]) -> Result<Vec<String>> {
+        let mut cleaned: Vec<String> = vec![];
+        for tag in tags {
+            let trimmed = tag.trim();
+            if trimmed.is_empty() || trimmed.chars().count() > 24 {
+                return Err(AppError::new("VALIDATION_ERROR", "标签须为 1–24 个字符"));
+            }
+            if !cleaned.iter().any(|existing| existing == trimmed) {
+                cleaned.push(trimmed.to_owned());
+            }
+        }
+        if cleaned.len() > 12 {
+            return Err(AppError::new("VALIDATION_ERROR", "每个项目最多 12 个标签"));
+        }
+        let changed = sqlx::query(
+            "UPDATE projects SET tags_json=?,updated_at=? WHERE id=? AND deleted_at IS NULL",
+        )
+        .bind(serde_json::to_string(&cleaned).unwrap())
+        .bind(crate::domain::timestamp())
+        .bind(project_id)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+        if changed == 0 {
+            return Err(AppError::new("NOT_FOUND", "项目不存在"));
+        }
+        Ok(cleaned)
+    }
     pub async fn photo_hashes(&self) -> Result<Vec<String>> {
         Ok(
             sqlx::query_scalar("SELECT DISTINCT content_sha256 FROM photos")
@@ -274,7 +304,7 @@ pub(crate) async fn snapshot_tx(
     archived: Option<bool>,
 ) -> Result<Project> {
     let row = sqlx::query(
-        "SELECT id,title,brief,revision,updated_at,deleted_at FROM projects WHERE id=?",
+        "SELECT id,title,brief,revision,updated_at,deleted_at,tags_json FROM projects WHERE id=?",
     )
     .bind(id)
     .fetch_optional(&mut **tx)
@@ -329,6 +359,7 @@ pub(crate) async fn snapshot_tx(
         brief: row.get("brief"),
         revision: row.get("revision"),
         updated_at: row.get("updated_at"),
+        tags: serde_json::from_str(&row.get::<String, _>("tags_json")).unwrap_or_default(),
         photos,
         sequence,
         events,

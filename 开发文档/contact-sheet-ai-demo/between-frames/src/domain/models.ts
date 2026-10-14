@@ -35,6 +35,7 @@ export interface Project {
   archived?: boolean;
   title: string;
   brief: string;
+  tags?: string[];
   photos: Photo[];
   sequence: string[];
   events: PreviewEvent[];
@@ -69,6 +70,7 @@ export interface ProjectRepository {
   redo(id: string): Promise<Project>;
   saveVersion(id: string, label: string): Promise<Project>;
   restoreVersion(id: string, versionId: string): Promise<Project>;
+  setTags(projectId: string, tags: string[]): Promise<void>;
 }
 
 export interface ImportJob {

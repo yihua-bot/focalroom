@@ -15,6 +15,10 @@ export function createSampleProject(): Project {
 
 // 仅用于 M0 UI 验收，刷新后重置；不读取用户文件，不使用浏览器持久化。
 export class MockRepository implements ProjectRepository {
+  async setTags(projectId: string, tags: string[]) {
+   const project = this.projects.find(item => item.id === projectId);
+   if (project) project.tags = [...new Set(tags.map(tag => tag.trim()).filter(Boolean))];
+  }
   private projects: Project[];
   private pending = new Map<string, Pick<Project, 'title' | 'brief' | 'photos' | 'sequence'>>();
   private stacks = new Map<string, { before: Pick<Project, 'title' | 'brief' | 'photos' | 'sequence'>; after: Pick<Project, 'title' | 'brief' | 'photos' | 'sequence'>; id: string }[]>();

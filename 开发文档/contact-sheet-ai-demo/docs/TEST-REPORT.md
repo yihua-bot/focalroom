@@ -46,8 +46,8 @@ CARGO_TARGET_DIR="target-v1" npm run test:integration
 
 签名/公证/DMG 需 Apple 开发者证书；20 位用户 Beta 与 3 位摄影师无指导试用需真人执行（验收脚本以 beta-journey 自动化打底）；真实模型 E2E 仍待 API Key；M4 遗留（跨项目假设、FTS5、证据删除入口）继续有效。
 
-## v1.1 第一轮增量（2026-10-14）
+## v1.1 增量（2026-10-14，两轮）
 
-版本对比（A vs B / 当前序列的新增/移除/移位/人工判断变化，纯前端复用快照）与项目模板（五个静态模板预填，仅新建时出现）已交付：组件测试 7 项，前端单测合计 35；verify-all 全量通过。项目标签（需迁移）与版式增强留后续。见 [PLAN-V1.1](PLAN-V1.1.md)、[ADR 0009](ADR/0009-v1-1-templates-diff.md)。
+第一轮：版本对比（A vs B / 当前序列的新增/移除/移位/人工判断变化，纯前端复用快照）与项目模板（五个静态模板预填）。第二轮：项目标签——migration 0007（tags_json）、独立通道 set_project_tags（组织元数据不占人工撤销栈、不推动 revision/不使草案 stale）、编辑对话框标签输入（、分隔）、列表标签 chips 与筛选；Rust project_tags 1 项（往返/校验/幂等/revision 不变/归档拒绝）+ 组件 9 项。verify-all 全量通过（46 Rust、37 前端单测）。版式增强待设计输入。见 [PLAN-V1.1](PLAN-V1.1.md)、[ADR 0009](ADR/0009-v1-1-templates-diff.md)。
 
 六阶段工程实现至此全部落地，停止等待整体评审；规格符合性终审见 [V1.0-COMPLIANCE](V1.0-COMPLIANCE.md)。另见 [已知问题](KNOWN_ISSUES.md)、[文件清单](V1-M5-FILES.md)、[ADR 0008](ADR/0008-v1-m5-beta-readiness.md)、[隐私说明](PRIVACY.md)。

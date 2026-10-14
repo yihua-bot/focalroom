@@ -79,6 +79,8 @@ pub struct Project {
     pub brief: String,
     pub revision: i64,
     pub updated_at: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
     pub photos: Vec<Photo>,
     pub sequence: Vec<String>,
     pub events: Vec<DecisionEvent>,

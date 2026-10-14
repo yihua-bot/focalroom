@@ -40,6 +40,11 @@ impl Harness {
                 let _ = between_frames_lib::keychain::delete_api_key();
                 json!({"ok": true, "keySource": null})
             }
+            "set_project_tags" => {
+                let tags: Vec<String> = serde_json::from_value(args["tags"].clone())
+                    .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+                json!({"ok": true, "tags": self.store.set_project_tags(id, &tags).await?})
+            }
             "get_diagnostics" => {
                 let config = self.agent.ai_config();
                 let photos: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photos")

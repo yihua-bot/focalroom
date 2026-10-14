@@ -29,6 +29,9 @@ async function command<T>(name: string, args?: Record<string, unknown>): Promise
 export class TauriRepository implements DesktopProjectRepository {
   readonly mode = 'desktop' as const;
   readonly agent = new TauriAgentRepository();
+  async setTags(projectId: string, tags: string[]) {
+   await invoke('set_project_tags', { projectId, tags });
+  }
   readonly memory = new TauriMemoryRepository();
   private snapshots = new Map<string, Project>();
 

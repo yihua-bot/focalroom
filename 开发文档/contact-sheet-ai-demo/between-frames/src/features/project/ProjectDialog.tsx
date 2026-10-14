@@ -13,9 +13,10 @@ export const PROJECT_TEMPLATES: { key: string; label: string; titleHint: string;
   { key: 'portfolio', label: '作品集初选', titleHint: '年度作品集', brief: '从长期拍摄中选出代表性作品；主题一致性优先于数量，宁缺毋滥。每组之间要有呼吸和转折。' },
 ];
 
-export function ProjectDialog({ project, onClose, onSave, busy }: { project?: Project; onClose: () => void; onSave: (title: string, brief: string) => void; busy: boolean }) {
+export function ProjectDialog({ project, onClose, onSave, busy }: { project?: Project; onClose: () => void; onSave: (title: string, brief: string, tags?: string[]) => void; busy: boolean }) {
   const [title, setTitle] = useState(project?.title ?? '');
   const [brief, setBrief] = useState(project?.brief ?? '');
+  const [tags, setTags] = useState((project?.tags ?? []).join('、'));
   const [templateKey, setTemplateKey] = useState('blank');
   const applyTemplate = (key: string) => {
     setTemplateKey(key);
@@ -27,7 +28,8 @@ export function ProjectDialog({ project, onClose, onSave, busy }: { project?: Pr
     }
   };
   return <Modal title={project ? zh.editIntent : zh.newProject} description="写下作品名称与创作意图，作为每次判断的背景。" onClose={onClose}>
-    <form onSubmit={event => { event.preventDefault(); if (title.trim()) onSave(title.trim(), brief.trim()); }}>
+    {project && <><label htmlFor="project-tags">标签（用、分隔，最多 12 个）</label><input id="project-tags" className="text-input" maxLength={340} value={tags} placeholder="例如：家庭、2026、胶片" onChange={event => setTags(event.target.value)} /></>}
+    <form onSubmit={event => { event.preventDefault(); if (title.trim()) onSave(title.trim(), brief.trim(), tags.split(/、|,/).map(tag => tag.trim()).filter(Boolean)); }}>
       {!project && <fieldset className="template-picker"><legend>从模板开始（可选）</legend>
         <div className="template-options">{PROJECT_TEMPLATES.map(template => <button type="button" key={template.key} aria-pressed={templateKey === template.key} onClick={() => applyTemplate(template.key)}>
           {template.label}{template.key !== 'blank' && <small>{template.titleHint}</small>}

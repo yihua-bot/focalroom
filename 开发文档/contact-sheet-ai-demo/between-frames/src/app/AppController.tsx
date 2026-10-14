@@ -131,8 +131,8 @@ export function AppController({ repository }: { repository: ProjectRepository })
   </AppShell>
     {local && project && !(ui.inspectorOpen && ui.panel === 'ai') && <AgentStatus repository={repository} projectId={project.id} onOpen={() => ui.setPanel('ai')} />}
     {notice && <div role="status" className="toast">{notice}</div>}
-    {(dialog?.kind === 'create' || dialog?.kind === 'edit') && <ProjectDialog project={dialog.kind === 'edit' ? project : undefined} busy={mutation.isPending} onClose={() => setDialog(null)} onSave={(title, brief) => {
-      if (dialog.kind === 'edit' && project) act(() => repository.edit(project.id, title, brief), local ? '项目已保存到本地' : zh.savedProject, true);
+    {(dialog?.kind === 'create' || dialog?.kind === 'edit') && <ProjectDialog project={dialog.kind === 'edit' ? project : undefined} busy={mutation.isPending} onClose={() => setDialog(null)} onSave={(title, brief, tags) => {
+      if (dialog.kind === 'edit' && project) act(async () => { const updated = await repository.edit(project.id, title, brief); if (tags) await repository.setTags(project.id, tags); return updated; }, local ? '项目已保存到本地' : zh.savedProject, true);
       else mutation.mutate(() => repository.create(title, brief), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); setLastProjectId(created.id); navigate(created.id); } });
     }} />}
     {dialog?.kind === 'compare' && project && <CompareModal left={dialog.left} right={dialog.right} busy={mutation.isPending} onClose={() => setDialog(null)} onCompare={(preferred, reason) => act(() => repository.compare(project.id, dialog.left.id, dialog.right.id, preferred, reason), zh.savedCompare, true)} />}

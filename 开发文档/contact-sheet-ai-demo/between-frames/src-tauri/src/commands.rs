@@ -344,6 +344,15 @@ pub fn delete_api_key() -> Result<serde_json::Value> {
     Ok(serde_json::json!({"ok": true, "keySource": null}))
 }
 #[tauri::command]
+pub async fn set_project_tags(
+    state: State<'_, Backend>,
+    project_id: String,
+    tags: Vec<String>,
+) -> Result<serde_json::Value> {
+    let cleaned = state.store.set_project_tags(&project_id, &tags).await?;
+    Ok(serde_json::json!({"ok": true, "tags": cleaned}))
+}
+#[tauri::command]
 pub async fn get_diagnostics(state: State<'_, Backend>) -> Result<serde_json::Value> {
     let mut counts = serde_json::Map::new();
     for (label, table) in [
