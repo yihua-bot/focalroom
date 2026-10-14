@@ -97,5 +97,5 @@ export interface DesktopProjectRepository extends ProjectRepository, DraftReposi
   cancelImport(jobId: string): Promise<void>;
   retryImport(jobId: string): Promise<string>;
   relink(id: string, photoId: string): Promise<Project | null>;
-  export(id: string, format: 'json' | 'csv' | 'html', includePaths?: boolean): Promise<ExportReceipt | null>;
+  export(id: string, format: 'json' | 'csv' | 'html' | 'print' | 'sidecar', includePaths?: boolean): Promise<ExportReceipt | null>;
 }

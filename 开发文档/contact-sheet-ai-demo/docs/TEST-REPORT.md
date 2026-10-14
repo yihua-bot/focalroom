@@ -50,4 +50,8 @@ CARGO_TARGET_DIR="target-v1" npm run test:integration
 
 第一轮：版本对比（A vs B / 当前序列的新增/移除/移位/人工判断变化，纯前端复用快照）与项目模板（五个静态模板预填）。第二轮：项目标签——migration 0007（tags_json）、独立通道 set_project_tags（组织元数据不占人工撤销栈、不推动 revision/不使草案 stale）、编辑对话框标签输入（、分隔）、列表标签 chips 与筛选；Rust project_tags 1 项（往返/校验/幂等/revision 不变/归档拒绝）+ 组件 9 项。第三轮：沉浸审片（版式增强）——灯箱内 K/X/U 决策与 0–5 评分（与网格同一正式命令通道）、状态与星级实时反馈、底部胶片条（状态标/星级/当前高亮/点击跳转）；组件测试 4 项。**v1.1 三项全部交付**，verify-all 全量通过（46 Rust、41 前端单测）。见 [PLAN-V1.1](PLAN-V1.1.md)、[ADR 0009](ADR/0009-v1-1-templates-diff.md)。
 
+## v1.2 第一轮增量（2026-10-14）
+
+印刷参考导出（format=print：A4 横版分页 HTML，封面+每页双图+裁切参考，浏览器打印存为 PDF，零新依赖）与元数据侧车（format=sidecar：每照片一 JSON + manifest，目录级只新建不覆盖，路径默认私密可 opt-in）已交付：export_v12 两项测试（3 张作品 2 页 3 plate 结构断言；侧车内容/manifest/重复导出拒绝/路径 opt-in）；导出对话框新增两个按钮。verify-all 全量通过（48 Rust、41 单测）。页跨图编辑待试用反馈后设计。见 [PLAN-V1.2](PLAN-V1.2.md)、[ADR 0010](ADR/0010-v1-2-print-sidecar.md)。
+
 六阶段工程实现至此全部落地，停止等待整体评审；规格符合性终审见 [V1.0-COMPLIANCE](V1.0-COMPLIANCE.md)。另见 [已知问题](KNOWN_ISSUES.md)、[文件清单](V1-M5-FILES.md)、[ADR 0008](ADR/0008-v1-m5-beta-readiness.md)、[隐私说明](PRIVACY.md)。

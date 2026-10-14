@@ -120,7 +120,7 @@ export class TauriRepository implements DesktopProjectRepository {
   async cancelImport(jobId: string) { await command('cancel_import', { jobId }); }
   async retryImport(jobId: string) { return command<string>('retry_import', { jobId }); }
   async relink(id: string, photoId: string) { const project = await command('relink_photo', { projectId: id, expectedRevision: this.revision(id), photoId }); return project ? this.map(project) : null; }
-  async export(id: string, format: 'json' | 'csv' | 'html', includePaths = false) {
+  async export(id: string, format: 'json' | 'csv' | 'html' | 'print' | 'sidecar', includePaths = false) {
     return z.object({ path: z.string(), sha256: z.string(), bytes: z.number() }).nullable().parse(await command('export_project', { projectId: id, format, includePaths }));
   }
 }
