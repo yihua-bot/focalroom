@@ -1,450 +1,450 @@
 {
-  "version": "1.1.0-m2",
-  "notes": {
-    "model_contract": "将access字段从发送给模型的function定义移除；access仅由可信PolicyGate消费。",
-    "schema": "strict=true requires all properties in required and additionalProperties=false.",
-    "authoritative": "Rust backend validates ID scope, count, authorization and revisions."
+ "version": "1.1.0-m2",
+ "notes": {
+  "model_contract": "将access字段从发送给模型的function定义移除；access仅由可信PolicyGate消费。",
+  "schema": "strict=true requires all properties in required and additionalProperties=false.",
+  "authoritative": "Rust backend validates ID scope, count, authorization and revisions."
+ },
+ "tools": [
+  {
+   "name": "get_project_context",
+   "description": "读取当前项目目标、版本、计数；仅限当前已授权项目。",
+   "strict": true,
+   "access": "read",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     }
+    },
+    "required": [
+     "project_id"
+    ],
+    "additionalProperties": false
+   }
   },
-  "tools": [
-    {
-      "name": "get_project_context",
-      "description": "读取当前项目目标、版本、计数；仅限当前已授权项目。",
-      "strict": true,
-      "access": "read",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          }
-        },
-        "required": [
-          "project_id"
-        ],
-        "additionalProperties": false
-      }
+  {
+   "name": "list_photos",
+   "description": "按正式人工状态分页读取已导入照片摘要。",
+   "strict": true,
+   "access": "read",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "status": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "enum": [
+       "keep",
+       "reject",
+       "undecided",
+       null
+      ]
+     },
+     "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+     },
+     "cursor": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
     },
-    {
-      "name": "list_photos",
-      "description": "按正式人工状态分页读取已导入照片摘要。",
-      "strict": true,
-      "access": "read",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "status": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "enum": [
-              "keep",
-              "reject",
-              "undecided",
-              null
-            ]
-          },
-          "limit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          },
-          "cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "project_id",
-          "status",
-          "limit",
-          "cursor"
-        ],
-        "additionalProperties": false
-      }
+    "required": [
+     "project_id",
+     "status",
+     "limit",
+     "cursor"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "search_photos",
+   "description": "在已导入项目内按文本、已有视觉描述和元数据检索；不得访问互联网图库。",
+   "strict": true,
+   "access": "read",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+     },
+     "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+     }
     },
-    {
-      "name": "search_photos",
-      "description": "在已导入项目内按文本、已有视觉描述和元数据检索；不得访问互联网图库。",
-      "strict": true,
-      "access": "read",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "query": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4000
-          },
-          "limit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          }
-        },
-        "required": [
-          "project_id",
-          "query",
-          "limit"
-        ],
-        "additionalProperties": false
-      }
+    "required": [
+     "project_id",
+     "query",
+     "limit"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "inspect_photos",
+   "description": "M3：有图像授权且提供方可用时执行真实视觉观察（上传低分辨率预览，缓存命中不上传）；无授权时仅对照人工状态/评分/备注并明示未读图。观察区分可观察事实与主观解读。",
+   "strict": true,
+   "access": "read_image_authorization_required",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "photo_ids": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "项目中已存在的photo_id",
+      "maxItems": 12,
+      "uniqueItems": true,
+      "minItems": 1
+     }
     },
-    {
-      "name": "inspect_photos",
-      "description": "M2 Mock 元数据对照：只读人工状态/评分/备注，不读取像素或上传图像；不代表视觉理解。",
-      "strict": true,
-      "access": "read_image_authorization_required",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "photo_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "项目中已存在的photo_id",
-            "maxItems": 12,
-            "uniqueItems": true,
-            "minItems": 1
-          }
-        },
-        "required": [
-          "project_id",
-          "photo_ids"
-        ],
-        "additionalProperties": false
-      }
+    "required": [
+     "project_id",
+     "photo_ids"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "compare_photos",
+   "description": "M3：有图像授权且提供方可用时执行真实视觉观察（上传低分辨率预览，缓存命中不上传）；无授权时仅对照人工状态/评分/备注并明示未读图。观察区分可观察事实与主观解读。",
+   "strict": true,
+   "access": "read_image_authorization_required",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "photo_ids": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 4,
+      "uniqueItems": true,
+      "minItems": 2
+     },
+     "brief": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+     }
     },
-    {
-      "name": "compare_photos",
-      "description": "M2 Mock 元数据对照：只读人工状态/评分/备注，不读取像素或上传图像；不代表视觉理解。",
-      "strict": true,
-      "access": "read_image_authorization_required",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "photo_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 4,
-            "uniqueItems": true,
-            "minItems": 2
-          },
-          "brief": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4000
-          }
-        },
-        "required": [
-          "project_id",
-          "photo_ids",
-          "brief"
-        ],
-        "additionalProperties": false
-      }
+    "required": [
+     "project_id",
+     "photo_ids",
+     "brief"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "retrieve_preferences",
+   "description": "M2 仅返回限量项目人工事实，不生成偏好假设；global_confirmed 暂不可用。",
+   "strict": true,
+   "access": "read",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "scope": {
+      "type": "string",
+      "enum": [
+       "project_local",
+       "global_confirmed"
+      ],
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+     }
     },
-    {
-      "name": "retrieve_preferences",
-      "description": "M2 仅返回限量项目人工事实，不生成偏好假设；global_confirmed 暂不可用。",
-      "strict": true,
-      "access": "read",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "scope": {
-            "type": "string",
-            "enum": [
-              "project_local",
-              "global_confirmed"
-            ],
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "limit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          }
-        },
-        "required": [
-          "project_id",
-          "scope",
-          "limit"
-        ],
-        "additionalProperties": false
-      }
+    "required": [
+     "project_id",
+     "scope",
+     "limit"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "get_sequence",
+   "description": "读取正式序列与项目当前revision。",
+   "strict": true,
+   "access": "read",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     }
     },
-    {
-      "name": "get_sequence",
-      "description": "读取正式序列与项目当前revision。",
-      "strict": true,
-      "access": "read",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          }
+    "required": [
+     "project_id"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "create_selection_draft",
+   "description": "只能创建可审核草案，不得写正式人类选择。",
+   "strict": true,
+   "access": "draft_write",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "base_project_revision": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+     },
+     "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "properties": {
+        "photo_id": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 160
         },
-        "required": [
-          "project_id"
-        ],
-        "additionalProperties": false
+        "proposed_action": {
+         "type": "string",
+         "enum": [
+          "keep",
+          "reject",
+          "undecided"
+         ]
+        },
+        "position": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 499
+        },
+        "rationale": {
+         "type": "string",
+         "maxLength": 500
+        }
+       },
+       "required": [
+        "photo_id",
+        "proposed_action",
+        "position",
+        "rationale"
+       ]
       }
+     }
     },
-    {
-      "name": "create_selection_draft",
-      "description": "只能创建可审核草案，不得写正式人类选择。",
-      "strict": true,
-      "access": "draft_write",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "title": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "base_project_revision": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "summary": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4000
-          },
-          "items": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 500,
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "photo_id": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 160
-                },
-                "proposed_action": {
-                  "type": "string",
-                  "enum": [
-                    "keep",
-                    "reject",
-                    "undecided"
-                  ]
-                },
-                "position": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 499
-                },
-                "rationale": {
-                  "type": "string",
-                  "maxLength": 500
-                }
-              },
-              "required": [
-                "photo_id",
-                "proposed_action",
-                "position",
-                "rationale"
-              ]
-            }
-          }
-        },
-        "required": [
-          "project_id",
-          "title",
-          "base_project_revision",
-          "summary",
-          "items"
-        ],
-        "additionalProperties": false
-      }
+    "required": [
+     "project_id",
+     "title",
+     "base_project_revision",
+     "summary",
+     "items"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "update_draft_sequence",
+   "description": "更新本任务拥有的草案排序，检查draft revision和photo IDs。",
+   "strict": true,
+   "access": "draft_write",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "draft_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "expected_draft_revision": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "ordered_photo_ids": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 500,
+      "uniqueItems": true
+     }
     },
-    {
-      "name": "update_draft_sequence",
-      "description": "更新本任务拥有的草案排序，检查draft revision和photo IDs。",
-      "strict": true,
-      "access": "draft_write",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "draft_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "expected_draft_revision": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "ordered_photo_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 500,
-            "uniqueItems": true
-          }
-        },
-        "required": [
-          "project_id",
-          "draft_id",
-          "expected_draft_revision",
-          "ordered_photo_ids"
-        ],
-        "additionalProperties": false
-      }
+    "required": [
+     "project_id",
+     "draft_id",
+     "expected_draft_revision",
+     "ordered_photo_ids"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "evaluate_draft",
+   "description": "返回草案约束检查、重复/缺失和与正式序列的差异，读取但不修改。",
+   "strict": true,
+   "access": "read",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "draft_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     }
     },
-    {
-      "name": "evaluate_draft",
-      "description": "返回草案约束检查、重复/缺失和与正式序列的差异，读取但不修改。",
-      "strict": true,
-      "access": "read",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "draft_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          }
-        },
-        "required": [
-          "project_id",
-          "draft_id"
-        ],
-        "additionalProperties": false
-      }
+    "required": [
+     "project_id",
+     "draft_id"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "request_feedback",
+   "description": "提问一个高价值问题，任务进入needs_input。",
+   "strict": true,
+   "access": "ask_human",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "question": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+     },
+     "options": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 500,
+      "uniqueItems": true
+     }
     },
-    {
-      "name": "request_feedback",
-      "description": "提问一个高价值问题，任务进入needs_input。",
-      "strict": true,
-      "access": "ask_human",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "question": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4000
-          },
-          "options": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 500,
-            "uniqueItems": true
-          }
-        },
-        "required": [
-          "project_id",
-          "question",
-          "options"
-        ],
-        "additionalProperties": false
-      }
+    "required": [
+     "project_id",
+     "question",
+     "options"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "finish_task",
+   "description": "提交本任务生成的草案ID和摘要，进入review_ready；不能自动批准。",
+   "strict": true,
+   "access": "finish",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "draft_ids": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 500,
+      "uniqueItems": true
+     },
+     "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+     }
     },
-    {
-      "name": "finish_task",
-      "description": "提交本任务生成的草案ID和摘要，进入review_ready；不能自动批准。",
-      "strict": true,
-      "access": "finish",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "project_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "task_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 160
-          },
-          "draft_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 500,
-            "uniqueItems": true
-          },
-          "summary": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4000
-          }
-        },
-        "required": [
-          "project_id",
-          "task_id",
-          "draft_ids",
-          "summary"
-        ],
-        "additionalProperties": false
-      }
-    }
-  ]
+    "required": [
+     "project_id",
+     "task_id",
+     "draft_ids",
+     "summary"
+    ],
+    "additionalProperties": false
+   }
+  }
+ ]
 }

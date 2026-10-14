@@ -1,13 +1,16 @@
+pub mod consent;
 pub mod context;
 mod drafts;
-mod execution;
-mod lifecycle;
+pub(crate) mod execution;
+pub mod lifecycle;
+pub mod openai;
 pub mod policy;
 pub mod provider;
 pub mod runtime;
 pub(crate) mod store;
 mod tools;
 pub mod types;
+pub mod vision;
 pub(crate) use drafts::human as apply_human_draft;
 
 use crate::{command_handler::CommandHandler, domain::Result};
@@ -37,8 +40,13 @@ impl CommandHandler<'_> {
     ) -> Result<()> {
         execution::outcome(self.store, id, o, input, elapsed).await
     }
-    pub async fn agent_tool(&self, id: &str, c: &ToolCall) -> Result<ToolResult> {
-        execution::tool(self.store, id, c).await
+    pub async fn agent_tool(
+        &self,
+        id: &str,
+        c: &ToolCall,
+        vision_data: Option<&vision::VisionPrefetch>,
+    ) -> Result<ToolResult> {
+        execution::tool(self.store, id, c, vision_data).await
     }
     pub(crate) async fn agent_clear(&self, id: &str) -> Result<()> {
         execution::clear(self.store, id).await
@@ -55,3 +63,18 @@ pub async fn projection(db: &crate::db::Store, project: &str) -> Result<AgentPro
 pub const PROMPT_VERSION: &str = "m2-mock-1";
 pub const PROVIDER_ID: &str = "mock";
 pub const MODEL_ID: &str = "metadata-mock-1";
+pub const PROVIDER_OPENAI: &str = "openai";
+pub fn prompt_version(provider: &str) -> &'static str {
+    if provider == PROVIDER_OPENAI {
+        "m3-openai-1"
+    } else {
+        PROMPT_VERSION
+    }
+}
+pub fn system_prompt(provider: &str) -> &'static str {
+    if provider == PROVIDER_OPENAI {
+        include_str!("../../../prompts/agent-system-m3.md")
+    } else {
+        include_str!("../../../prompts/agent-system-m2.md")
+    }
+}

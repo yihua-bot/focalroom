@@ -50,6 +50,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::agent_request,
             commands::get_agent_projection,
+            commands::get_ai_config,
+            commands::set_privacy_consent,
             commands::list_projects,
             commands::get_project,
             commands::execute_gui_command,

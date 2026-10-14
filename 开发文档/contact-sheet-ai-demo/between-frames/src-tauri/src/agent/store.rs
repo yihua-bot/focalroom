@@ -33,6 +33,8 @@ pub(crate) async fn load(tx: &mut Transaction<'_, Sqlite>, id: &str) -> Result<T
             .get::<Option<String>, _>("pending_json")
             .map(parse)
             .transpose()?,
+        provider_id: r.get("provider_id"),
+        consent_id: r.get("consent_id"),
         created_at: r.get("created_at"),
         updated_at: r.get("updated_at"),
     })
@@ -125,8 +127,18 @@ pub(crate) async fn checkpoint(tx: &mut Transaction<'_, Sqlite>, task: &Task) ->
             .bind(&task.id)
             .fetch_all(&mut **tx)
             .await?;
-    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"providerId":super::PROVIDER_ID,"modelId":super::MODEL_ID,"promptVersion":super::PROMPT_VERSION,"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"providerId":task.provider_id,"modelId":model_id_of(&task.provider_id),"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
     Ok(())
+}
+fn model_id_of(provider: &str) -> String {
+    if provider == super::PROVIDER_OPENAI {
+        std::env::var(super::openai::MODEL_ENV)
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| super::openai::DEFAULT_MODEL.into())
+    } else {
+        super::MODEL_ID.into()
+    }
 }
 pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection> {
     let mut tx = store.pool.begin().await?;
@@ -165,6 +177,7 @@ pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection>
             elapsed_ms: t.elapsed_ms,
             question: t.question,
             final_draft_ids: t.final_draft_ids,
+            provider_id: t.provider_id,
             steps,
             created_at: t.created_at,
         });

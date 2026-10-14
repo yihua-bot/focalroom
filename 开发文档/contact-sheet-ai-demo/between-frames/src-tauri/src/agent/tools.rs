@@ -1,4 +1,4 @@
-use super::{drafts::replace_items, store, types::*};
+use super::{drafts::replace_items, store, types::*, vision::VisionPrefetch};
 use crate::{
     command_audit::serialization,
     domain::{self, AppError, Result},
@@ -11,6 +11,7 @@ pub(crate) async fn execute(
     tx: &mut Transaction<'_, Sqlite>,
     task: &mut Task,
     call: &ToolCall,
+    vision_data: Option<&VisionPrefetch>,
 ) -> Result<Value> {
     let a = &call.args;
     match call.name.as_str() {
@@ -85,9 +86,58 @@ pub(crate) async fn execute(
                 serde_json::from_value(a["photo_ids"].clone()).map_err(serialization)?;
             let mut data = photos(tx, task).await?;
             data.retain(|p| ids.iter().any(|id| p["photo_id"] == *id));
-            Ok(
-                json!({"photos":data,"mode":"mock_metadata_only","uncertainty":"未读取像素；仅对照人工评分/备注"}),
-            )
+            match vision_data.filter(|v| v.kind == call.name) {
+                Some(prefetch) => {
+                    // 观察落缓存（photo_hash 维度），配额/用量/费用同事务扣减。
+                    for (photo_id, observation) in &prefetch.observations {
+                        let hash: Option<String> = sqlx::query_scalar(
+                            "SELECT content_sha256 FROM photos WHERE id=? AND project_id=?",
+                        )
+                        .bind(photo_id)
+                        .bind(&task.project_id)
+                        .fetch_optional(&mut **tx)
+                        .await?;
+                        if let Some(hash) = hash {
+                            sqlx::query("INSERT INTO photo_observations(photo_id,photo_hash,model_id,prompt_version,kind,observation_json,created_at) VALUES(?,?,?,?,?,?,?)")
+                                .bind(photo_id)
+                                .bind(&hash)
+                                .bind(&prefetch.model_id)
+                                .bind(super::vision::VISION_PROMPT_VERSION)
+                                .bind(call.name.as_str())
+                                .bind(observation.to_string())
+                                .bind(domain::timestamp())
+                                .execute(&mut **tx)
+                                .await?;
+                        }
+                    }
+                    if prefetch.uploaded > 0 {
+                        super::consent::consume(
+                            tx,
+                            task,
+                            prefetch.consent_id,
+                            prefetch.uploaded,
+                            prefetch.tokens,
+                            prefetch.cost_minor_usd,
+                        )
+                        .await?;
+                    }
+                    let observations: Vec<Value> = prefetch
+                        .observations
+                        .iter()
+                        .map(|(id, o)| {
+                            json!({"photo_id":id,"visible_facts":o["visible_facts"],"interpretation":o["interpretation"],"uncertainty":o["uncertainty"]})
+                        })
+                        .collect();
+                    let uploaded = prefetch.uploaded;
+                    let cached = (prefetch.observations.len() as u32).saturating_sub(uploaded);
+                    Ok(
+                        json!({"photos":data,"mode":"vision_observed","uploaded_images":uploaded,"cache_hits":cached,"observations":observations,"uncertainty":"主观解读与不确定性由模型标注；服务端已校验 photo_id 均属请求集合"}),
+                    )
+                }
+                None => Ok(
+                    json!({"photos":data,"mode":"mock_metadata_only","uncertainty":"缺少图像授权或提供方不支持视觉；仅对照人工评分/备注，未读取像素"}),
+                ),
+            }
         }
         "retrieve_preferences" => {
             if a["scope"] != "project_local" {

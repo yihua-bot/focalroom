@@ -1,7 +1,9 @@
 use super::{
     context::ContextBuilder,
+    openai::{OpenAiConfig, OpenAiProvider},
     provider::{MockProvider, ModelProvider},
     types::*,
+    vision,
 };
 use crate::{
     command_handler::CommandHandler,
@@ -14,7 +16,8 @@ type Notifier = Arc<dyn Fn(&str) + Send + Sync>;
 #[derive(Clone)]
 pub struct AgentEngine {
     db: Store,
-    provider: Arc<dyn ModelProvider>,
+    mock: Arc<dyn ModelProvider>,
+    openai: Option<Arc<OpenAiProvider>>,
     active: Arc<Mutex<HashSet<String>>>,
     notify: Notifier,
 }
@@ -23,11 +26,72 @@ impl AgentEngine {
         Self::with_provider(db, Arc::new(MockProvider))
     }
     pub fn with_provider(db: Store, provider: Arc<dyn ModelProvider>) -> Self {
-        Self {
+        Self::with_providers(
             db,
             provider,
+            OpenAiConfig::from_env().map(|c| Arc::new(OpenAiProvider::new(c))),
+        )
+    }
+    /// 测试与注入用：显式提供双 provider，不经环境变量。
+    pub fn with_providers(
+        db: Store,
+        mock: Arc<dyn ModelProvider>,
+        openai: Option<Arc<OpenAiProvider>>,
+    ) -> Self {
+        Self {
+            db,
+            mock,
+            openai,
             active: Default::default(),
             notify: Arc::new(|_| {}),
+        }
+    }
+    pub fn ai_config(&self) -> AiConfig {
+        match &self.openai {
+            Some(provider) => AiConfig {
+                provider_id: super::PROVIDER_OPENAI.into(),
+                model_id: provider.model_id().into(),
+                ready: true,
+                api_key_tail: Some(
+                    std::env::var(super::openai::KEY_ENV)
+                        .map(|k| {
+                            k.chars()
+                                .rev()
+                                .take(4)
+                                .collect::<Vec<_>>()
+                                .into_iter()
+                                .rev()
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                ),
+                base_url: std::env::var(super::openai::BASE_URL_ENV)
+                    .unwrap_or_else(|_| super::openai::DEFAULT_BASE_URL.into()),
+                prompt_version: super::prompt_version(super::PROVIDER_OPENAI).into(),
+            },
+            None => AiConfig {
+                provider_id: super::PROVIDER_ID.into(),
+                model_id: super::MODEL_ID.into(),
+                ready: false,
+                api_key_tail: None,
+                base_url: String::new(),
+                prompt_version: super::PROMPT_VERSION.into(),
+            },
+        }
+    }
+    fn provider_for(&self, task: &Task) -> Result<Arc<dyn ModelProvider>> {
+        if task.provider_id == super::PROVIDER_OPENAI {
+            self.openai
+                .clone()
+                .map(|p| p as Arc<dyn ModelProvider>)
+                .ok_or_else(|| {
+                    AppError::new(
+                        "MODEL_UNAVAILABLE",
+                        "任务需要真实模型但当前缺少 API Key 配置；请配置后重新委托",
+                    )
+                })
+        } else {
+            Ok(self.mock.clone())
         }
     }
     pub fn with_notify(mut self, notify: Notifier) -> Self {
@@ -83,11 +147,19 @@ impl AgentEngine {
         if initial.task.state != "queued" {
             return Err(AppError::new("CANCELLED", "任务未排队"));
         }
+        let provider = self.provider_for(&initial.task)?;
         handler
             .agent_state(id, "planning", "加载可信 scope、预算与安全检查点")
             .await?;
         handler
-            .agent_state(id, "running", "本地 Mock 执行中，不读取或上传像素")
+            .agent_state(
+                id,
+                "running",
+                &format!(
+                    "提供方 {} 执行中；图像仅在明确授权后上传",
+                    initial.task.provider_id
+                ),
+            )
             .await?;
         let mut retries = 0;
         loop {
@@ -100,7 +172,27 @@ impl AgentEngine {
                 match outcome {
                     ModelOutcome::ToolCalls { calls } => {
                         for call in calls {
-                            handler.agent_tool(id, &call).await?;
+                            let openai = self
+                                .openai
+                                .as_deref()
+                                .filter(|_| input.task.provider_id == super::PROVIDER_OPENAI)
+                                .filter(|_| vision::is_vision_tool(&call.name));
+                            let prefetch = match openai {
+                                Some(provider) => {
+                                    match vision::prefetch(&self.db, provider, &input.task, &call)
+                                        .await
+                                    {
+                                        Ok(data) => data,
+                                        Err(e) if e.code == "BUDGET_EXCEEDED" => {
+                                            handler.agent_state(id, "paused", &e.message).await?;
+                                            return Ok(());
+                                        }
+                                        Err(e) => return Err(e),
+                                    }
+                                }
+                                None => None,
+                            };
+                            handler.agent_tool(id, &call, prefetch.as_ref()).await?;
                             (self.notify)(&input.task.project_id);
                             let current = ContextBuilder::build(&self.db, id).await?;
                             if current.task.state != "running" {
@@ -128,7 +220,7 @@ impl AgentEngine {
                 .max(1);
             let result = tokio::time::timeout(
                 std::time::Duration::from_millis(remaining),
-                self.provider.generate(&input),
+                provider.generate(&input),
             )
             .await;
             match result {

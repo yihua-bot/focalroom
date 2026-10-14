@@ -54,6 +54,7 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
             selected_photo_ids,
             target_count,
             budget,
+            consent_id,
         } = &r.command
         else {
             unreachable!()
@@ -61,6 +62,31 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
         budget.validate()?;
         if goal.trim().is_empty() {
             return Err(AppError::new("VALIDATION_ERROR", "编辑目标不能为空"));
+        }
+        let provider_id = if super::openai::OpenAiConfig::from_env().is_some() {
+            super::PROVIDER_OPENAI.to_owned()
+        } else {
+            super::PROVIDER_ID.to_owned()
+        };
+        let mut consent_id = *consent_id;
+        if consent_id.is_some_and(|_| provider_id != super::PROVIDER_OPENAI) {
+            consent_id = None;
+        }
+        if let Some(id) = consent_id {
+            let owner: Option<i64> = sqlx::query_scalar(
+                "SELECT id FROM privacy_consents WHERE id=? AND project_id=? AND provider=? AND revoked_at IS NULL",
+            )
+            .bind(id)
+            .bind(&r.project_id)
+            .bind(&provider_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            if owner.is_none() {
+                return Err(AppError::new(
+                    "PERMISSION_DENIED",
+                    "图像授权不存在或已撤回，请重新授权",
+                ));
+            }
         }
         if !selected_photo_ids.is_empty() {
             validate_selection(&mut tx, &r.project_id, selected_photo_ids).await?;
@@ -96,7 +122,7 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
             selected_photo_ids: selected_photo_ids.clone(),
             target_count: *target_count,
             state: "queued".into(),
-            reason: "已排队 · 本地 Mock，无图像上传".into(),
+            reason: format!("已排队 · 提供方 {provider_id}；图像仅在明确授权后上传"),
             budget: budget.clone(),
             usage: Usage::default(),
             elapsed_ms: 0,
@@ -104,12 +130,14 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
             answer: None,
             final_draft_ids: vec![],
             pending: None,
+            provider_id: provider_id.clone(),
+            consent_id,
             created_at: now.clone(),
             updated_at: now,
         };
-        sqlx::query("INSERT INTO agent_tasks(id,project_id,goal,base_revision,allowed_ids_json,selected_ids_json,target_count,state,reason,budget_json,usage_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
- .bind(&t.id).bind(&t.project_id).bind(&t.goal).bind(t.base_revision).bind(encode(&t.allowed_photo_ids)?).bind(encode(&t.selected_photo_ids)?).bind(t.target_count as i64).bind(&t.state).bind(&t.reason).bind(encode(&t.budget)?).bind(encode(&t.usage)?).bind(&t.created_at).bind(&t.updated_at).execute(&mut *tx).await?;
-        store::step(&mut tx, &t.id, "state", json!({"to":"queued","providerId":super::PROVIDER_ID,"modelId":super::MODEL_ID,"promptVersion":super::PROMPT_VERSION}), &t.reason).await?;
+        sqlx::query("INSERT INTO agent_tasks(id,project_id,goal,base_revision,allowed_ids_json,selected_ids_json,target_count,state,reason,budget_json,usage_json,provider_id,consent_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+ .bind(&t.id).bind(&t.project_id).bind(&t.goal).bind(t.base_revision).bind(encode(&t.allowed_photo_ids)?).bind(encode(&t.selected_photo_ids)?).bind(t.target_count as i64).bind(&t.state).bind(&t.reason).bind(encode(&t.budget)?).bind(encode(&t.usage)?).bind(&t.provider_id).bind(t.consent_id).bind(&t.created_at).bind(&t.updated_at).execute(&mut *tx).await?;
+        store::step(&mut tx, &t.id, "state", json!({"to":"queued","providerId":t.provider_id,"modelId":"pending-first-turn","promptVersion":super::prompt_version(&t.provider_id)}), &t.reason).await?;
         sqlx::query(
             "INSERT INTO task_messages(task_id,kind,body,created_at) VALUES(?,'user_goal',?,?)",
         )

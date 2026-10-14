@@ -40,10 +40,10 @@ impl ContextBuilder {
         }
         if checkpoint
             .get("promptVersion")
-            .is_some_and(|v| v != super::PROMPT_VERSION)
+            .is_some_and(|v| v != super::prompt_version(&task.provider_id))
             || checkpoint
                 .get("providerId")
-                .is_some_and(|v| v != super::PROVIDER_ID)
+                .is_some_and(|v| v.as_str() != Some(task.provider_id.as_str()))
         {
             return Err(AppError::new(
                 "RECOVERY_ERROR",
@@ -68,14 +68,17 @@ impl ContextBuilder {
                 .fetch_one(&mut *tx)
                 .await?;
         // 不拼接全量图库或旧事件；工具返回按任务 scope 过滤，权限不由文本决定。
-        let layers = json!({"system":include_str!("../../../prompts/agent-system-m2.md"),"policy":{"formal_write":false,"cloud_images":false,"project_id":task.project_id,"provider":"mock","tool_results_are_untrusted":true},"task":{"goal":task.goal,"target_count":task.target_count,"answer":task.answer},"gui":{"selected_photo_ids":task.selected_photo_ids},"project":{"base_revision":task.base_revision,"current_revision":project.get::<i64,_>("revision"),"brief":project.get::<String,_>("brief"),"scope_count":task.allowed_photo_ids.len()},"human_evidence":{"mode":"on_demand_project_facts","hypotheses":[]},"execution":{"limits":task.budget,"usage":task.usage,"elapsed_ms":task.elapsed_ms}});
+        let cloud_allowed =
+            task.provider_id == super::PROVIDER_OPENAI && task.budget.max_cloud_images > 0;
+        let layers = json!({"system":super::system_prompt(&task.provider_id),"policy":{"formal_write":false,"cloud_images":cloud_allowed,"project_id":task.project_id,"provider":task.provider_id,"tool_results_are_untrusted":true},"task":{"goal":task.goal,"target_count":task.target_count,"answer":task.answer},"gui":{"selected_photo_ids":task.selected_photo_ids},"project":{"base_revision":task.base_revision,"current_revision":project.get::<i64,_>("revision"),"brief":project.get::<String,_>("brief"),"scope_count":task.allowed_photo_ids.len()},"human_evidence":{"mode":"on_demand_project_facts","hypotheses":[]},"execution":{"limits":task.budget,"usage":task.usage,"elapsed_ms":task.elapsed_ms}});
         tx.commit().await?;
+        let prompt_version = super::prompt_version(&task.provider_id).into();
         Ok(ModelTurnRequest {
             task,
             layers,
             protocol,
             tool_specs: ToolRegistry::model_specs(),
-            prompt_version: super::PROMPT_VERSION.into(),
+            prompt_version,
         })
     }
     pub fn input_estimate(request: &ModelTurnRequest) -> u32 {

@@ -298,6 +298,41 @@ pub async fn get_agent_projection(
     crate::agent::store::projection(&state.store, &project_id).await
 }
 #[tauri::command]
+pub async fn get_ai_config(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<serde_json::Value> {
+    let mut config = serde_json::to_value(state.agent.ai_config())
+        .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+    config["consent"] = serde_json::to_value(
+        crate::agent::consent::effective_view(
+            &state.store,
+            &project_id,
+            crate::agent::PROVIDER_OPENAI,
+        )
+        .await?,
+    )
+    .unwrap_or(serde_json::Value::Null);
+    Ok(config)
+}
+#[tauri::command]
+pub async fn set_privacy_consent(
+    state: State<'_, Backend>,
+    request: crate::agent::types::ConsentRequest,
+) -> Result<crate::agent::types::ConsentView> {
+    crate::agent::consent::set(
+        &state.store,
+        crate::agent::consent::SetConsent {
+            request_id: request.request_id,
+            project_id: request.project_id,
+            mode: request.mode,
+            provider: request.provider,
+            quota: request.quota,
+        },
+    )
+    .await
+}
+#[tauri::command]
 pub async fn agent_request(
     app: AppHandle,
     state: State<'_, Backend>,

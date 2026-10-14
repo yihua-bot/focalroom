@@ -1,4 +1,4 @@
-use super::{policy::PolicyGate, store, tools, types::*};
+use super::{policy::PolicyGate, store, tools, types::*, vision::VisionPrefetch};
 use crate::{
     command_audit::{encode, fingerprint},
     db::Store,
@@ -72,8 +72,8 @@ pub(crate) async fn outcome(
             &mut tx,
             id,
             "model",
-            {let mut body=serde_json::to_value(&result).unwrap();body["executionVersion"]=json!({"providerId":super::PROVIDER_ID,"modelId":super::MODEL_ID,"promptVersion":super::PROMPT_VERSION});body},
-            "Mock 回合已保存；下一步由工具观察决定",
+            {let mut body=serde_json::to_value(&result).unwrap();body["executionVersion"]=json!({"providerId":t.provider_id,"promptVersion":super::prompt_version(&t.provider_id)});body},
+            "模型回合已保存；下一步由工具观察决定",
         )
         .await?;
         store::save(&mut tx, &t).await?;
@@ -82,7 +82,12 @@ pub(crate) async fn outcome(
     tx.commit().await?;
     Ok(())
 }
-pub(crate) async fn tool(db: &Store, id: &str, call: &ToolCall) -> Result<ToolResult> {
+pub(crate) async fn tool(
+    db: &Store,
+    id: &str,
+    call: &ToolCall,
+    vision_data: Option<&VisionPrefetch>,
+) -> Result<ToolResult> {
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, id).await?;
     // 身份和 task scope 在回放前检查，指纹不允许同 call ID 更换参数。
@@ -129,7 +134,7 @@ pub(crate) async fn tool(db: &Store, id: &str, call: &ToolCall) -> Result<ToolRe
     let execution = if let Err(e) = validated {
         Err(e)
     } else {
-        tools::execute(&mut tx, &mut t, call).await
+        tools::execute(&mut tx, &mut t, call, vision_data).await
     };
     let mut result = match execution {
         Ok(v) => ToolResult::success(&call.call_id, v),
@@ -176,10 +181,19 @@ pub(crate) async fn tool(db: &Store, id: &str, call: &ToolCall) -> Result<ToolRe
                 "读取序列与选区，共 {} 张",
                 v["photo_ids"].as_array().map_or(0, Vec::len)
             ),
-            "inspect_photos" | "compare_photos" => format!(
-                "对照了 {} 张人工元数据；没有读图",
-                v["photos"].as_array().map_or(0, Vec::len)
-            ),
+            "inspect_photos" | "compare_photos" => {
+                let count = v["photos"].as_array().map_or(0, Vec::len);
+                if v["mode"] == "vision_observed" {
+                    format!(
+                        "视觉观察了 {} 张照片（上传 {} 张，缓存命中 {} 张）",
+                        count,
+                        v["uploaded_images"].as_u64().unwrap_or(0),
+                        v["cache_hits"].as_u64().unwrap_or(0)
+                    )
+                } else {
+                    format!("对照了 {count} 张人工元数据；没有读图")
+                }
+            }
             "retrieve_preferences" => format!(
                 "读取 {} 条项目人工线索",
                 v["human_facts"].as_array().map_or(0, Vec::len)
@@ -277,7 +291,7 @@ pub(crate) async fn attempt(db: &Store, id: &str, input: u32) -> Result<()> {
         .bind(0i64)
         .execute(&mut *tx)
         .await?;
-    store::step(&mut tx,id,"model_attempt",json!({"round":t.usage.model_turns,"startedAt":crate::domain::timestamp(),"promptVersion":super::PROMPT_VERSION}),"发起一轮本地 Mock 请求").await?;
+    store::step(&mut tx,id,"model_attempt",json!({"round":t.usage.model_turns,"startedAt":crate::domain::timestamp(),"promptVersion":super::prompt_version(&t.provider_id),"providerId":t.provider_id}),"发起一轮模型请求").await?;
     store::save(&mut tx, &t).await?;
     tx.commit().await?;
     Ok(())

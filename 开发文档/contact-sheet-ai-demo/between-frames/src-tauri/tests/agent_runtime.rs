@@ -46,6 +46,7 @@ async fn start(db: &Store, p: &Project, goal: &str, selected: Vec<String>, budge
                 selected_photo_ids: selected,
                 target_count: 3,
                 budget,
+                consent_id: None,
             },
         ))
         .await
@@ -253,6 +254,7 @@ async fn ag03_reorder_scope_avoids_whole_project_reads_for_two_orders() {
                 selected_photo_ids: ids.clone(),
                 target_count: 12,
                 budget: Budget::default(),
+                consent_id: None,
             },
         );
         let task = CommandHandler::new(&db)
@@ -383,7 +385,7 @@ async fn ag07_receipt_replay_does_not_duplicate_draft_even_after_timeout_and_res
     )
     .unwrap();
     let old = CommandHandler::new(&db)
-        .agent_tool(&task.id, &call)
+        .agent_tool(&task.id, &call, None)
         .await
         .unwrap();
     db.pool.close().await;
@@ -397,7 +399,7 @@ async fn ag07_receipt_replay_does_not_duplicate_draft_even_after_timeout_and_res
     assert_eq!(
         serde_json::to_value(
             CommandHandler::new(&reopened)
-                .agent_tool(&task.id, &call)
+                .agent_tool(&task.id, &call, None)
                 .await
                 .unwrap()
         )
@@ -409,7 +411,7 @@ async fn ag07_receipt_replay_does_not_duplicate_draft_even_after_timeout_and_res
     changed.args["title"] = json!("篡改");
     assert_eq!(
         CommandHandler::new(&reopened)
-            .agent_tool(&task.id, &changed)
+            .agent_tool(&task.id, &changed, None)
             .await
             .unwrap_err()
             .code,
@@ -826,6 +828,7 @@ async fn two_hundred_scope_two_twenty_five_drafts_fit_default_context_without_lo
                 selected_photo_ids: vec![],
                 target_count: 25,
                 budget: Budget::default(),
+                consent_id: None,
             },
         ))
         .await

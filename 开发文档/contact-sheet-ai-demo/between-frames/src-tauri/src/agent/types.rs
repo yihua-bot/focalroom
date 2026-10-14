@@ -33,16 +33,13 @@ impl Budget {
         if !(1..=200).contains(&self.max_model_turns)
             || !(1..=1000).contains(&self.max_tool_calls)
             || !(1..=7200).contains(&self.max_duration_seconds)
-            || self.max_cloud_images != 0
+            || self.max_cloud_images > 100
             || self.max_cost_minor_usd > 100000
             || !(128..=256000).contains(&self.max_context_tokens)
             || !(128..=2000000).contains(&self.max_total_tokens)
             || !(128..=16000).contains(&self.max_output_tokens)
         {
-            return Err(AppError::new(
-                "VALIDATION_ERROR",
-                "预算超出允许范围；M2 不允许云端图像",
-            ));
+            return Err(AppError::new("VALIDATION_ERROR", "预算超出允许范围"));
         }
         Ok(())
     }
@@ -72,6 +69,7 @@ pub enum TaskCommand {
         selected_photo_ids: Vec<String>,
         target_count: u32,
         budget: Budget,
+        consent_id: Option<i64>,
     },
     PauseTask {
         task_id: String,
@@ -122,6 +120,8 @@ pub struct Task {
     pub answer: Option<String>,
     pub final_draft_ids: Vec<String>,
     pub pending: Option<ModelOutcome>,
+    pub provider_id: String,
+    pub consent_id: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -249,6 +249,38 @@ pub struct TaskView {
     pub elapsed_ms: u64,
     pub question: Option<String>,
     pub final_draft_ids: Vec<String>,
+    pub provider_id: String,
     pub steps: Vec<Step>,
     pub created_at: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsentView {
+    pub id: i64,
+    pub project_id: String,
+    pub mode: String,
+    pub provider: String,
+    pub quota: i64,
+    pub used: i64,
+    pub granted_at: String,
+    pub revoked_at: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiConfig {
+    pub provider_id: String,
+    pub model_id: String,
+    pub ready: bool,
+    pub api_key_tail: Option<String>,
+    pub base_url: String,
+    pub prompt_version: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsentRequest {
+    pub request_id: String,
+    pub project_id: String,
+    pub mode: String,
+    pub provider: String,
+    pub quota: i64,
 }

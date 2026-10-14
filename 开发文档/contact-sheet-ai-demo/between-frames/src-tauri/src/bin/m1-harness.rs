@@ -31,6 +31,37 @@ impl Harness {
             "get_agent_projection" => {
                 json!(between_frames_lib::agent::projection(&self.store, id).await?)
             }
+            "get_ai_config" => {
+                let mut config = serde_json::to_value(self.agent.ai_config()).unwrap();
+                config["consent"] = serde_json::to_value(
+                    between_frames_lib::agent::consent::effective_view(
+                        &self.store,
+                        id,
+                        between_frames_lib::agent::PROVIDER_OPENAI,
+                    )
+                    .await?,
+                )
+                .unwrap_or(serde_json::Value::Null);
+                config
+            }
+            "set_privacy_consent" => {
+                let request: between_frames_lib::agent::types::ConsentRequest =
+                    serde_json::from_value(args["request"].clone())
+                        .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+                json!(
+                    between_frames_lib::agent::consent::set(
+                        &self.store,
+                        between_frames_lib::agent::consent::SetConsent {
+                            request_id: request.request_id,
+                            project_id: request.project_id,
+                            mode: request.mode,
+                            provider: request.provider,
+                            quota: request.quota,
+                        },
+                    )
+                    .await?
+                )
+            }
             "agent_request" => {
                 let request: between_frames_lib::agent::types::AgentRequest =
                     serde_json::from_value(args["request"].clone())
