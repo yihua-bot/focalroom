@@ -315,7 +315,7 @@ pub(crate) async fn snapshot_tx(
     {
         return Err(AppError::new("NOT_FOUND", "项目不存在或已归档"));
     }
-    let mut photos:Vec<Photo>=sqlx::query_as("SELECT p.id,p.import_index,p.filename AS name,p.original_path,p.thumbnail_path,p.preview_path,p.content_sha256,p.width,p.height,p.file_size,d.status,d.user_note AS note,d.rating FROM photos p JOIN photo_decisions d ON d.project_id=p.project_id AND d.photo_id=p.id WHERE p.project_id=? ORDER BY p.import_index").bind(id).fetch_all(&mut **tx).await?;
+    let mut photos:Vec<Photo>=sqlx::query_as("SELECT p.id,p.import_index,p.filename AS name,p.original_path,p.thumbnail_path,p.preview_path,p.content_sha256,p.width,p.height,p.file_size,d.status,d.user_note AS note,d.rating,d.book_mark FROM photos p JOIN photo_decisions d ON d.project_id=p.project_id AND d.photo_id=p.id WHERE p.project_id=? ORDER BY p.import_index").bind(id).fetch_all(&mut **tx).await?;
     for photo in &mut photos {
         photo.is_missing = !Path::new(&photo.original_path).is_file();
     }

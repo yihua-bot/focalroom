@@ -98,28 +98,45 @@ pub fn render_with_options(
             let mut pages = String::new();
             let mut remaining = project.sequence.iter().enumerate().peekable();
             let mut page_number = 0;
+            // v1.2 页跨图：spread 标记的照片独占一页（跨页大图），full 独占单幅版；
+            // 其余默认每页两图。
+            let build = |position: usize, id: &str, class: &str| -> Result<String> {
+                let photo = project
+                    .photos
+                    .iter()
+                    .find(|photo| photo.id == id)
+                    .ok_or_else(|| AppError::new("EXPORT", "序列包含失效照片"))?;
+                let preview = std::fs::read(&photo.preview_path)?;
+                Ok(format!(
+                    "<figure class=\"plate {class}\"><img alt=\"{}\" src=\"data:image/jpeg;base64,{}\"><figcaption><strong>{:02}</strong> {}</figcaption></figure>",
+                    escape(&photo.name),
+                    STANDARD.encode(preview),
+                    position + 1,
+                    escape(&photo.name)
+                ))
+            };
+            let mark_of = |id: &str| -> Option<&str> {
+                project
+                    .photos
+                    .iter()
+                    .find(|photo| photo.id == id)
+                    .and_then(|photo| photo.book_mark.as_deref())
+            };
             while let Some((position, id)) = remaining.next() {
                 page_number += 1;
                 let mut plates = String::new();
-                let build = |position: usize, id: &str| -> Result<String> {
-                    let photo = project
-                        .photos
-                        .iter()
-                        .find(|photo| photo.id == id)
-                        .ok_or_else(|| AppError::new("EXPORT", "序列包含失效照片"))?;
-                    let preview = std::fs::read(&photo.preview_path)?;
-                    Ok(format!(
-                        "<figure class=\"plate\"><img alt=\"{}\" src=\"data:image/jpeg;base64,{}\"><figcaption><strong>{:02}</strong> {}</figcaption></figure>",
-                        escape(&photo.name),
-                        STANDARD.encode(preview),
-                        position + 1,
-                        escape(&photo.name)
-                    ))
-                };
-                plates.push_str(&build(position, id)?);
-                if let Some((next_position, next_id)) = remaining.peek() {
-                    plates.push_str(&build(*next_position, next_id)?);
-                    remaining.next();
+                let mark = mark_of(id);
+                if mark == Some("spread") || mark == Some("full") {
+                    plates.push_str(&build(position, id, mark.unwrap_or("spread"))?);
+                } else {
+                    plates.push_str(&build(position, id, "half")?);
+                    // 下一张若为独占标记，则本页到此为止（不能 continue——会跳过本页包装）。
+                    let next_is_solo = remaining.peek().is_some_and(|(_, next_id)| {
+                        matches!(mark_of(next_id), Some("spread") | Some("full"))
+                    });
+                    if !next_is_solo && let Some((next_position, next_id)) = remaining.next() {
+                        plates.push_str(&build(next_position, next_id, "half")?);
+                    }
                 }
                 pages.push_str(&format!(
                     "<section class=\"sheet\"><header><span>{}</span><span>第 {page_number} 页</span></header><div class=\"plates\">{plates}</div><footer><span>Between Frames · 印刷参考（非最终色彩管理）</span><span>{}</span></footer></section>",
@@ -139,6 +156,9 @@ body {{ font-family: Georgia, 'Songti SC', serif; color: #222; margin: 0; }}
 .plates {{ display: flex; gap: 10mm; flex: 1; align-items: center; }}
 .plate {{ flex: 1; margin: 0; text-align: center; }}
 .plate img {{ max-width: 100%; max-height: 130mm; outline: 0.4pt dashed #bbb; outline-offset: 4mm; }}
+.plate.spread {{ flex: 1 1 100%; }}
+.plate.spread img {{ max-height: 155mm; }}
+.plate.full {{ flex: 1 1 100%; max-width: 70%; margin: 0 auto; }}
 .plate figcaption {{ font-size: 9.5pt; margin-top: 3mm; color: #444; }}
 .plate strong {{ color: #000; margin-right: 2mm; }}
 @media screen {{ body {{ background: #f3f2ee; }} .sheet, .cover {{ background: white; max-width: 260mm; margin: 10mm auto; padding: 12mm; }} }}

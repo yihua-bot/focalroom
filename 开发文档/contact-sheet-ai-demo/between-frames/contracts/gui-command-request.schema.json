@@ -212,6 +212,36 @@
           "type": "object",
           "properties": {
             "type": {
+              "const": "SetPhotoBookMark"
+            },
+            "photoId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "mark": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "spread",
+                "full",
+                null
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "photoId",
+            "mark"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
               "const": "ReorderSequence"
             },
             "orderedPhotoIds": {

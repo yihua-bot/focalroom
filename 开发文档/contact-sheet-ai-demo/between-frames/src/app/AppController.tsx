@@ -111,6 +111,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
     <div className="right-tabs" aria-label="检查器面板">{(['photo', 'ai', 'memory'] as const).map(key => <button key={key} className={ui.panel === key ? 'active' : ''} aria-pressed={ui.panel === key} onClick={() => ui.setPanel(key)}>{key === 'photo' ? '照片检查' : key === 'ai' ? 'AI 建议' : zh.memory}</button>)}</div>
     {ui.panel === 'photo' ? (active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending} onDecide={decide}
       onRate={(id, rating) => act(() => repository.rate(project.id, [id], rating))}
+      onBookMark={local && project ? (id, mark) => act(() => repository.setBookMark(project.id, id, mark), mark === 'spread' ? '已设为跨页大图' : mark === 'full' ? '已设为整页图' : '已清除册页标记') : undefined}
       draft={drafts[active.id]} onDraft={note => setDrafts(previous => ({ ...previous, [active.id]: note }))}
       onNote={(id, note) => act(() => repository.note(project.id, id, note), local ? '判断已保存到本地' : zh.savedNote, false, () => setDrafts(previous => { const next = { ...previous }; delete next[id]; return next; }))}
       onRelink={local ? () => { act(async () => (await repository.relink(project.id, active.id)) ?? project); } : undefined}

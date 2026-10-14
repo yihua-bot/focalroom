@@ -80,6 +80,7 @@ export class TauriRepository implements DesktopProjectRepository {
   async decide(id: string, photoId: string, status: PhotoStatus) { return this.decideMany(id, [photoId], status); }
   async decideMany(id: string, photoIds: string[], status: PhotoStatus) { return this.execute(id, { type: 'SetPhotoDecision', photoIds, status }); }
   async rate(id: string, photoIds: string[], rating: number) { return this.execute(id, { type: 'SetPhotoRating', photoIds, rating }); }
+  async setBookMark(id: string, photoId: string, mark: 'spread' | 'full' | null) { return this.execute(id, { type: 'SetPhotoBookMark', photoId, mark }); }
   async note(id: string, photoId: string, note: string) { return this.execute(id, { type: 'SetPhotoNote', photoId, note }); }
   async reorder(id: string, orderedPhotoIds: string[]) { return this.execute(id, { type: 'ReorderSequence', orderedPhotoIds }); }
   async compare(id: string, leftId: string, rightId: string, preferred: string | null, reason: string) {

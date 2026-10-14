@@ -63,6 +63,13 @@ export class MockRepository implements ProjectRepository {
     this.event(project, 'rating', `${photoIds.length} 张：人工评分 ${rating}`, photoIds.length === 1 ? photoIds[0] : undefined);
     return structuredClone(project);
   }
+  async setBookMark(id: string, photoId: string, mark: 'spread' | 'full' | null) {
+    const project = this.begin(id);
+    const photo = this.photo(project, photoId);
+    photo.bookMark = mark ?? undefined;
+    this.event(project, 'decision', mark === 'spread' ? '已设为跨页大图' : mark === 'full' ? '已设为整页图' : '已清除册页标记', photoId);
+    return structuredClone(project);
+  }
   async note(id: string, photoId: string, text: string) {
     const project = this.begin(id);
     const photo = this.photo(project, photoId);

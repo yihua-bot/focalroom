@@ -50,6 +50,9 @@ pub struct Photo {
     pub status: String,
     pub note: String,
     pub rating: i64,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub book_mark: Option<String>,
     #[sqlx(skip)]
     pub is_missing: bool,
 }
@@ -104,6 +107,8 @@ pub struct PhotoDecisionState {
     pub status: String,
     pub rating: i64,
     pub note: String,
+    #[serde(default)]
+    pub book_mark: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

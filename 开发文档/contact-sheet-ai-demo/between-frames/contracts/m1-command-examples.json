@@ -219,5 +219,17 @@
       "draftId": "draft-a",
       "expectedDraftRevision": 1
     }
+  },
+  {
+    "commandId": "sample-SetPhotoBookMark",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-SetPhotoBookMark",
+    "command": {
+      "type": "SetPhotoBookMark",
+      "photoId": "photo-a",
+      "mark": "spread"
+    }
   }
 ]

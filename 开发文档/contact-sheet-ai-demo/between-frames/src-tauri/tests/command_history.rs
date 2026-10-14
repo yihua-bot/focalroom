@@ -616,7 +616,7 @@ async fn old_wal_database_is_backed_up_before_upgrade_and_backup_can_restore_pro
 fn generated_request_contract_round_trips_all_m1_examples_and_rejects_extra_fields() {
     let examples: Vec<Value> =
         serde_json::from_str(include_str!("../../contracts/m1-command-examples.json")).unwrap();
-    assert_eq!(examples.len(), 18);
+    assert_eq!(examples.len(), 19);
     for example in examples {
         let request: GuiCommandRequest = serde_json::from_value(example.clone()).unwrap();
         assert_eq!(serde_json::to_value(request).unwrap(), example);

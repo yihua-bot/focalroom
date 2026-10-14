@@ -29,6 +29,10 @@ pub enum GuiCommand {
         photo_id: String,
         note: String,
     },
+    SetPhotoBookMark {
+        photo_id: String,
+        mark: Option<String>,
+    },
     ReorderSequence {
         ordered_photo_ids: Vec<String>,
     },

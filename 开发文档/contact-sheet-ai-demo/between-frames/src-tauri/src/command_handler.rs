@@ -229,7 +229,8 @@ impl<'a> CommandHandler<'a> {
                 _ => None,
             };
             let photo = match &request.command {
-                GuiCommand::SetPhotoNote { photo_id, .. } => Some(photo_id.as_str()),
+                GuiCommand::SetPhotoNote { photo_id, .. }
+                | GuiCommand::SetPhotoBookMark { photo_id, .. } => Some(photo_id.as_str()),
                 GuiCommand::SetPhotoDecision { photo_ids, .. }
                 | GuiCommand::SetPhotoRating { photo_ids, .. }
                     if photo_ids.len() == 1 =>

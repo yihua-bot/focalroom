@@ -12,6 +12,7 @@ export interface Photo {
   status: PhotoStatus;
   note: string;
   rating: number;
+  bookMark?: 'spread' | 'full' | null;
   previewSrc?: string;
   originalPath?: string;
   isMissing?: boolean;
@@ -63,6 +64,7 @@ export interface ProjectRepository {
   decide(id: string, photoId: string, status: PhotoStatus): Promise<Project>;
   decideMany(id: string, photoIds: string[], status: PhotoStatus): Promise<Project>;
   rate(id: string, photoIds: string[], rating: number): Promise<Project>;
+  setBookMark(projectId: string, photoId: string, mark: 'spread' | 'full' | null): Promise<Project>;
   note(id: string, photoId: string, text: string): Promise<Project>;
   reorder(id: string, photoIds: string[]): Promise<Project>;
   compare(id: string, leftId: string, rightId: string, preferred: string | null, reason: string): Promise<Project>;

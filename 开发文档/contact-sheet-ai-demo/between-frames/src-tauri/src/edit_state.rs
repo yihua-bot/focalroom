@@ -20,7 +20,7 @@ pub(crate) async fn capture(tx: &mut Transaction<'_, Sqlite>, project: &str) -> 
         .bind(project)
         .fetch_one(&mut **tx)
         .await?;
-    let photos=sqlx::query_as("SELECT photo_id,status,rating,user_note AS note FROM photo_decisions WHERE project_id=? ORDER BY photo_id").bind(project).fetch_all(&mut **tx).await?;
+    let photos=sqlx::query_as("SELECT photo_id,status,rating,user_note AS note,book_mark FROM photo_decisions WHERE project_id=? ORDER BY photo_id").bind(project).fetch_all(&mut **tx).await?;
     let comparisons=sqlx::query_scalar("SELECT c.id FROM comparison_events c LEFT JOIN comparison_state s ON s.comparison_id=c.id WHERE c.project_id=? AND COALESCE(s.active,1)=1 ORDER BY c.id").bind(project).fetch_all(&mut **tx).await?;
     Ok(EditState {
         title: row.get("title"),
@@ -48,7 +48,7 @@ pub(crate) async fn apply_state(
     state: &EditState,
 ) -> Result<()> {
     for photo in &state.photos {
-        if sqlx::query("UPDATE photo_decisions SET status=?,rating=?,user_note=?,updated_at=? WHERE project_id=? AND photo_id=?").bind(&photo.status).bind(photo.rating).bind(&photo.note).bind(domain::timestamp()).bind(project).bind(&photo.photo_id).execute(&mut **tx).await?.rows_affected()!=1 {return Err(AppError::new("NOT_FOUND","快照包含其他项目或失效照片"));}
+        if sqlx::query("UPDATE photo_decisions SET status=?,rating=?,user_note=?,book_mark=?,updated_at=? WHERE project_id=? AND photo_id=?").bind(&photo.status).bind(photo.rating).bind(&photo.note).bind(&photo.book_mark).bind(domain::timestamp()).bind(project).bind(&photo.photo_id).execute(&mut **tx).await?.rows_affected()!=1 {return Err(AppError::new("NOT_FOUND","快照包含其他项目或失效照片"));}
     }
     sqlx::query("UPDATE projects SET title=?,brief=?,deleted_at=? WHERE id=?")
         .bind(&state.title)

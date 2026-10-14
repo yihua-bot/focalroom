@@ -92,6 +92,22 @@ pub(crate) async fn apply_gui(
                 db::write_sequence(tx, &request.project_id, &sequence).await?;
             }
         }
+        GuiCommand::SetPhotoBookMark { photo_id, mark } => {
+            validate_selection(tx, &request.project_id, std::slice::from_ref(photo_id)).await?;
+            let normalized = match mark.as_deref() {
+                None | Some("") => None,
+                Some("spread") => Some("spread"),
+                Some("full") => Some("full"),
+                Some(_) => return Err(AppError::new("INVALID_INPUT", "册页标记不合法")),
+            };
+            sqlx::query("UPDATE photo_decisions SET book_mark=?,updated_at=? WHERE project_id=? AND photo_id=?")
+                .bind(normalized)
+                .bind(now)
+                .bind(&request.project_id)
+                .bind(photo_id)
+                .execute(&mut **tx)
+                .await?;
+        }
         GuiCommand::SetPhotoRating { photo_ids, rating } => {
             validate_selection(tx, &request.project_id, photo_ids).await?;
             if !(0..=5).contains(rating) {

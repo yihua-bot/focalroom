@@ -59,7 +59,7 @@ async fn print_reference_html_has_cover_pages_and_plates() {
     assert!(html.contains("data:image/jpeg;base64,"));
     // 三张作品 → 2 个 sheet（首页两图 + 次页一图），共三个 plate。
     assert_eq!(html.matches("class=\"sheet\"").count(), 2);
-    assert_eq!(html.matches("class=\"plate\"").count(), 3);
+    assert_eq!(html.matches("plate half").count(), 3);
     assert!(html.contains("第 1 页"));
     assert!(html.contains("第 2 页"));
 }

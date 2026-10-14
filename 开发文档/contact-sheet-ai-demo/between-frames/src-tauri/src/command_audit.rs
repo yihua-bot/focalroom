@@ -16,6 +16,7 @@ pub(crate) fn legacy_kind(command: &GuiCommand) -> &'static str {
         GuiCommand::SetPhotoDecision { .. } => "decision",
         GuiCommand::SetPhotoRating { .. } => "rating",
         GuiCommand::SetPhotoNote { .. } => "note",
+        GuiCommand::SetPhotoBookMark { .. } => "book_mark",
         GuiCommand::RecordComparison { .. } => "compare",
         GuiCommand::ReorderSequence { .. } => "reorder",
         GuiCommand::SaveSequenceVersion { .. } => "version_save",

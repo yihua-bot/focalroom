@@ -8,6 +8,7 @@ export type DomainCommand =
   | { type: "SetPhotoDecision"; photoIds: string[]; status: "keep" | "reject" | "undecided" }
   | { type: "SetPhotoRating"; photoIds: string[]; rating: number }
   | { type: "SetPhotoNote"; photoId: string; note: string }
+  | { type: "SetPhotoBookMark"; photoId: string; mark: "spread" | "full" | null }
   | { type: "ReorderSequence"; orderedPhotoIds: string[] }
   | { type: "RecordComparison"; leftId: string; rightId: string; preference: "left" | "right" | "uncertain"; reason: string }
   | { type: "SaveSequenceVersion"; label: string }
