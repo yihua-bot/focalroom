@@ -1,5 +1,11 @@
 # 工程决策
 
+## v1.0 M3 真实视觉与授权验收（2026-10-14）
+
+OpenAIProvider 走 Responses API tool calling（reqwest/rustls），store:false 由本地 checkpoint 保存并重发多轮 function_call/output；视觉观察是工具执行器内的独立子请求，预取持读事务、网络在写事务外，避免长事务持锁。授权三态（本次任务/本项目/禁止），配额按**真实传输张数**扣减——幻觉 photo_id 的观察被整体丢弃但传输已发生、配额仍扣，隐私语义优先；观察缓存键 hash+model+prompt+kind，命中零上传。API key 仅环境变量进内存、不落库不进前端（Keychain 留 M5，ADR 0006）；费用为保守估算（1 美分/图 + 1 美分/千 token）非账单。provider 由后端按 key 决定，checkpoint 校验 providerId/promptVersion 防跨 provider 续跑。
+
+复验过程一次集成失败定位为 target-v1 残留 M2 旧 harness（不识别 consentId）；按报告命令重建后全绿，前端载荷与 Rust 校验确认一致。本轮自动化：37 Rust（agent_vision 4 含 AG-04 零外发/授权上传/缓存/幻觉/触顶）、24 单测（授权卡 3）、16 预览、2 集成、typecheck/lint/严格 Clippy/fmt/契约通过；**真实模型 E2E 无 key 未跑，不宣称通过**。**当前停止 M3 等待评审，M4 未启动。** 见 [ADR 0006](docs/ADR/0006-v1-m3-vision-consent.md)、[测试报告](docs/TEST-REPORT.md)、[文件清单](docs/V1-M3-FILES.md)、[计划](docs/PLAN-V1-M3.md)。下文保留各轮历史决定。
+
 ## v1.0 M2 受控 Mock Runtime 验收（2026-10-14）
 
 Agent 通道只经 ToolRegistry（12 工具白名单 + 工程 schema 子集校验）与 PolicyGate（项目隔离、photo_id scope、draft 归属）；不存在 shell/SQL/网络能力，费用恒 0、云端图像 0。Mock Provider 每轮依据真实工具结果重选下一工具，AG-01/02/03 以双套观察数据的工具轨迹断言，不用固定流程冒充自主。任务请求/工具调用持久化幂等回执，outcome 先落库后执行；中断恢复重放检查点，不重复草案。草案审批走唯一 CommandHandler：全量采纳替换序列、局部采纳只改所选并保留其余人工状态、rebase 仅更新基线需重新预览。文本预算为保守 UTF-8 上界，真实 token/成本属 M3。

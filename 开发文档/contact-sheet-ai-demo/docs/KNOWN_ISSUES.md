@@ -11,7 +11,7 @@
 | V1-03 | M2 工具 items 契约、六类生命周期请求与 Draft 审批契约已实施；M3 token/input 预算与真实 Provider 契约待实现 | M3 契约 |
 | V1-04 | 现有六表以新增 0003 升为十二表并验证含 WAL 的备份恢复；未照搬 24 表。历史 v0.2 paused CHECK 问题留任务实现时处理 | M1 已测；任务/记忆后续迁移 |
 | V1-05 | M2 受控 Mock Runtime 已实现并验收：动态循环、任务/暂停/预算/检查点、工具 receipt 与草案审批（AG-01/02/03/05–10/13/14/15 自动化通过）；等待本轮评审 | M2 completed |
-| V1-06 | 真实视觉/上传 consent 外发拦截与真实成本、证据记忆尚未实现 | M3/M4 |
+| V1-06 | M3 已实现并自动化验收（OpenAIProvider/consent/观察缓存/预算放开，AG-04 等视觉场景通过）；**真实模型 E2E 待 API Key 补验**；真实 token/费用、AG-01/02/03 真实样本未跑 | M3 completed（待补验） / M4 记忆未启动 |
 | V1-07 | 代表性 12–24MP 图库、目标 Mac 性能和至少 20 位 Beta 用户尚未验证 | 性能/Beta；不是基础 M0 测试图库前置条件 |
 
 本轮原始需求包自检通过不等于上述应用能力已实现，15 条 AG 场景未宣称通过。
@@ -36,7 +36,17 @@
 - `npm run contracts:check` 仅覆盖 M1 GUI 命令契约；agent 契约由 Rust 运行时校验与集成测试覆盖，独立契约漂移检查待补。
 - ContextBuilder 上下文含人工目标与限量备注，不含资源路径；200 scope→双 25 草案在默认上下文内保持完整协议关联。
 
-以下 M1/M0/v0.2/v0.1 内容为各轮历史，当前状态以上文和 M2 报告为准。
+## v1.0 M3 已测能力与边界（2026-10-14）
+
+- 自动化：37 Rust（agent_vision 4：AG-04 无授权零外发、授权上传+配额/费用入账、缓存命中零重传、幻觉丢弃且传输扣配额、图像预算触顶 paused）、24 前端单测（授权卡 3）、16 预览 E2E、2 真实后端集成旅程；typecheck/lint/严格 Clippy/fmt 通过。见 [当前报告](TEST-REPORT.md)。
+- 云端闭环以本地 HTTP 模拟 Responses API 验证协议；**真实服务未调用**（无 key）：工具次序多样性、真实 token/费用、供应商数据政策均待补验，不宣称通过。
+- API key 仅环境变量（不落 SQLite/日志/前端，界面仅脱敏尾号）；macOS Keychain 留 M5。base_url/model 可环境覆盖，兼容网关与测试。
+- 视觉输入为最长边 1400px 重编码 JPEG（无 EXIF/GPS）；观察缓存键 hash+model+prompt+kind，无 TTL；观察引用幻觉 photo_id 时整体丢弃、配额按真实传输扣减（隐私语义）。
+- 费用为保守估算（每图 1 美分 + 每千 token 1 美分）非账单；预算触顶转 paused，恢复需显式调整。
+- `contracts:check` 仍仅覆盖 M1 GUI 契约；agent 契约由 Rust 运行时校验与集成测试覆盖。
+- 集成测试依赖 target-v1 的 feature harness；旧二进制残留会以 unknown field consentId 失败，复现命令含重建步骤。
+
+以下 M2/M1/M0/v0.2/v0.1 内容为各轮历史，当前状态以上文和 M3 报告为准。
 
 ## v1.0 M0 已测能力与边界
 
