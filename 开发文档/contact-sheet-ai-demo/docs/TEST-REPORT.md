@@ -46,4 +46,4 @@ CARGO_TARGET_DIR="target-v1" npm run test:integration
 
 签名/公证/DMG 需 Apple 开发者证书；20 位用户 Beta 与 3 位摄影师无指导试用需真人执行（验收脚本以 beta-journey 自动化打底）；真实模型 E2E 仍待 API Key；M4 遗留（跨项目假设、FTS5、证据删除入口）继续有效。
 
-六阶段工程实现至此全部落地，停止等待整体评审。见 [已知问题](KNOWN_ISSUES.md)、[文件清单](V1-M5-FILES.md)、[ADR 0008](ADR/0008-v1-m5-beta-readiness.md)、[隐私说明](PRIVACY.md)。
+六阶段工程实现至此全部落地，停止等待整体评审；规格符合性终审见 [V1.0-COMPLIANCE](V1.0-COMPLIANCE.md)。另见 [已知问题](KNOWN_ISSUES.md)、[文件清单](V1-M5-FILES.md)、[ADR 0008](ADR/0008-v1-m5-beta-readiness.md)、[隐私说明](PRIVACY.md)。
