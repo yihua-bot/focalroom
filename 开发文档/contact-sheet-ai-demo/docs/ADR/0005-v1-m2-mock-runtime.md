@@ -1,6 +1,6 @@
 # ADR 0005：M2 受控 Mock Runtime 与审批恢复
 
-状态：实施中，范围见 PLAN-V1-M2。
+状态：已实施并通过自动化验收（2026-10-14），范围见 PLAN-V1-M2；测试证据见 [TEST-REPORT](../TEST-REPORT.md)。
 
 主规格的 create_selection_draft.items 优先于随包旧 ordered_photo_ids 契约。工程工具契约使用 items（photo_id/proposed_action/position/rationale），后端检查连续位置与 ID scope；原始包不修改。ModelProvider 输出结构化 outcome，每轮依据实际工具结果重新选择，Mock 仅验证闭环与边界，不能证明真实模型自主性。
 

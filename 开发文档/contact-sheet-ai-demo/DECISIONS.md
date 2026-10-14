@@ -1,5 +1,11 @@
 # 工程决策
 
+## v1.0 M2 受控 Mock Runtime 验收（2026-10-14）
+
+Agent 通道只经 ToolRegistry（12 工具白名单 + 工程 schema 子集校验）与 PolicyGate（项目隔离、photo_id scope、draft 归属）；不存在 shell/SQL/网络能力，费用恒 0、云端图像 0。Mock Provider 每轮依据真实工具结果重选下一工具，AG-01/02/03 以双套观察数据的工具轨迹断言，不用固定流程冒充自主。任务请求/工具调用持久化幂等回执，outcome 先落库后执行；中断恢复重放检查点，不重复草案。草案审批走唯一 CommandHandler：全量采纳替换序列、局部采纳只改所选并保留其余人工状态、rebase 仅更新基线需重新预览。文本预算为保守 UTF-8 上界，真实 token/成本属 M3。
+
+复验发现 integration 首败源于旧 target 残留 m1-harness 二进制（无 agent 命令），带 `integration-harness` feature 重建后全绿；正式复现统一使用 `CARGO_TARGET_DIR="target-v1"`。本轮自动化：33 Rust（agent_runtime 13）、21 单测、16 预览 E2E、2 集成旅程、typecheck/lint/严格 Clippy/fmt/契约检查通过；原生证据沿用同日上一轮 M2 Review 截图与快照，未重跑原生 .app。**当前停止 M2 等待评审，M3 未启动。** 见 [ADR 0005](docs/ADR/0005-v1-m2-mock-runtime.md)、[测试报告](docs/TEST-REPORT.md)、[文件清单](docs/V1-M2-FILES.md)。下文保留各轮历史决定。
+
 ## v1.0 M1 命令与恢复验收（2026-10-14）
 
 唯一 CommandHandler 负责正式写入。14 类 GUI 命令从机器契约生成，后端注入身份；幂等别名、完整命令、补偿目标和回执持久化，授权先于回放。Undo/Redo 追加补偿事件，比较只逻辑撤回；命名版本恢复是可撤销编辑。版本保存/项目新建/资源导入不占人工撤销栈，旧日志不伪造追溯撤销。

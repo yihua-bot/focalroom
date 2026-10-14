@@ -6,7 +6,7 @@
 
 现有工程复用，先按新 M0 补齐/复验 GUI 与 200 张测试图→25 张序列的离线重启，再完成 M1 统一命令、版本、Undo/Redo 和幂等。M2 才实现动态 Mock Agent，M3 接真实视觉，M4 记忆，M5 Beta。新初始 SQL 与当前数据库不兼容，升级需专用兼容 migration。
 
-当前 **v1.0 M1 已实现并完成测试，停止等待评审**：唯一 CommandHandler、严格生成契约、幂等/冲突、持久化 Undo/Redo、命名版本与默认私密导出。200→25 的评分、备注、序列、版本和历史完整退出重启后十二表一致，200 源 hash 不变。18 单测、16 GUI E2E、1 真实 Store 旅程、20 Rust 测试及最终原生验收通过。M2 Runtime 与记忆引擎尚未启动。
+当前 **v1.0 M2 已实现并完成自动化验收，停止等待评审**：受控 Mock Agent Runtime 落地任务 FSM、动态工具循环（依据真实工具结果重决策）、ToolRegistry/PolicyGate 白名单与 scope、后端预算、检查点中断恢复、幂等回执与草案审批（全量/局部采纳、rebase、丢弃）。Agent 只写草案，正式选片与序列仍由用户经唯一 CommandHandler 批准。33 Rust 测试（含 AG-01/02/03/05–10/13/14/15）、21 前端单测、16 预览 E2E、2 真实后端集成旅程（agent-core 预算暂停→恢复→双草案→人工冲突→局部采纳/撤销→重启）全部通过。M3 真实 Provider/视觉/云端 consent 与 M4 记忆引擎尚未启动。
 
 本机评审应用：`between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames M1 Review.app`，使用新的 `studio.betweenframes.m1review` 数据目录，用户原应用和 M0 Review DB 未升级。浏览器预览为 `http://localhost:1420/`，真实存档使用桌面版。详见 [`测试与剩余问题`](docs/TEST-REPORT.md)、[`文件变更`](docs/V1-M1-FILES.md)、[`ADR 0004`](docs/ADR/0004-v1-m1-command-history.md)、[`M0 历史报告`](docs/V1-M0-TEST-REPORT.md)。记忆/上下文补充进入 [`后续约束`](docs/MEMORY-CONTEXT-ADDENDUM.md)，不提前实现。
 
