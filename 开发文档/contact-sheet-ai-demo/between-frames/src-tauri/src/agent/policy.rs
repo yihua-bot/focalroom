@@ -10,7 +10,7 @@ impl ToolRegistry {
             .expect("工具契约")
     }
     pub fn model_specs() -> Value {
-        Value::Array(Self::specs()["tools"].as_array().unwrap().iter().map(|tool|json!({"name":tool["name"],"description":tool["description"],"parameters":tool["parameters"],"strict":true})).collect())
+        Value::Array(Self::specs()["tools"].as_array().unwrap().iter().map(|tool|json!({"type":"function","name":tool["name"],"description":tool["description"],"parameters":tool["parameters"],"strict":true})).collect())
     }
     pub fn validate(call: &ToolCall) -> Result<()> {
         if call.call_id.is_empty() || call.call_id.len() > 160 {
