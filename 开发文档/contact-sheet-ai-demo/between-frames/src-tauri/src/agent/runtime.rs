@@ -78,9 +78,10 @@ impl AgentEngine {
                 .clone()
                 .map(|p| p as Arc<dyn ModelProvider>)
                 .ok_or_else(|| {
+                    // 经 Router 语义给出可读错误：能力缺失而非笼统不可用（M3/ADR 0018）。
                     AppError::new(
-                        "MODEL_UNAVAILABLE",
-                        "任务需要真实模型但当前缺少 API Key 配置；请配置后重新委托",
+                        "MODEL_CAPABILITY_MISSING",
+                        "任务需要真实模型，但当前没有可用的云端提供方（缺少 API Key）；请配置后重新委托，或改用本地 Mock。",
                     )
                 })
         } else {

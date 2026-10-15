@@ -156,3 +156,68 @@ async fn v2_tool_names_complete_full_loop_and_m5_tools_are_rejected() {
     let project = db.get(&p.id).await.unwrap();
     assert!(project.sequence.is_empty());
 }
+
+#[test]
+fn v2_router_errors_are_readable_and_scope_never_expands() {
+    use between_frames_lib::agent::router::*;
+    let free = RegionPolicy::default();
+    let restricted = RegionPolicy {
+        restricted: vec!["EU_NO_EXPORT".into()],
+        allowed_residencies: vec!["local".into()],
+    };
+    // 1) 能力缺失：仅 mock 可用时请求视觉任务。
+    let vision_req = RouteRequest {
+        task_type: TaskType::VisionObserve,
+        tier: ServiceTier::Standard,
+        region: &free,
+        budget_remaining_usd: 1.0,
+        images_required: true,
+        image_consent: true,
+    };
+    let error = route(&vision_req, false).unwrap_err();
+    assert_eq!(error.code, "MODEL_CAPABILITY_MISSING");
+    assert!(error.message.contains("vision"));
+    // 2) 区域拒绝：受限区域 + openai 可用但驻留不匹配。
+    let text_req = RouteRequest {
+        task_type: TaskType::AgentOrchestrate,
+        tier: ServiceTier::Standard,
+        region: &restricted,
+        budget_remaining_usd: 1.0,
+        images_required: false,
+        image_consent: false,
+    };
+    let ok = route(&text_req, true).unwrap();
+    assert_eq!(ok.provider_id, "mock", "受限区域回落本地");
+    // 3) 隐私拒绝：需要图像但无授权（openai 可用）——不自动扩大范围。
+    let no_consent = RouteRequest {
+        task_type: TaskType::Curation,
+        tier: ServiceTier::Pro,
+        region: &free,
+        budget_remaining_usd: 1.0,
+        images_required: true,
+        image_consent: false,
+    };
+    let error = route(&no_consent, true).unwrap_err();
+    assert_eq!(error.code, "PRIVACY_REGION_REJECTED");
+    assert!(error.message.contains("不会自动扩大授权范围"));
+    // 4) 预算：剩余 0.01 且需云端视觉（mock 无 vision）。
+    let broke = RouteRequest {
+        task_type: TaskType::VisionObserve,
+        tier: ServiceTier::Standard,
+        region: &free,
+        budget_remaining_usd: 0.01,
+        images_required: true,
+        image_consent: true,
+    };
+    let error = route(&broke, true).unwrap_err();
+    assert_eq!(error.code, "BUDGET_EXCEEDED");
+    // 5) 正常：有 key + 授权 → openai；无图像任务 → 按质量选云端。
+    let ok = route(&vision_req, true).unwrap();
+    assert_eq!(ok.provider_id, "openai");
+    let ok = route(&text_req, false).unwrap();
+    assert_eq!(ok.provider_id, "mock");
+    // 6) 可解释投影不含密钥/端点。
+    let explained = explain(&vision_req, true);
+    assert!(explained["outcome"]["providerId"].is_string());
+    assert!(explained.to_string().find("sk-").is_none());
+}

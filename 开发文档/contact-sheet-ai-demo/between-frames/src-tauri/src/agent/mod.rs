@@ -10,6 +10,7 @@ mod memory_search;
 pub mod openai;
 pub mod policy;
 pub mod provider;
+pub mod router;
 pub mod runtime;
 pub(crate) mod store;
 mod tools;
