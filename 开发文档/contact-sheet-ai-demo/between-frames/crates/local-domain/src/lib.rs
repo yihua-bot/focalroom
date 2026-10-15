@@ -29,6 +29,12 @@ pub struct CommandEnvelope {
 }
 #[derive(Debug)]
 pub struct ValidatedCommand(CommandEnvelope);
+impl ValidatedCommand {
+    /// 只读访问已校验的命令（M2 执行桥使用；不暴露可变构造）。
+    pub fn envelope(&self) -> &CommandEnvelope {
+        &self.0
+    }
+}
 
 pub fn parse_command(mut value: Value) -> Result<ValidatedCommand, &'static str> {
     normalize_wire_numbers(&mut value);
@@ -119,7 +125,7 @@ pub struct ProjectAuthority {
     pub revision: i64,
 }
 // 不实现 Deserialize：Actor 必须由可信入口/session/task 颁发。
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Actor {
     User {
         id: String,
@@ -133,14 +139,14 @@ pub enum Actor {
         expires_at_ms: u64,
     },
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Principal {
     pub workspace_id: String,
     pub project_id: String,
     pub actor: Actor,
 }
 
-fn authorize(
+pub fn authorize(
     command: &CommandEnvelope,
     principal: &Principal,
     project: &ProjectAuthority,

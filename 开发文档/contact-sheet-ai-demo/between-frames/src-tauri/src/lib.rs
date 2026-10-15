@@ -13,6 +13,7 @@ pub mod image_pipeline;
 pub mod importer;
 pub mod keychain;
 mod resource_commands;
+pub mod v2_bridge;
 use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
