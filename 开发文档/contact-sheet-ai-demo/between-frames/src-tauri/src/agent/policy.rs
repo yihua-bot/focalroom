@@ -21,9 +21,28 @@ impl ToolRegistry {
             .as_array()
             .unwrap()
             .iter()
-            .find(|t| t["name"] == call.name)
+            .find(|t| {
+                t["name"] == call.name || t.get("v2Alias") == Some(&serde_json::json!(call.name))
+            })
             .ok_or_else(|| AppError::new("PERMISSION_DENIED", "工具不在摄影工具白名单"))?;
         validate_schema(&spec["parameters"], &call.args)
+    }
+    /// v2 别名解析为规范工具名（无别名返回原名）；M5 评论类工具显式拒绝。
+    pub fn canonical(name: &str) -> Result<String> {
+        if matches!(name, "get_comments" | "summarize_review_disagreement") {
+            return Err(AppError::new(
+                "NOT_IMPLEMENTED",
+                "评论协作工具在 M5 交付；当前任务请使用既有工具集",
+            ));
+        }
+        let specs = Self::specs();
+        Ok(specs["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == name || t.get("v2Alias") == Some(&serde_json::json!(name)))
+            .map(|t| t["name"].as_str().unwrap().to_owned())
+            .unwrap_or_else(|| name.to_owned()))
     }
 }
 pub(crate) fn validate_schema(schema: &Value, value: &Value) -> Result<()> {

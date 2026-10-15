@@ -14,7 +14,9 @@ pub(crate) async fn execute(
     vision_data: Option<&VisionPrefetch>,
 ) -> Result<Value> {
     let a = &call.args;
-    match call.name.as_str() {
+    let canonical = super::policy::ToolRegistry::canonical(&call.name);
+    let name = canonical.as_deref().unwrap_or(call.name.as_str());
+    match name {
         "get_project_context" => {
             let row = sqlx::query("SELECT brief,revision FROM projects WHERE id=?")
                 .bind(&task.project_id)
