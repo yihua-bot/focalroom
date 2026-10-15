@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "LOCAL_ONLY"
+        },
+        "allow_original_upload": {
+          "type": "boolean",
+          "const": false
+        },
+        "strip_gps": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "mode",
+        "allow_original_upload",
+        "strip_gps"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "AUTHORIZED_PREVIEW_ONLY"
+        },
+        "allow_original_upload": {
+          "type": "boolean",
+          "const": false
+        },
+        "strip_gps": {
+          "type": "boolean",
+          "const": true
+        },
+        "max_long_edge": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "consent_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "allowed_provider_ids": {
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "mode",
+        "allow_original_upload",
+        "strip_gps",
+        "max_long_edge",
+        "consent_id",
+        "allowed_provider_ids"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

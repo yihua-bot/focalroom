@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://betweenframes.example/schemas/command-envelope.v2.json",
+  "title": "Shared Domain Command Envelope v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["command_id", "workspace_id", "project_id", "expected_revision", "kind", "payload", "idempotency_key"],
+  "properties": {
+    "command_id": {"type": "string", "minLength": 8},
+    "workspace_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "expected_revision": {"type": "integer", "minimum": 0},
+    "kind": {"type": "string", "enum": ["photo.set_selection", "sequence.move_item", "sequence.add_item", "sequence.remove_item", "proposal.create", "proposal.submit", "proposal.apply", "comment.add", "comment.resolve"]},
+    "payload": {"type": "object"},
+    "idempotency_key": {"type": "string", "minLength": 8},
+    "client_trace_id": {"type": "string"}
+  },
+  "allOf": [
+    {"if": {"properties": {"kind": {"const": "sequence.move_item"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"type": "object", "additionalProperties": false, "required": ["sequence_id", "item_id", "to_index"], "properties": {"sequence_id": {"type": "string"}, "item_id": {"type": "string"}, "to_index": {"type": "integer", "minimum": 0}}}}}},
+    {"if": {"properties": {"kind": {"const": "proposal.apply"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"type": "object", "additionalProperties": false, "required": ["proposal_id", "accepted_operations", "approval_nonce"], "properties": {"proposal_id": {"type": "string"}, "accepted_operations": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}, "approval_nonce": {"type": "string", "minLength": 8}}}}}}
+  ],
+  "description": "AUTH WARNING: actor_id is derived from authenticated server/task principal and MUST NOT be trusted from client JSON."
+}

@@ -1,0 +1,198 @@
+{
+  "version": "2.0",
+  "note": "Scenario index only; implement tests and fixtures per milestone, no claims of execution.",
+  "cases": [
+    {
+      "id": "G01",
+      "title": "AI 关闭，500 张图片可完成 GUI 选片并导出",
+      "milestone": "M1",
+      "test_layer": "gui_e2e",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A01",
+      "title": "结果不足后 Agent 自主追加检索",
+      "milestone": "M2",
+      "test_layer": "runtime_mock",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A02",
+      "title": "不同工具反馈导致不同调用路径",
+      "milestone": "M2",
+      "test_layer": "runtime_mock",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A03",
+      "title": "不存在或越权 photo_id 被拒绝",
+      "milestone": "M2",
+      "test_layer": "policy",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A04",
+      "title": "Agent 无权修改正式版本",
+      "milestone": "M2",
+      "test_layer": "policy",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A05",
+      "title": "取消或恢复不会重复草案写入",
+      "milestone": "M2",
+      "test_layer": "recovery",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A06",
+      "title": "同一请求重试保持幂等",
+      "milestone": "M2",
+      "test_layer": "domain",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "P01",
+      "title": "未经明确同意不能向云模型发送预览图",
+      "milestone": "M3",
+      "test_layer": "privacy",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "P02",
+      "title": "对抗性文本/照片说明不能升级系统权限",
+      "milestone": "M3",
+      "test_layer": "security",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "M01",
+      "title": "用户纠正偏好后后续检索不再误用",
+      "milestone": "M3",
+      "test_layer": "memory",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "M02",
+      "title": "私人记忆不能跨创作者泄漏",
+      "milestone": "M3",
+      "test_layer": "memory",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "M03",
+      "title": "模型路由遇区域拒绝不会静默跨区回退",
+      "milestone": "M3",
+      "test_layer": "model_router",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "S01",
+      "title": "LOCAL 发布为 SHARED 后不得出现两个权威写入端",
+      "milestone": "M4",
+      "test_layer": "sync",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "S02",
+      "title": "共享权限撤销后新媒体 URL 访问被拒绝",
+      "milestone": "M4",
+      "test_layer": "acl",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "C01",
+      "title": "Reviewer 不能批准正式版本",
+      "milestone": "M5",
+      "test_layer": "acl",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "C02",
+      "title": "并发提案按项目基线检测冲突",
+      "milestone": "M5",
+      "test_layer": "domain",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "C03",
+      "title": "断线重连的客户端和服务端版本一致",
+      "milestone": "M5",
+      "test_layer": "sync",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "C04",
+      "title": "评论锚点在重新排序后仍指向原照片",
+      "milestone": "M5",
+      "test_layer": "collab",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "E01",
+      "title": "教师不能访问学生私人项目",
+      "milestone": "M6",
+      "test_layer": "acl",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "B01",
+      "title": "支付 webhook 重放不重复结算",
+      "milestone": "M7",
+      "test_layer": "billing",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "B02",
+      "title": "客户端伪造已付款不能改变账单状态",
+      "milestone": "M7",
+      "test_layer": "billing",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "D01",
+      "title": "记忆删除后查询缓存和向量派生物失效",
+      "milestone": "M3",
+      "test_layer": "privacy",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "D02",
+      "title": "项目版本回滚生成新版本而非抹去历史",
+      "milestone": "M1",
+      "test_layer": "domain",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    },
+    {
+      "id": "A07",
+      "title": "用户更新项目后旧 Agent 草案被标注过期",
+      "milestone": "M2",
+      "test_layer": "concurrency",
+      "expected": "pass with executable assertion and durable evidence",
+      "status": "not_implemented"
+    }
+  ]
+}

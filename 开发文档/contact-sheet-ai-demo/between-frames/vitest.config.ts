@@ -5,5 +5,5 @@ import { resolve } from 'node:path';
 export default defineConfig({
   plugins: [react()],
   server: { fs: { allow: [resolve('.'), resolve('../assets')] } },
-  test: { environment: 'jsdom', setupFiles: ['src/test/setup.ts'], include: ['src/**/*.test.{ts,tsx}'] },
+  test: { environment: 'jsdom', setupFiles: ['src/test/setup.ts'], include: ['src/**/*.test.{ts,tsx}', 'packages/**/*.test.{ts,tsx}'] },
 });

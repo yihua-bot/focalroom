@@ -1,0 +1,6 @@
+{
+  "node": "25.8.1",
+  "npm": "11.11.0",
+  "rust": "1.94.0",
+  "dependency_policy": "preserve-tested-lockfiles"
+}

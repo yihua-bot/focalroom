@@ -1,0 +1,15 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://betweenframes.example/schemas/approval.v2.json",
+  "title":"Human Proposal Approval Request",
+  "type":"object","additionalProperties":false,
+  "required":["workspace_id","project_id","proposal_id","expected_revision","accepted_operation_ids","approval_nonce"],
+  "properties":{
+    "workspace_id":{"type":"string"},"project_id":{"type":"string"},"proposal_id":{"type":"string"},
+    "expected_revision":{"type":"integer","minimum":0},
+    "accepted_operation_ids":{"type":"array","uniqueItems":true,"items":{"type":"string"}},
+    "approval_nonce":{"type":"string","minLength":8},
+    "review_comment":{"type":"string","maxLength":2000}
+  },
+  "description":"Server derives approver from session, checks current role and proposal base_revision, and applies approved operations transactionally."
+}

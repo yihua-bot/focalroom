@@ -185,7 +185,10 @@ pub(crate) async fn materialize(tx: &mut Transaction<'_, Sqlite>, project: &str)
     .unwrap_or_default();
     for (word, _) in candidates.into_iter().take(5) {
         let statement = format!("本项目多次人工判断的说明中出现「{word}」");
-        if tombstoned.iter().any(|key| key == word) {
+        if tombstoned
+            .iter()
+            .any(|key| super::memory_search::keyword(key) == word)
+        {
             continue;
         }
         if existing

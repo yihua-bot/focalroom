@@ -2,6 +2,8 @@
 
 给后续在此仓库工作的编码 Agent 与工程师。先读 `../docs/TEST-REPORT.md`（当前状态）与 `../README.md`，再按需深入。
 
+当前方向已接入 v2.0：先读 `../docs/V2-M0-TEST-REPORT.md`、`../docs/V2.0-ADOPTION.md`。M0 工程/契约切片本地验收通过，整体仍 partial/待评审；下文的 M0–M5 完成状态指 v1.0 历史。新增入口见 `V2-M0-README.md`，一键验证 `npm run verify:v2`。不要直接应用新包初始 SQL、覆盖旧迁移，或将示例 Web / skeleton 当成云协作；旧 src/src-tauri 保留以保护已有能力。
+
 ## 这是什么
 
 本地优先的摄影编辑工作台（Tauri 2 + React/TS + Rust/SQLite）：GUI 完整可用，Agent（Mock/真实视觉）经唯一 CommandHandler 只写草案；偏好记忆从人工命令取证。v1.0 六阶段（M0–M5）工程已全部落地并验收。
@@ -15,7 +17,7 @@ src-tauri/src/
   agent/                  Agent 域：runtime(引擎) provider/openai vision consent memory tools policy context lifecycle
   edit_commands.rs        GUI 命令执行（apply_gui）
   command_handler.rs      唯一命令通道（幂等回执、历史、证据挂钩）
-src-tauri/migrations/     0001–0009（改 schema 只能新增迁移，禁止改历史文件）
+src-tauri/migrations/     0001–0010（改 schema 只能新增迁移，禁止改历史文件）
 src-tauri/tests/          集成测试：agent_runtime / agent_vision / agent_memory / command_history / local_core / keychain / perf_baseline
 contracts/                机器契约（改后必须跑 contracts:check；GUI 命令 DTO 从契约生成，勿手改生成物）
 prompts/                  版本化提示词（agent-system-m2/m3、vision-observe-m3）
@@ -62,5 +64,5 @@ bash scripts/verify-all.sh --skip-keychain     # 跳过钥匙串写删回环，�
 ## 文档地图
 
 - 当前状态：`../docs/TEST-REPORT.md`；决策链：`../docs/DECISIONS.md` + `../docs/ADR/0001–0008`
-- 规格基线：`../planning-v1.0/docs/FINAL-IMPLEMENTATION-SPEC.md`（与实现冲突时提 ADR，不默默绕过）
+- 当前方向：`../docs/V2.0-ADOPTION.md` 指向 BF-SPEC-2.0；工程切片见 ADR 0016。旧基线 `../planning-v1.0/docs/FINAL-IMPLEMENTATION-SPEC.md` 保留作兼容参考；冲突需 ADR，不默默替换。
 - 遗留边界：`../docs/KNOWN_ISSUES.md`；隐私：`../docs/PRIVACY.md`；试用：`../docs/BETA-GUIDE.md`

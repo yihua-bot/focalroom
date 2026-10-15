@@ -1,0 +1,818 @@
+[
+  {
+    "name": "本地合法写入未开放",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "NOT_IMPLEMENTED"
+  },
+  {
+    "name": "共享合法写入未开放",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "SHARED",
+      "local_state": "SHARED_CACHE",
+      "revision": 3
+    },
+    "target": "CLOUD",
+    "now": 100,
+    "code": "NOT_IMPLEMENTED"
+  },
+  {
+    "name": "拒绝其他工作区",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w2",
+      "project_id": "p1",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "拒绝其他项目",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p2",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "拒绝请求其他工作区",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w2",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "拒绝请求其他项目",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p2",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "拒绝 Viewer",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "VIEWER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "拒绝 Reviewer 正式选择",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "REVIEWER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "拒绝无编辑授权的 Editor",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "EDITOR",
+      "can_approve": true,
+      "can_edit_formal": false,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "拒绝无提案授权的 Reviewer",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.create",
+      "payload": {
+        "base_revision": 3,
+        "title": "方案 A",
+        "operations": [
+          {
+            "operation_id": "op1",
+            "op": "add",
+            "photo_id": "photo1",
+            "to_index": 0
+          }
+        ]
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "REVIEWER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": false
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "允许获授权 Reviewer 提案至 stub",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.create",
+      "payload": {
+        "base_revision": 3,
+        "title": "方案 A",
+        "operations": [
+          {
+            "operation_id": "op1",
+            "op": "add",
+            "photo_id": "photo1",
+            "to_index": 0
+          }
+        ]
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "REVIEWER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "NOT_IMPLEMENTED"
+  },
+  {
+    "name": "拒绝 Reviewer 审批",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.apply",
+      "payload": {
+        "proposal_id": "prop1",
+        "expected_proposal_revision": 1,
+        "accepted_operation_ids": [
+          "op1"
+        ],
+        "approval_nonce": "nonce_001"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "REVIEWER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "拒绝无审批授权的 Editor",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.apply",
+      "payload": {
+        "proposal_id": "prop1",
+        "expected_proposal_revision": 1,
+        "accepted_operation_ids": [
+          "op1"
+        ],
+        "approval_nonce": "nonce_001"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "EDITOR",
+      "can_approve": false,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "拒绝旧版本",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 4
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "REVISION_CONFLICT"
+  },
+  {
+    "name": "拒绝共享回退本地",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "SHARED",
+      "local_state": "SHARED_CACHE",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "AUTHORITY_MISMATCH"
+  },
+  {
+    "name": "拒绝迁移期写入",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "PROMOTING",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "AUTHORITY_MISMATCH"
+  },
+  {
+    "name": "拒绝本地发往云端",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "user",
+      "id": "u1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "role": "OWNER",
+      "can_approve": true,
+      "can_edit_formal": true,
+      "can_propose": true
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "CLOUD",
+    "now": 100,
+    "code": "AUTHORITY_MISMATCH"
+  },
+  {
+    "name": "拒绝 Agent 正式选择",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    },
+    "principal": {
+      "type": "agent",
+      "id": "task1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expires_at_ms": 200
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  },
+  {
+    "name": "允许 Agent 草案至 stub",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.create",
+      "payload": {
+        "base_revision": 3,
+        "title": "方案 A",
+        "operations": [
+          {
+            "operation_id": "op1",
+            "op": "add",
+            "photo_id": "photo1",
+            "to_index": 0
+          }
+        ]
+      }
+    },
+    "principal": {
+      "type": "agent",
+      "id": "task1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expires_at_ms": 200
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "NOT_IMPLEMENTED"
+  },
+  {
+    "name": "拒绝过期 Agent",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.create",
+      "payload": {
+        "base_revision": 3,
+        "title": "方案 A",
+        "operations": [
+          {
+            "operation_id": "op1",
+            "op": "add",
+            "photo_id": "photo1",
+            "to_index": 0
+          }
+        ]
+      }
+    },
+    "principal": {
+      "type": "agent",
+      "id": "task1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expires_at_ms": 99
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "AUTH_REVOKED"
+  },
+  {
+    "name": "拒绝 Agent 审批",
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.apply",
+      "payload": {
+        "proposal_id": "prop1",
+        "expected_proposal_revision": 1,
+        "accepted_operation_ids": [
+          "op1"
+        ],
+        "approval_nonce": "nonce_001"
+      }
+    },
+    "principal": {
+      "type": "agent",
+      "id": "task1",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expires_at_ms": 200
+    },
+    "project": {
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "mode": "LOCAL",
+      "local_state": "LOCAL",
+      "revision": 3
+    },
+    "target": "LOCAL",
+    "now": 100,
+    "code": "PERMISSION_DENIED"
+  }
+]

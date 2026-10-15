@@ -1,0 +1,10 @@
+{
+  "productName": "Between Frames V2 Foundation",
+  "identifier": "studio.betweenframes.v2foundation",
+  "build": {
+    "beforeDevCommand": "npm run dev:desktop",
+    "beforeBuildCommand": "npm run build --workspace @betweenframes/desktop",
+    "frontendDist": "../apps/desktop/dist"
+  },
+  "app": { "windows": [{ "label": "main", "title": "序间 · v2.0 M0 基座评审", "width": 1440, "height": 960, "minWidth": 960, "minHeight": 680, "backgroundColor": "#101113" }] }
+}

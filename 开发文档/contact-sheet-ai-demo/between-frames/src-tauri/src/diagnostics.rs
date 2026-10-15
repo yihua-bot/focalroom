@@ -168,6 +168,9 @@ fn storage(root: &Path, limit: usize, cache_limit_bytes: u64) -> Storage {
 /// 最近 5 份升级前备份的可恢复性巡检（quick_check，新→旧）；打开失败标 unreadable。
 async fn check_backups(root: &Path) -> Vec<BackupHealth> {
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    if !std::fs::symlink_metadata(root).is_ok_and(|meta| meta.is_dir()) {
+        return Vec::new();
+    }
     let mut candidates: Vec<_> = std::fs::read_dir(root)
         .into_iter()
         .flatten()
@@ -191,7 +194,7 @@ async fn check_backups(root: &Path) -> Vec<BackupHealth> {
         let name = entry.file_name().to_string_lossy().into_owned();
         // 与文件统计同规则：不跟随符号链接；非普通文件直接标记，不打开目标（ADR 0015 修订）。
         let meta = entry.metadata();
-        if meta.as_ref().is_ok_and(|meta| !meta.is_file()) {
+        if !meta.as_ref().is_ok_and(|meta| meta.is_file()) {
             checked.push(BackupHealth {
                 name,
                 bytes: 0,

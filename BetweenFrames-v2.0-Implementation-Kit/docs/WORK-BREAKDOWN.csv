@@ -1,0 +1,42 @@
+﻿issue_id,milestone,priority,title,acceptance,dependencies
+M0-01,M0,P0,建立 mono repo 与锁定依赖,CI Node/Rust/Web/Tauri build passes,
+M0-02,M0,P0,设计 tokens 和三栏工作台,桌面窗口可操作且正确响应窗口尺寸,M0-01
+M0-03,M0,P0,统一命令 Schema/错误码,通过 jsonschema 契约测试,M0-01
+M0-04,M0,P0,Local SQLite migration/repository,真实迁移+外键/幂等测试通过,M0-03
+M0-05,M0,P0,ADR/权限边界测试骨架,文档/CI artifacts 存在,M0-01
+M1-01,M1,P0,本地照片导入及文件范围授权,未授权路径无法读取，原图 hash 不变,M0-04
+M1-02,M1,P0,缩略图/EXIF/色彩方向,多格式示例正确浏览,M1-01
+M1-03,M1,P0,虚拟 Contact Sheet + 键盘,500 图滚动、全选、批量保留正确,M1-02
+M1-04,M1,P0,Loupe/Compare 细节检视,同步缩放、切图、快捷键通过 E2E,M1-03
+M1-05,M1,P0,Sequence Editor domain commands,顺序唯一，撤销/重做无冲突,M1-03
+M1-06,M1,P0,Immutable versions/export,重新启动版本可恢复，导出真实顺序,M1-05
+M2-01,M2,P0,AgentTask 状态机与 Checkpoint,pause/resume/cancel idempotent,M1-06
+M2-02,M2,P0,Tool Registry 与 Permission Gate,跨项目 ID、模型写正式版均拒绝,M2-01
+M2-03,M2,P0,MockProvider 自适应工具循环,不同工具结果不同轨迹，非固定流程,M2-02
+M2-04,M2,P0,Agent Draft/Proposal 界面,真实 proposal diff，必须人工审批,M2-03
+M2-05,M2,P0,预算/取消/重试/诊断日志,硬上限有效，不能重复副作用,M2-01
+M3-01,M3,P0,ModelProvider adapters 和 Router,供应商故障可降级且尊重隐私区域,M2-03
+M3-02,M3,P0,视觉索引与候选检索,每次只深度处理相关少量图,M3-01
+M3-03,M3,P0,深入比较与叙事草案,摄影师完成真实 20-30 张序列,M3-02
+M3-04,M3,P0,证据型审美记忆,纠正和跨项目授权工作正确,M3-03
+M3-05,M3,P0,Context budget/compaction/checkpoint,多轮任务可恢复、不会丢安全约束,M3-04
+M3-06,M3,P0,竞品同题盲评/质量回归,测得专家评分、费效比、典型失败,M3-03
+M4-01,M4,P0,Cloud Auth/Workspace/ProjectGrant,多租户授权测试通过,M0-03
+M4-02,M4,P0,Postgres Command/Version,幂等+事务+revision 冲突通过,M4-01
+M4-03,M4,P0,对象存储预览和签名链接,权限被撤销后无法再签发,M4-01
+M4-04,M4,P0,Local→Shared 显式 promotion,无双主，失败可回滚/恢复,M4-02;M4-03
+M4-05,M4,P0,浏览器只读/Reviewer 工作台,被邀请者无需安装 desktop,M4-04
+M5-01,M5,P0,评论/锚点/线程,锚点不会随照片顺序变化,M4-05
+M5-02,M5,P0,EditProposal 与审批 Diff,冲突时不能最后写入覆盖,M5-01
+M5-03,M5,P1,WebSocket Yjs Presence/草稿,断线重连权威状态一致,M5-02
+M5-04,M5,P0,团队 ACL 与 Agent 协作总结,Agent 仅读授权评论并准确引用,M5-02
+M5-05,M5,P0,两人真实项目试点,至少 5 组跑通提案→评审→采纳,M5-04
+M6-01,M6,P1,Team/School 权限与组织管理,学校私密数据隔离测试,M5-04
+M6-02,M6,P1,订阅权益/用量计量,任务 usage ledger 可核账,M6-01
+M6-03,M6,P1,工作区审计/管理员面板,可追溯用户和 Agent 写入,M6-01
+M6-04,M6,P1,收费团队商业实验,收获真实支付与续用意愿,M6-02
+M7-01,M7,P1,服务模板与报价合同,交付范围、次数和验收标准清晰,M6-04
+M7-02,M7,P1,Engagement/Deliverable 工作流,委托人仅验收范围内成果,M7-01
+M7-03,M7,P1,支付 webhook 验签与幂等,模拟重放不重复财务效果,M7-02
+M7-04,M7,P1,取消/退款/争议路径,异常订单有人审机制,M7-03
+M7-05,M7,P1,小规模真实交易试点,服务交付、满意度和成本可复核,M7-04

@@ -2,7 +2,6 @@ use super::types::{Task, ToolCall};
 use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 use sqlx::{Sqlite, Transaction};
-use std::collections::HashSet;
 
 pub struct ToolRegistry;
 impl ToolRegistry {
@@ -28,102 +27,14 @@ impl ToolRegistry {
     }
 }
 pub(crate) fn validate_schema(schema: &Value, value: &Value) -> Result<()> {
-    let fail = || AppError::new("VALIDATION_ERROR", "工具参数不符合严格 schema");
-    if let Some(c) = schema.get("const")
-        && c != value
-    {
-        return Err(fail());
+    if betweenframes_local_domain::schema::valid(schema, value) {
+        Ok(())
+    } else {
+        Err(AppError::new(
+            "VALIDATION_ERROR",
+            "工具参数不符合严格 schema",
+        ))
     }
-    if let Some(e) = schema.get("enum")
-        && !e.as_array().unwrap().contains(value)
-    {
-        return Err(fail());
-    }
-    if let Some(branches) = schema.get("oneOf")
-        && branches
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|s| validate_schema(s, value).is_ok())
-            .count()
-            != 1
-    {
-        return Err(fail());
-    }
-    let is_type = |t: &str| match t {
-        "object" => value.is_object(),
-        "array" => value.is_array(),
-        "string" => value.is_string(),
-        "integer" => value.as_i64().is_some(),
-        "null" => value.is_null(),
-        "boolean" => value.is_boolean(),
-        _ => false,
-    };
-    if let Some(t) = schema.get("type")
-        && (t.as_str().is_some_and(|t| !is_type(t))
-            || t.as_array()
-                .is_some_and(|ts| !ts.iter().any(|t| is_type(t.as_str().unwrap_or("")))))
-    {
-        return Err(fail());
-    }
-    if let Some(obj) = value.as_object() {
-        if let Some(required) = schema.get("required")
-            && required
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|k| !obj.contains_key(k.as_str().unwrap()))
-        {
-            return Err(fail());
-        }
-        if let Some(props) = schema["properties"].as_object() {
-            for (k, v) in obj {
-                if let Some(s) = props.get(k) {
-                    validate_schema(s, v)?;
-                } else if schema["additionalProperties"] == false {
-                    return Err(fail());
-                }
-            }
-        }
-    }
-    if let Some(list) = value.as_array() {
-        let n = list.len() as u64;
-        if schema["minItems"].as_u64().is_some_and(|v| n < v)
-            || schema["maxItems"].as_u64().is_some_and(|v| n > v)
-        {
-            return Err(fail());
-        }
-        if schema["uniqueItems"] == true
-            && list
-                .iter()
-                .map(Value::to_string)
-                .collect::<HashSet<_>>()
-                .len()
-                != list.len()
-        {
-            return Err(fail());
-        }
-        if let Some(item) = schema.get("items") {
-            for v in list {
-                validate_schema(item, v)?;
-            }
-        }
-    }
-    if let Some(text) = value.as_str() {
-        let n = text.chars().count() as u64;
-        if schema["minLength"].as_u64().is_some_and(|v| n < v)
-            || schema["maxLength"].as_u64().is_some_and(|v| n > v)
-        {
-            return Err(fail());
-        }
-    }
-    if let Some(n) = value.as_i64()
-        && (schema["minimum"].as_i64().is_some_and(|v| n < v)
-            || schema["maximum"].as_i64().is_some_and(|v| n > v))
-    {
-        return Err(fail());
-    }
-    Ok(())
 }
 pub struct PolicyGate;
 impl PolicyGate {

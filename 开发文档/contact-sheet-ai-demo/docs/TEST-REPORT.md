@@ -1,3 +1,7 @@
+# 当前验收：v2.0 M0 工程与契约切片（2026-10-15）
+
+83 Rust、134 前端单测、17 浏览器 E2E、5 后端旅程通过，类型/契约/Lint/fmt/严格 Clippy、两端前端与独立桌面构建通过。原生 28 图导入/选片/完整退出重启通过，37 表逐行一致，28 源 hash 不变。M0 整体 partial/待架构与 UI/UX 评审；新模式持久化迁移、远端 CI 未实施/未执行，不自动进入 M1。详见 [V2-M0-TEST-REPORT](V2-M0-TEST-REPORT.md)。以下保留历史验收。
+
 # 当前验收：M5 本地存储诊断（2026-10-15）
 
 已完成桌面/harness 共享诊断投影、固定目录存储统计、失败/不完整状态、脱敏 JSON 预览/复制和刷新。全量 **72 Rust、56 前端单测、16 预览、5 真实后端旅程** 通过，契约/typecheck/Lint/fmt/严格 Clippy 通过；原生补验前后 35 表逐行一致、28 源 hash 不变。无新增迁移、依赖或模型任务，原用户库未升级。见 [STORAGE-DIAGNOSTICS-TEST-REPORT](STORAGE-DIAGNOSTICS-TEST-REPORT.md) 与 [ADR 0013](ADR/0013-m5-local-storage-diagnostics.md)。本轮停止等待评审；签名公证、真实模型/计价、真人 Beta、真实大图库性能等边界保留。

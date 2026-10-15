@@ -126,6 +126,7 @@ name = "between-frames"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "betweenframes-local-domain",
  "chrono",
  "image",
  "reqwest 0.12.28",
@@ -139,6 +140,14 @@ dependencies = [
  "tempfile",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "betweenframes-local-domain"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

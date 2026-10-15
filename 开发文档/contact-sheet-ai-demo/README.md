@@ -1,6 +1,10 @@
 # 序间 BETWEEN FRAMES
 
-## 当前需求基线：v1.0（2026-10-13）
+## 新方向：v2.0（2026-10-15）
+
+用户提供了 `BetweenFrames-v2.0-Implementation-Kit`，方向升级为专业摄影 Agent、创作工作区、多人协作与后续私密专业服务。方向差异和阶段映射见 [V2.0-ADOPTION](docs/V2.0-ADOPTION.md)。**M0 工程/契约切片已本地验收**：npm workspaces、Desktop/Web 独立入口、共享 UI、TS/Rust 契约与权限骨架、CI 配置；83 Rust、134 单测、17 浏览器 E2E、5 后端旅程通过，独立原生包导入/选片/退出重启通过。M0 整体仍 partial/待架构与 UI/UX 评审；云服务、v2 生产迁移、远端 CI 均未验收，原用户库未升级。见 [M0 报告](docs/V2-M0-TEST-REPORT.md) 和 [启动说明](between-frames/V2-M0-README.md)。旧版 M0–M5 完成记录不代表新版阶段已通过。
+
+## v1.0 需求与验收历史（2026-10-13 起）
 
 最终实施需求已原样纳入 [`planning-v1.0/`](planning-v1.0/README.md)，后续以 [`FINAL-IMPLEMENTATION-SPEC`](planning-v1.0/docs/FINAL-IMPLEMENTATION-SPEC.md) 为准。新要求明确动态工具闭环、可暂停任务、后端预算、检查点恢复、上传 consent 和 15 条 Agent 验收；需求包不等于已完成软件。
 

@@ -1,0 +1,878 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "client_trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "type": "string",
+          "const": "photo.set_selection"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "photo_ids": {
+              "minItems": 1,
+              "maxItems": 1000,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "uniqueItems": true
+            },
+            "selection_state": {
+              "type": "string",
+              "enum": [
+                "UNDECIDED",
+                "KEEP",
+                "REJECT"
+              ]
+            }
+          },
+          "required": [
+            "photo_ids",
+            "selection_state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "command_id",
+        "workspace_id",
+        "project_id",
+        "expected_revision",
+        "idempotency_key",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "client_trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "type": "string",
+          "const": "sequence.move_item"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "sequence_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "item_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "to_index": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 999999
+            }
+          },
+          "required": [
+            "sequence_id",
+            "item_id",
+            "to_index"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "command_id",
+        "workspace_id",
+        "project_id",
+        "expected_revision",
+        "idempotency_key",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "client_trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "type": "string",
+          "const": "sequence.add_item"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "sequence_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "photo_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "to_index": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 999999
+            }
+          },
+          "required": [
+            "sequence_id",
+            "photo_id",
+            "to_index"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "command_id",
+        "workspace_id",
+        "project_id",
+        "expected_revision",
+        "idempotency_key",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "client_trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "type": "string",
+          "const": "sequence.remove_item"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "sequence_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "item_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "sequence_id",
+            "item_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "command_id",
+        "workspace_id",
+        "project_id",
+        "expected_revision",
+        "idempotency_key",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "client_trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "type": "string",
+          "const": "proposal.create"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "base_revision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "operations": {
+              "minItems": 1,
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "operation_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "photo_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "reason": {
+                        "type": "string",
+                        "maxLength": 1000
+                      },
+                      "op": {
+                        "type": "string",
+                        "const": "add"
+                      },
+                      "to_index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 999999
+                      }
+                    },
+                    "required": [
+                      "operation_id",
+                      "photo_id",
+                      "op",
+                      "to_index"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "operation_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "photo_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "reason": {
+                        "type": "string",
+                        "maxLength": 1000
+                      },
+                      "op": {
+                        "type": "string",
+                        "const": "move"
+                      },
+                      "to_index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 999999
+                      }
+                    },
+                    "required": [
+                      "operation_id",
+                      "photo_id",
+                      "op",
+                      "to_index"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "operation_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "photo_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "reason": {
+                        "type": "string",
+                        "maxLength": 1000
+                      },
+                      "op": {
+                        "type": "string",
+                        "const": "remove"
+                      }
+                    },
+                    "required": [
+                      "operation_id",
+                      "photo_id",
+                      "op"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          },
+          "required": [
+            "base_revision",
+            "title",
+            "operations"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "command_id",
+        "workspace_id",
+        "project_id",
+        "expected_revision",
+        "idempotency_key",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "client_trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "type": "string",
+          "const": "proposal.submit"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "proposal_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "expected_proposal_revision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "proposal_id",
+            "expected_proposal_revision"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "command_id",
+        "workspace_id",
+        "project_id",
+        "expected_revision",
+        "idempotency_key",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "client_trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "type": "string",
+          "const": "proposal.apply"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "proposal_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "expected_proposal_revision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "accepted_operation_ids": {
+              "minItems": 1,
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "uniqueItems": true
+            },
+            "approval_nonce": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "proposal_id",
+            "expected_proposal_revision",
+            "accepted_operation_ids",
+            "approval_nonce"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "command_id",
+        "workspace_id",
+        "project_id",
+        "expected_revision",
+        "idempotency_key",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "client_trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "type": "string",
+          "const": "comment.add"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 5000
+            },
+            "anchor": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "photo"
+                    },
+                    "photo_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "x": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "photo_id",
+                    "x",
+                    "y"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "sequence"
+                    },
+                    "sequence_item_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "revision_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "sequence_item_id",
+                    "revision_id"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "body",
+            "anchor"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "command_id",
+        "workspace_id",
+        "project_id",
+        "expected_revision",
+        "idempotency_key",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 160
+        },
+        "client_trace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "type": "string",
+          "const": "comment.resolve"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "thread_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "RESOLVED",
+                "REOPENED"
+              ]
+            }
+          },
+          "required": [
+            "thread_id",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "command_id",
+        "workspace_id",
+        "project_id",
+        "expected_revision",
+        "idempotency_key",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$id": "https://betweenframes.example/schemas/command-envelope.v2.json",
+  "title": "Between Frames v2.0 validated command envelope"
+}

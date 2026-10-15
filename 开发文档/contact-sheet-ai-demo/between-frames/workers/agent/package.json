@@ -1,0 +1,10 @@
+{
+  "name": "@betweenframes/agent",
+  "dependencies": {
+    "@betweenframes/contracts": "0.0.0"
+  },
+  "exports": "./src/index.ts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module"
+}

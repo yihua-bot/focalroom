@@ -1,6 +1,31 @@
 // M5 诊断必须只读、无业务文本泄漏，统计失败不能伪装成 0。
 use between_frames_lib::{agent::types::AiConfig, db::Store, diagnostics};
 use std::path::Path;
+
+#[cfg(unix)]
+#[tokio::test]
+async fn v2_baseline_backup_health_rejects_symlink_root() {
+    let temp = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let db = store(temp.path()).await;
+    let external = store(outside.path()).await;
+    let backup = outside
+        .path()
+        .join("projects.backup-before-external.sqlite");
+    sqlx::query("VACUUM INTO ?")
+        .bind(backup.to_string_lossy().as_ref())
+        .execute(&external.pool)
+        .await
+        .unwrap();
+    let linked = temp.path().join("linked-root");
+    std::os::unix::fs::symlink(outside.path(), &linked).unwrap();
+    let data = diagnostics::collect(&db, &linked, config()).await.unwrap();
+    assert!(!data.storage.complete);
+    assert!(
+        data.storage.backups_checked.is_empty(),
+        "根目录是符号链接时也不得打开外部备份"
+    );
+}
 fn config() -> AiConfig {
     AiConfig {
         provider_id: "openai".into(),

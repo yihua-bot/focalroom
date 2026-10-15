@@ -14,7 +14,13 @@
     "test:integration": "playwright test --config playwright.integration.config.ts",
     "tauri": "tauri",
     "contracts:generate": "node scripts/generate-command-contracts.mjs",
-    "contracts:check": "node scripts/generate-command-contracts.mjs --check"
+    "contracts:check": "node scripts/generate-command-contracts.mjs --check && node scripts/generate-v2-contracts.mjs --check",
+    "dev:desktop": "npm run dev --workspace @betweenframes/desktop",
+    "dev:web": "npm run dev --workspace @betweenframes/web",
+    "build:workspaces": "npm run typecheck && npm run build --workspaces --if-present",
+    "contracts:v2:generate": "node scripts/generate-v2-contracts.mjs",
+    "test:web": "playwright test --config playwright.web.config.ts",
+    "verify:v2": "bash scripts/verify-v2-m0.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -54,5 +60,14 @@
     "typescript-eslint": "^8.71.2",
     "vite": "^8.0.16",
     "vitest": "^4.1.11"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "workers/*"
+  ],
+  "packageManager": "npm@11.11.0",
+  "engines": {
+    "node": ">=25.8.1 <26"
   }
 }

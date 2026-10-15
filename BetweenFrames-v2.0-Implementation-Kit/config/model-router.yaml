@@ -1,0 +1,31 @@
+version: 1
+# 这是路由策略模板，不是供应商保证、最终型号或公开定价表。
+# 生产环境由模型能力目录 + 可复现评测结果 + 真实计费数据生成 routes。
+service_tiers:
+  standard:
+    allowed_task_types: [INDEX, VISION_OBSERVE, AGENT_ORCHESTRATE, CURATION, MEMORY_EXTRACT, REVIEW_SUMMARY]
+    quality_floor: baseline
+    max_cost_usd_per_task: 0.50
+  pro:
+    allowed_task_types: [INDEX, VISION_OBSERVE, AGENT_ORCHESTRATE, CURATION, MEMORY_EXTRACT, REVIEW_SUMMARY]
+    quality_floor: professional
+    max_cost_usd_per_task: 1.00
+router:
+  filter_order: [region_eligibility, privacy_consent, required_capabilities, usage_budget, health]
+  rank_order: [offline_eval_quality, estimated_cost, p95_latency]
+  fallback: consent_gated_same_capability
+  never_auto_expand_image_scope: true
+  no_provider_selection_required_in_normal_ui: true
+  default_image_mode: authorized_preview_only
+  regions: [region_configured_per_deployment]
+tasks:
+  INDEX: {prefer: efficient_multimodal_or_embedding, cacheable: true}
+  VISION_OBSERVE: {prefer: economical_vision, cacheable: true}
+  AGENT_ORCHESTRATE: {prefer: reliable_tool_calling, cacheable: false}
+  CURATION: {prefer: strongest_qualified_visual_reasoning, cacheable: false}
+  MEMORY_EXTRACT: {prefer: structured_low_cost, cacheable: true}
+  REVIEW_SUMMARY: {prefer: instruction_following_with_citations, cacheable: false}
+limits:
+  standard: {max_turns: 12, max_tool_calls: 30, max_preview_uploads: 40}
+  pro: {max_turns: 18, max_tool_calls: 48, max_preview_uploads: 80}
+  enforce_server_side: true

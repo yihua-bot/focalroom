@@ -1,0 +1,740 @@
+[
+  {
+    "name": "有效选择",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    }
+  },
+  {
+    "name": "有效移位",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "sequence.move_item",
+      "payload": {
+        "sequence_id": "s1",
+        "item_id": "i1",
+        "to_index": 0
+      }
+    }
+  },
+  {
+    "name": "有效添加",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "sequence.add_item",
+      "payload": {
+        "sequence_id": "s1",
+        "photo_id": "photo1",
+        "to_index": 0
+      }
+    }
+  },
+  {
+    "name": "有效移除",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "sequence.remove_item",
+      "payload": {
+        "sequence_id": "s1",
+        "item_id": "i1"
+      }
+    }
+  },
+  {
+    "name": "有效提案",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.create",
+      "payload": {
+        "base_revision": 3,
+        "title": "方案 A",
+        "operations": [
+          {
+            "operation_id": "op1",
+            "op": "add",
+            "photo_id": "photo1",
+            "to_index": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "有效提交",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.submit",
+      "payload": {
+        "proposal_id": "prop1",
+        "expected_proposal_revision": 1
+      }
+    }
+  },
+  {
+    "name": "有效审批",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.apply",
+      "payload": {
+        "proposal_id": "prop1",
+        "expected_proposal_revision": 1,
+        "accepted_operation_ids": [
+          "op1"
+        ],
+        "approval_nonce": "nonce_001"
+      }
+    }
+  },
+  {
+    "name": "有效评论",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "comment.add",
+      "payload": {
+        "body": "关注此处的留白",
+        "anchor": {
+          "type": "photo",
+          "photo_id": "photo1",
+          "x": 0.2,
+          "y": 0.8
+        }
+      }
+    }
+  },
+  {
+    "name": "有效评论解决",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "comment.resolve",
+      "payload": {
+        "thread_id": "thread1",
+        "state": "RESOLVED"
+      }
+    }
+  },
+  {
+    "name": "有效序列评论",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "comment.add",
+      "payload": {
+        "body": "作为结尾",
+        "anchor": {
+          "type": "sequence",
+          "sequence_item_id": "i1",
+          "revision_id": "v3"
+        }
+      }
+    }
+  },
+  {
+    "name": "拒绝客户端 actor",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      },
+      "actor": {
+        "type": "user",
+        "id": "owner"
+      }
+    }
+  },
+  {
+    "name": "拒绝旧协议冒充",
+    "valid": false,
+    "command": {
+      "version": "1.1",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    }
+  },
+  {
+    "name": "拒绝负版本",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": -1,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    }
+  },
+  {
+    "name": "拒绝空工作区",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    }
+  },
+  {
+    "name": "拒绝未知命令",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "project.publish",
+      "payload": {}
+    }
+  },
+  {
+    "name": "拒绝重复照片",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1",
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    }
+  },
+  {
+    "name": "拒绝空选择",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [],
+        "selection_state": "KEEP"
+      }
+    }
+  },
+  {
+    "name": "拒绝错误状态",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "keep"
+      }
+    }
+  },
+  {
+    "name": "拒绝负位置",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "sequence.move_item",
+      "payload": {
+        "sequence_id": "s1",
+        "item_id": "i1",
+        "to_index": -1
+      }
+    }
+  },
+  {
+    "name": "拒绝过长 ID",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    }
+  },
+  {
+    "name": "拒绝分数位置",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "sequence.move_item",
+      "payload": {
+        "sequence_id": "s1",
+        "item_id": "i1",
+        "to_index": 0.5
+      }
+    }
+  },
+  {
+    "name": "拒绝越界锚点",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "comment.add",
+      "payload": {
+        "body": "bad",
+        "anchor": {
+          "type": "photo",
+          "photo_id": "photo1",
+          "x": 1.1,
+          "y": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "拒绝锚点未知字段",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "comment.add",
+      "payload": {
+        "body": "bad",
+        "anchor": {
+          "type": "photo",
+          "photo_id": "photo1",
+          "x": 0,
+          "y": 0,
+          "path": "/private/photo"
+        }
+      }
+    }
+  },
+  {
+    "name": "拒绝旧审批字段",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.apply",
+      "payload": {
+        "proposal_id": "prop1",
+        "expected_proposal_revision": 1,
+        "accepted_operations": [
+          "op1"
+        ],
+        "approval_nonce": "nonce_001"
+      }
+    }
+  },
+  {
+    "name": "拒绝空审批",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.apply",
+      "payload": {
+        "proposal_id": "prop1",
+        "expected_proposal_revision": 1,
+        "accepted_operation_ids": [],
+        "approval_nonce": "nonce_001"
+      }
+    }
+  },
+  {
+    "name": "拒绝重复操作 ID",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.create",
+      "payload": {
+        "base_revision": 3,
+        "title": "A",
+        "operations": [
+          {
+            "operation_id": "op1",
+            "op": "add",
+            "photo_id": "photo1",
+            "to_index": 0
+          },
+          {
+            "operation_id": "op1",
+            "op": "add",
+            "photo_id": "photo2",
+            "to_index": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "拒绝提案基线分歧",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.create",
+      "payload": {
+        "base_revision": 2,
+        "title": "A",
+        "operations": [
+          {
+            "operation_id": "op1",
+            "op": "add",
+            "photo_id": "photo1",
+            "to_index": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "有效选择拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {}
+    }
+  },
+  {
+    "name": "有效移位拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "sequence.move_item",
+      "payload": {}
+    }
+  },
+  {
+    "name": "有效添加拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "sequence.add_item",
+      "payload": {}
+    }
+  },
+  {
+    "name": "有效移除拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "sequence.remove_item",
+      "payload": {}
+    }
+  },
+  {
+    "name": "有效提案拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.create",
+      "payload": {}
+    }
+  },
+  {
+    "name": "有效提交拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.submit",
+      "payload": {}
+    }
+  },
+  {
+    "name": "有效审批拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "proposal.apply",
+      "payload": {}
+    }
+  },
+  {
+    "name": "有效评论拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "comment.add",
+      "payload": {}
+    }
+  },
+  {
+    "name": "有效评论解决拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "comment.resolve",
+      "payload": {}
+    }
+  },
+  {
+    "name": "有效序列评论拒绝空 payload",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "comment.add",
+      "payload": {}
+    }
+  },
+  {
+    "name": "接受按 Unicode 码点计数的 ID",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    }
+  },
+  {
+    "name": "接受 JSON 数学整数版本",
+    "valid": true,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "p1",
+      "expected_revision": 3.0,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    }
+  },
+  {
+    "name": "拒绝 Unicode 码点超限 ID",
+    "valid": false,
+    "command": {
+      "version": "2.0",
+      "command_id": "cmd_test_001",
+      "workspace_id": "w1",
+      "project_id": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "expected_revision": 3,
+      "idempotency_key": "idem_test_001",
+      "kind": "photo.set_selection",
+      "payload": {
+        "photo_ids": [
+          "photo1"
+        ],
+        "selection_state": "KEEP"
+      }
+    }
+  }
+]

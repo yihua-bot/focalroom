@@ -1,0 +1,13 @@
+{
+  "name": "@betweenframes/web",
+  "dependencies": {
+    "@betweenframes/ui": "0.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "version": "0.0.0",
+  "private": true,
+  "type": "module"
+}

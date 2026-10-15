@@ -1,0 +1,10 @@
+{
+  "name": "@betweenframes/api",
+  "dependencies": {
+    "@betweenframes/contracts": "0.0.0"
+  },
+  "exports": "./src/commands.ts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module"
+}

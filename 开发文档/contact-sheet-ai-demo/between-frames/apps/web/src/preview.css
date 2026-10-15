@@ -1,0 +1,2 @@
+.v2-preview-notice { padding: 9px 16px; background: var(--surface-raised); border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.v2-preview-notice + .app-shell { height: calc(100dvh - 36px); }

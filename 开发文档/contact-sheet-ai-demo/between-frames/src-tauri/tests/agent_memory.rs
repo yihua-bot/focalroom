@@ -11,6 +11,38 @@ use between_frames_lib::{
 use serde_json::{Value, json};
 use std::path::Path;
 
+#[tokio::test]
+async fn v2_baseline_preserves_pre_keyword_tombstones() {
+    for suffix in ["", "（2 条证据）"] {
+        let temp = tempfile::tempdir().unwrap();
+        let (db, p) = setup(temp.path(), 2).await;
+        let p = note(&db, p, 0, "留白").await;
+        let p = note(&db, p, 1, "留白").await;
+        let view = memory::projection(&db, &p.id).await.unwrap();
+        let h = view
+            .hypotheses
+            .iter()
+            .find(|h| h.statement.contains("留白"))
+            .unwrap();
+        // 复现 0a5c71b 之前已删除、仅留下完整表述墓碑的用户数据库。
+        sqlx::query("INSERT INTO memory_tombstones(project_id,kind,ref_key,created_at) VALUES(?,'hypothesis',?,'now')")
+            .bind(&p.id).bind(format!("{}{suffix}", h.statement)).execute(&db.pool).await.unwrap();
+        sqlx::query("DELETE FROM preference_hypotheses WHERE id=?")
+            .bind(h.id)
+            .execute(&db.pool)
+            .await
+            .unwrap();
+        let after = memory::projection(&db, &p.id).await.unwrap();
+        assert!(
+            after
+                .hypotheses
+                .iter()
+                .all(|h| !h.statement.contains("留白")),
+            "旧格式墓碑仍须有效"
+        );
+    }
+}
+
 async fn setup(path: &Path, count: usize) -> (Store, Project) {
     let db = Store::open(&path.join("projects.sqlite")).await.unwrap();
     let p = db.create("M4", "偏好与证据").await.unwrap();
