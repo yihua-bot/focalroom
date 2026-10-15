@@ -53,6 +53,9 @@ export function PreferencePanel({ events, repository, project }: { events: Previ
       {hypothesis.status === 'unconfirmed' && <Button size="small" disabled={busy || !hypothesis.evidenceIds.length} onClick={() => { void act(() => repository.memory.request(project.id, { type: 'ConfirmHypothesis', hypothesisId: hypothesis.id })); }}>确认此假设</Button>}
       <Button size="small" disabled={busy} onClick={() => { void act(() => repository.memory.request(project.id, { type: hypothesis.status === 'retired' ? 'RestoreHypothesis' : 'RetireHypothesis', hypothesisId: hypothesis.id })); }}>{hypothesis.status === 'retired' ? '恢复此假设' : '移除此假设'}</Button>
      </div>
+     {hypothesis.status === 'corrected' && <div className="agent-task-actions">
+       <Button size="small" disabled={busy} onClick={() => { if (window.confirm('物理删除这条已纠正的假设？不可撤销；删除后不会从你的操作中重新生成。')) { void act(() => repository.memory.deleteHypothesis(project.id, hypothesis.id)); } }}>删除假设</Button>
+     </div>}
      {!['corrected', 'retired'].includes(hypothesis.status) && <div className="agent-task-actions">
       {correcting === hypothesis.id
        ? <form onSubmit={event => { event.preventDefault(); void act(async () => { await repository.memory.correct(project.id, hypothesis.id, correction.trim()); setCorrecting(null); setCorrection(''); }); }}>

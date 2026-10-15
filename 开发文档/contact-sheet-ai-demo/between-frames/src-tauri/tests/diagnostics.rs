@@ -217,3 +217,40 @@ async fn backup_health_checks_report_recoverability() {
             .starts_with("projects.backup-before-")
     );
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn backup_health_does_not_follow_symlinks() {
+    // 符号链接命名的「备份」不打开目标，直接标 unreadable（评审问题 2）。
+    let dir = tempfile::tempdir().unwrap();
+    let real = dir.path().join("real-target.sqlite");
+    std::fs::write(&real, b"whatever").unwrap();
+    let link = dir.path().join("projects.backup-before-v10-link.sqlite");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        // 直接调用巡检入口：check_backups 是私有——经由 collect 需要 Store；
+        // 用最小 Store（迁移库）+ 同目录 root。
+        let root = dir.path().to_path_buf();
+        let store = between_frames_lib::db::Store::open(&root.join("projects.sqlite"))
+            .await
+            .unwrap();
+        let data = between_frames_lib::diagnostics::collect(
+            &store,
+            &root,
+            between_frames_lib::agent::runtime::AgentEngine::new(store.clone()).ai_config(),
+        )
+        .await
+        .unwrap();
+        let link_row = data
+            .storage
+            .backups_checked
+            .iter()
+            .find(|item| item.name.contains("link"))
+            .expect("符号链接备份应出现在巡检中");
+        assert_eq!(link_row.status, "unreadable");
+    });
+}

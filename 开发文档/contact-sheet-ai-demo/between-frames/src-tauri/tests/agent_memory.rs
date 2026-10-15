@@ -1389,3 +1389,43 @@ async fn delete_evidence_unlinks_hypotheses_and_purges_cache() {
     let again = control(&db, &p, MemoryCommand::PurgeObservationCache {}).await;
     assert!(!again.changed);
 }
+
+#[tokio::test]
+async fn deleted_hypothesis_stays_dead_when_evidence_count_changes() {
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 3).await;
+    // 两条同词证据 → 假设「（2 条证据）」→ 删除（墓碑按关键词）。
+    let p = note(&db, p, 0, "窗边逆光有层次").await;
+    let p = note(&db, p, 1, "逆光更克制").await;
+    let view = memory::projection(&db, &p.id).await.unwrap();
+    let hypothesis = view
+        .hypotheses
+        .iter()
+        .find(|h| h.statement.contains("逆光"))
+        .expect("应有假设")
+        .id;
+    control(
+        &db,
+        &p,
+        MemoryCommand::DeleteHypothesis {
+            hypothesis_id: hypothesis,
+        },
+    )
+    .await;
+    // 第三条同词证据加入：候选表述证据数变为 3——完整表述匹配会漏（评审问题 1），
+    // 关键词墓碑必须仍然拦截。
+    let _p2 = note(&db, p.clone(), 2, "这张也是逆光").await;
+    let again = memory::projection(&db, &p.id).await.unwrap();
+    assert!(
+        again
+            .hypotheses
+            .iter()
+            .all(|h| !h.statement.contains("逆光")),
+        "证据数漂移后删除的假设不得复活：{:?}",
+        again
+            .hypotheses
+            .iter()
+            .map(|h| h.statement.clone())
+            .collect::<Vec<_>>()
+    );
+}

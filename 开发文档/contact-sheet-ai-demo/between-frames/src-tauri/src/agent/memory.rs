@@ -174,7 +174,8 @@ pub(crate) async fn materialize(tx: &mut Transaction<'_, Sqlite>, project: &str)
     let existing = load_hypotheses(tx, project).await?;
     let mut candidates: Vec<_> = supports.iter().filter(|(_, ids)| ids.len() >= 2).collect();
     candidates.sort_by(|a, b| b.1.len().cmp(&a.1.len()).then(a.0.cmp(b.0)));
-    // 物理删除的假设写有墓碑：同表述候选跳过，删除不因物化复活（ADR 0014）。
+    // 物理删除的假设写有墓碑（按关键词）：同词候选跳过，删除不因物化复活
+    // （ADR 0014 修订：表述含证据数会漂移，按词匹配才可靠）。
     let tombstoned: Vec<String> = sqlx::query_scalar(
         "SELECT ref_key FROM memory_tombstones WHERE project_id=? AND kind='hypothesis'",
     )
@@ -184,7 +185,7 @@ pub(crate) async fn materialize(tx: &mut Transaction<'_, Sqlite>, project: &str)
     .unwrap_or_default();
     for (word, _) in candidates.into_iter().take(5) {
         let statement = format!("本项目多次人工判断的说明中出现「{word}」");
-        if tombstoned.contains(&statement) {
+        if tombstoned.iter().any(|key| key == word) {
             continue;
         }
         if existing

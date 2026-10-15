@@ -116,10 +116,10 @@ pub(crate) async fn execute(db: &Store, request: MemoryRequest) -> Result<Memory
             if old.project_id != request.project_id {
                 return Err(AppError::new("NOT_FOUND", "假设不属于本项目"));
             }
-            // 墓碑按表述登记：物化引擎跳过同表述候选，物理删除不复活。
+            // 墓碑按关键词登记（表述含证据数，会随新证据漂移导致复活；ADR 0014 修订）。
             sqlx::query("INSERT OR IGNORE INTO memory_tombstones(project_id,kind,ref_key,created_at) VALUES(?,'hypothesis',?,?)")
                 .bind(&request.project_id)
-                .bind(&old.statement)
+                .bind(super::memory_search::keyword(&old.statement))
                 .bind(domain::timestamp())
                 .execute(&mut *tx)
                 .await?;

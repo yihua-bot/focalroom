@@ -189,6 +189,16 @@ async fn check_backups(root: &Path) -> Vec<BackupHealth> {
     let mut checked = vec![];
     for entry in candidates.into_iter().take(5) {
         let name = entry.file_name().to_string_lossy().into_owned();
+        // 与文件统计同规则：不跟随符号链接；非普通文件直接标记，不打开目标（ADR 0015 修订）。
+        let meta = entry.metadata();
+        if meta.as_ref().is_ok_and(|meta| !meta.is_file()) {
+            checked.push(BackupHealth {
+                name,
+                bytes: 0,
+                status: "unreadable".into(),
+            });
+            continue;
+        }
         let bytes = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
         let status = match SqlitePoolOptions::new()
             .max_connections(1)

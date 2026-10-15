@@ -118,3 +118,21 @@ describe('Memory Studio', () => {
   });
 
 });
+
+describe('v1 收尾评审：已纠正假设的删除入口', () => {
+  it('corrected 状态仍提供删除按钮且不提供纠正/停用', async () => {
+    const corrected = { ...hypothesis, status: 'corrected' as const, userCorrection: '不是偏好' };
+    const repository = {
+      memory: {
+        query: vi.fn().mockResolvedValue({ ...projection, hypotheses: [corrected] }),
+        correct: vi.fn(), setEnabled: vi.fn(),
+        deleteHypothesis: vi.fn().mockResolvedValue(undefined),
+        deleteEvidence: vi.fn(), purgeObservationCache: vi.fn(),
+      },
+    };
+    mount(repository);
+    expect(await screen.findByRole('button', { name: '删除假设' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '纠正此假设' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '停用检索' })).not.toBeInTheDocument();
+  });
+});
