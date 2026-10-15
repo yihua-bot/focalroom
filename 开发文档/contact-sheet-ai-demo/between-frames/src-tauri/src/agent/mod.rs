@@ -6,6 +6,7 @@ pub mod context;
 mod drafts;
 pub(crate) mod execution;
 pub mod lifecycle;
+pub mod media_links;
 pub mod memory;
 pub mod memory_control;
 mod memory_search;
