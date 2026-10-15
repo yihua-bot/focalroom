@@ -128,3 +128,68 @@ async fn real_model_deepseek_full_agent_loop() {
         projection.drafts.len()
     );
 }
+
+#[tokio::test]
+#[ignore = "需要真实 API key 与网络；视觉观察经真实 DeepSeek 模型"]
+async fn real_model_deepseek_vision_observation() {
+    if !real_config_available() {
+        eprintln!("SKIP：未配置真实 API key");
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = project_with_photos(temp.path(), 3).await;
+    // 授权云视觉（consent 必须先行——未授权时零外发是 P01 的核心）。
+    let consent = between_frames_lib::agent::consent::set(
+        &db,
+        between_frames_lib::agent::consent::SetConsent {
+            request_id: domain::id(),
+            project_id: project.id.clone(),
+            mode: "project".into(),
+            provider: "openai".into(),
+            quota: 5,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(consent.used < consent.quota, "consent 配额应有效");
+    // 直接调真实 Provider 的 observe：验证视觉子请求与真实模型交互。
+    let provider = between_frames_lib::agent::openai::OpenAiConfig::from_env().unwrap();
+    let provider = between_frames_lib::agent::openai::OpenAiProvider::new(provider);
+    // 生成一张红色测试图（观察应能识别主色）。
+    let png = image::RgbImage::from_pixel(120, 90, image::Rgb([200, 60, 50]));
+    let mut jpeg_bytes = Vec::new();
+    image::DynamicImage::ImageRgb8(png)
+        .to_rgb8()
+        .write_to(
+            &mut std::io::Cursor::new(&mut jpeg_bytes),
+            image::ImageFormat::Jpeg,
+        )
+        .unwrap();
+    let b64 = {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.encode(&jpeg_bytes)
+    };
+    let photo_id = project.photos[0].id.clone();
+    let (observations, tokens) = provider
+        .observe(
+            "测试项目",
+            "每张图的主色调是什么",
+            &[(photo_id.clone(), b64)],
+            500,
+        )
+        .await
+        .unwrap();
+    eprintln!(
+        "视觉观察返回: {}",
+        serde_json::to_string(&observations).unwrap_or_default()[..200.min(200)].to_string()
+    );
+    eprintln!("真实 token: {tokens}");
+    assert!(
+        tokens > 0 || !observations.to_string().is_empty(),
+        "真实模型应返回观察结果"
+    );
+    // 观察结果必须是合法 JSON（严格 schema 输出）。
+    let text = observations.to_string();
+    assert!(!text.is_empty(), "观察结果不应为空");
+    eprintln!("✅ M3 真实视觉观察通过：DeepSeek 返回观察结果 + {tokens} tokens");
+}

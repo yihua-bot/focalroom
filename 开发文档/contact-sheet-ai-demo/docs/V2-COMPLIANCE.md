@@ -64,3 +64,9 @@ R1–R3 已修复，见 [当前报告](V2-M1-REVIEW-FIXES-TEST-REPORT.md) 与 AD
 - **回执 eventCursor**（ADR 0028）：历史业务快照+事件游标持久化，重放仅补当时事件；兼容旧完整与无游标瘦回执。
 - **灯箱胶片条 CSS 修复**：从未加载的 App.css 迁移到共享 app.css。
 - 本轮验证：126 Rust / 149 前端 / 4 M1 GUI（含新增 RAW 格式边界旅程）/ 16+6 E2E / Clippy / 契约全绿。
+
+### 增量记录（2026-10-15 第五轮：真实模型 E2E）
+
+- **M3 真实模型 E2E 通过**（`301f0c1`）：DeepSeek（OpenAI 兼容 Responses API）跑完整 Agent 任务循环——真实工具调用、草案校验、Agent 不改正式序列、API key 零泄漏全部断言通过。测试 `real_model_e2e.rs`（#[ignore]，需真实 key）。
+- **工具 schema 兼容修复**：`model_specs` 补 `type: "function"` 字段——标准 Responses API 与 DeepSeek/Qwen 等 OpenAI 兼容端点必需。
+- 剩余：真实视觉观察（DeepSeek deepseek-chat 已支持视觉输入，下一轮测试）、token 费用精确校准、竞品对比。
