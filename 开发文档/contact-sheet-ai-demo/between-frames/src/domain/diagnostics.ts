@@ -4,7 +4,8 @@ export interface Diagnostics {
   provider: { providerId: string; ready: boolean; keySource: string | null };
   database: { projects: number; photos: number; decisions: number; agentTasks: number; drafts: number; toolCalls: number; observations: number; evidence: number; hypotheses: number };
   failedAgentTasks: number; migrationsApplied: number;
-  storage: { database: FileUsage; wal: FileUsage; sharedMemory: FileUsage; cache: FileUsage; backups: FileUsage; totalBytes: number; complete: boolean; cacheLimitBytes: number; scanLimitEntries: number };
+  storage: { database: FileUsage; wal: FileUsage; sharedMemory: FileUsage; cache: FileUsage; backups: FileUsage; backupsChecked: BackupHealth[]; totalBytes: number; complete: boolean; cacheLimitBytes: number; scanLimitEntries: number };
   notice: string;
 }
+export interface BackupHealth { name: string; bytes: number; status: 'ok' | 'corrupt' | 'unreadable' }
 export interface DiagnosticsRepository { query(): Promise<Diagnostics> }

@@ -61,12 +61,22 @@ impl FileUsage {
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BackupHealth {
+    pub name: String,
+    pub bytes: u64,
+    /// ok = quick_check 通过；unreadable = 无法打开；corrupt = 完整性检查失败。
+    pub status: String,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Storage {
     pub database: FileUsage,
     pub wal: FileUsage,
     pub shared_memory: FileUsage,
     pub cache: FileUsage,
     pub backups: FileUsage,
+    /// 最近若干份升级前备份的可恢复性巡检（quick_check）；名称不含路径（ADR 0015）。
+    pub backups_checked: Vec<BackupHealth>,
     pub total_bytes: u64,
     pub complete: bool,
     pub cache_limit_bytes: u64,
@@ -142,6 +152,7 @@ fn storage(root: &Path, limit: usize, cache_limit_bytes: u64) -> Storage {
     let total_bytes = sections.iter().map(|part| part.bytes).sum();
     let complete = sections.iter().all(|part| part.complete);
     Storage {
+        backups_checked: Vec::new(),
         database,
         wal,
         shared_memory,
@@ -152,6 +163,66 @@ fn storage(root: &Path, limit: usize, cache_limit_bytes: u64) -> Storage {
         cache_limit_bytes,
         scan_limit_entries: limit,
     }
+}
+
+/// 最近 5 份升级前备份的可恢复性巡检（quick_check，新→旧）；打开失败标 unreadable。
+async fn check_backups(root: &Path) -> Vec<BackupHealth> {
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    let mut candidates: Vec<_> = std::fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("projects.backup-before-") && name.ends_with(".sqlite")
+        })
+        .collect();
+    candidates.sort_by_key(|entry| {
+        std::cmp::Reverse(
+            entry
+                .metadata()
+                .and_then(|meta| meta.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+        )
+    });
+    let mut checked = vec![];
+    for entry in candidates.into_iter().take(5) {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let bytes = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
+        let status = match SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(entry.path())
+                    .read_only(true),
+            )
+            .await
+        {
+            Ok(pool) => {
+                let result = sqlx::query_scalar::<_, String>("PRAGMA quick_check")
+                    .fetch_one(&pool)
+                    .await;
+                pool.close().await;
+                match result {
+                    Ok(check) if check == "ok" => "ok".into(),
+                    Ok(_) => "corrupt".into(),
+                    // SQLITE_NOTADB(26)：文件根本不是可读数据库。
+                    Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("26") => {
+                        "unreadable".into()
+                    }
+                    Err(_) => "corrupt".into(),
+                }
+            }
+            Err(_) => "unreadable".into(),
+        };
+        checked.push(BackupHealth {
+            name,
+            bytes,
+            status,
+        });
+    }
+    checked
 }
 
 pub async fn collect(store: &Store, root: &Path, config: AiConfig) -> Result<Diagnostics> {
@@ -186,10 +257,13 @@ pub async fn collect(store: &Store, root: &Path, config: AiConfig) -> Result<Dia
             .map_err(unavailable)?;
     tx.commit().await.map_err(unavailable)?;
     let root = root.to_owned();
+    let scan_root = root.clone();
     let cache_limit = image_pipeline::cache_limit_bytes();
-    let storage = tokio::task::spawn_blocking(move || storage(&root, SCAN_LIMIT, cache_limit))
-        .await
-        .map_err(|_| AppError::new("DIAGNOSTICS_UNAVAILABLE", "存储统计暂不可用，请重试"))?;
+    let mut storage =
+        tokio::task::spawn_blocking(move || storage(&scan_root, SCAN_LIMIT, cache_limit))
+            .await
+            .map_err(|_| AppError::new("DIAGNOSTICS_UNAVAILABLE", "存储统计暂不可用，请重试"))?;
+    storage.backups_checked = check_backups(&root).await;
     Ok(Diagnostics {
         schema_version: 1,
         collected_at: domain::timestamp(),

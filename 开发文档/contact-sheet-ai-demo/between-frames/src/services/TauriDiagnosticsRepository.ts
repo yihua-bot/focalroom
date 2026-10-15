@@ -9,7 +9,7 @@ const schema = z.object({
   schemaVersion: z.literal(1), collectedAt: z.iso.datetime({ offset: true }), appVersion: z.string(),
   provider: z.object({ providerId: z.enum(['mock', 'openai']), ready: z.boolean(), keySource: z.enum(['env', 'keychain']).nullable() }),
   database: counts, failedAgentTasks: count, migrationsApplied: count,
-  storage: z.object({ database: usage, wal: usage, sharedMemory: usage, cache: usage, backups: usage, totalBytes: count, complete: z.boolean(), cacheLimitBytes: count, scanLimitEntries: count }),
+  storage: z.object({ database: usage, wal: usage, sharedMemory: usage, cache: usage, backups: usage, backupsChecked: z.array(z.object({ name: z.string(), bytes: count, status: z.enum(['ok', 'corrupt', 'unreadable']) })), totalBytes: count, complete: z.boolean(), cacheLimitBytes: count, scanLimitEntries: count }),
   notice: z.string(),
 }).refine(value => {
   const s = value.storage;

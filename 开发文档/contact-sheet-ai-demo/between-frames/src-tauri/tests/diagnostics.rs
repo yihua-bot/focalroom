@@ -162,3 +162,58 @@ async fn cache_and_backup_symlinks_and_nested_dirs_are_not_followed() {
         [0; 100]
     );
 }
+
+#[tokio::test]
+async fn backup_health_checks_report_recoverability() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    // 一份健康备份（VACUUM INTO 产出）+ 一份截断损坏 + 一份非 SQLite 文件。
+    Store::open(&root.join("projects.sqlite")).await.unwrap();
+    {
+        let db = Store::open(&root.join("projects.sqlite")).await.unwrap();
+        let good = root.join("projects.backup-before-v10-goodtest.sqlite");
+        sqlx::query("VACUUM INTO ?")
+            .bind(good.to_string_lossy().as_ref())
+            .execute(&db.pool)
+            .await
+            .unwrap();
+        db.pool.close().await;
+    }
+    let healthy_bytes =
+        std::fs::read(root.join("projects.backup-before-v10-goodtest.sqlite")).unwrap();
+    std::fs::write(
+        root.join("projects.backup-before-v10-truncated.sqlite"),
+        &healthy_bytes[..healthy_bytes.len() / 2],
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("projects.backup-before-v10-notsqlite.sqlite"),
+        b"not a database",
+    )
+    .unwrap();
+    let store = Store::open(&root.join("projects.sqlite")).await.unwrap();
+    let data = between_frames_lib::diagnostics::collect(
+        &store,
+        root,
+        between_frames_lib::agent::runtime::AgentEngine::new(store.clone()).ai_config(),
+    )
+    .await
+    .unwrap();
+    let checked = &data.storage.backups_checked;
+    assert_eq!(checked.len(), 3);
+    let by_name = |fragment: &str| {
+        checked
+            .iter()
+            .find(|item| item.name.contains(fragment))
+            .unwrap()
+    };
+    assert_eq!(by_name("goodtest").status, "ok");
+    assert_eq!(by_name("truncated").status, "corrupt");
+    assert_eq!(by_name("notsqlite").status, "unreadable");
+    // 名称只含文件名，不含目录路径。
+    assert!(
+        by_name("goodtest")
+            .name
+            .starts_with("projects.backup-before-")
+    );
+}

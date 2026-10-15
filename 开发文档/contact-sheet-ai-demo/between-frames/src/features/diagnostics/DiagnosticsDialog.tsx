@@ -45,6 +45,13 @@ export function DiagnosticsDialog({ repository, onClose }: { repository: Diagnos
         ] as const).map(([label, part]) => <tr key={label}><th scope="row">{label}</th><td>{amount(part)}{!part.complete && <small> · 统计不完整</small>}</td><td>{part.files}</td></tr>)}</tbody>
       </table>
       <p>已统计文件合计：{data.storage.complete ? '' : '至少 '}{bytes(data.storage.totalBytes)}</p>
+      {data.storage.backupsChecked.length > 0 && <div className="backup-health">
+        <h4>备份可恢复性巡检（最近 {data.storage.backupsChecked.length} 份）</h4>
+        <ul>{data.storage.backupsChecked.map(backup => <li key={backup.name} data-status={backup.status}>
+          {backup.status === 'ok' ? '✓ 可恢复' : backup.status === 'corrupt' ? '⚠ 完整性异常' : '⚠ 无法打开'} · {bytes(backup.bytes)} · {backup.name}
+        </li>)}</ul>
+        <p className="micro">巡检为只读快速校验（quick_check）；异常备份仍保留在原处，可用于人工恢复评估。应用内暂无自动恢复入口。</p>
+      </div>}
       <p className="micro">缓存配置额度：{bytes(data.storage.cacheLimitBytes)}。自动清理只针对孤儿缓存，被照片引用的缓存保留。</p>
       {data.storage.cache.bytes > data.storage.cacheLimitBytes && <p role="status">已统计缓存超过配置额度；引用缓存不会自动淘汰。</p>}
       {!data.storage.complete && <p role="status">部分条目不可读取、不是普通文件或超出扫描上限；仅显示已统计下界。不会跟随符号链接。</p>}
