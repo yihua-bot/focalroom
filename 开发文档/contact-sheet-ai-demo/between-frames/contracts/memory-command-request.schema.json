@@ -130,6 +130,52 @@
             "hypothesisId",
             "enabled"
           ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "DeleteHypothesis"
+            },
+            "hypothesisId": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type",
+            "hypothesisId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "DeleteEvidence"
+            },
+            "evidenceId": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type",
+            "evidenceId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "PurgeObservationCache"
+            }
+          },
+          "required": [
+            "type"
+          ]
         }
       ]
     }

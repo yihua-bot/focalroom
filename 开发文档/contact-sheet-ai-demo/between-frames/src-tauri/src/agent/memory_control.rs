@@ -40,6 +40,15 @@ pub enum MemoryCommand {
         hypothesis_id: i64,
         enabled: bool,
     },
+    /// 物理删除：不可撤销；写墓碑防止确定性物化复活（ADR 0014）。
+    DeleteHypothesis {
+        hypothesis_id: i64,
+    },
+    DeleteEvidence {
+        evidence_id: i64,
+    },
+    /// 清空本项目的视觉观察缓存（photo_observations）；不影响证据/假设/草案。
+    PurgeObservationCache {},
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -102,6 +111,92 @@ pub(crate) async fn execute(db: &Store, request: MemoryRequest) -> Result<Memory
     }
     memory::materialize(&mut tx, &request.project_id).await?;
     let changed = match &request.command {
+        MemoryCommand::DeleteHypothesis { hypothesis_id } => {
+            let old = memory::row_view(&mut tx, *hypothesis_id).await?;
+            if old.project_id != request.project_id {
+                return Err(AppError::new("NOT_FOUND", "假设不属于本项目"));
+            }
+            // 墓碑按表述登记：物化引擎跳过同表述候选，物理删除不复活。
+            sqlx::query("INSERT OR IGNORE INTO memory_tombstones(project_id,kind,ref_key,created_at) VALUES(?,'hypothesis',?,?)")
+                .bind(&request.project_id)
+                .bind(&old.statement)
+                .bind(domain::timestamp())
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("DELETE FROM preference_hypotheses WHERE id=? AND project_id=?")
+                .bind(hypothesis_id)
+                .bind(&request.project_id)
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("DELETE FROM memory_search WHERE project_id=?")
+                .bind(&request.project_id)
+                .execute(&mut *tx)
+                .await?;
+            true
+        }
+        MemoryCommand::DeleteEvidence { evidence_id } => {
+            let owner: Option<i64> = sqlx::query_scalar(
+                "SELECT id FROM preference_evidence WHERE id=? AND project_id=?",
+            )
+            .bind(evidence_id)
+            .bind(&request.project_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            if owner.is_none() {
+                return Err(AppError::new("NOT_FOUND", "证据不属于本项目"));
+            }
+            sqlx::query("DELETE FROM memory_evidence_state WHERE evidence_id=?")
+                .bind(evidence_id)
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("DELETE FROM preference_evidence WHERE id=?")
+                .bind(evidence_id)
+                .execute(&mut *tx)
+                .await?;
+            // 引用该证据的假设移除引用；引用清空的假设退役（不可再确认）。
+            let hypotheses: Vec<i64> = sqlx::query_scalar(
+                "SELECT id FROM preference_hypotheses WHERE project_id=? AND evidence_ids_json LIKE ?",
+            )
+            .bind(&request.project_id)
+            .bind(format!("%{evidence_id}%"))
+            .fetch_all(&mut *tx)
+            .await?;
+            for hypothesis in hypotheses {
+                let view = memory::row_view(&mut tx, hypothesis).await?;
+                let remaining: Vec<i64> = view
+                    .evidence_ids
+                    .into_iter()
+                    .filter(|id| id != evidence_id)
+                    .collect();
+                if remaining.is_empty() {
+                    sqlx::query("UPDATE preference_hypotheses SET evidence_ids_json='[]',status='retired',disabled_for_retrieval=1,updated_at=? WHERE id=?")
+                        .bind(domain::timestamp())
+                        .bind(hypothesis)
+                        .execute(&mut *tx)
+                        .await?;
+                } else {
+                    sqlx::query("UPDATE preference_hypotheses SET evidence_ids_json=?,updated_at=? WHERE id=?")
+                        .bind(serde_json::to_string(&remaining).unwrap())
+                        .bind(domain::timestamp())
+                        .bind(hypothesis)
+                        .execute(&mut *tx)
+                        .await?;
+                }
+            }
+            sqlx::query("DELETE FROM memory_search WHERE project_id=?")
+                .bind(&request.project_id)
+                .execute(&mut *tx)
+                .await?;
+            true
+        }
+        MemoryCommand::PurgeObservationCache {} => {
+            let removed = sqlx::query("DELETE FROM photo_observations WHERE photo_id IN (SELECT id FROM photos WHERE project_id=?)")
+                .bind(&request.project_id)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected();
+            removed > 0
+        }
         MemoryCommand::SetEvidenceExcluded {
             evidence_id,
             excluded,

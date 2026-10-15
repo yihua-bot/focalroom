@@ -5,11 +5,17 @@ export type MemoryCommand =
   | { type: 'SetEvidenceExcluded'; evidenceId: number; excluded: boolean }
   | { type: 'ConfirmHypothesis' | 'RetireHypothesis' | 'RestoreHypothesis'; hypothesisId: number }
   | { type: 'CorrectHypothesis'; hypothesisId: number; correction: string }
-  | { type: 'SetHypothesisEnabled'; hypothesisId: number; enabled: boolean };
+  | { type: 'SetHypothesisEnabled'; hypothesisId: number; enabled: boolean }
+  | { type: 'DeleteHypothesis'; hypothesisId: number }
+  | { type: 'DeleteEvidence'; evidenceId: number }
+  | { type: 'PurgeObservationCache' };
 export interface MemoryReceipt { requestId: string; changed: boolean; memoryRevision: number }
 export interface MemoryRepository {
   query(projectId: string, query?: string): Promise<MemoryProjection>;
   request(projectId: string, command: MemoryCommand): Promise<MemoryReceipt>;
   correct(projectId: string, hypothesisId: number, correction: string): Promise<MemoryHypothesis>;
   setEnabled(projectId: string, hypothesisId: number, enabled: boolean): Promise<MemoryHypothesis>;
+  deleteHypothesis(projectId: string, hypothesisId: number): Promise<void>;
+  deleteEvidence(projectId: string, evidenceId: number): Promise<void>;
+  purgeObservationCache(projectId: string): Promise<MemoryReceipt>;
 }

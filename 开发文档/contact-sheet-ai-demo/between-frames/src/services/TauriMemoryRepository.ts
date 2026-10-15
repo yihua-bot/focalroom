@@ -36,6 +36,15 @@ export class TauriMemoryRepository implements MemoryRepository {
   await this.request(projectId, { type: 'SetHypothesisEnabled', hypothesisId, enabled });
   return this.find(projectId, hypothesisId);
  }
+ async deleteHypothesis(projectId: string, hypothesisId: number) {
+  await this.request(projectId, { type: 'DeleteHypothesis', hypothesisId });
+ }
+ async deleteEvidence(projectId: string, evidenceId: number) {
+  await this.request(projectId, { type: 'DeleteEvidence', evidenceId });
+ }
+ async purgeObservationCache(projectId: string) {
+  return this.request(projectId, { type: 'PurgeObservationCache' });
+ }
  private async find(projectId: string, id: number) {
   const item = (await this.query(projectId)).hypotheses.find(h => h.id === id);
   if (!item) throw new Error('假设不存在');

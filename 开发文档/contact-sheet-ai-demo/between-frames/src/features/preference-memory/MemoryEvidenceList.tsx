@@ -15,9 +15,10 @@ function explanation(item: MemoryEvidence, photos: Photo[]) {
   return { lines, names: ids.join('、') };
 }
 
-export function MemoryEvidenceList({ ids, evidence, photos, busy, onExclude }: {
+export function MemoryEvidenceList({ ids, evidence, photos, busy, onExclude, onDelete }: {
   ids: number[]; evidence: MemoryEvidence[]; photos: Photo[]; busy?: boolean;
   onExclude?: (item: MemoryEvidence) => void;
+  onDelete?: (item: MemoryEvidence) => void;
 }) {
   return <ol className="timeline">{ids.map(id => {
     const item = evidence.find(value => value.id === id);
@@ -30,6 +31,9 @@ export function MemoryEvidenceList({ ids, evidence, photos, busy, onExclude }: {
       {!detail.lines.length && <p className="micro">该操作没有留下文字理由。</p>}
       {onExclude && <Button size="small" disabled={busy} aria-label={`${item.excluded ? '恢复' : '排除'}证据 #${id}`} onClick={() => onExclude(item)}>
         {item.excluded ? '恢复参与学习' : '排除学习'}
+      </Button>}
+      {onDelete && <Button size="small" disabled={busy} aria-label={`删除证据 #${id}`} onClick={() => { if (window.confirm('物理删除这条证据？不可撤销，引用它的假设将失去该证据（引用清空的假设会退役）。')) onDelete(item); }}>
+        删除
       </Button>}
     </li>;
   })}</ol>;

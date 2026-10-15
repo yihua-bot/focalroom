@@ -1294,3 +1294,98 @@ async fn memory_exclusion_discards_a_model_reply_already_in_flight() {
     );
     assert_eq!(db.get(&p.id).await.unwrap().revision, p.revision);
 }
+
+#[tokio::test]
+async fn physical_delete_hypothesis_writes_tombstone_and_never_revives() {
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 3).await;
+    // 两张照片同关键词备注 → 物化假设。
+    let p = note(&db, p, 0, "逆光有层次").await;
+    let p = note(&db, p, 1, "逆光更克制").await;
+    let view = memory::projection(&db, &p.id).await.unwrap();
+    let hypothesis = view
+        .hypotheses
+        .iter()
+        .find(|h| h.statement.contains("逆光"))
+        .expect("应有假设")
+        .id;
+    // 物理删除。
+    let receipt = control(
+        &db,
+        &p,
+        MemoryCommand::DeleteHypothesis {
+            hypothesis_id: hypothesis,
+        },
+    )
+    .await;
+    assert!(receipt.changed);
+    let after = memory::projection(&db, &p.id).await.unwrap();
+    assert!(after.hypotheses.iter().all(|h| h.id != hypothesis));
+    // 再触发物化（新证据写入 + 投影）不复活：同表述候选被墓碑拦截。
+    let p2 = note(&db, p.clone(), 2, "逆光也想要").await;
+    let _ = p2;
+    let again = memory::projection(&db, &p.id).await.unwrap();
+    assert!(
+        again.hypotheses.iter().all(|h| h.statement
+            != view
+                .hypotheses
+                .iter()
+                .find(|h| h.id == hypothesis)
+                .unwrap()
+                .statement),
+        "物理删除的假设不得经物化复活"
+    );
+    // 行已不存在：明确 NOT_FOUND；同请求重放的幂等由 request_id 回执机制保障。
+    let replay = CommandHandler::new(&db)
+        .execute_memory(MemoryRequest {
+            request_id: between_frames_lib::domain::id(),
+            project_id: p.id.clone(),
+            command: MemoryCommand::DeleteHypothesis {
+                hypothesis_id: hypothesis,
+            },
+        })
+        .await;
+    assert!(replay.is_err());
+}
+
+#[tokio::test]
+async fn delete_evidence_unlinks_hypotheses_and_purges_cache() {
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 3).await;
+    let p = note(&db, p, 0, "窗边的光线有层次").await;
+    let p = note(&db, p, 1, "窗边也留白").await;
+    let view = memory::projection(&db, &p.id).await.unwrap();
+    // 先造观察缓存：直接落两行（不经视觉链路）。
+    for photo in &p.photos[..2] {
+        sqlx::query("INSERT INTO photo_observations(photo_id,photo_hash,model_id,prompt_version,kind,observation_json,created_at) VALUES(?,?,?,?,?,?,?)")
+            .bind(&photo.id).bind("hash-x").bind("mock").bind("m3-vision-1").bind("inspect_photos").bind("{}").bind(between_frames_lib::domain::timestamp())
+            .execute(&db.pool).await.unwrap();
+    }
+    // 删除一条证据：引用它的假设要么失去引用、要么退役。
+    let evidence_id = view.evidence[0].id;
+    let linked: Vec<i64> = view
+        .hypotheses
+        .iter()
+        .flat_map(|h| h.evidence_ids.clone())
+        .collect();
+    let receipt = control(&db, &p, MemoryCommand::DeleteEvidence { evidence_id }).await;
+    assert!(receipt.changed);
+    let after = memory::projection(&db, &p.id).await.unwrap();
+    assert!(after.evidence.iter().all(|e| e.id != evidence_id));
+    for hypothesis in &after.hypotheses {
+        assert!(!hypothesis.evidence_ids.contains(&evidence_id));
+        if hypothesis.evidence_ids.is_empty() {
+            assert_eq!(hypothesis.status, "retired");
+        }
+    }
+    let _ = linked;
+    // 清空观察缓存。
+    let purged = control(&db, &p, MemoryCommand::PurgeObservationCache {}).await;
+    assert!(purged.changed);
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations WHERE photo_id IN (SELECT id FROM photos WHERE project_id=?)")
+        .bind(&p.id).fetch_one(&db.pool).await.unwrap();
+    assert_eq!(count, 0);
+    // 再次清空为 no-op（幂等）。
+    let again = control(&db, &p, MemoryCommand::PurgeObservationCache {}).await;
+    assert!(!again.changed);
+}

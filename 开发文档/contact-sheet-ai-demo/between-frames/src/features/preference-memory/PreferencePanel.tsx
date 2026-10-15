@@ -61,11 +61,13 @@ export function PreferencePanel({ events, repository, project }: { events: Previ
           <Button size="small" disabled={busy} onClick={() => { setCorrecting(null); setCorrection(''); }}>取消</Button>
          </form>
        : <><Button size="small" disabled={busy} onClick={() => { setCorrecting(hypothesis.id); setCorrection(''); }}>纠正此假设</Button>
-          <Button size="small" disabled={busy} onClick={() => { void act(() => repository.memory.setEnabled(project.id, hypothesis.id, hypothesis.disabled)); }}>{hypothesis.disabled ? '恢复检索' : '停用检索'}</Button></>}
+          <Button size="small" disabled={busy} onClick={() => { void act(() => repository.memory.setEnabled(project.id, hypothesis.id, hypothesis.disabled)); }}>{hypothesis.disabled ? '恢复检索' : '停用检索'}</Button>
+          <Button size="small" disabled={busy} onClick={() => { if (window.confirm('物理删除这条假设？不可撤销；删除后不会从你的操作中重新生成。')) { void act(() => repository.memory.deleteHypothesis(project.id, hypothesis.id)); } }}>删除假设</Button></>}
      </div>}
     </article>) : <EmptyState title={keyword ? "没有匹配的假设" : "还没有假设"} hint="进行几次带理由的人工选择后，这里会出现证据支持的偏好假设。" />}
     <div className="divider" /><div className="eyebrow">EVIDENCE / 人工证据</div>
-    {evidence.length ? <MemoryEvidenceList ids={evidence.slice(0, evidenceLimit).map(item => item.id)} evidence={evidence} photos={project.photos} busy={busy} onExclude={item => { void act(() => repository.memory.request(project.id, { type: 'SetEvidenceExcluded', evidenceId: item.id, excluded: !item.excluded })); }} /> : <EmptyState title={zh.noEvents} hint="从一次人工选择开始。" />}
+    <div className="agent-task-actions"><Button size="small" disabled={busy} onClick={() => { if (window.confirm('清空本项目的视觉观察缓存？已上传的云端数据不受影响；再次视觉观察会重新申请授权并上传。')) { void act(() => repository.memory.purgeObservationCache(project.id)); } }}>清空视觉观察缓存</Button><span className="micro">不含证据与假设；仅删除本机缓存的观察结果。</span></div>
+    {evidence.length ? <MemoryEvidenceList ids={evidence.slice(0, evidenceLimit).map(item => item.id)} evidence={evidence} photos={project.photos} busy={busy} onExclude={item => { void act(() => repository.memory.request(project.id, { type: 'SetEvidenceExcluded', evidenceId: item.id, excluded: !item.excluded })); }} onDelete={item => { void act(() => repository.memory.deleteEvidence(project.id, item.id)); }} /> : <EmptyState title={zh.noEvents} hint="从一次人工选择开始。" />}
     {evidence.length > evidenceLimit && <Button size="small" onClick={() => setEvidenceLimit(value => value + 20)}>查看更多证据</Button>}
     <p className="micro">证据仅记录你的明确操作；Agent 的草案与建议不会出现在这里。撤销或重做不重复计数。</p>
    </>}
