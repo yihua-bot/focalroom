@@ -1,12 +1,21 @@
 use crate::{
     command_handler::GuiCommandRequest,
     commands_generated::GuiCommand,
-    domain::{self, AppError, Result},
+    domain::{self, AppError, DecisionEvent, Result},
 };
 use serde::Serialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::{Sqlite, Transaction};
+
+pub(crate) async fn events_through(
+    tx: &mut Transaction<'_, Sqlite>,
+    project: &str,
+    cursor: i64,
+) -> Result<Vec<DecisionEvent>> {
+    Ok(sqlx::query_as("SELECT id,photo_id,actor,event_type,previous_json,next_json,reason,context_json,created_at FROM decision_events WHERE project_id=? AND rowid<=? ORDER BY created_at DESC,rowid DESC")
+        .bind(project).bind(cursor).fetch_all(&mut **tx).await?)
+}
 pub(crate) fn legacy_kind(command: &GuiCommand) -> &'static str {
     match command {
         GuiCommand::CreateProject { .. } => "project_create",
@@ -24,6 +33,7 @@ pub(crate) fn legacy_kind(command: &GuiCommand) -> &'static str {
         GuiCommand::UndoCommandGroup { .. } => "undo",
         GuiCommand::RedoCommandGroup { .. } => "redo",
         GuiCommand::ApplyDraft { .. } => "draft_apply",
+        GuiCommand::ApplyProposal { .. } => "proposal_apply",
         GuiCommand::RebaseDraft { .. } => "draft_rebase",
         GuiCommand::UpdateDraft { .. } => "draft_edit",
         GuiCommand::DiscardDraft { .. } => "draft_discard",

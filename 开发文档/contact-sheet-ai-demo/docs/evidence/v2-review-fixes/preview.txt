@@ -1,0 +1,29 @@
+
+> between-frames@0.1.0 test:e2e
+> playwright test
+
+[WebServer] (node:82649) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 16 tests using 1 worker
+
+(node:82685) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 e2e/gui-v1.spec.ts:10:1 › 多选、明确 K/X/U、批量人工评分和输入焦点隔离 (869ms)
+  ✓   2 e2e/gui-v1.spec.ts:41:1 › 大图适合屏幕、100% 缓存像素、平移、翻片与关闭焦点 (835ms)
+  ✓   3 e2e/gui-v1.spec.ts:71:1 › 选中两张比较，同步与独立缩放平移不会改写状态 (851ms)
+  ✓   4 e2e/gui-v1.spec.ts:100:1 › 搜索快捷键、当前视图全选、面板折叠和双尺寸可用性 (1.1s)
+  ✓   5 e2e/history-v1.spec.ts:8:1 › 多选一次撤销，重做与新编辑分支；备注输入不触发项目撤销 (642ms)
+  ✓   6 e2e/history-v1.spec.ts:28:1 › 版本保存、范围预览、恢复与撤销恢复 (821ms)
+  ✓   7 e2e/workspace.spec.ts:17:1 › 实际运行原始 standalone Demo 并核对主要交互 (436ms)
+  ✓   8 e2e/workspace.spec.ts:33:1 › 工作台与检查器截图，完整构图、密度切换和面板收起 (807ms)
+  ✓   9 e2e/workspace.spec.ts:53:1 › 比较截图、焦点陷阱、Esc 与偏好不会改写选片 (689ms)
+  ✓  10 e2e/workspace.spec.ts:70:1 › 作品序列截图，鼠标拖拽与键盘上下移动一致 (1.7s)
+  ✓  11 e2e/workspace.spec.ts:100:1 › 序列把手支持 Space 与方向键拖放，不与全局快捷键冲突 (828ms)
+  ✓  12 e2e/workspace.spec.ts:116:1 › 序列把手处理单次合并移动事件，Escape 取消后顺序不变 (818ms)
+  ✓  13 e2e/workspace.spec.ts:147:1 › 新建项目的空状态截图与项目导航 (676ms)
+  ✓  14 e2e/workspace.spec.ts:162:1 › 备注编辑不会触发 K/X；刷新明确重置内存预览 (892ms)
+  ✓  15 e2e/workspace.spec.ts:176:1 › AI、导入和导出边界明示；没有外部请求 (621ms)
+  ✓  16 e2e/workspace.spec.ts:190:1 › 390px 窄屏能导航、选片和查看检查器，无横向溢出 (549ms)
+
+  16 passed (16.0s)

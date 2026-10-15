@@ -1,0 +1,32 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.83s
+     Running tests/command_history.rs (src-tauri/target-v1/debug/deps/command_history-b89b6e6c5ad322c0)
+
+running 10 tests
+test generated_request_contract_round_trips_all_m1_examples_and_rejects_extra_fields ... ok
+test database_ownership_triggers_reject_cross_project_rows ... ok
+test comparison_undo_is_logical_and_does_not_delete_evidence_rows ... ok
+test receipt_write_failure_rolls_back_every_projection_event_and_stack ... ok
+test named_version_restore_is_scoped_atomic_and_undoable ... ok
+test concurrent_connections_have_one_success_and_deterministic_conflict ... ok
+test durable_replay_checks_fingerprint_scope_and_returns_original_result ... ok
+test project_brief_and_archive_restore_have_compensating_history ... ok
+test batch_history_undo_redo_persists_and_new_edit_invalidates_redo_branch ... ok
+test old_wal_database_is_backed_up_before_upgrade_and_backup_can_restore_project ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+     Running tests/photo_inspection.rs (src-tauri/target-v1/debug/deps/photo_inspection-478da661b37b8e76)
+
+running 8 tests
+test fake_raw_and_unsupported_extensions_fail_with_clear_errors ... ok
+test color_boundary_probe_icc_16bit_and_orientation ... ok
+test heic_original_passes_brand_check_when_fixture_exists ... ok
+test inspect_original_is_owned_read_only_and_larger_than_preview ... ok
+test compact_gui_projection_preserves_audit_exports_and_idempotent_receipts ... ok
+test raw_cr2_returns_embedded_preview_not_full_resolution ... ok
+test tiff_original_is_direct_and_read_only ... ok
+test changed_missing_and_unsupported_originals_do_not_masquerade_as_full_resolution ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.79s
+

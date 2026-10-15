@@ -1,0 +1,21 @@
+{
+  "receipt": {
+    "firstRevision": 2,
+    "replayRevision": 2,
+    "replayProjectRevision": 2,
+    "replayTitle": "A",
+    "sameResult": true
+  },
+  "raw": {
+    "sourceDimensions": [
+      7000,
+      5000
+    ],
+    "returnedDimensions": [
+      1400,
+      1000
+    ],
+    "returnedKind": "derived_preview",
+    "sourceHashUnchanged": true
+  }
+}

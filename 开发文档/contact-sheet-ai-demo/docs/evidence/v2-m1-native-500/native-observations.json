@@ -1,0 +1,74 @@
+{
+  "projectId": "31c253b6-6e1e-4041-b17f-2f58cec0e8d8",
+  "initialPid": 24230,
+  "import": {
+    "count": 500,
+    "failed": 0,
+    "duplicates": 0,
+    "observedCompletionUpperBoundMs": 17686
+  },
+  "virtualGridRanges": [
+    [
+      1,
+      20
+    ],
+    [
+      225,
+      260
+    ],
+    [
+      481,
+      500
+    ]
+  ],
+  "batchKeep": 25,
+  "batchRating": 4,
+  "batchKeepAutomationObservedMs": 567,
+  "menuToolConflict": "Resolved through native menu secondary Cancel, then type-ahead 4 with collapsed select; no user intervention required.",
+  "defectFound": "Filmstrip styling in unused src/App.css; real native 500 image lightbox displayed large stacked thumbnails. Moving CSS to src/styles/app.css and adding geometry regression.",
+  "rawScreenshots": "Inspected inline through CUA; not saved as local PNG.",
+  "rebuiltPid": 29204,
+  "filmstripFixedNative": true,
+  "originalCompareSyncScalePercent": 150,
+  "sequenceUndoRedoPassed": true,
+  "namedVersionRestored": true,
+  "restoredFirstSequenceNames": [
+    "frame-001.jpg",
+    "frame-000.png",
+    "frame-002.png"
+  ],
+  "quickDecisions": {
+    "keys": [
+      "x",
+      "u",
+      "x",
+      "u",
+      "x",
+      "u"
+    ],
+    "automationRoundTripMs": [
+      451,
+      758,
+      767,
+      758,
+      742,
+      723
+    ],
+    "allUiStatesVerified": true,
+    "latencyMeaning": "CUA send-key + accessibility observation round trip; NOT key-to-paint or IPC latency"
+  },
+  "beforeRebuildVsAfterRebuildTablesEqual": 50,
+  "nativeDuplicateImport": {
+    "added": 0,
+    "skipped": 500,
+    "failed": 0
+  },
+  "finalQuitPid": 29204,
+  "finalNewPid": 29978,
+  "oldProcessConfirmedExited": true,
+  "all50TablesEqualAfterFinalRestart": true,
+  "sourceHashesUnchangedAfterFinalRestart": 500,
+  "agentTasks": 0,
+  "finalUndoCount": 13,
+  "nativeFunctionalSlice": "passed; generated 500-image JPEG/PNG corpus; no professional color, true RAW detail, total WebKit memory, GPU or low-end performance pass claim"
+}

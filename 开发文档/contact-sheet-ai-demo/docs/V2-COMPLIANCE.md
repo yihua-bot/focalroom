@@ -1,40 +1,66 @@
 # v2.0 规格符合性总账（24 验收场景映射）
 
-日期：2026-10-15。基线：`8353afa`（+本轮 M6 骨架）。对照 `BetweenFrames-v2.0-Implementation-Kit/tests/acceptance-matrix.json`。状态：**pass**（自动化证据）、**partial**（本地/模拟层验证，云或真模型层待外部）、**missing**（依赖未建基础设施）。
+日期：2026-10-15。基线：`33e5ff9` + ADR 0023 评审修复与 ADR 0024 的 M1 GUI 验收（未提交工作区）。对照 `BetweenFrames-v2.0-Implementation-Kit/tests/acceptance-matrix.json`。状态：**pass**（自动化证据）、**partial**（本地/模拟层验证，云或真模型层待外部）、**missing**（依赖未建基础设施）。
 
 | ID | 场景 | 状态 | 证据 |
 |---|---|---|---|
-| G01 | AI 关闭 500 张 GUI 选片导出 | **pass** | gui_v2_m1（500 张混合集/重启一致/hash 不变）；16 预览 + 5 集成 E2E |
+| G01 | AI 关闭 500 张 GUI 选片导出 | **pass**（GUI 自动化层） | m1-500.spec.ts：250 PNG + 250 JPEG 实际文件，经页面导入/滚动/选片/检查/序列/Undo-Redo/版本恢复/导出/重启；500 个源 hash 前后一致。JPEG/PNG 原图 1:1、Retina、独立原生选择器/退出重启通过；生成图库的独立原生 release 500 图功能旅程已补验，系统导入/保存、序列/版本和完整 Quit/重启通过，50 表及 500 源 hash 一致；RAW 细节、色彩、WKWebView 总资源与低端性能待补，见 [最新 M1 报告](V2-M1-NATIVE-500-TEST-REPORT.md) |
 | A01 | 结果不足自主追加检索 | **pass** | agent_runtime ag01（双观察轨迹） |
 | A02 | 不同反馈不同路径 | **pass** | agent_runtime ag02/ag03 |
 | A03 | 越权 photo_id 拒绝 | **pass** | ag05_06_13_14 + v2_bridge（跨项目操作拒）+ PolicyGate 回归 |
 | A04 | Agent 无权改正式版本 | **pass** | v2_bridge（Agent principal 纯函数层拒）+ v2_proposals（Agent 仅可 create） |
 | A05 | 取消/恢复不重复草案 | **pass** | ag07（回执重放）+ ag09（检查点） |
-| A06 | 同请求重试幂等 | **pass** | v2_bridge（幂等优先于 409）+ command_history durable_replay |
+| A06 | 同请求重试幂等 | **pass** | v2_bridge + v2_proposals：create/submit/apply/comment 重启重放、冲突指纹拒绝；业务/回执同事务，回执落库故障全部回滚 |
 | P01 | 无同意不发送预览图 | **pass** | agent_vision ag04（零外发断言）+ consent 三态配额 |
 | P02 | 对抗文本不升权 | **pass** | ag13（注入指令不可信）+ 白名单 schema |
 | M01 | 纠正后不再误用 | **pass** | agent_memory ag11 + 物理删除墓碑（ADR 0014 修订） |
-| M02 | 私人记忆不跨创作者 | **pass** | scope=project_local + 跨项目 schema 层拒绝 + Router 不扩图像范围 |
-| M03 | 区域拒绝不静默跨区 | **pass** | v2_tools Router 测试（受限区域回落本地、不跨区） |
-| S01 | LOCAL→SHARED 单权威 | **pass**（协议层） | v2_promotion_billing：并发唯一拒/跳级拒/无回执拒/failed 回落重试/终止态保护；真实上传待 M4 部署（ADR 0022） |
-| S02 | 撤销后 URL 拒绝 | **pass**（协议层） | v2_media_links：撤销即拒（区别于过期文案）/伪造拒/跨项目签发拒/项目级批量撤销幂等；CDN 网关待 M4 部署（ADR 0022） |
+| M02 | 私人记忆不跨创作者 | **partial** | 仅实现项目内记忆与跨项目拒绝；Creator 身份、共享项目中的作者私有记忆隔离尚未实现 |
+| M03 | 区域拒绝不静默跨区 | **pass**（本地执行层） | agent_vision 的真实 AgentEngine + 本地 HTTP 测试：区域拒绝、预算不足、缺提供方均零 HTTP；离线任务不切云；区域/档位为可信部署代码注入，配置文件与设置界面尚未接入 |
+| S01 | LOCAL→SHARED 单权威 | **partial** | 本地写门槛已接入 v1/v2、导入与重连；锁内重读权威，failed/aborted 同版本可重试且保留记录。云权威、上传及真实签名确认尚未实现 |
+| S02 | 撤销后 URL 拒绝 | **partial** | v2_media_links：撤销即拒（区别于过期文案）/伪造拒/跨项目签发拒/项目级批量撤销幂等；CDN 网关待 M4 部署（ADR 0022） |
 | C01 | Reviewer 不能批准 | **pass** | local-domain 权限样例 21 组 + proposals apply 须 can_approve |
-| C02 | 并发提案基线冲突检测 | **pass** | v2_proposals stale 测试（base 漂移拒绝重建） |
+| C02 | 并发提案基线冲突检测 | **pass**（本地领域层） | v2_proposals 的基线漂移拒绝 + v2-proposals.spec.ts 真实后端 GUI 冲突拒绝；审批整体原子并可单组 Undo/Redo |
 | C03 | 断线重连版本一致 | **partial** | 本地重启一致性全套通过；CRDT 实时收敛依赖 M4 |
 | C04 | 评论锚点重排后仍指原照片 | **pass** | 锚点按 photo_id 持久化（0011），排序变化不影响锚定；照片删除时锚点校验拒新引用 |
 | E01 | 教师不能访问学生私人项目 | **partial** | 组织/席位/角色骨架 + 项目归属校验已测（M6 本轮）；教育隔离的云侧 ACL 依赖 M4 |
-| B01 | webhook 重放不重复结算 | **pass**（协议层） | v2_promotion_billing：同 event_id 幂等回执零重复行；真实服务商接入待外部（ADR 0022） |
-| B02 | 伪造付款不改账本 | **pass**（协议层） | v2_promotion_billing：HMAC 签名/篡改拒绝零落行；结算状态机金额匹配（ADR 0022） |
+| B01 | webhook 重放不重复结算 | **partial** | v2_promotion_billing：同 event_id 幂等回执零重复行；真实服务商接入待外部（ADR 0022） |
+| B02 | 伪造付款不改账本 | **partial** | v2_promotion_billing：HMAC 签名/篡改拒绝零落行；结算状态机金额匹配（ADR 0022） |
 | D01 | 记忆删除后缓存/派生物失效 | **pass** | 物理删除墓碑 + FTS5 全量重建 + 观察缓存清空（ADR 0014/0019） |
 | D02 | 版本回滚生成新版本 | **pass** | command_history（恢复为可撤销新编辑）+ gui_v2_m1（undo/redo 位置唯一） |
 | A07 | 项目更新后草案标过期 | **pass** | ag08（stale/rebase）+ proposals 基线漂移拒 |
 
 ## 汇总
 
-- **pass：22 / 24**（S01/S02/B01/B02 以协议层证据升级；真实云/支付服务接入待外部部署）
-- **partial：2**（C03 实时收敛、E01 云侧隔离——需要真实网络两端，本地无法证明收敛性）
-- **missing：0**
+- **pass：17 / 24**（限表中明确列出的自动化层级，不表示真模型质量或云服务验收）。
+- **partial：7**（M02、S01、S02、C03、E01、B01、B02）。
+- **missing：0 个场景完全无基础证据**，不代表缺失模块为零：认证、Postgres、多租户授权、共享服务、实时同步、支付服务等工程仍未实现。
 
 ## 结论与剩余
 
-工程可在本地完成的验收全部有自动化证据；missing 0 项（云服务、支付服务），不存在"写了代码就能验证"的路径。M4（认证/Postgres/共享服务）与 M7（支付集成）需要真实部署环境与外部账户，属"待外部条件"，与 v1.0 的签名/Beta 同类。建议：以本总账为 v2.0 工程侧完成基线；云侧（M4/M7）按真实需求单独立项。
+v2.0 **仍处于部分实现阶段**。撤回先前“22 pass / 工程侧完成”的结论：本地协议单测不能替代远端服务、真实权限边界和指定规模的 GUI 验收。
+
+本轮只修复既有评审问题，详见 [修复报告](V2-REVIEW-FIXES-TEST-REPORT.md) 与 [ADR 0023](ADR/0023-v2-review-transaction-boundaries.md)。M1 的 500 张 GUI 自动化层已补齐，见 [M1 报告](V2-M1-500-GUI-TEST-REPORT.md)。M1 整体仍需原生选择器、原图 1:1 与色彩、低端机和内存性能验收，暂不进入新的 M2 开发；随后再按 M2、M3、M4/M5 顺序推进；云端工程缺口不能仅归为账号或部署条件。
+
+## 收口增量记录（2026-10-15 第二轮）
+
+- B 项格式检视交付：TIFF/HEIC 直通 + RAW 嵌入预览标注（非全分辨率如实标示）；检视测试 7 项。
+- C 项存储修复已由 ADR 0028 补正：回执保留首次业务快照并按游标补历史；旧每 500 命令基准撤回。最终基准为 1250 次成功 GUI 命令/1250 回执增量，逻辑数据库 64,733,184 字节，原始输出见当前修复报告。
+- 原生 500 图验收：环境侦察完成但无视觉通道可用（无屏幕录制权限、AX 窗口不可达），保持待验收；不冒充。
+
+- C 项色彩边界（ADR 0027）：16 位全流程 + ICC 预览丢失/原图保留行为锁定；校准显示器/HDR 待外部。
+
+## M1 接续评审修复更新（2026-10-15）
+
+R1–R3 已修复，见 [当前报告](V2-M1-REVIEW-FIXES-TEST-REPORT.md) 与 ADR 0028：RAW 不再无界转换或冒充嵌入预览，回执重放不替换为当前项目，基准与 E2E 次数纠正。122 功能 Rust + 1 增长基准、147 前端、27 条独立 E2E 通过。独立原生补验 3500 万像素边界图仅显示 1400×1000 派生缓存，源 hash 不变。原生 500 图、真正 RAW 细节/色彩与低端硬件仍待验收，24 场景总账保持 17 pass / 7 partial，不以本次修复宣布 M1 完成。
+
+## M1 原生 500 图更新（2026-10-15）
+
+生成 PNG/JPEG 图库的原生功能切片已通过，修复胶片条样式未加载的布局缺陷；本轮 120 Rust 默认、147 前端、4 M1 GUI 通过。50 表和 500 源 hash 在完整退出重启前后一致，系统保存的三个导出文件哈希与回执相符。原先“无视觉通道可用”是旧环境侦察记录，本轮通过 CUA 实际完成界面验收。资源采样只覆盖宿主主进程，不证明 WebKit 总内存、帧时延或低端机达标。RAW 细节、专业色彩和真实高像素/低端硬件仍待补，总账保持 17 pass / 7 partial，M1 整体 partial。见 [原生 500 图报告](V2-M1-NATIVE-500-TEST-REPORT.md)。
+
+### 增量记录（2026-10-15 第四轮：原生 500 图 + CR2 内嵌预览）
+
+- **G01 原生证据补齐**：独立 release 应用的 500 图全旅程（系统选择器导入/虚拟网格/批量选片/灯箱比较/序列 Undo-Redo/版本恢复/系统导出/完整退出重启）通过；50 表内容一致、500 源 hash 不变、Agent task=0。
+- **CR2 有界内嵌 JPEG 提取**（ADR 0029）：IFD0 0x111/0x117 偏移+长度严格校验，4MiB/1600 万像素上限，八种 EXIF 方向覆盖；kind=`embedded_preview`（dataUrl 返回，不授权整个 RAW）；无 sips、无持久缓存、不冒充全分辨率。
+- **回执 eventCursor**（ADR 0028）：历史业务快照+事件游标持久化，重放仅补当时事件；兼容旧完整与无游标瘦回执。
+- **灯箱胶片条 CSS 修复**：从未加载的 App.css 迁移到共享 app.css。
+- 本轮验证：126 Rust / 149 前端 / 4 M1 GUI（含新增 RAW 格式边界旅程）/ 16+6 E2E / Clippy / 契约全绿。

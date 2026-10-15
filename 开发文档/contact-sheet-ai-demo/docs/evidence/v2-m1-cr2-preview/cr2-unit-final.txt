@@ -1,0 +1,13 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.80s
+     Running unittests src/lib.rs (src-tauri/target-v1/debug/deps/between_frames_lib-d739ba835d550501)
+
+running 5 tests
+test cr2_preview::tests::rejects_invalid_ranges_counts_duplicate_tags_and_pixel_limits ... ok
+test cr2_preview::tests::extracts_only_declared_primary_jpeg_without_changing_source_bytes ... ok
+test cr2_preview::tests::rejects_non_jpeg_payload_and_metadata_dimension_mismatch ... ok
+test cr2_preview::tests::conflicting_existing_exif_falls_back_instead_of_guessing ... ok
+test cr2_preview::tests::carries_all_eight_orientations_and_preserves_pixel_and_icc_segments ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 9.03s
+

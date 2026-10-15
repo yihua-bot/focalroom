@@ -1,0 +1,14 @@
+Hardware:
+
+    Hardware Overview:
+
+      Model Name: MacBook Pro
+      Model Identifier: Mac16,1
+      Model Number: Z1DW0002DCH/A
+      Chip: Apple M4
+      Total Number of Cores: 10 (4 Performance and 6 Efficiency)
+      Memory: 24 GB
+      System Firmware Version: 20457.1.29
+      OS Loader Version: 20457.1.29
+      Activation Lock Status: Disabled
+

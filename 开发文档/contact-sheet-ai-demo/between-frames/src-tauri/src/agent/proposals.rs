@@ -1,10 +1,7 @@
 // v2.0 M5 提案协议：operations 化的编辑提案与人工审批（ADR 0020）。
 // 语义：create（可提案者/Agent）→ submit → apply（can_approve 者 + nonce + 部分采纳）。
-// 正式写入经 v1 唯一 CommandHandler 逐操作执行：每操作独立原子、可撤销、进历史；
-// 不做跨操作伪事务——失败如实逐项报告（已执行项保留，可整体 undo 回退）。
+// 人工审批经唯一 CommandHandler 在一个事务内执行，审批状态、正式编辑与历史一起提交。
 use crate::{
-    command_handler::{CommandHandler, GuiCommandRequest},
-    commands_generated::GuiCommand,
     db::Store,
     domain::{self, AppError, Result},
 };
@@ -56,8 +53,8 @@ fn validate_operations(operations: &[Operation]) -> Result<()> {
     Ok(())
 }
 
-pub async fn create(
-    store: &Store,
+pub(crate) async fn create_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     project_id: &str,
     author: &str,
     task_id: Option<&str>,
@@ -77,7 +74,7 @@ pub async fn create(
             sqlx::query_scalar("SELECT COUNT(*) FROM photos WHERE id=? AND project_id=?")
                 .bind(&op.photo_id)
                 .bind(project_id)
-                .fetch_one(&store.pool)
+                .fetch_one(&mut **tx)
                 .await
                 .unwrap_or(0);
         if owned != 1 {
@@ -87,7 +84,7 @@ pub async fn create(
             ));
         }
     }
-    let project = store.get(project_id).await?;
+    let project = crate::db::snapshot_tx(tx, project_id, None).await?;
     if base_revision != project.revision {
         return Err(AppError::new(
             "REVISION_CONFLICT",
@@ -97,27 +94,25 @@ pub async fn create(
     let now = domain::timestamp();
     let id = domain::id();
     let nonce = domain::id();
-    let mut tx = store.pool.begin_with("BEGIN IMMEDIATE").await?;
     sqlx::query("INSERT INTO proposals(id,project_id,task_id,author,title,base_revision,state,approval_nonce,created_at,updated_at) VALUES(?,?,?,?,?,?,'draft',?,?,?)")
         .bind(&id).bind(project_id).bind(task_id).bind(author.trim()).bind(title.trim()).bind(base_revision).bind(&nonce).bind(&now).bind(&now)
-        .execute(&mut *tx).await?;
+        .execute(&mut **tx).await?;
     for op in &parsed {
         sqlx::query("INSERT INTO proposal_operations(proposal_id,operation_id,photo_id,op,to_index,reason) VALUES(?,?,?,?,?,?)")
             .bind(&id).bind(&op.operation_id).bind(&op.photo_id).bind(&op.op).bind(op.to_index).bind(&op.reason)
-            .execute(&mut *tx).await?;
+            .execute(&mut **tx).await?;
     }
-    tx.commit().await?;
-    view(store, &id).await
+    view_tx(tx, &id).await
 }
 
-pub async fn submit(
-    store: &Store,
+pub(crate) async fn submit_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     project_id: &str,
     proposal_id: &str,
     expected_revision: i64,
 ) -> Result<Proposal> {
     transition(
-        store,
+        tx,
         project_id,
         proposal_id,
         "draft",
@@ -128,18 +123,17 @@ pub async fn submit(
 }
 
 async fn transition(
-    store: &Store,
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     project_id: &str,
     proposal_id: &str,
     from: &str,
     to: &str,
     expected_revision: i64,
 ) -> Result<Proposal> {
-    let mut tx = store.pool.begin_with("BEGIN IMMEDIATE").await?;
     let row = sqlx::query("SELECT revision,state FROM proposals WHERE id=? AND project_id=?")
         .bind(proposal_id)
         .bind(project_id)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await?
         .ok_or_else(|| AppError::new("NOT_FOUND", "提案不属于此项目"))?;
     let (revision, state): (i64, String) = (row.get("revision"), row.get("state"));
@@ -156,23 +150,21 @@ async fn transition(
         .bind(to)
         .bind(domain::timestamp())
         .bind(proposal_id)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
-    tx.commit().await?;
-    view(store, proposal_id).await
+    view_tx(tx, proposal_id).await
 }
 
-/// 人工审批执行：nonce 匹配 + accepted_operation_ids 子集 + base_revision 未漂移；
-/// 接受的操作经 v1 唯一通道逐个执行（独立原子、可撤销、进历史）。
-pub async fn apply(
-    store: &Store,
+/// 同一事务中按提案顺序解释操作，全部成功后才发布正式序列与审批状态。
+pub(crate) async fn apply_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     project_id: &str,
     proposal_id: &str,
     expected_revision: i64,
     accepted: &[String],
     nonce: &str,
-) -> Result<Value> {
-    let proposal = view(store, proposal_id).await?;
+) -> Result<()> {
+    let proposal = view_tx(tx, proposal_id).await?;
     if proposal.project_id != project_id {
         return Err(AppError::new("NOT_FOUND", "提案不属于此项目"));
     }
@@ -188,132 +180,104 @@ pub async fn apply(
     if nonce != proposal.approval_nonce {
         return Err(AppError::new("PERMISSION_DENIED", "审批 nonce 不匹配"));
     }
-    let project = store.get(project_id).await?;
+    let project = crate::db::snapshot_tx(tx, project_id, None).await?;
     if project.revision != proposal.base_revision {
         return Err(AppError::new(
             "REVISION_CONFLICT",
             "项目已更新；请丢弃该提案并基于新版本重建",
         ));
     }
-    // accepted 必须是操作子集；空集 = 驳回（discarded）。
-    let known: std::collections::HashSet<&String> = proposal
+    let known: std::collections::HashSet<_> = proposal
         .operations
         .iter()
         .map(|op| &op.operation_id)
         .collect();
-    for id in accepted {
-        if !known.contains(id) {
-            return Err(AppError::new(
-                "VALIDATION_ERROR",
-                format!("接受清单引用了不存在的操作 {id}"),
-            ));
-        }
+    if accepted.len() > 200
+        || accepted
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            != accepted.len()
+        || accepted.iter().any(|id| !known.contains(id))
+    {
+        return Err(AppError::new(
+            "VALIDATION_ERROR",
+            "接受清单包含重复或不存在的操作",
+        ));
     }
-    if accepted.is_empty() {
-        let mut tx = store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        sqlx::query(
-            "UPDATE proposals SET state='discarded',revision=revision+1,updated_at=? WHERE id=?",
-        )
-        .bind(domain::timestamp())
-        .bind(proposal_id)
-        .execute(&mut *tx)
-        .await?;
-        tx.commit().await?;
-        return Ok(json!({"applied": 0, "discarded": true, "results": []}));
-    }
-    // 逐操作经 v1 通道执行；每个操作独立原子（幂等键绑定提案+操作）。
-    let mut results = vec![];
-    let mut current = project.revision;
-    for op in &proposal.operations {
-        if !accepted.contains(&op.operation_id) {
-            continue;
-        }
-        let gui = operation_to_gui(store, project_id, &project.sequence, op).await?;
-        let request = GuiCommandRequest {
-            command_id: format!("{proposal_id}-{}", op.operation_id),
-            project_id: project_id.to_owned(),
-            expected_project_revision: current,
-            causation_id: Some(format!("proposal:{proposal_id}")),
-            idempotency_key: format!("{proposal_id}-{}", op.operation_id),
-            command: gui,
-        };
-        match CommandHandler::new(store).execute_gui(request).await {
-            Ok(receipt) => {
-                current = receipt.revision;
-                results.push(json!({"operation_id": op.operation_id, "ok": true, "revision": receipt.revision}));
-            }
-            Err(error) => {
-                results.push(json!({"operation_id": op.operation_id, "ok": false, "code": error.code, "message": error.message}));
-            }
-        }
-    }
-    let failed = results
+    let mut sequence = project.sequence;
+    for op in proposal
+        .operations
         .iter()
-        .filter(|r| !r["ok"].as_bool().unwrap_or(false))
-        .count();
-    let mut tx = store.pool.begin_with("BEGIN IMMEDIATE").await?;
-    sqlx::query("UPDATE proposals SET state='applied',revision=revision+1,updated_at=? WHERE id=?")
+        .filter(|op| accepted.contains(&op.operation_id))
+    {
+        crate::edit_state::validate_selection(tx, project_id, std::slice::from_ref(&op.photo_id))
+            .await?;
+        match op.op.as_str() {
+            "add" | "move" => {
+                let from = sequence.iter().position(|id| id == &op.photo_id);
+                if op.op == "move" && from.is_none() {
+                    return Err(AppError::new("VALIDATION_ERROR", "move 的照片不在当前序列"));
+                }
+                if op.op == "add" && from.is_some() {
+                    return Err(AppError::new(
+                        "VALIDATION_ERROR",
+                        "add 的照片已在序列中，请使用 move",
+                    ));
+                }
+                if let Some(from) = from {
+                    sequence.remove(from);
+                }
+                let to = op
+                    .to_index
+                    .and_then(|v| usize::try_from(v).ok())
+                    .filter(|to| *to <= sequence.len())
+                    .ok_or_else(|| AppError::new("VALIDATION_ERROR", "to_index 超出序列范围"))?;
+                sequence.insert(to, op.photo_id.clone());
+            }
+            "remove" => sequence.retain(|id| id != &op.photo_id),
+            _ => return Err(AppError::new("VALIDATION_ERROR", "操作类型不合法")),
+        }
+        if op.op != "move" {
+            sqlx::query("UPDATE photo_decisions SET status=?,updated_at=? WHERE project_id=? AND photo_id=?")
+                .bind(if op.op == "add" { "keep" } else { "undecided" })
+                .bind(domain::timestamp()).bind(project_id).bind(&op.photo_id).execute(&mut **tx).await?;
+        }
+    }
+    if !accepted.is_empty() {
+        crate::db::write_sequence(tx, project_id, &sequence).await?;
+    }
+    sqlx::query("UPDATE proposals SET state=?,revision=revision+1,updated_at=? WHERE id=?")
+        .bind(if accepted.is_empty() {
+            "discarded"
+        } else {
+            "applied"
+        })
         .bind(domain::timestamp())
         .bind(proposal_id)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
-    tx.commit().await?;
-    Ok(
-        json!({"applied": accepted.len() - failed, "failed": failed, "discarded": false, "results": results}),
-    )
-}
-
-async fn operation_to_gui(
-    store: &Store,
-    project_id: &str,
-    sequence: &[String],
-    op: &Operation,
-) -> Result<GuiCommand> {
-    match op.op.as_str() {
-        "add" => {
-            let project = store.get(project_id).await?;
-            if !project.photos.iter().any(|p| p.id == op.photo_id) {
-                return Err(AppError::new("VALIDATION_ERROR", "操作照片不存在"));
-            }
-            let _ = sequence;
-            Ok(GuiCommand::SetPhotoDecision {
-                photo_ids: vec![op.photo_id.clone()],
-                status: "keep".into(),
-            })
-        }
-        "remove" => Ok(GuiCommand::SetPhotoDecision {
-            photo_ids: vec![op.photo_id.clone()],
-            status: "undecided".into(),
-        }),
-        "move" => {
-            let mut next = sequence.to_vec();
-            let from = next
-                .iter()
-                .position(|id| id == &op.photo_id)
-                .ok_or_else(|| AppError::new("VALIDATION_ERROR", "move 的照片不在当前序列"))?;
-            let to = op.to_index.unwrap_or(0) as usize;
-            if to >= next.len() {
-                return Err(AppError::new("VALIDATION_ERROR", "to_index 超出序列范围"));
-            }
-            next.remove(from);
-            next.insert(to, op.photo_id.clone());
-            Ok(GuiCommand::ReorderSequence {
-                ordered_photo_ids: next,
-            })
-        }
-        _ => Err(AppError::new("VALIDATION_ERROR", "操作类型不合法")),
-    }
+    Ok(())
 }
 
 pub async fn view(store: &Store, proposal_id: &str) -> Result<Proposal> {
+    let mut tx = store.pool.begin().await?;
+    let result = view_tx(&mut tx, proposal_id).await?;
+    tx.commit().await?;
+    Ok(result)
+}
+async fn view_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    proposal_id: &str,
+) -> Result<Proposal> {
     let row = sqlx::query("SELECT * FROM proposals WHERE id=?")
         .bind(proposal_id)
-        .fetch_one(&store.pool)
+        .fetch_one(&mut **tx)
         .await?;
     let operations =
         sqlx::query("SELECT * FROM proposal_operations WHERE proposal_id=? ORDER BY rowid")
             .bind(proposal_id)
-            .fetch_all(&store.pool)
+            .fetch_all(&mut **tx)
             .await?
             .iter()
             .map(|r| Operation {

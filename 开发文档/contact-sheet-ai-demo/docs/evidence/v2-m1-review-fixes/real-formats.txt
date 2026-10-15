@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+     Running tests/photo_inspection.rs (src-tauri/target-v1/debug/deps/photo_inspection-478da661b37b8e76)
+
+running 2 tests
+test heic_original_passes_brand_check_when_fixture_exists ... ok
+test raw_cr2_returns_bounded_derived_preview_not_full_resolution ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 3.08s
+

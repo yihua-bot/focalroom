@@ -6,7 +6,7 @@ import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { z } from 'zod';
 import { listen } from '@tauri-apps/api/event';
 import { PROJECT_CHANGED_EVENT, PHOTOS_IMPORTED_EVENT, type DomainCommand, type GuiCommandRequest } from '../domain/commands.generated';
-import type { DesktopProjectRepository, PhotoStatus, Project, ProjectRepository } from '../domain/models';
+import type { DesktopProjectRepository, InspectionImage, PhotoStatus, Project, ProjectRepository } from '../domain/models';
 
 const eventSchema = z.object({ id: z.string(), photoId: z.string().nullable(), actor: z.enum(['user', 'system']), kind: z.string(), previousJson: z.string().nullable(), nextJson: z.string().nullable(), reason: z.string().nullable(), contextJson: z.string(), at: z.string() });
 const projectSchema = z.object({
@@ -36,12 +36,32 @@ export class TauriRepository implements DesktopProjectRepository {
   readonly memory = new TauriMemoryRepository();
   readonly diagnostics = new TauriDiagnosticsRepository();
   private snapshots = new Map<string, Project>();
+  private originalLoaders = new Map<string, () => Promise<InspectionImage>>();
+
+  private originalLoader(projectId: string, photoId: string) {
+    const key = `${projectId}:${photoId}`;
+    let loader = this.originalLoaders.get(key);
+    if (!loader) {
+      loader = async () => {
+        const source = z.discriminatedUnion('kind', [
+          z.object({ path: z.string(), kind: z.literal('original') }),
+          z.object({ path: z.string(), kind: z.literal('derived_preview') }),
+          z.object({ dataUrl: z.string().max(5_600_000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/), kind: z.literal('embedded_preview') }),
+        ])
+          .parse(await command('get_original_photo', { projectId, photoId }));
+        return { src: source.kind === 'embedded_preview' ? source.dataUrl : convertFileSrc(source.path), kind: source.kind };
+      };
+      this.originalLoaders.set(key, loader);
+    }
+    return loader;
+  }
 
   private map(raw: unknown): Project {
     const parsed = projectSchema.parse(raw);
     const current = this.snapshots.get(parsed.id);
     if (current && (current.revision ?? 0) > parsed.revision) return current;
-    const project: Project = { ...parsed, photos: parsed.photos.map(photo => ({ ...photo, src: convertFileSrc(photo.thumbnailPath), previewSrc: convertFileSrc(photo.previewPath) })),
+    const project: Project = { ...parsed, photos: parsed.photos.map(photo => ({ ...photo, src: convertFileSrc(photo.thumbnailPath), previewSrc: convertFileSrc(photo.previewPath),
+      loadOriginal: this.originalLoader(parsed.id, photo.id) })),
       events: parsed.events.map(event => ({ id: event.id, type: event.kind, photoId: event.photoId ?? undefined, at: event.at,
         description: event.reason || ({ decision: '修改选片状态', note: '更新照片备注', compare: '记录两图偏好', reorder: '调整作品序列', import: '导入照片', relink: '重新定位照片', project: '更新项目意图', project_create: '创建项目', rating: '保存人工评分', undo: '撤销人工编辑', redo: '重做人工编辑', version_save: '保存作品版本', version_restore: '恢复作品版本', project_archive: '归档项目', project_restore: '恢复项目', draft_apply: '采纳草案', draft_rebase: '重新比较草案基线', draft_edit: '调整草案顺序', draft_discard: '丢弃草案' }[event.kind] ?? event.kind),
         previous: event.previousJson ? JSON.parse(event.previousJson) : null, next: event.nextJson ? JSON.parse(event.nextJson) : null, context: JSON.parse(event.contextJson) })),
@@ -64,10 +84,10 @@ export class TauriRepository implements DesktopProjectRepository {
     });
     // 仅通信失败才按同一 envelope 重试；业务冲突不能生成新 ID 强行重放。
     let raw: unknown;
-    try { raw = await command('execute_gui_command', { request }); }
+    try { raw = await command('execute_gui_command', { request, compact: true }); }
     catch (error) {
       if (error instanceof Error && 'code' in error) throw error;
-      raw = await command('execute_gui_command', { request });
+      raw = await command('execute_gui_command', { request, compact: true });
     }
     const reply = replySchema.parse(raw);
     if (!reply.ok || !reply.data?.project) throw Object.assign(new Error(reply.error?.message ?? '命令没有返回项目'), { code: reply.error?.code, currentRevision: reply.error?.currentRevision });
@@ -75,8 +95,8 @@ export class TauriRepository implements DesktopProjectRepository {
     if (reply.data.revision < current) return this.get(id);
     return this.map(reply.data.project);
   }
-  async list(archived = false) { return z.array(projectSchema).parse(await command('list_projects', { archived })).map(project => this.map(project)); }
-  async get(id: string) { return this.map(await command('get_project', { projectId: id })); }
+  async list(archived = false) { return z.array(projectSchema).parse(await command('list_projects', { archived, compact: true })).map(project => this.map(project)); }
+  async get(id: string) { return this.map(await command('get_project', { projectId: id, compact: true })); }
   async create(title: string, brief: string) { return this.execute(crypto.randomUUID(), { type: 'CreateProject', title, brief }, 0); }
   async edit(id: string, title: string, brief: string) { return this.execute(id, { type: 'UpdateProject', title, brief }); }
   async decide(id: string, photoId: string, status: PhotoStatus) { return this.decideMany(id, [photoId], status); }

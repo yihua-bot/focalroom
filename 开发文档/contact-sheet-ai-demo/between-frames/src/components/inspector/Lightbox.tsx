@@ -34,7 +34,7 @@ export function Lightbox({ photos, activeId, onNavigate, onClose, onDecide, onRa
       else if (/^[0-5]$/.test(key)) { event.preventDefault(); rate(Number(key)); }
       else if (event.key === ' ' && !(event.target instanceof HTMLElement && event.target.closest('button'))) { event.preventDefault(); onClose(); }
     }}>
-      <div className="lightbox-toolbar"><ZoomControls zoom={zoom} onChange={setZoom} label="大图" />
+      <div className="lightbox-toolbar"><ZoomControls zoom={zoom} onChange={setZoom} label="大图" original={Boolean(photo.loadOriginal)} />
         <div className="review-status" role="status" data-status={photo.status}>
           <strong>{statusLabels[photo.status]}</strong>
           <span className="micro">{'★'.repeat(photo.rating)}{'☆'.repeat(5 - photo.rating)}</span>
@@ -48,11 +48,11 @@ export function Lightbox({ photos, activeId, onNavigate, onClose, onDecide, onRa
         <div className="lightbox-nav">
           <Button size="small" aria-label="上一张照片" disabled={index <= 0} onClick={() => move(-1)}>←</Button><span className="micro">{index + 1} / {photos.length}</span>
           <Button size="small" aria-label="下一张照片" disabled={index >= photos.length - 1} onClick={() => move(1)}>→</Button></div></div>
-      <PhotoViewport key={photo.id} photo={photo} zoom={zoom} onChange={setZoom} />
+      <PhotoViewport key={`${photo.id}:${photo.originalPath ?? ''}`} photo={photo} zoom={zoom} onChange={setZoom} />
       <div className="review-filmstrip" aria-label="胶片条导航">{photos.map((item, position) => <button
         key={item.id} aria-label={`第 ${position + 1} 张 ${item.name}（${statusLabels[item.status]}）`} aria-current={item.id === photo.id}
         data-status={item.status} onClick={() => { setZoom(fitZoom); onNavigate(item); }}>
-        <img src={item.src} alt={item.name} />
+        <img loading="lazy" src={item.src} alt={item.name} />
         {item.rating > 0 && <span className="filmstrip-rating">{item.rating}</span>}
       </button>)}</div>
     </div>

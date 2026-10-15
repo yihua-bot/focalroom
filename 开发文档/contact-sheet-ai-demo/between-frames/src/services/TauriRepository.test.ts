@@ -15,6 +15,33 @@ const success = (revision: number) => ({
 beforeEach(() => ipc.mockReset());
 
 describe('类型化 IPC 的重试与投影', () => {
+  it('请求精简界面投影，只有显式检视时按项目和照片 ID 读取原图', async () => {
+    const repository = new TauriRepository();
+    const raw = { ...projection(2), photos: [{ id: 'photo', index: 1, name: 'detail.png', originalPath: '/private/source.png', thumbnailPath: 'thumb', previewPath: 'preview', contentSha256: 'hash', width: 2400, height: 1600, fileSize: 42, status: 'undecided', note: '', rating: 0, isMissing: false }] };
+    ipc.mockResolvedValueOnce(raw);
+    const first = await repository.get('project');
+    expect(ipc).toHaveBeenCalledExactlyOnceWith('get_project', { projectId: 'project', compact: true });
+    ipc.mockResolvedValueOnce(raw);
+    const second = await repository.get('project');
+    expect(second.photos[0].loadOriginal).toBe(first.photos[0].loadOriginal);
+    ipc.mockResolvedValueOnce({ path: '/authorized/original.png', kind: 'original' });
+    const loaded = await second.photos[0].loadOriginal!();
+    expect(loaded.src).toBe('/authorized/original.png');
+    expect(loaded.kind).toBe('original');
+    expect(ipc).toHaveBeenLastCalledWith('get_original_photo', { projectId: 'project', photoId: 'photo' });
+  });
+  it('内嵌预览使用限定的 JPEG 数据源，拒绝其他协议与过大回执', async () => {
+    const repository = new TauriRepository();
+    ipc.mockResolvedValueOnce({ ...projection(2), photos: [{ id: 'photo', index: 1, name: 'camera.CR2', originalPath: '/private/source.CR2', thumbnailPath: 'thumb', previewPath: 'preview', contentSha256: 'hash', width: 1936, height: 1288, fileSize: 42, status: 'undecided', note: '', rating: 0, isMissing: false }] });
+    const photo = (await repository.get('project')).photos[0];
+    const dataUrl = 'data:image/jpeg;base64,/9j/2Q==';
+    ipc.mockResolvedValueOnce({ kind: 'embedded_preview', dataUrl });
+    expect(await photo.loadOriginal!()).toEqual({ src: dataUrl, kind: 'embedded_preview' });
+    for (const invalid of ['https://example.com/camera.jpg', 'data:image/svg+xml;base64,abcd', 'data:image/jpeg;base64,' + 'a'.repeat(5_600_001)]) {
+      ipc.mockResolvedValueOnce({ kind: 'embedded_preview', dataUrl: invalid });
+      await expect(photo.loadOriginal!()).rejects.toThrow();
+    }
+  });
   it('通信回执丢失时重用完整 envelope，不生成第二个命令身份', async () => {
     const repository = new TauriRepository();
     ipc.mockResolvedValueOnce(projection(2));

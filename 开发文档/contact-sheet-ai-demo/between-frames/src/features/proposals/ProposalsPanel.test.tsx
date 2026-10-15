@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProposalsPanel } from './ProposalsPanel';
 import type { Project } from '../../domain/models';
 
@@ -12,7 +12,8 @@ const queryMock = vi.fn().mockResolvedValue([
   ] },
   { id: 'p2', title: '已完成提案', state: 'applied', author: 'user:u', revision: 3, approvalNonce: 'n2', operations: [] },
 ]);
-const applyMock = vi.fn().mockResolvedValue({ ok: true });
+const applyMock = vi.fn();
+beforeEach(() => { applyMock.mockReset().mockResolvedValue({ applied: 1, failed: 0, discarded: false }); });
 vi.mock('../../services/TauriProposalsRepository', () => ({
   TauriProposalsRepository: class {
     query = queryMock;
@@ -20,7 +21,7 @@ vi.mock('../../services/TauriProposalsRepository', () => ({
   },
 }));
 
-const project = { id: 'proj', title: 't' } as unknown as Project;
+const project = { id: 'proj', title: 't', revision: 7 } as unknown as Project;
 function mount(enabled = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={client}><ProposalsPanel project={project} enabled={enabled} /></QueryClientProvider>);
@@ -43,6 +44,24 @@ describe('v2 提案审批面板', () => {
     await user.click(screen.getByLabelText(/移出序列/));
     await user.click(screen.getByRole('button', { name: '执行所选操作' }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('已执行 1 个操作'));
+  });
+  it('业务失败显示错误，不宣称执行成功', async () => {
+    applyMock.mockRejectedValueOnce(new Error('项目版本冲突，请刷新'));
+    mount();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /克制版/ }));
+    await user.click(screen.getByRole('button', { name: '执行所选操作' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('项目版本冲突');
+    expect(screen.getByRole('status')).not.toHaveTextContent('已执行');
+    expect(applyMock).toHaveBeenCalledWith('proj', 7, 'p1', 2, ['op-1', 'op-2'], 'nonce-1', expect.any(String));
+  });
+  it('成功提示使用后端实际执行数量', async () => {
+    applyMock.mockResolvedValueOnce({ applied: 1, failed: 0, discarded: false });
+    mount();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /克制版/ }));
+    await user.click(screen.getByRole('button', { name: '执行所选操作' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('已执行 1 个操作');
   });
   it('全部不勾时按钮为驳回语义', async () => {
     mount();

@@ -1,0 +1,23 @@
+{
+  "native-500-project.json": {
+    "bytes": 2636779,
+    "sha256": "f3c57cc032d8f2fa40130f14e8e6b76af7c0952b56fc1252dca0c5c724d138a9",
+    "localPathsAbsent": true
+  },
+  "native-500-selection.csv": {
+    "bytes": 79429,
+    "sha256": "16826d8e006acde024b3584b053813fa7cd1ec0c1b560e23f331d4a30546fd35",
+    "localPathsAbsent": true
+  },
+  "native-500-contact-sheet.html": {
+    "bytes": 406548,
+    "sha256": "d48af9cc7d093affe8efe30b46d47578b1741f7aa27a9042f6ebb2912b407986",
+    "localPathsAbsent": true
+  },
+  "content": {
+    "jsonPhotos": 500,
+    "jsonSequence": 25,
+    "csvDataRows": 500,
+    "contactFigures": 25
+  }
+}

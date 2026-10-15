@@ -8,10 +8,16 @@ use serde_json::{Value, json};
 use sqlx::Row;
 
 /// Promotion 开始：项目必须处于 LOCAL 且无进行中的 promotion；
-/// 迁移期间本地写入被暂停（mode 进入 PROMOTING——由调用方在业务层执行）。
+/// 迁移状态与本地写入口共用写事务锁，旧 GUI 也不能绕过。
 pub async fn begin(store: &Store, project_id: &str, initiator: &str) -> Result<Value> {
-    let project = store.get(project_id).await?;
     let mut tx = store.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let project = crate::db::snapshot_tx(&mut tx, project_id, None).await?;
+    if project.archived {
+        return Err(AppError::new("NOT_FOUND", "项目已归档"));
+    }
+    ensure_local_write(&mut tx, project_id)
+        .await
+        .map_err(|_| AppError::new("INVALID_TRANSITION", "已有迁移或项目已共享，不能重新发起"))?;
     // 不变量 1：同一项目同时只能有一个未终止的 promotion。
     let active: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM v2_promotions WHERE project_id=? AND state IN('pending','uploading','verifying')",
@@ -75,19 +81,43 @@ pub async fn advance(
     )
 }
 
-/// S01 核心断言：查询某项目当前的权威端。completed 前为 local（迁移中本地暂停写由业务层
-/// 用 PROMOTING 门槛实现），completed 后 shared；failed/aborted 回落 local。
+/// 统一查询本地权威状态，completed 不因失败重试记录而回退。
+pub(crate) async fn local_state(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    project_id: &str,
+) -> Result<betweenframes_local_domain::LocalState> {
+    let states: Vec<String> = sqlx::query_scalar("SELECT state FROM v2_promotions WHERE project_id=? AND state IN('pending','uploading','verifying','completed')")
+        .bind(project_id).fetch_all(&mut **tx).await?;
+    use betweenframes_local_domain::LocalState;
+    Ok(if states.iter().any(|s| s == "completed") {
+        LocalState::SHARED_CACHE
+    } else if !states.is_empty() {
+        LocalState::PROMOTING
+    } else {
+        LocalState::LOCAL
+    })
+}
+pub(crate) async fn ensure_local_write(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    project_id: &str,
+) -> Result<()> {
+    if local_state(tx, project_id).await? != betweenframes_local_domain::LocalState::LOCAL {
+        return Err(AppError::new(
+            "AUTHORITY_MISMATCH",
+            "迁移中的项目暂停本地写入；共享项目由云端持有写入权威",
+        ));
+    }
+    Ok(())
+}
 pub async fn authority_of(store: &Store, project_id: &str) -> Result<Value> {
-    let state: Option<String> = sqlx::query_scalar(
-        "SELECT state FROM v2_promotions WHERE project_id=? AND state IN('pending','uploading','verifying','completed') ORDER BY updated_at DESC LIMIT 1",
-    )
-    .bind(project_id)
-    .fetch_optional(&store.pool)
-    .await?;
-    let authority = match state.as_deref() {
-        Some("completed") => "shared",
-        Some(_) => "local-promoting", // 迁移中：本地写入暂停，等待完成或中止
-        None => "local",
+    let mut tx = store.pool.begin().await?;
+    let state = local_state(&mut tx, project_id).await?;
+    tx.commit().await?;
+    use betweenframes_local_domain::LocalState;
+    let authority = match state {
+        LocalState::LOCAL => "local",
+        LocalState::PROMOTING => "local-promoting",
+        LocalState::SHARED_CACHE => "shared",
     };
-    Ok(json!({"project_id": project_id, "authority": authority}))
+    Ok(json!({"project_id":project_id,"authority":authority}))
 }

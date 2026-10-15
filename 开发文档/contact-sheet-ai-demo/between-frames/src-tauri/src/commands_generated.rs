@@ -73,6 +73,12 @@ pub enum GuiCommand {
         draft_id: String,
         expected_draft_revision: i64,
     },
+    ApplyProposal {
+        proposal_id: String,
+        expected_proposal_revision: i64,
+        accepted_operation_ids: Vec<String>,
+        approval_nonce: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

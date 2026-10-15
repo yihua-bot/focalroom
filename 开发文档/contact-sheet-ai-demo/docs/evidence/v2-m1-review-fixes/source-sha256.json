@@ -1,0 +1,18 @@
+{
+  "src-tauri/src/command_handler.rs": "f5ae4b62f8a784e369b2352553065a40529b02e8b3de8dd525de23a4607c0dc6",
+  "src-tauri/src/command_audit.rs": "0d909acdc377680ca79bd593a8563ec424f40c3fabe55eacc6e5d50f7f79a2c8",
+  "src-tauri/src/db.rs": "8749acc80ed07eb69a3635b456ff4f9c37b48fe1eb5c0022ddaf7554169ea06e",
+  "src-tauri/src/photo_inspection.rs": "b9867bb5a3ee4d5974cca1b81c418e900793153864484297247c64e9fa7db0bc",
+  "src-tauri/tests/command_history.rs": "e47a5470501f654d7bd0677b46702cbd97b93d703ba45aafe8607145f435f923",
+  "src-tauri/tests/photo_inspection.rs": "ab59ae77ca9b9f0a91ec03cf6d0018c07fa323a00fb5d41737d8b6eff3cb7b2f",
+  "src-tauri/tests/perf_baseline.rs": "661da79267d6e4e08163b233977e9cde4fc328a9309ec3c3512e75a7ee7a208c",
+  "src-tauri/src/harness_fixtures.rs": "6785bd29af2de3f9b282a93a8fd8f97b54eddfbc54c63a63a171a400079534d8",
+  "src-tauri/src/bin/m1-harness.rs": "8d0d27e5012cf7a3db8db75353db540e0d41c698029e5302c1efed99b8fb5521",
+  "src/components/shared/PhotoViewport.tsx": "abe10e9ea5dc3011661ab84f0387d4484dc2f3fce2921c7bceb29cb872d7e7ca",
+  "src/components/shared/PhotoViewport.test.tsx": "ab1f38c8d4ad7a5e54c14356e0ccca1a7889cbce915d18b4c0966b09244a942a",
+  "src/domain/models.ts": "42983f25af37699ac03b21029dc62e8a6c20f440246c05e0bbce2551c6425049",
+  "src/services/TauriRepository.ts": "fa1206eadf524b8a807ffab8954e0c07dcb13ca05f845c7db66f1f464dd50502",
+  "src/services/TauriRepository.test.ts": "06e6b202a41ae8356d8c94e0aa5990e322176e0aa1f1b0f31381590a7bed0ef7",
+  "e2e/m1-500.spec.ts": "2b1f58c121e692a52db07acff18c36aab3ba13a8e01948b516f80f66bb3b97ba",
+  "src-tauri/tauri.m1-review-fixes.conf.json": "1a4894ef114027240af5175b962f1a0f7e8a7f7d83f350f575a39a9904b03acc"
+}

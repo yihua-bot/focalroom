@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-15",
+  "baseline": "33e5ff940fedf4341cefca7433ffa8826a39a37e",
+  "scope": "M1 G01 自动化切片，保留上一轮未提交修复；未提交工作区",
+  "rust": {
+    "passed": 110,
+    "ignored": 1,
+    "filtered": 1
+  },
+  "frontend": {
+    "files": 18,
+    "passed": 142
+  },
+  "e2e": {
+    "preview": 16,
+    "web": 1,
+    "standard_real_backend": 6,
+    "m1_500_real_backend": 2,
+    "total_unique_passed": 25,
+    "additional_default_driver_recheck": 1
+  },
+  "checks": [
+    "contracts",
+    "typecheck",
+    "lint",
+    "Rust fmt",
+    "Clippy all-targets + integration-harness -D warnings",
+    "Desktop/Web workspace builds",
+    "release/debug harness builds",
+    "git diff --check"
+  ],
+  "m1_profile": {
+    "bytes": 305575284,
+    "count": 500,
+    "dimensions": "1200x800",
+    "harnessPid": 89412,
+    "jpeg": 250,
+    "png": 250,
+    "profile": "m1-500",
+    "provenance": "28 repository reference images resized with unique content markers; generated test corpus, not 500 independent photographer originals"
+  },
+  "key_to_next_frame_p95_ms": 133.30000001192093,
+  "ipc_p95_ms": 127.60000002384186,
+  "import_seconds": 9.414104083,
+  "true_process_restart": {
+    "main": {
+      "previousPid": 89412,
+      "pid": 89581
+    },
+    "exceptions": {
+      "previousPid": 89581,
+      "pid": 89729
+    }
+  },
+  "source_hashes_verified": 500,
+  "original_user_database_opened_or_upgraded": false,
+  "new_business_schema_or_dependencies": false,
+  "native_file_picker": "simulated in browser test; native acceptance pending",
+  "native_original_1to1": "not implemented; cache preview remains labelled 100% preview",
+  "gpu_utilization": null,
+  "memory_status": "renderer RSS high; needs profiling and native/low-end revalidation",
+  "milestone": "M1 partial; G01 GUI automation pass; do not begin new M2 work",
+  "acceptance_matrix": {
+    "pass": 17,
+    "partial": 7
+  },
+  "logs": [
+    "m1-gui-final.txt",
+    "standard-integration.txt",
+    "standard-driver-recheck.txt",
+    "preview.txt",
+    "web.txt",
+    "rust.txt",
+    "frontend.txt",
+    "workspace-build.txt",
+    "clippy.txt",
+    "release-build.txt"
+  ]
+}

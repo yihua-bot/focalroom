@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-15",
+  "milestone": "v2 M1",
+  "overall": "partial",
+  "fixedFindings": [
+    "R1 bounded RAW inspection with honest derived_preview type",
+    "R2 original complete receipt replay, slim storage cursor, legacy full/slim compatibility",
+    "R3 actual 1250 command accounting, receipt delta equality, logical size + WAL physical scope"
+  ],
+  "rust": {
+    "defaultPassed": 120,
+    "defaultIgnored": 4,
+    "keychainWriteDeleteFiltered": 1,
+    "explicitCameraFixtureTestsPassed": 2,
+    "distinctFunctionalTestsPassed": 122,
+    "growthBenchmarkPassed": 1,
+    "existing200PhotoPerformanceNotRun": true
+  },
+  "frontend": {
+    "passed": 147,
+    "files": 19
+  },
+  "e2e": {
+    "preview": 16,
+    "web": 1,
+    "backend": 6,
+    "m1": 4,
+    "totalDistinct": 27
+  },
+  "checks": [
+    "contracts",
+    "typecheck",
+    "lint",
+    "fmt",
+    "strict clippy all-targets integration-harness",
+    "workspace build",
+    "isolated native release build",
+    "git diff --check"
+  ],
+  "newDependencies": false,
+  "newSchemaMigrations": false,
+  "existingUserDatabaseOpenedOrUpgraded": false,
+  "rawFullResolutionOrEmbeddedJpegExtractionDelivered": false,
+  "nativeOriginal35MpBoundaryUses1400Preview": true,
+  "remaining": [
+    "native 500-photo full acceptance",
+    "true RAW detail inspection",
+    "real high-resolution photographer corpus",
+    "calibrated color/HDR/16-bit display",
+    "low-end hardware performance"
+  ]
+}

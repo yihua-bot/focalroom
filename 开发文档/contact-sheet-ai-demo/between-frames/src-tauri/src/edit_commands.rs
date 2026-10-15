@@ -73,6 +73,22 @@ pub(crate) async fn apply_gui(
                 .execute(&mut **tx)
                 .await?;
         }
+        GuiCommand::ApplyProposal {
+            proposal_id,
+            expected_proposal_revision,
+            accepted_operation_ids,
+            approval_nonce,
+        } => {
+            crate::agent::proposals::apply_tx(
+                tx,
+                &request.project_id,
+                proposal_id,
+                *expected_proposal_revision,
+                accepted_operation_ids,
+                approval_nonce,
+            )
+            .await?;
+        }
         GuiCommand::SetPhotoDecision { photo_ids, status } => {
             validate_selection(tx, &request.project_id, photo_ids).await?;
             if !["keep", "reject", "undecided"].contains(&status.as_str()) {

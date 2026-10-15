@@ -1,0 +1,62 @@
+
+> between-frames@0.1.0 tauri
+> tauri build --config src-tauri/tauri.m1-inspection.conf.json --bundles app
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build --workspace @betweenframes/desktop`
+
+> @betweenframes/desktop@0.0.0 build
+> vite build
+
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 1850 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                      0.45 kB │ gzip:   0.30 kB
+dist/assets/frame_18-CUrxFbUF.jpg   21.39 kB
+dist/assets/frame_04-COwCkRw0.jpg   22.11 kB
+dist/assets/frame_15-Bg7ozPi7.jpg   24.69 kB
+dist/assets/frame_16-DURAVXBA.jpg   35.74 kB
+dist/assets/frame_02-BUvQ1son.jpg   37.88 kB
+dist/assets/frame_05-CvR9eMMn.jpg   39.63 kB
+dist/assets/frame_17-Cd2zhXPc.jpg   41.05 kB
+dist/assets/frame_19-C8_RYiio.jpg   41.78 kB
+dist/assets/frame_14-CWYV5PZ4.jpg   43.90 kB
+dist/assets/frame_27-DREHb-qI.jpg   44.17 kB
+dist/assets/frame_28-B8XdxY15.jpg   44.63 kB
+dist/assets/frame_08-B7BkBnB_.jpg   45.87 kB
+dist/assets/frame_22-D7HVBU88.jpg   46.15 kB
+dist/assets/frame_03-Bbf1bpTf.jpg   48.31 kB
+dist/assets/frame_21-BhS-rKnd.jpg   48.95 kB
+dist/assets/frame_24-Dp7iOio1.jpg   49.05 kB
+dist/assets/frame_13-DLXZ97rA.jpg   50.00 kB
+dist/assets/frame_01-BPQLoJQk.jpg   50.48 kB
+dist/assets/frame_26-CcZefyAM.jpg   50.49 kB
+dist/assets/frame_11-BpCOZHAz.jpg   50.52 kB
+dist/assets/frame_25-Bnxj933h.jpg   50.78 kB
+dist/assets/frame_12-BGOKCISn.jpg   53.86 kB
+dist/assets/frame_23-B7MqHc8D.jpg   54.42 kB
+dist/assets/frame_10-BFZDTp3Q.jpg   57.83 kB
+dist/assets/frame_07-CvxbZ1g4.jpg   59.16 kB
+dist/assets/frame_09-CcaWJJJw.jpg   59.67 kB
+dist/assets/frame_06-DNPVykTp.jpg   59.68 kB
+dist/assets/frame_20-ChkNoU-2.jpg   69.77 kB
+dist/assets/index-DaGJBnqx.css      28.33 kB │ gzip:   6.85 kB
+dist/assets/index-BCSHKS1m.js      611.32 kB │ gzip: 191.39 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../node_modules/@tauri-apps/api/core.js is dynamically imported by ../../src/features/ai-editor/AIPanel.tsx but also statically imported by ../../node_modules/@tauri-apps/api/event.js, ../../src/services/TauriAgentRepository.ts, ../../src/services/TauriDiagnosticsRepository.ts, ../../src/services/TauriMemoryRepository.ts, ../../src/services/TauriProposalsRepository.ts, ..., dynamic import will not move module into another chunk.
+
+✓ built in 272ms
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `release` profile [optimized] target(s) in 1m 42s
+       Built application at: /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/release/between-frames
+    Bundling Between Frames M1 Inspection.app (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/release/bundle/macos/Between Frames M1 Inspection.app)
+    Finished 1 bundle at:
+        /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/release/bundle/macos/Between Frames M1 Inspection.app (10.98 MiB)
+

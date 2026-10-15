@@ -231,6 +231,8 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .zoom-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; }
 .zoom-controls .button { min-height: 28px; padding: 4px 7px; font-size: 10px; }
 .photo-viewport { position: relative; overflow: hidden; background: #0b0c0d; width: 100%; height: 300px; touch-action: none; }
+.inspection-source { position: absolute; bottom: 8px; left: 8px; right: 8px; padding: 5px 8px; background: #101213de; color: var(--muted); pointer-events: none; }
+.original-badge { position: absolute; z-index: 1; top: 8px; left: 8px; max-width: calc(100% - 16px); padding: 5px 8px; background: #101213e8; color: var(--text); font-size: 11px; pointer-events: none; }
 .photo-viewport.pannable { cursor: grab; }
 .photo-viewport.pannable:active { cursor: grabbing; }
 .photo-viewport img { position: absolute; left: 50%; top: 50%; max-width: none; max-height: none; object-fit: contain; pointer-events: none; user-select: none; }
@@ -238,6 +240,19 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .lightbox-body > .photo-viewport { height: min(60dvh, 600px); }
 .lightbox-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .lightbox-nav { display: flex; gap: 8px; align-items: center; }
+/* 沉浸审片样式随共享应用入口加载，胶片条只横向滚动。 */
+.review-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.review-status strong { color: var(--keep); }
+.review-status[data-status="reject"] strong { color: var(--reject); }
+.review-status[data-status="undecided"] strong { color: var(--muted); }
+.review-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.review-filmstrip { display: flex; gap: 4px; overflow-x: auto; padding: 8px 2px 2px; }
+.review-filmstrip button { flex: 0 0 auto; width: 52px; height: 40px; padding: 0; border: 2px solid var(--border); border-radius: 4px; overflow: hidden; position: relative; background: none; cursor: pointer; }
+.review-filmstrip button[aria-current="true"] { border-color: var(--accent); }
+.review-filmstrip button[data-status="keep"] { box-shadow: inset 0 -3px 0 var(--keep); }
+.review-filmstrip button[data-status="reject"] { box-shadow: inset 0 -3px 0 var(--reject); }
+.review-filmstrip img { width: 100%; height: 100%; object-fit: cover; }
+.filmstrip-rating { position: absolute; right: 2px; bottom: 1px; font-size: 10px; color: var(--accent); text-shadow: 0 1px 2px #000; }
 .sync-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 0; font-size: 12px; }
 .sync-toggle input { accent-color: var(--accent); }
 .compare-cols .photo-viewport { height: clamp(180px, 36dvh, 410px); }
@@ -311,3 +326,20 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .diagnostic-counts > div { padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
 .diagnostic-counts dt { color: var(--muted); font-size: 11px; }
 .diagnostic-counts dd { margin: 4px 0 0; font-size: 17px; }
+
+.proposals-panel { display: grid; gap: 14px; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+.proposals-panel h3, .proposals-panel h4, .proposals-panel p { margin: 0; }
+.proposals-panel p { line-height: 1.65; }
+.proposals-panel [role="status"] { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; overflow-wrap: anywhere; }
+.proposal-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.proposal-list > li > button { display: grid; gap: 6px; width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); text-align: left; overflow-wrap: anywhere; }
+.proposal-list > li > button[aria-expanded="true"] { border-color: var(--accent); }
+.proposal-list > li > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.proposal-list .micro { font-size: 10px; line-height: 1.6; }
+.proposal-review { display: grid; gap: 12px; }
+.proposal-ops { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.proposal-ops label { display: flex; align-items: start; gap: 8px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.proposal-ops input { flex: none; margin-top: 3px; }
+.proposal-review > label { display: grid; gap: 8px; font-size: 12px; }
+.proposal-review .text-input { width: 100%; min-width: 0; }
+.proposal-actions { display: flex; flex-wrap: wrap; gap: 10px; }

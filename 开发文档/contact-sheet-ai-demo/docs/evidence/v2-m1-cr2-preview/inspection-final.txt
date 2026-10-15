@@ -1,0 +1,18 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.22s
+     Running tests/photo_inspection.rs (src-tauri/target-v1/debug/deps/photo_inspection-478da661b37b8e76)
+
+running 10 tests
+test fake_raw_and_unsupported_extensions_fail_with_clear_errors ... ok
+test icc_metadata_is_preserved_in_original_and_absent_in_preview ... ok
+test png_16bit_quantization_preserves_original_bytes ... ok
+test heic_original_passes_brand_check_when_fixture_exists ... ok
+test compact_gui_projection_preserves_audit_exports_and_idempotent_receipts ... ok
+test inspect_original_is_owned_read_only_and_larger_than_preview ... ok
+test tiff_original_is_direct_and_read_only ... ok
+test raw_cr2_returns_bounded_embedded_jpeg_not_full_raw ... ok
+test changed_missing_and_unsupported_originals_do_not_masquerade_as_full_resolution ... ok
+test renamed_large_tiff_cannot_bypass_raw_inspection_pixel_bounds ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.22s
+

@@ -1,0 +1,118 @@
+
+COMMAND: cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target-v1 --test v2_proposals review_ -- --nocapture
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.23s
+     Running tests/v2_proposals.rs (src-tauri/target-v1/debug/deps/v2_proposals-c4ab65519ef9fe5e)
+
+running 6 tests
+
+thread 'review_failed_promotion_must_allow_retry_without_formal_edit' (8652228) panicked at tests/v2_proposals.rs:274:5:
+失败后无法重试：Some(AppError { code: "DATABASE", message: "本地数据库操作失败：error returned from database: (code: 2067) UNIQUE constraint failed: v2_promotions.project_id, v2_promotions.from_revision", retriable: true, current_revision: None })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test review_failed_promotion_must_allow_retry_without_formal_edit ... FAILED
+
+thread 'review_v2_metadata_commands_must_be_idempotent' (8652231) panicked at tests/v2_proposals.rs:264:5:
+assertion `left == right` failed: 同 envelope 重放产生额外写入：首/次提案 ID="002dc0a5-f71a-428f-9d4f-40f30e1d615a" / "3ae817f9-c3ea-4143-bc9e-e363f73eefdc"
+  left: (2, 2)
+ right: (1, 1)
+test review_v2_metadata_commands_must_be_idempotent ... FAILED
+
+thread 'review_failed_approval_must_not_leave_unrecoverable_formal_writes' (8652227) panicked at tests/v2_proposals.rs:250:5:
+返回错误 VALIDATION_ERROR 但正式序列已改变为 ["8d190d8a-e79e-4a20-975f-e24ef1465d76"]；state=submitted，重试错误=REVISION_CONFLICT
+test review_failed_approval_must_not_leave_unrecoverable_formal_writes ... FAILED
+
+thread 'review_add_must_honor_approved_position' (8652226) panicked at tests/v2_proposals.rs:286:5:
+assertion `left == right` failed: 批准插入第 1 位却被追加到末尾
+  left: ["e33f07d5-1164-4d42-beda-9de42ab5c6b8", "8198d767-e525-4fdf-bb3b-d0880ffede57"]
+ right: ["8198d767-e525-4fdf-bb3b-d0880ffede57", "e33f07d5-1164-4d42-beda-9de42ab5c6b8"]
+test review_add_must_honor_approved_position ... FAILED
+
+thread 'review_two_moves_must_compose_in_order' (8652230) panicked at tests/v2_proposals.rs:233:5:
+assertion `left == right` failed: 第二个 move 不应撤销第一个 move
+  left: ["024539a2-e7ed-43f2-a109-e68d9db5e4c5", "fdff1781-4599-4c75-9f34-2cdf5758aa04", "4f10e64b-bf60-492b-823a-33c323d3cb79"]
+ right: ["fdff1781-4599-4c75-9f34-2cdf5758aa04", "024539a2-e7ed-43f2-a109-e68d9db5e4c5", "4f10e64b-bf60-492b-823a-33c323d3cb79"]
+test review_two_moves_must_compose_in_order ... FAILED
+
+thread 'review_promotion_must_block_real_local_writes' (8652229) panicked at tests/v2_proposals.rs:217:5:
+迁移中/完成后仍允许本地正式写入: [false, true]
+test review_promotion_must_block_real_local_writes ... FAILED
+
+failures:
+
+failures:
+    review_add_must_honor_approved_position
+    review_failed_approval_must_not_leave_unrecoverable_formal_writes
+    review_failed_promotion_must_allow_retry_without_formal_edit
+    review_promotion_must_block_real_local_writes
+    review_two_moves_must_compose_in_order
+    review_v2_metadata_commands_must_be_idempotent
+
+test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.15s
+
+error: test failed, to rerun pass `--test v2_proposals`
+
+COMMAND: npm test -- src/services/TauriMemoryRepository.test.ts -t review
+
+> between-frames@0.1.0 test
+> vitest run src/services/TauriMemoryRepository.test.ts -t review
+
+
+ RUN  v4.1.11 /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames
+
+ ❯ src/services/TauriMemoryRepository.test.ts (5 tests | 2 failed | 3 skipped) 7ms
+   × review GUI 提案请求必须符合 Rust 使用的 v2 wire 契约 5ms
+   × review GUI 仓库必须拒绝业务错误回执 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/TauriMemoryRepository.test.ts > review GUI 提案请求必须符合 Rust 使用的 v2 wire 契约
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/services/TauriMemoryRepository.test.ts:40:60
+     38|   await repository.apply('project1','proposal1',2,['op1'],'nonce0001',…
+     39|   for (const [,args] of ipc.mock.calls) {
+     40|     expect(commandSchema.safeParse(args.envelope).success).toBe(true);
+       |                                                            ^
+     41|   }
+     42| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/services/TauriMemoryRepository.test.ts > review GUI 仓库必须拒绝业务错误回执
+AssertionError: promise resolved "{ ok: false, error: { …(2) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "error": {
++     "code": "VALIDATION_ERROR",
++     "message": "invalid envelope",
++   },
++   "ok": false,
+  }
+
+ ❯ src/services/TauriMemoryRepository.test.ts:45:112
+     43| it('review GUI 仓库必须拒绝业务错误回执', async () => {
+     44|   ipc.mockResolvedValue({ok:false,error:{code:'VALIDATION_ERROR',messa…
+     45|   await expect(new TauriProposalsRepository().apply('project1','propos…
+       |                                                                                                                ^
+     46| });
+     47|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 skipped (5)
+   Start at  16:54:32
+   Duration  668ms (transform 27ms, setup 97ms, import 48ms, tests 7ms, environment 410ms)
+

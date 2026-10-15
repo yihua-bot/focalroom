@@ -27,6 +27,8 @@ pub(crate) async fn prefetch(
     provider: &OpenAiProvider,
     task: &Task,
     call: &ToolCall,
+    region: &super::router::RegionPolicy,
+    tier: super::router::ServiceTier,
 ) -> Result<Option<VisionPrefetch>> {
     use sqlx::Row;
     if let Some(data) = super::cloud::replay(db, &task.id, call).await? {
@@ -116,6 +118,18 @@ pub(crate) async fn prefetch(
     let Some(_) = authorized else {
         return Ok(None);
     };
+    super::router::route_for_provider(
+        &super::router::RouteRequest {
+            task_type: super::router::TaskType::VisionObserve,
+            tier,
+            region,
+            budget_remaining_usd: super::router::remaining_budget(task, tier),
+            images_required: true,
+            image_consent: true,
+        },
+        &task.provider_id,
+        true,
+    )?;
     if task.usage.cloud_images + missing.len() as u32 > task.budget.max_cloud_images {
         return Err(AppError::new(
             "BUDGET_EXCEEDED",

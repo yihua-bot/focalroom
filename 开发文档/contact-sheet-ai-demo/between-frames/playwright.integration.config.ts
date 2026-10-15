@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
-  testDir: './e2e', testMatch: ['local-core.spec.ts', 'agent-core.spec.ts', 'beta-journey.spec.ts', 'memory-controls.spec.ts', 'diagnostics.spec.ts'], workers: 1, timeout: 120_000,
+  testDir: './e2e', testMatch: ['local-core.spec.ts', 'agent-core.spec.ts', 'beta-journey.spec.ts', 'memory-controls.spec.ts', 'diagnostics.spec.ts', 'v2-proposals.spec.ts'], workers: 1, timeout: 120_000,
   outputDir: 'test-results/integration',
   use: { baseURL: 'http://localhost:1420', viewport: { width: 1440, height: 960 }, trace: 'retain-on-failure' },
   webServer: [

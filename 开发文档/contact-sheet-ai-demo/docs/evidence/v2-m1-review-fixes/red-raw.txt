@@ -1,0 +1,19 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.13s
+     Running tests/photo_inspection.rs (src-tauri/target-v1/debug/deps/photo_inspection-478da661b37b8e76)
+
+running 1 test
+
+thread 'renamed_large_tiff_cannot_bypass_raw_inspection_pixel_bounds' (9078979) panicked at tests/photo_inspection.rs:454:82:
+called `Result::unwrap()` on an `Err` value: AppError { code: "INSPECTION_FORMAT", message: "无法从 RAW 提取嵌入预览（系统解码器不支持该格式）；当前显示缓存预览", retriable: false, current_revision: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test renamed_large_tiff_cannot_bypass_raw_inspection_pixel_bounds ... FAILED
+
+failures:
+
+failures:
+    renamed_large_tiff_cannot_bypass_raw_inspection_pixel_bounds
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 11.09s
+
+error: test failed, to rerun pass `--test photo_inspection`

@@ -105,6 +105,15 @@ pub(crate) async fn record_from_command(
                 )]
             }
         }
+        GuiCommand::ApplyProposal {
+            proposal_id,
+            accepted_operation_ids,
+            ..
+        } if !accepted_operation_ids.is_empty() => vec![(
+            None,
+            "draft_apply",
+            json!({"proposal_id":proposal_id,"accepted_operation_ids":accepted_operation_ids}),
+        )],
         GuiCommand::ApplyDraft {
             draft_id,
             approved_photo_ids,

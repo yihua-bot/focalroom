@@ -17,9 +17,13 @@ export function ProposalsPanel({ project, enabled }: { project: Project; enabled
   const [nonce, setNonce] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
-  const act = async (action: () => Promise<unknown>, message: string) => {
+  const projectRevision = () => {
+    if (project.revision === undefined) throw new Error('项目版本缺失，请刷新后再审批');
+    return project.revision;
+  };
+  const act = async (action: () => Promise<string>) => {
     if (busy) return; setBusy(true); setNote('');
-    try { await action(); setNote(message); void query.refetch(); void client.invalidateQueries({ queryKey: ['projects'] }); }
+    try { setNote(await action()); void query.refetch(); void client.invalidateQueries({ queryKey: ['projects'] }); }
     catch (error) { setNote(error instanceof Error ? error.message : String(error)); }
     finally { setBusy(false); }
   };
@@ -38,7 +42,7 @@ export function ProposalsPanel({ project, enabled }: { project: Project; enabled
     </li>)}</ol>
     {open && open.state === 'draft' && <div className="proposal-actions">
       <p className="micro">草稿待提交审批。</p>
-      <Button size="small" disabled={busy} onClick={() => { void act(() => repository.submit(project.id, open.id, open.revision, `submit-${Date.now()}`), '已提交审批'); }}>提交审批</Button>
+      <Button size="small" disabled={busy} onClick={() => { void act(() => repository.submit(project.id, projectRevision(), open.id, open.revision, `submit-${Date.now()}`).then(() => '已提交审批')); }}>提交审批</Button>
     </div>}
     {open && open.state === 'submitted' && <div className="proposal-review">
       <h4>审批 · {open.title}</h4>
@@ -49,7 +53,7 @@ export function ProposalsPanel({ project, enabled }: { project: Project; enabled
       <label>审批 nonce<input className="text-input" value={nonce} onChange={event => setNonce(event.target.value)} /></label>
       <p className="micro">nonce 与提案不符会被拒绝；不勾任何操作即整体驳回。</p>
       <div className="proposal-actions">
-        <Button size="small" variant="primary" disabled={busy} onClick={() => { const ids = Object.entries(accepted).filter(([, on]) => on).map(([id]) => id); void act(() => repository.apply(project.id, open.id, open.revision, ids, nonce.trim(), `apply-${Date.now()}`), ids.length ? `已执行 ${ids.length} 个操作` : '已驳回该提案'); }}>
+        <Button size="small" variant="primary" disabled={busy} onClick={() => { const ids = Object.entries(accepted).filter(([, on]) => on).map(([id]) => id); void act(() => repository.apply(project.id, projectRevision(), open.id, open.revision, ids, nonce.trim(), `apply-${Date.now()}`).then(result => result.discarded ? '已驳回该提案' : `已执行 ${result.applied} 个操作`)); }}>
           {Object.values(accepted).some(Boolean) ? '执行所选操作' : '驳回提案'}
         </Button>
       </div>

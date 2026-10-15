@@ -1,0 +1,14 @@
+{
+  "sourcePath": "/tmp/between-frames-raw-fixture.CR2",
+  "sourceBytes": 6800865,
+  "sourceSha256": "152382ce4dbf644899d12b41b4c577f07638aa3ec5745ac344c36bad93826125",
+  "previewOffset": 49416,
+  "previewBytes": 481778,
+  "previewSha256": "ad284d49894269d9774efb7dadf4d24e38026281ba23762a1aaab2102844c738",
+  "previewDimensions": [
+    1936,
+    1288
+  ],
+  "orientation": 1,
+  "provenance": "Existing local CR2 fixture from earlier project testing; source attribution not independently archived in this slice. Do not claim a broad camera matrix."
+}

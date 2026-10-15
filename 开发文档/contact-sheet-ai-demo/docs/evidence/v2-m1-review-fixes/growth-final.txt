@@ -1,0 +1,7 @@
+
+running 1 test
+growth-baseline: {"commands":1250,"commandsPerSecond":79.97370486081108,"elapsedSeconds":15.630137458,"events":1291,"historyGroups":40,"logicalBytesAfterImport":606208,"logicalBytesFinal":64733184,"logicalGrowthBytesPer100Commands":5130158.08,"measurement":"logical bytes = PRAGMA page_count * page_size, including committed WAL pages; physical files sampled before closing; throughput includes preparation reads","physicalMainBytes":63594496,"physicalShmBytes":32768,"physicalWalBytes":4247752,"receiptAliases":2502,"receiptDelta":1250}
+test long_edit_history_growth_baseline ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 15.89s
+

@@ -1,0 +1,202 @@
+{
+  "_sqlx_migrations": {
+    "rows": 17,
+    "sha256": "9257357a4b4ad1c421294e96578c29f0e9228fd901c052e9f77877e06e4e97f3"
+  },
+  "projects": {
+    "rows": 3,
+    "sha256": "174860e79e0a5d3715a27cb11804c7adcf64a88bdc3e94e9e89cfb235cb2f07d"
+  },
+  "photos": {
+    "rows": 502,
+    "sha256": "33a40424423024ddf88c26fee37d6f637ad0eb5dd24f6457ad332a27d3d36afc"
+  },
+  "photo_decisions": {
+    "rows": 502,
+    "sha256": "c620ca555e985925041eced3f4acee37d1c500663fdee051458cf01efaa4c392"
+  },
+  "sequence_items": {
+    "rows": 25,
+    "sha256": "54f45831070e986a535f5afaf6fe6606c27047a6690a1dce6c2f686072188f0b"
+  },
+  "decision_events": {
+    "rows": 521,
+    "sha256": "601e3d0dbbe1ee3c10f830cd1c7bdc66e7f40312bf923a7638e988d0144d3d49"
+  },
+  "comparison_events": {
+    "rows": 1,
+    "sha256": "46f4bd69fcdddfb126d33455d8b6e331d20df75548cc241ea31d73240cfd1662"
+  },
+  "command_events": {
+    "rows": 521,
+    "sha256": "859d1d8536c89ff7a646555000d79e867990383208297eb03bb855f10e82be2a"
+  },
+  "command_receipt_aliases": {
+    "rows": 38,
+    "sha256": "893b6bf5fbc4fa418323fdd8d8cfc7454e1ed2733519e3e04bb822080504f471"
+  },
+  "command_history": {
+    "rows": 13,
+    "sha256": "1d70306c79d4bc00dd68091cab4dd9e878fa48d3ee306ee341fb9d039466cffc"
+  },
+  "history_heads": {
+    "rows": 1,
+    "sha256": "ed637cefbde44452f04e7875a5f6843d8f955a270fd2603739d5c5b5ff44c17a"
+  },
+  "sequence_versions": {
+    "rows": 1,
+    "sha256": "c94b0398df81e4db6ae2dcb7deb2252fb14dad119ad10fbb938f8058ca2523ea"
+  },
+  "comparison_state": {
+    "rows": 1,
+    "sha256": "8e6756635105ac69e4da56e05528e89e7332f95d055851451ef4c2eb647b6c90"
+  },
+  "agent_tasks": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "agent_steps": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sqlite_sequence": {
+    "rows": 1,
+    "sha256": "197b20ecf7c73736e33cef645b361b73e79fc4e1e3d9a33ca37e9f7c0e40bb97"
+  },
+  "tool_calls": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "agent_checkpoints": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "task_messages": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "drafts": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "draft_items": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "agent_request_receipts": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "privacy_consents": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "photo_observations": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "model_usage": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "consent_receipts": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "preference_evidence": {
+    "rows": 6,
+    "sha256": "4fe28ecb2ad226445cdf3a2e98c57fa29c1ec5a47f777c9316ea8da1f4f83a18"
+  },
+  "preference_hypotheses": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "memory_evidence_state": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "memory_commands": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "memory_search": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "memory_search_data": {
+    "rows": 2,
+    "sha256": "0038e0b18c307771c3bc0d4c398dfabe2e6b87af5305e89d504e68031fcf52d3"
+  },
+  "memory_search_idx": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "memory_search_content": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "memory_search_docsize": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "memory_search_config": {
+    "rows": 1,
+    "sha256": "afaee2b1562b04a97bf25315b158b426795a3b6f88b13fd85d546090fb141946"
+  },
+  "memory_tombstones": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "comment_threads": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "comments": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proposals": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proposal_operations": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "v2_creators": {
+    "rows": 1,
+    "sha256": "055e9470f9ac957511503a06b0be8f5e3ef18284d1a97e256350621e08853533"
+  },
+  "v2_workspaces": {
+    "rows": 1,
+    "sha256": "789ca2e2314b6913e35863af701f9fe669206abed22d2c3de915e40660be533e"
+  },
+  "v2_memberships": {
+    "rows": 1,
+    "sha256": "8b64d0314c4248f731f2b33767cd1c58e1c368610db2575c454dbeeef8202b14"
+  },
+  "v2_workspace_audit": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "v2_billing_events": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "v2_orders": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "v2_media_grants": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "v2_command_receipts": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "v2_promotions": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

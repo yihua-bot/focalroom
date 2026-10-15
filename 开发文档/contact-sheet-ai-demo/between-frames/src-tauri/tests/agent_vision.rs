@@ -925,3 +925,105 @@ async fn cloud_image_budget_cap_pauses_task_before_any_upload() {
     assert_eq!(image_requests(&state.lock().unwrap()), 0);
     unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
 }
+
+#[tokio::test]
+async fn runtime_router_rejects_region_budget_and_missing_provider_before_http() {
+    use agent::router::{RegionPolicy, ServiceTier};
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    for condition in ["region", "budget", "missing"] {
+        let temp = tempfile::tempdir().unwrap();
+        let (db, project) = setup(temp.path(), 2).await;
+        let (base, state) = spawn_server(Script {
+            main: vec!["text".into()],
+            vision: VisionReply::Valid,
+        });
+        let task = CommandHandler::new(&db)
+            .agent_request(AgentRequest {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                command: TaskCommand::StartTask {
+                    goal: "验证真实执行入口的路由门槛".into(),
+                    selected_photo_ids: vec![],
+                    target_count: 2,
+                    budget: Budget {
+                        max_cost_minor_usd: if condition == "budget" { 1 } else { 100 },
+                        ..Budget::default()
+                    },
+                    consent_id: None,
+                },
+            })
+            .await
+            .unwrap();
+        assert_eq!(task.provider_id, "openai");
+        let engine = match condition {
+            "region" => engine(&db, &base).with_routing_policy(
+                RegionPolicy {
+                    restricted: vec!["EU_NO_EXPORT".into()],
+                    allowed_residencies: vec!["local".into()],
+                },
+                ServiceTier::Standard,
+            ),
+            "missing" => AgentEngine::with_providers(
+                db.clone(),
+                Arc::new(agent::provider::MockProvider),
+                None,
+            ),
+            _ => engine(&db, &base),
+        };
+        let result = engine.run(&task.id).await;
+        let task = agent::projection(&db, &project.id)
+            .await
+            .unwrap()
+            .tasks
+            .into_iter()
+            .find(|t| t.id == task.id)
+            .unwrap();
+        match condition {
+            "budget" => {
+                assert!(result.is_ok());
+                assert_eq!(task.state, "paused");
+                assert!(task.reason.contains("估算成本"));
+            }
+            "region" => {
+                assert_eq!(result.unwrap_err().code, "PRIVACY_REGION_REJECTED");
+                assert_eq!(task.state, "failed");
+            }
+            _ => {
+                assert_eq!(result.unwrap_err().code, "MODEL_CAPABILITY_MISSING");
+                assert_eq!(task.state, "failed");
+            }
+        }
+        assert!(
+            state.lock().unwrap().requests.is_empty(),
+            "{condition} 路由拒绝后不得调用 HTTP"
+        );
+        assert_eq!(task.usage.model_turns, 0);
+    }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn runtime_router_keeps_offline_task_local_when_cloud_adapter_is_available() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let task = start_vision_task(&db, &project, vec![], 0, None).await;
+    assert_eq!(task.provider_id, "mock");
+    let (base, state) = spawn_server(Script {
+        main: vec!["text".into()],
+        vision: VisionReply::Valid,
+    });
+    engine(&db, &base).run(&task.id).await.unwrap();
+    assert!(state.lock().unwrap().requests.is_empty());
+    let task = agent::projection(&db, &project.id)
+        .await
+        .unwrap()
+        .tasks
+        .remove(0);
+    assert_eq!(task.state, "review_ready");
+    assert_eq!(task.usage.cost_minor_usd, 0);
+    assert_eq!(task.provider_id, "mock");
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}

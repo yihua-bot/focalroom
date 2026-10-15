@@ -466,8 +466,8 @@
     }
   },
   {
-    "name": "拒绝空审批",
-    "valid": false,
+    "name": "接受空选驳回审批",
+    "valid": true,
     "command": {
       "version": "2.0",
       "command_id": "cmd_test_001",

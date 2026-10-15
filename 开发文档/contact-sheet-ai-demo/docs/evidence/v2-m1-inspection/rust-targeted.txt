@@ -1,0 +1,11 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.05s
+     Running tests/photo_inspection.rs (src-tauri/target-v1/debug/deps/photo_inspection-478da661b37b8e76)
+
+running 3 tests
+test compact_gui_projection_preserves_audit_exports_and_idempotent_receipts ... ok
+test inspect_original_is_owned_read_only_and_larger_than_preview ... ok
+test changed_missing_and_unsupported_originals_do_not_masquerade_as_full_resolution ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.38s
+

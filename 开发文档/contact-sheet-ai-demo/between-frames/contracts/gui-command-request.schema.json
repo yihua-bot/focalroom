@@ -496,6 +496,46 @@
             "draftId",
             "expectedDraftRevision"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ApplyProposal"
+            },
+            "proposalId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "expectedProposalRevision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "acceptedOperationIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "maxItems": 200,
+              "uniqueItems": true
+            },
+            "approvalNonce": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "type",
+            "proposalId",
+            "expectedProposalRevision",
+            "acceptedOperationIds",
+            "approvalNonce"
+          ],
+          "additionalProperties": false
         }
       ]
     }

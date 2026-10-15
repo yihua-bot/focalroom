@@ -1,0 +1,63 @@
+warning: output filename collision at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/release/deps/libbetween_frames_lib.a
+  |
+  = note: the lib target `between_frames_lib` in package `between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)` has the same output filename as the lib target `between_frames_lib` in package `between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)`
+  = note: this may become a hard error in the future; see <https://github.com/rust-lang/cargo/issues/6313>
+  = help: consider changing their names to be unique or compiling them separately
+warning: output filename collision at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/release/deps/libbetween_frames_lib.dylib
+  |
+  = note: the lib target `between_frames_lib` in package `between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)` has the same output filename as the lib target `between_frames_lib` in package `between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)`
+  = note: this may become a hard error in the future; see <https://github.com/rust-lang/cargo/issues/6313>
+  = help: consider changing their names to be unique or compiling them separately
+warning: output filename collision at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/release/deps/libbetween_frames_lib.dylib.dSYM
+  |
+  = note: the lib target `between_frames_lib` in package `between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)` has the same output filename as the lib target `between_frames_lib` in package `between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)`
+  = note: this may become a hard error in the future; see <https://github.com/rust-lang/cargo/issues/6313>
+  = help: consider changing their names to be unique or compiling them separately
+warning: output filename collision at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/release/deps/libbetween_frames_lib.rlib
+  |
+  = note: the lib target `between_frames_lib` in package `between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)` has the same output filename as the lib target `between_frames_lib` in package `between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)`
+  = note: this may become a hard error in the future; see <https://github.com/rust-lang/cargo/issues/6313>
+  = help: consider changing their names to be unique or compiling them separately
+   Compiling objc2-exception-helper v0.1.1
+   Compiling ring v0.17.14
+   Compiling digest v0.10.7
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+   Compiling libsqlite3-sys v0.30.1
+   Compiling objc2 v0.6.5
+   Compiling betweenframes-local-domain v0.0.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/crates/local-domain)
+   Compiling sha2 v0.10.9
+   Compiling hmac v0.12.1
+   Compiling sqlx-core v0.8.6
+   Compiling block2 v0.6.2
+   Compiling objc2-core-foundation v0.3.2
+   Compiling dispatch2 v0.3.1
+   Compiling rustls-webpki v0.103.15
+   Compiling rustls v0.23.45
+   Compiling sqlx-sqlite v0.8.6
+   Compiling objc2-foundation v0.3.2
+   Compiling sqlx v0.8.6
+   Compiling tokio-rustls v0.26.6
+   Compiling hyper-rustls v0.27.10
+   Compiling reqwest v0.12.28
+   Compiling objc2-quartz-core v0.3.2
+   Compiling objc2-app-kit v0.3.2
+   Compiling objc2-web-kit v0.3.2
+   Compiling tao v0.37.1
+   Compiling window-vibrancy v0.8.1
+   Compiling muda v0.20.0
+   Compiling rfd v0.16.0
+   Compiling wry v0.57.0
+   Compiling tauri-runtime v2.12.1
+   Compiling tauri-runtime-wry v2.12.1
+   Compiling tauri v2.12.3
+   Compiling tauri-plugin-fs v2.7.0
+   Compiling tauri-plugin-dialog v2.8.2
+    Finished `release` profile [optimized] target(s) in 2m 18s
+     Running tests/perf_baseline.rs (src-tauri/target-v1/release/deps/perf_baseline-ea6c3ee5c1c8b637)
+
+running 1 test
+growth-baseline: {"commands":1250,"commandsPerSecond":93.89564299662409,"elapsedSeconds":13.312651792,"events":1291,"historyGroups":40,"logicalBytesAfterImport":606208,"logicalBytesFinal":64720896,"logicalGrowthBytesPer100Commands":5129175.04,"measurement":"logical bytes = PRAGMA page_count * page_size, including committed WAL pages; physical files sampled before closing; throughput includes preparation reads","physicalMainBytes":63889408,"physicalShmBytes":32768,"physicalWalBytes":4260112,"receiptAliases":2502,"receiptDelta":1250}
+test long_edit_history_growth_baseline ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 13.53s
+

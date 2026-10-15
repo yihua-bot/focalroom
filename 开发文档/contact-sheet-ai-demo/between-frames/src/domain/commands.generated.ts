@@ -18,7 +18,8 @@ export type DomainCommand =
   | { type: "ApplyDraft"; draftId: string; expectedDraftRevision: number; approvedPhotoIds: string[]; mode: "partial" | "full" }
   | { type: "RebaseDraft"; draftId: string; expectedDraftRevision: number }
   | { type: "UpdateDraft"; draftId: string; expectedDraftRevision: number; orderedPhotoIds: string[] }
-  | { type: "DiscardDraft"; draftId: string; expectedDraftRevision: number };
+  | { type: "DiscardDraft"; draftId: string; expectedDraftRevision: number }
+  | { type: "ApplyProposal"; proposalId: string; expectedProposalRevision: number; acceptedOperationIds: string[]; approvalNonce: string };
 
 export interface GuiCommandRequest {
   commandId: string;

@@ -6,7 +6,7 @@ use crate::{
     importer::ImportManager,
 };
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::Mutex;
 
@@ -24,12 +24,48 @@ pub struct Backend {
 pub async fn list_projects(
     state: State<'_, Backend>,
     archived: Option<bool>,
+    compact: Option<bool>,
 ) -> Result<Vec<Project>> {
-    state.store.list(archived.unwrap_or(false)).await
+    let projects = state.store.list(archived.unwrap_or(false)).await?;
+    Ok(projects
+        .into_iter()
+        .map(|project| {
+            if compact.unwrap_or(false) {
+                crate::photo_inspection::compact_project(project)
+            } else {
+                project
+            }
+        })
+        .collect())
 }
 #[tauri::command]
-pub async fn get_project(state: State<'_, Backend>, project_id: String) -> Result<Project> {
-    state.store.get(&project_id).await
+pub async fn get_project(
+    state: State<'_, Backend>,
+    project_id: String,
+    compact: Option<bool>,
+) -> Result<Project> {
+    let project = state.store.get(&project_id).await?;
+    Ok(if compact.unwrap_or(false) {
+        crate::photo_inspection::compact_project(project)
+    } else {
+        project
+    })
+}
+#[tauri::command]
+pub async fn get_original_photo(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    photo_id: String,
+) -> Result<crate::photo_inspection::InspectionSource> {
+    let source =
+        crate::photo_inspection::original_path(&state.store, &project_id, &photo_id).await?;
+    if let Some(path) = source.path() {
+        app.asset_protocol_scope()
+            .allow_file(path)
+            .map_err(|error| AppError::new("ASSET_SCOPE", error.to_string()))?;
+    }
+    Ok(source)
 }
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +81,7 @@ pub async fn execute_gui_command(
     app: AppHandle,
     state: State<'_, Backend>,
     request: crate::command_handler::GuiCommandRequest,
+    compact: Option<bool>,
 ) -> Result<GuiReply> {
     let draft_change = matches!(
         request.command,
@@ -60,7 +97,7 @@ pub async fn execute_gui_command(
             .execute_gui(request)
             .await
         {
-            Ok(receipt) => {
+            Ok(mut receipt) => {
                 if receipt.changed {
                     let _ = app.emit(crate::commands_generated::PROJECT_CHANGED_EVENT, serde_json::json!({"projectId":project_id,"revision":receipt.revision,"requestId":request_id}));
                     let _ = app.emit(
@@ -73,6 +110,11 @@ pub async fn execute_gui_command(
                             serde_json::json!({"projectId":project_id,"requestId":request_id}),
                         );
                     }
+                }
+                if compact.unwrap_or(false) {
+                    receipt.project = receipt
+                        .project
+                        .map(crate::photo_inspection::compact_project);
                 }
                 GuiReply {
                     ok: true,

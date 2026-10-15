@@ -158,3 +158,181 @@ async fn b01_b02_webhook_replay_idempotent_and_forgery_rejected() {
     );
     unsafe { std::env::remove_var(billing::BILLING_KEY_ENV) };
 }
+
+#[tokio::test]
+async fn promotion_blocks_legacy_and_v2_writes_even_with_stale_authority() {
+    use between_frames_lib::{
+        command_handler::{CommandHandler, GuiCommandRequest},
+        commands_generated::GuiCommand,
+        v2_bridge,
+    };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = project_with_photo(temp.path()).await;
+    let photo = db.get(&project).await.unwrap().photos[0].id.clone();
+    let base = db.get(&project).await.unwrap().revision;
+    let source = temp.path().join("two.png");
+    image::RgbImage::from_pixel(32, 24, image::Rgb([20, 30, 40]))
+        .save(&source)
+        .unwrap();
+    let prepared = image_pipeline::prepare(&source, &temp.path().join("cache")).unwrap();
+    let promoted = promotion::begin(&db, &project, "local-owner")
+        .await
+        .unwrap();
+    for state in ["pending", "completed"] {
+        if state == "completed" {
+            let id = promoted["promotion_id"].as_str().unwrap();
+            promotion::advance(&db, id, "uploading", None)
+                .await
+                .unwrap();
+            promotion::advance(&db, id, "verifying", None)
+                .await
+                .unwrap();
+            promotion::advance(&db, id, "completed", Some("protocol-test-confirmation"))
+                .await
+                .unwrap();
+        }
+        let result = CommandHandler::new(&db)
+            .execute_gui(GuiCommandRequest::new(
+                &project,
+                base,
+                GuiCommand::SetPhotoDecision {
+                    photo_ids: vec![photo.clone()],
+                    status: "keep".into(),
+                },
+            ))
+            .await
+            .unwrap_err();
+        assert_eq!(result.code, "AUTHORITY_MISMATCH", "{state}");
+        assert_eq!(
+            db.insert_photo(&project, &prepared).await.unwrap_err().code,
+            "AUTHORITY_MISMATCH"
+        );
+        assert_eq!(
+            db.relink(&project, &photo, &prepared, base)
+                .await
+                .unwrap_err()
+                .code,
+            "AUTHORITY_MISMATCH"
+        );
+        let envelope = betweenframes_local_domain::parse_command(serde_json::json!({"version":"2.0","command_id":format!("cmd-gate-{state}"),"workspace_id":"local-workspace","project_id":project,"expected_revision":base,"idempotency_key":format!("idem-gate-{state}"),"kind":"photo.set_selection","payload":{"photo_ids":[photo],"selection_state":"KEEP"}})).unwrap();
+        // 模拟开始迁移前读取的旧快照，不能依赖调用方提供的 LOCAL。
+        let stale = betweenframes_local_domain::ProjectAuthority {
+            workspace_id: "local-workspace".into(),
+            project_id: project.clone(),
+            revision: base,
+            mode: betweenframes_local_domain::ProjectMode::LOCAL,
+            local_state: betweenframes_local_domain::LocalState::LOCAL,
+        };
+        let result = v2_bridge::execute(
+            &db,
+            v2_bridge::V2Execution {
+                envelope,
+                principal: v2_bridge::local_owner_principal("local-workspace", &project),
+                authority: stale,
+            },
+            1_900_000_000_000,
+        )
+        .await;
+        assert_eq!(
+            result["error"]["code"], "AUTHORITY_MISMATCH",
+            "{state}: {result}"
+        );
+        assert!(db.get(&project).await.unwrap().sequence.is_empty());
+    }
+    assert!(
+        promotion::begin(&db, &project, "local-owner")
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn failed_and_aborted_promotion_retry_at_same_revision_preserves_attempts() {
+    use between_frames_lib::{
+        command_handler::{CommandHandler, GuiCommandRequest},
+        commands_generated::GuiCommand,
+    };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = project_with_photo(temp.path()).await;
+    let base = db.get(&project).await.unwrap().revision;
+    let mut previous = None;
+    for terminal in ["failed", "aborted"] {
+        let attempt = promotion::begin(&db, &project, "local-owner")
+            .await
+            .unwrap();
+        let id = attempt["promotion_id"].as_str().unwrap();
+        assert_ne!(previous.as_deref(), Some(id));
+        assert_eq!(attempt["from_revision"], base);
+        promotion::advance(&db, id, terminal, None).await.unwrap();
+        previous = Some(id.to_owned());
+        // 失败/中止立即恢复旧命令通道；无操作不推进正式版本。
+        CommandHandler::new(&db)
+            .execute_gui(GuiCommandRequest::new(
+                &project,
+                base,
+                GuiCommand::UpdateProjectBrief {
+                    brief: String::new(),
+                },
+            ))
+            .await
+            .unwrap();
+    }
+    assert_eq!(db.get(&project).await.unwrap().revision, base);
+    let retry = promotion::begin(&db, &project, "local-owner")
+        .await
+        .unwrap();
+    assert_eq!(retry["from_revision"], base);
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM v2_promotions WHERE project_id=?")
+        .bind(&project)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 3);
+}
+
+#[tokio::test]
+async fn migration_seventeen_preserves_existing_promotion_records() {
+    let temp = tempfile::tempdir().unwrap();
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new()
+                .filename(temp.path().join("v16.sqlite"))
+                .create_if_missing(true)
+                .foreign_keys(true),
+        )
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE TABLE projects(id TEXT PRIMARY KEY); INSERT INTO projects VALUES('p1');")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::raw_sql(include_str!("../migrations/0014_promotions.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO v2_promotions VALUES('old-failed','p1','owner','failed',3,'{}','before','before')").execute(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!("../migrations/0017_v2_command_receipts.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let old: (String, i64) =
+        sqlx::query_as("SELECT state,from_revision FROM v2_promotions WHERE id='old-failed'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(old, ("failed".into(), 3));
+    sqlx::query(
+        "INSERT INTO v2_promotions VALUES('retry','p1','owner','pending',3,'{}','after','after')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(sqlx::query("INSERT INTO v2_promotions VALUES('duplicate','p1','owner','pending',4,'{}','after','after')").execute(&pool).await.is_err());
+    assert!(
+        sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&pool)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

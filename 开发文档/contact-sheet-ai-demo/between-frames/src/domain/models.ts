@@ -3,6 +3,7 @@ export type PhotoStatus = 'undecided' | 'keep' | 'reject';
 export type PhotoFilter = 'all' | PhotoStatus;
 export type WorkspaceView = 'grid' | 'sequence';
 export type InspectorPanel = 'photo' | 'ai' | 'memory';
+export interface InspectionImage { src: string; kind: 'original' | 'derived_preview' | 'embedded_preview' }
 
 export interface Photo {
   id: string;
@@ -18,6 +19,7 @@ export interface Photo {
   isMissing?: boolean;
   width?: number;
   height?: number;
+  loadOriginal?: () => Promise<InspectionImage>;
 }
 
 export interface PreviewEvent {

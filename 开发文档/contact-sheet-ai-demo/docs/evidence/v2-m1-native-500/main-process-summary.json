@@ -1,0 +1,11 @@
+{
+  "pid": 24230,
+  "sampleIntervalSeconds": 1,
+  "samples": 341,
+  "wallSeconds": 343.60386180877686,
+  "startRssKiB": 112448,
+  "peakSampledRssKiB": 126240,
+  "finalRssKiB": 78160,
+  "cpuSecondsDelta": 11.97,
+  "scope": "Main Rust/native host process ONLY. WebKit processes excluded: ownership not verified. Contains idle/menu automation delays; no app-total-memory, frame latency or GPU utilization claim. Sampling stopped before regression/build."
+}

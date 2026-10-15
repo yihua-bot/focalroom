@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-15",
+  "milestone": "v2 M1",
+  "overall": "partial",
+  "rust": {
+    "passed": 113,
+    "ignored": 1,
+    "keychainSkipped": 1
+  },
+  "frontend": {
+    "passed": 146,
+    "files": 19
+  },
+  "e2e": {
+    "preview": 16,
+    "web": 1,
+    "backendIntegration": 6,
+    "m1Gui": 3,
+    "totalDistinctJourneys": 26
+  },
+  "checks": [
+    "contracts",
+    "typecheck",
+    "lint",
+    "fmt",
+    "strict clippy all targets integration-harness",
+    "workspace build",
+    "native release app build",
+    "git diff --check"
+  ],
+  "regressions": {
+    "initialViewportTests": "Test cleanup removed shared ResizeObserver mock; corrected cleanup and reran 146 passing tests",
+    "webPort": "Existing user preview on 1424; allow local reuse while CI remains exclusive; final test passes"
+  },
+  "native": "native-results.json",
+  "metrics": "gui-metrics.json",
+  "newDependencies": false,
+  "newMigrationsThisSlice": false,
+  "existingUserDatabaseOpenedOrUpgraded": false,
+  "remaining": [
+    "TIFF/RAW/HEIC full-resolution inspection",
+    "ICC/HDR/16-bit/calibrated display validation",
+    "native 500-photo and low-end hardware performance",
+    "database receipt growth and large-history paging"
+  ]
+}

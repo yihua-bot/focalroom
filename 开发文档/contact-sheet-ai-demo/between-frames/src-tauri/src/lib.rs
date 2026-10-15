@@ -3,6 +3,7 @@ mod command_audit;
 pub mod command_handler;
 mod commands;
 pub mod commands_generated;
+mod cr2_preview;
 pub mod db;
 pub mod diagnostics;
 pub mod domain;
@@ -12,6 +13,7 @@ pub mod export;
 pub mod image_pipeline;
 pub mod importer;
 pub mod keychain;
+pub mod photo_inspection;
 mod resource_commands;
 pub mod v2_bridge;
 use tauri::Manager;
@@ -80,6 +82,7 @@ pub fn run() {
             commands::set_privacy_consent,
             commands::list_projects,
             commands::get_project,
+            commands::get_original_photo,
             commands::execute_gui_command,
             commands::choose_import,
             commands::import_photos,

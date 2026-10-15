@@ -1,237 +1,220 @@
-// v2.0 M2 执行桥：local-domain 纯鉴权 → v1 CommandHandler 真实执行。
-// 可执行切片：photo.set_selection、sequence.move_item/add_item/remove_item。
-// proposal.*/comment.* 属 M5 审批与评论，保留 NOT_IMPLEMENTED（不假装成功）。
+// v2 命令桥：权限、权威、业务写入与持久化回执在同一个写事务内裁决。
 use crate::{
-    command_handler::{CommandHandler, GuiCommandRequest},
+    command_handler::{CommandContext, CommandHandler, GuiCommandRequest},
     commands_generated::GuiCommand,
     db::Store,
-    domain::Result,
+    domain::{AppError, Result},
 };
 use betweenframes_local_domain::{
     Actor, AuthorityTarget, CommandKind, Principal, ProjectAuthority, ValidatedCommand,
 };
 use serde_json::{Value, json};
+use sqlx::{Row, Sqlite, Transaction};
 
 pub struct V2Execution {
     pub envelope: ValidatedCommand,
     pub principal: Principal,
     pub authority: ProjectAuthority,
 }
-
 fn reply(ok: bool, command_id: &str, revision: Option<i64>, code: &str, message: &str) -> Value {
-    json!({
-        "ok": ok,
-        "command_id": command_id,
-        "revision": revision,
-        "error": if ok { Value::Null } else { json!({"code": code, "message": message}) },
-    })
+    json!({"ok":ok,"command_id":command_id,"revision":revision,"error":if ok {Value::Null} else {json!({"code":code,"message":message})}})
 }
-
-fn envelope_parts(envelope: &ValidatedCommand) -> (&str, &str, &str, i64, &CommandKind, &Value) {
-    let inner = envelope.envelope();
-    (
-        &inner.command_id,
-        &inner.project_id,
-        &inner.idempotency_key,
-        inner.expected_revision,
-        &inner.kind,
-        &inner.payload,
-    )
-}
-
 pub async fn execute(store: &Store, execution: V2Execution, now: u64) -> Value {
-    let V2Execution {
-        envelope,
-        principal,
-        authority,
-    } = execution;
-    let (command_id, project_id, idempotency_key, expected_revision, kind, payload) =
-        envelope_parts(&envelope);
-    // 1) 纯函数层：权限/权威先拒；REVISION_CONFLICT 特例——交由 v1 内部幂等裁决，
-    //    同命令重放应返回原回执而不是 409（v1 幂等命中先于版本检查）。
-    if let Err(code) = betweenframes_local_domain::authorize(
-        envelope.envelope(),
-        &principal,
-        &authority,
-        AuthorityTarget::Local,
-        now,
-    ) && code != "REVISION_CONFLICT"
-    {
-        return reply(
-            false,
-            command_id,
-            Some(authority.revision),
-            code,
-            "命令未获执行：权限、项目模式或版本校验失败",
-        );
+    let id = execution.envelope.envelope().command_id.clone();
+    let result = async {
+        let mut tx = store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let value = execute_tx(store, &mut tx, &execution, now).await?;
+        tx.commit().await?;
+        Ok::<_, AppError>(value)
     }
-    // 2) 可执行映射；未列入本切片的命令诚实返回未实现。
-    let gui = match kind {
-        CommandKind::PhotoSetSelection => GuiCommand::SetPhotoDecision {
-            photo_ids: payload["photo_ids"]
-                .as_array()
-                .map(|ids| {
-                    ids.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            status: match payload["selection_state"].as_str() {
-                Some("KEEP") => "keep".to_owned(),
-                Some("REJECT") => "reject".to_owned(),
-                _ => "undecided".to_owned(),
-            },
-        },
-        CommandKind::SequenceMoveItem
-        | CommandKind::SequenceAddItem
-        | CommandKind::SequenceRemoveItem => {
-            match sequence_command(store, project_id, expected_revision, kind, payload).await {
-                Ok(gui) => gui,
-                Err(message) => {
-                    return reply(false, command_id, None, "VALIDATION_ERROR", &message);
-                }
-            }
-        }
-        CommandKind::ProposalCreate => {
-            let proposal = crate::agent::proposals::create(
-                store,
-                project_id,
-                &betweenframes_local_domain::actor_label(&principal),
-                None,
-                payload["base_revision"].as_i64().unwrap_or(-1),
-                payload["title"].as_str().unwrap_or(""),
-                payload["operations"].clone(),
-            )
-            .await;
-            return match proposal {
-                Ok(proposal) => {
-                    let mut value = reply(true, command_id, None, "", "");
-                    value["proposal_id"] = json!(proposal.id);
-                    value["proposal_revision"] = json!(proposal.revision);
-                    value["approval_nonce"] = json!(proposal.approval_nonce);
-                    value
-                }
-                Err(error) => reply(false, command_id, None, &error.code, &error.message),
-            };
-        }
-        CommandKind::ProposalSubmit => {
-            let proposal = crate::agent::proposals::submit(
-                store,
-                project_id,
-                payload["proposal_id"].as_str().unwrap_or(""),
-                payload["expected_proposal_revision"].as_i64().unwrap_or(-1),
-            )
-            .await;
-            return match proposal {
-                Ok(proposal) => {
-                    let mut value = reply(true, command_id, None, "", "");
-                    value["proposal_id"] = json!(proposal.id);
-                    value["proposal_revision"] = json!(proposal.revision);
-                    value["state"] = json!(proposal.state);
-                    value
-                }
-                Err(error) => reply(false, command_id, None, &error.code, &error.message),
-            };
-        }
-        CommandKind::ProposalApply => {
-            let accepted: Vec<String> = payload["accepted_operation_ids"]
-                .as_array()
-                .map(|ids| {
-                    ids.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let outcome = crate::agent::proposals::apply(
-                store,
-                project_id,
-                payload["proposal_id"].as_str().unwrap_or(""),
-                payload["expected_proposal_revision"].as_i64().unwrap_or(-1),
-                &accepted,
-                payload["approval_nonce"].as_str().unwrap_or(""),
-            )
-            .await;
-            return match outcome {
-                Ok(value) => {
-                    let mut merged = reply(true, command_id, None, "", "");
-                    merged["outcome"] = value;
-                    merged
-                }
-                Err(error) => reply(false, command_id, None, &error.code, &error.message),
-            };
-        }
-        CommandKind::CommentAdd => {
-            let thread = crate::agent::comments::add(
-                store,
-                project_id,
-                &betweenframes_local_domain::actor_label(&principal),
-                payload["body"].as_str().unwrap_or(""),
-                &payload["anchor"],
-            )
-            .await;
-            return match thread {
-                Ok(thread) => {
-                    let mut value = reply(true, command_id, None, "", "");
-                    value["thread_id"] = json!(thread.id);
-                    value["state"] = json!(thread.state);
-                    value
-                }
-                Err(error) => reply(false, command_id, None, &error.code, &error.message),
-            };
-        }
-        CommandKind::CommentResolve => {
-            let thread = crate::agent::comments::resolve(
-                store,
-                project_id,
-                payload["thread_id"].as_str().unwrap_or(""),
-                payload["state"]
-                    .as_str()
-                    .is_some_and(|state| state.eq_ignore_ascii_case("resolved")),
-            )
-            .await;
-            return match thread {
-                Ok(thread) => {
-                    let mut value = reply(true, command_id, None, "", "");
-                    value["thread_id"] = json!(thread.id);
-                    value["state"] = json!(thread.state);
-                    value
-                }
-                Err(error) => reply(false, command_id, None, &error.code, &error.message),
-            };
-        }
-    };
-    // 3) 经唯一 CommandHandler 执行（幂等回执、历史、undo、证据全部继承 v1 语义）。
-    let request = GuiCommandRequest {
-        command_id: command_id.to_owned(),
-        project_id: project_id.to_owned(),
-        expected_project_revision: expected_revision,
-        causation_id: None,
-        idempotency_key: idempotency_key.to_owned(),
-        command: gui,
-    };
-    match CommandHandler::new(store).execute_gui(request).await {
-        Ok(receipt) => reply(true, command_id, Some(receipt.revision), "", ""),
+    .await;
+    match result {
+        Ok(value) => value,
         Err(error) => reply(
             false,
-            command_id,
+            &id,
             error.current_revision,
             &error.code,
             &error.message,
         ),
     }
 }
-
-// v2 序列命令 → v1 语义：序列 = 全部 keep 照片的有序集。
-// move：目标已在序列内则重排；add：先 keep 再落位；remove：置为 undecided（移出序列，评分备注保留）。
-async fn sequence_command(
+async fn execute_tx(
     store: &Store,
+    tx: &mut Transaction<'_, Sqlite>,
+    execution: &V2Execution,
+    now: u64,
+) -> Result<Value> {
+    let envelope = execution.envelope.envelope();
+    let project_id = &envelope.project_id;
+    // 调用者快照只能收紧权限；锁内重读才是写入的权威依据。
+    let authority = authority_for_tx(tx, project_id).await?;
+    for snapshot in [&execution.authority, &authority] {
+        if let Err(code) = betweenframes_local_domain::authorize(
+            envelope,
+            &execution.principal,
+            snapshot,
+            AuthorityTarget::Local,
+            now,
+        ) && code != "REVISION_CONFLICT"
+        {
+            return Err(AppError::new(code, "命令未获执行：权限或项目权威校验失败"));
+        }
+    }
+    let fingerprint = crate::command_audit::fingerprint(
+        &json!({"envelope":envelope,"actor":betweenframes_local_domain::actor_label(&execution.principal)}),
+    );
+    let receipts = sqlx::query("SELECT request_fingerprint,result_json FROM v2_command_receipts WHERE command_id=? OR idempotency_key=?")
+        .bind(&envelope.command_id).bind(&envelope.idempotency_key).fetch_all(&mut **tx).await?;
+    if !receipts.is_empty() {
+        if receipts.len() != 1 || receipts[0].get::<String, _>("request_fingerprint") != fingerprint
+        {
+            return Err(AppError::new(
+                "IDEMPOTENCY_CONFLICT",
+                "命令 ID 或幂等键已用于不同请求",
+            ));
+        }
+        return serde_json::from_str(&receipts[0].get::<String, _>("result_json"))
+            .map_err(crate::command_audit::serialization);
+    }
+    if envelope.kind == CommandKind::ProposalApply
+        && envelope.expected_revision != authority.revision
+    {
+        let mut error = AppError::new(
+            "REVISION_CONFLICT",
+            "项目已更新；请刷新并基于新版本重建提案",
+        );
+        error.current_revision = Some(authority.revision);
+        return Err(error);
+    }
+    // 旧 v1 正式命令回执仍由 CommandHandler 处理，支持升级前的安全重放。
+    let metadata = matches!(
+        envelope.kind,
+        CommandKind::ProposalCreate
+            | CommandKind::ProposalSubmit
+            | CommandKind::CommentAdd
+            | CommandKind::CommentResolve
+    );
+    if metadata && envelope.expected_revision != authority.revision {
+        let mut error = AppError::new("REVISION_CONFLICT", "项目版本已更新，请刷新后重试");
+        error.current_revision = Some(authority.revision);
+        return Err(error);
+    }
+    let payload = &envelope.payload;
+    let mut result = reply(true, &envelope.command_id, Some(authority.revision), "", "");
+    let gui = match &envelope.kind {
+        CommandKind::ProposalCreate => {
+            let proposal = crate::agent::proposals::create_tx(
+                tx,
+                project_id,
+                &betweenframes_local_domain::actor_label(&execution.principal),
+                None,
+                payload["base_revision"].as_i64().unwrap_or(-1),
+                payload["title"].as_str().unwrap_or(""),
+                payload["operations"].clone(),
+            )
+            .await?;
+            result["proposal_id"] = json!(proposal.id);
+            result["proposal_revision"] = json!(proposal.revision);
+            result["approval_nonce"] = json!(proposal.approval_nonce);
+            None
+        }
+        CommandKind::ProposalSubmit => {
+            let proposal = crate::agent::proposals::submit_tx(
+                tx,
+                project_id,
+                payload["proposal_id"].as_str().unwrap_or(""),
+                payload["expected_proposal_revision"].as_i64().unwrap_or(-1),
+            )
+            .await?;
+            result["proposal_id"] = json!(proposal.id);
+            result["proposal_revision"] = json!(proposal.revision);
+            result["state"] = json!(proposal.state);
+            None
+        }
+        CommandKind::ProposalApply => Some(GuiCommand::ApplyProposal {
+            proposal_id: payload["proposal_id"].as_str().unwrap_or("").into(),
+            expected_proposal_revision: payload["expected_proposal_revision"]
+                .as_i64()
+                .unwrap_or(-1),
+            accepted_operation_ids: serde_json::from_value(
+                payload["accepted_operation_ids"].clone(),
+            )
+            .map_err(crate::command_audit::serialization)?,
+            approval_nonce: payload["approval_nonce"].as_str().unwrap_or("").into(),
+        }),
+        CommandKind::CommentAdd => {
+            let thread = crate::agent::comments::add_tx(
+                tx,
+                project_id,
+                &betweenframes_local_domain::actor_label(&execution.principal),
+                payload["body"].as_str().unwrap_or(""),
+                &payload["anchor"],
+            )
+            .await?;
+            result["thread_id"] = json!(thread.id);
+            result["state"] = json!(thread.state);
+            None
+        }
+        CommandKind::CommentResolve => {
+            let thread = crate::agent::comments::resolve_tx(
+                tx,
+                project_id,
+                payload["thread_id"].as_str().unwrap_or(""),
+                payload["state"] == "RESOLVED",
+            )
+            .await?;
+            result["thread_id"] = json!(thread.id);
+            result["state"] = json!(thread.state);
+            None
+        }
+        CommandKind::PhotoSetSelection => Some(GuiCommand::SetPhotoDecision {
+            photo_ids: serde_json::from_value(payload["photo_ids"].clone())
+                .map_err(crate::command_audit::serialization)?,
+            status: match payload["selection_state"].as_str() {
+                Some("KEEP") => "keep",
+                Some("REJECT") => "reject",
+                _ => "undecided",
+            }
+            .into(),
+        }),
+        kind => Some(
+            sequence_command(tx, project_id, envelope.expected_revision, kind, payload)
+                .await
+                .map_err(|message| AppError::new("VALIDATION_ERROR", message))?,
+        ),
+    };
+    if let Some(gui) = gui {
+        let request = GuiCommandRequest {
+            command_id: envelope.command_id.clone(),
+            project_id: project_id.clone(),
+            expected_project_revision: envelope.expected_revision,
+            causation_id: None,
+            idempotency_key: envelope.idempotency_key.clone(),
+            command: gui,
+        };
+        let receipt = CommandHandler::new(store)
+            .execute_tx(tx, request, &CommandContext::human(project_id))
+            .await?;
+        result["revision"] = json!(receipt.revision);
+        if envelope.kind == CommandKind::ProposalApply {
+            let accepted = payload["accepted_operation_ids"].as_array().unwrap();
+            result["outcome"] = json!({"applied":accepted.len(),"failed":0,"discarded":accepted.is_empty(),"results":accepted.iter().map(|id|json!({"operation_id":id,"ok":true,"revision":receipt.revision})).collect::<Vec<_>>()});
+        }
+    }
+    sqlx::query("INSERT INTO v2_command_receipts(command_id,idempotency_key,project_id,request_fingerprint,result_json,created_at) VALUES(?,?,?,?,?,?)")
+        .bind(&envelope.command_id).bind(&envelope.idempotency_key).bind(project_id).bind(fingerprint).bind(result.to_string()).bind(crate::domain::timestamp()).execute(&mut **tx).await?;
+    Ok(result)
+}
+
+async fn sequence_command(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     project_id: &str,
     revision: i64,
     kind: &CommandKind,
     payload: &Value,
 ) -> std::result::Result<GuiCommand, String> {
-    let project = store
-        .get(project_id)
+    let project = crate::db::snapshot_tx(tx, project_id, None)
         .await
         .map_err(|_| "项目不可读".to_owned())?;
     let sequence = project.sequence.clone();
@@ -321,12 +304,30 @@ pub fn agent_principal(workspace_id: &str, project_id: &str, expires_at_ms: u64)
 }
 
 pub async fn authority_for(store: &Store, project_id: &str) -> Result<ProjectAuthority> {
-    let project = store.get(project_id).await?;
+    let mut tx = store.pool.begin().await?;
+    let result = authority_for_tx(&mut tx, project_id).await?;
+    tx.commit().await?;
+    Ok(result)
+}
+async fn authority_for_tx(
+    tx: &mut Transaction<'_, Sqlite>,
+    project_id: &str,
+) -> Result<ProjectAuthority> {
+    let revision: i64 = sqlx::query_scalar("SELECT revision FROM projects WHERE id=?")
+        .bind(project_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .ok_or_else(|| AppError::new("NOT_FOUND", "项目不存在"))?;
+    let state = crate::agent::promotion::local_state(tx, project_id).await?;
     Ok(ProjectAuthority {
         workspace_id: "local-workspace".into(),
-        project_id: project.id,
-        mode: betweenframes_local_domain::ProjectMode::LOCAL,
-        revision: project.revision,
-        local_state: betweenframes_local_domain::LocalState::LOCAL,
+        project_id: project_id.into(),
+        revision,
+        mode: if state == betweenframes_local_domain::LocalState::SHARED_CACHE {
+            betweenframes_local_domain::ProjectMode::SHARED
+        } else {
+            betweenframes_local_domain::ProjectMode::LOCAL
+        },
+        local_state: state,
     })
 }

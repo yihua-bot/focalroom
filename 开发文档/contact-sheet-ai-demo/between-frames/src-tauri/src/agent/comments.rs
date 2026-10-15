@@ -29,7 +29,11 @@ pub struct CommentEntry {
     pub created_at: String,
 }
 
-async fn validate_anchor(anchor: &Value, project: &str, store: &Store) -> Result<()> {
+async fn validate_anchor(
+    anchor: &Value,
+    project: &str,
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+) -> Result<()> {
     let kind = anchor["type"].as_str().unwrap_or("");
     match kind {
         // 照片锚点：照片必须真实存在于该项目（防跨项目引用）。
@@ -42,7 +46,7 @@ async fn validate_anchor(anchor: &Value, project: &str, store: &Store) -> Result
                 sqlx::query_scalar("SELECT COUNT(*) FROM photos WHERE id=? AND project_id=?")
                     .bind(photo)
                     .bind(project)
-                    .fetch_one(&store.pool)
+                    .fetch_one(&mut **tx)
                     .await
                     .unwrap_or(0);
             if owned != 1 {
@@ -59,8 +63,8 @@ async fn validate_anchor(anchor: &Value, project: &str, store: &Store) -> Result
 }
 
 /// 发起或追加讨论：同锚点未关闭线程追加；否则新建线程。
-pub async fn add(
-    store: &Store,
+pub(crate) async fn add_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     project_id: &str,
     author: &str,
     body: &str,
@@ -73,16 +77,15 @@ pub async fn add(
     if author.trim().is_empty() || author.len() > 160 {
         return Err(AppError::new("VALIDATION_ERROR", "作者标识不合法"));
     }
-    validate_anchor(anchor, project_id, store).await?;
+    validate_anchor(anchor, project_id, tx).await?;
     let now = domain::timestamp();
     let anchor_json = anchor.to_string();
-    let mut tx = store.pool.begin_with("BEGIN IMMEDIATE").await?;
     let existing: Option<String> = sqlx::query_scalar(
         "SELECT id FROM comment_threads WHERE project_id=? AND anchor_json=? AND state='open' ORDER BY created_at LIMIT 1",
     )
     .bind(project_id)
     .bind(&anchor_json)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?;
     let thread_id = match existing {
         Some(id) => id,
@@ -94,7 +97,7 @@ pub async fn add(
                 .bind(&anchor_json)
                 .bind(&now)
                 .bind(&now)
-                .execute(&mut *tx)
+                .execute(&mut **tx)
                 .await?;
             id
         }
@@ -104,29 +107,27 @@ pub async fn add(
         .bind(text)
         .bind(author.trim())
         .bind(&now)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
     sqlx::query("UPDATE comment_threads SET updated_at=? WHERE id=?")
         .bind(&now)
         .bind(&thread_id)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
-    tx.commit().await?;
-    thread_view(store, &thread_id).await
+    thread_view_tx(tx, &thread_id).await
 }
 
 /// 关闭/重开线程；已关闭线程可重开继续讨论。
-pub async fn resolve(
-    store: &Store,
+pub(crate) async fn resolve_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     project_id: &str,
     thread_id: &str,
     resolved: bool,
 ) -> Result<CommentThread> {
-    let mut tx = store.pool.begin_with("BEGIN IMMEDIATE").await?;
     let owned = sqlx::query("SELECT id,state FROM comment_threads WHERE id=? AND project_id=?")
         .bind(thread_id)
         .bind(project_id)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await?
         .ok_or_else(|| AppError::new("NOT_FOUND", "讨论线程不属于此项目"))?;
     let _ = owned;
@@ -135,18 +136,11 @@ pub async fn resolve(
         .bind(next)
         .bind(domain::timestamp())
         .bind(thread_id)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
-    tx.commit().await?;
-    thread_view(store, thread_id).await
+    thread_view_tx(tx, thread_id).await
 }
 
-async fn thread_view(store: &Store, thread_id: &str) -> Result<CommentThread> {
-    let mut tx = store.pool.begin().await?;
-    let value = thread_view_tx(&mut tx, thread_id).await?;
-    tx.commit().await?;
-    Ok(value)
-}
 async fn thread_view_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     thread_id: &str,

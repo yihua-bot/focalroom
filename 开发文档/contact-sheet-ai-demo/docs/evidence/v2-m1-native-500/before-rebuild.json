@@ -1,0 +1,321 @@
+{
+  "projectId": "31c253b6-6e1e-4041-b17f-2f58cec0e8d8",
+  "sourceHashesUnchanged": 500,
+  "decisions": [
+    [
+      "keep",
+      4,
+      25
+    ],
+    [
+      "undecided",
+      0,
+      475
+    ]
+  ],
+  "sequence": [
+    [
+      "frame-000.png",
+      0
+    ],
+    [
+      "frame-001.jpg",
+      1
+    ],
+    [
+      "frame-002.png",
+      2
+    ],
+    [
+      "frame-003.jpg",
+      3
+    ],
+    [
+      "frame-004.png",
+      4
+    ],
+    [
+      "frame-005.jpg",
+      5
+    ],
+    [
+      "frame-006.png",
+      6
+    ],
+    [
+      "frame-007.jpg",
+      7
+    ],
+    [
+      "frame-008.png",
+      8
+    ],
+    [
+      "frame-009.jpg",
+      9
+    ],
+    [
+      "frame-010.png",
+      10
+    ],
+    [
+      "frame-011.jpg",
+      11
+    ],
+    [
+      "frame-012.png",
+      12
+    ],
+    [
+      "frame-013.jpg",
+      13
+    ],
+    [
+      "frame-014.png",
+      14
+    ],
+    [
+      "frame-015.jpg",
+      15
+    ],
+    [
+      "frame-016.png",
+      16
+    ],
+    [
+      "frame-017.jpg",
+      17
+    ],
+    [
+      "frame-018.png",
+      18
+    ],
+    [
+      "frame-019.jpg",
+      19
+    ],
+    [
+      "frame-020.png",
+      20
+    ],
+    [
+      "frame-021.jpg",
+      21
+    ],
+    [
+      "frame-022.png",
+      22
+    ],
+    [
+      "frame-023.jpg",
+      23
+    ],
+    [
+      "frame-024.png",
+      24
+    ]
+  ],
+  "agentTasks": 0,
+  "tables": {
+    "_sqlx_migrations": {
+      "rows": 17,
+      "sha256": "9257357a4b4ad1c421294e96578c29f0e9228fd901c052e9f77877e06e4e97f3"
+    },
+    "projects": {
+      "rows": 2,
+      "sha256": "e4f2bee63a348a9db48aea58bd184986b5e4dbfc89156427a10f24f1727da100"
+    },
+    "photos": {
+      "rows": 501,
+      "sha256": "e0e090faa0615b72836b2d8289ddfc756891e831fb97d516ab3a2cf52301ff12"
+    },
+    "photo_decisions": {
+      "rows": 501,
+      "sha256": "bc4f24027307c19f67c9e35c290b9faaa26d496f5177f37b417b991c1cbfd209"
+    },
+    "sequence_items": {
+      "rows": 25,
+      "sha256": "32c4c11f25feee9c5d8d6222d1af848832ec271e9393da35e552574ad39e4930"
+    },
+    "decision_events": {
+      "rows": 506,
+      "sha256": "736bd45cff32efde513847394ba07c9e46313a9cfc342b24bb458644a551fe11"
+    },
+    "comparison_events": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "command_events": {
+      "rows": 506,
+      "sha256": "b87e95183847c233231be033836ca5e4d21e016251fa0c82a2de5f06bcc1d84b"
+    },
+    "command_receipt_aliases": {
+      "rows": 10,
+      "sha256": "84c84e01a89f4f3bfb71193a6a0182f0e74aa28dbbbc88dbf4e1aaf2e043949d"
+    },
+    "command_history": {
+      "rows": 3,
+      "sha256": "6894e3c5b5c39401bb0a7334822a50246a7ce3030284180968ca16da8dfbda79"
+    },
+    "history_heads": {
+      "rows": 1,
+      "sha256": "f04cb9b1803568f2230527b9c35dc79c43850aa0bb647cea76ae5bef79bcc6db"
+    },
+    "sequence_versions": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "comparison_state": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "agent_tasks": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "agent_steps": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sqlite_sequence": {
+      "rows": 1,
+      "sha256": "4a97e5ccaa79ebe006fdd4b56cc7c56f61b85f48fc11393260a1aec76bf8926e"
+    },
+    "tool_calls": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "agent_checkpoints": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "task_messages": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "drafts": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "draft_items": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "agent_request_receipts": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "privacy_consents": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "photo_observations": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "model_usage": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "consent_receipts": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "preference_evidence": {
+      "rows": 2,
+      "sha256": "1fd72492562023e07b73722360c20febf3a06d5f939e78e41f5b2c0e40e5c98a"
+    },
+    "preference_hypotheses": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "memory_evidence_state": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "memory_commands": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "memory_search": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "memory_search_data": {
+      "rows": 2,
+      "sha256": "0038e0b18c307771c3bc0d4c398dfabe2e6b87af5305e89d504e68031fcf52d3"
+    },
+    "memory_search_idx": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "memory_search_content": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "memory_search_docsize": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "memory_search_config": {
+      "rows": 1,
+      "sha256": "afaee2b1562b04a97bf25315b158b426795a3b6f88b13fd85d546090fb141946"
+    },
+    "memory_tombstones": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "comment_threads": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "comments": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "proposals": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "proposal_operations": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "v2_creators": {
+      "rows": 1,
+      "sha256": "055e9470f9ac957511503a06b0be8f5e3ef18284d1a97e256350621e08853533"
+    },
+    "v2_workspaces": {
+      "rows": 1,
+      "sha256": "789ca2e2314b6913e35863af701f9fe669206abed22d2c3de915e40660be533e"
+    },
+    "v2_memberships": {
+      "rows": 1,
+      "sha256": "8b64d0314c4248f731f2b33767cd1c58e1c368610db2575c454dbeeef8202b14"
+    },
+    "v2_workspace_audit": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "v2_billing_events": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "v2_orders": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "v2_media_grants": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "v2_command_receipts": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "v2_promotions": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

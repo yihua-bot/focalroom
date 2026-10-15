@@ -1,0 +1,39 @@
+{
+  "cancelled": {
+    "total": 500,
+    "processed": 12,
+    "committed": 12,
+    "status": "cancelled"
+  },
+  "restartSnapshotEqual": true,
+  "processRestart": {
+    "previousPid": 28749,
+    "pid": 28880
+  },
+  "failures": [
+    {
+      "file": "broken.jpg",
+      "code": "DECODE",
+      "message": "Format error decoding Jpeg: Error parsing image. Illegal start bytes:6E6F"
+    },
+    {
+      "file": "encoding.png",
+      "code": "DECODE",
+      "message": "Format error decoding Png: ChunkType { type: lid , critical: false, private: true, reserved: true, safecopy: true } chunk appeared before IHDR chunk"
+    },
+    {
+      "file": "oversized.jpg",
+      "code": "FILE_TOO_LARGE",
+      "message": "照片必须为不超过 512 MB 的文件"
+    }
+  ],
+  "duplicatesSkipped": 1,
+  "retry": {
+    "imported": 0,
+    "failed": 3
+  },
+  "relinkPreservedHash": true,
+  "originalHashesMatched": 500,
+  "pageErrors": [],
+  "externalRequests": []
+}

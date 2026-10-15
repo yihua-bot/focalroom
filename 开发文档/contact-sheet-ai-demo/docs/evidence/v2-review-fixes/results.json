@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-15",
+  "baseline": "33e5ff940fedf4341cefca7433ffa8826a39a37e",
+  "scope": "八项评审修复，未提交工作区",
+  "rust": {
+    "passed": 110,
+    "ignored": 1,
+    "filtered": 1,
+    "filtered_test": "store_load_delete_roundtrip"
+  },
+  "frontend": {
+    "files": 18,
+    "passed": 142
+  },
+  "e2e": {
+    "preview": 16,
+    "web": 1,
+    "backend_unique_journeys": 6,
+    "backend_suites": {
+      "agent-core": "pass",
+      "beta-journey": "pass",
+      "diagnostics": "pass after updating expected migrations 16 -> 17; targeted recheck",
+      "local-core": "pass",
+      "memory-controls": "pass",
+      "v2-proposals": "pass; CSS and final screenshot recheck passed"
+    }
+  },
+  "static_checks": [
+    "contracts generation check",
+    "TypeScript",
+    "ESLint",
+    "Rust fmt (application and local-domain)",
+    "Clippy all-targets + integration-harness -D warnings",
+    "git diff --check"
+  ],
+  "builds": {
+    "desktop_frontend": "pass",
+    "web_frontend": "pass",
+    "tauri_rust_and_harness": "compiled by Cargo tests/build/Clippy",
+    "native_bundle_acceptance": "not run"
+  },
+  "data": {
+    "migration_added": 17,
+    "historical_migrations_changed": false,
+    "migrations_executed_only_on_temporary_databases": true,
+    "original_and_existing_native_review_db_upgraded": false,
+    "production_model_or_payment_requests": false
+  },
+  "v2_acceptance": {
+    "pass": 16,
+    "partial": 8,
+    "overall": "partial"
+  },
+  "logs": [
+    "before-fixes-probes.txt",
+    "rust.txt",
+    "frontend.txt",
+    "preview.txt",
+    "web.txt",
+    "integration-first-run.txt",
+    "diagnostics-recheck.txt",
+    "proposals-recheck.txt",
+    "clippy.txt",
+    "workspace-build.txt"
+  ]
+}

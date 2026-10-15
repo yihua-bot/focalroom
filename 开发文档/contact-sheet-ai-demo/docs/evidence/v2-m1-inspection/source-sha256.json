@@ -1,0 +1,20 @@
+{
+  "src-tauri/src/photo_inspection.rs": "16ba6a041e2d0b3b91186be43ff9117f3b30943aa10db71a8614e2015032ffa3",
+  "src-tauri/src/commands.rs": "dfb53f3f57a44cb9150bf68d30046744a9831aa1e336d0fc06ff8e6aeb880f1a",
+  "src-tauri/src/lib.rs": "bc5db4619da68bd9726f29d642dd51345bdb9cf04a9548664180209ecbf83484",
+  "src-tauri/tests/photo_inspection.rs": "0045d8777c8ae8c4aec7f2381b199b6892754af356fb3948602207a562ff80bc",
+  "src-tauri/src/bin/m1-harness.rs": "d2620e2ed77683ae4a02cf302ec1fc56dd96f324be6ff9efc6d5481331016f28",
+  "src-tauri/src/harness_fixtures.rs": "0664b3996ad1e85322fc92f8f563744995806c1faa009a6faf574a0fe7cdc57f",
+  "src/components/shared/PhotoViewport.tsx": "66b2df92294843be77d160a661f69a91db1a414eb56f66a7b26fc08309ca7ee2",
+  "src/components/shared/PhotoViewport.test.tsx": "7f8b40757c8f0bd2bf5b1c623f85195b99c956a79b919efd0934f5c8f2922ce1",
+  "src/components/inspector/Lightbox.tsx": "db663818fec8fd90ee05257b8ce6d3719b0e4916188aac95e95aff3b78057b90",
+  "src/components/compare/CompareModal.tsx": "3371e6ec30a8ce9c64114a754b52661efafc4bdae0237a939280984eec8b21ec",
+  "src/services/TauriRepository.ts": "14b1438e9c7f7d0a539875ac4d8c3ec3225eafdb211cb7f5985da82d4d03f660",
+  "src/services/TauriRepository.test.ts": "2f9a744ea836f9ae35d6c734ed2195703f80946664ff112b655f78c06e64c037",
+  "src/domain/models.ts": "d6525d26c59c371d80da8bb75a8b88387ff8912b10fc2189a8717fc2f43283c7",
+  "src/styles/app.css": "3ca009e4ef547e49323457d570714bad9d0052b083425c5a0bd811d98b258e03",
+  "e2e/m1-500.spec.ts": "616aa785671b3d2dda46e4912a82350788ce321e2cce0f6129a2cc7c4ec8ffea",
+  "scripts/integration-server.mjs": "71bfb3deb120e6b15ea1574cc1ff9db630c0992407f79279fd75178d0fcd0ef9",
+  "playwright.web.config.ts": "53808acaaf3bbbd7cb07f89111e7014940aef5db77c44ec9aef8fe37edd90848",
+  "src-tauri/tauri.m1-inspection.conf.json": "61ce631628b1b8023ad7f2b8579ccdaa4e1773efb434028abe7db73b0766e5b7"
+}

@@ -1,0 +1,21 @@
+{
+  "identifier": "studio.betweenframes.m1reviewfixes",
+  "freshDatabase": true,
+  "schema": 17,
+  "source": "generated 35 MP TIFF renamed .dng; not a real camera RAW",
+  "sourceDimensions": [
+    7000,
+    5000
+  ],
+  "displaySourceDimensions": [
+    1400,
+    1000
+  ],
+  "rawDerivedPreviewLabelVisible": true,
+  "fullResolutionClaimAbsent": true,
+  "nativeFilePickerImported": 1,
+  "sourceHashUnchanged": true,
+  "agentTasks": 0,
+  "nativeScreenshot": "Visually checked inline through CUA; no local screenshot archive claimed",
+  "executableSha256": "c10c587e75cde566c59e8dd62858aad4f3b427ca85d1d3fef52f6317ebc1153c"
+}

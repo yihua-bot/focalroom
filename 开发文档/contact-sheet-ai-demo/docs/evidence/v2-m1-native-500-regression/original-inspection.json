@@ -1,0 +1,16 @@
+{
+  "dimensions": "2400x1600",
+  "cachedWidth": 1400,
+  "originalWidth": 2400,
+  "devicePixelRatio": 2,
+  "cssWidth": 1200,
+  "formats": [
+    "JPEG",
+    "PNG"
+  ],
+  "linkedCompare": true,
+  "missingFallback": true,
+  "originalsUnchanged": true,
+  "pageErrors": [],
+  "externalRequests": []
+}

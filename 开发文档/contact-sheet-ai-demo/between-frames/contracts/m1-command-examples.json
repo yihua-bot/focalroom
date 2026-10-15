@@ -231,5 +231,21 @@
       "photoId": "photo-a",
       "mark": "spread"
     }
+  },
+  {
+    "commandId": "sample-ApplyProposal",
+    "projectId": "project-a",
+    "expectedProjectRevision": 4,
+    "causationId": null,
+    "idempotencyKey": "key-ApplyProposal",
+    "command": {
+      "type": "ApplyProposal",
+      "proposalId": "proposal-a",
+      "expectedProposalRevision": 2,
+      "acceptedOperationIds": [
+        "op-a"
+      ],
+      "approvalNonce": "nonce-sample"
+    }
   }
 ]

@@ -1,0 +1,21 @@
+
+> between-frames@0.1.0 test:integration
+> playwright test --config playwright.integration.config.ts
+
+[WebServer] (node:97692) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:97711) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 6 tests using 1 worker
+
+(node:97884) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/agent-core.spec.ts:13:1 › M2 真实后端：预算暂停、恢复、两份草案、人工冲突、局部采纳/撤销与重启 (32.3s)
+  ✓  2 e2e/beta-journey.spec.ts:14:1 › Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一致 (11.8s)
+  ✓  3 e2e/diagnostics.spec.ts:12:1 › M5 本地诊断：真实统计、查看后复制、刷新及正式状态只读 (1.3s)
+  ✓  4 e2e/local-core.spec.ts:13:1 › v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、版本恢复、私密导出与重启 (10.7s)
+  ✓  5 e2e/memory-controls.spec.ts:14:1 › M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索及重启 (6.4s)
+  ✓  6 e2e/v2-proposals.spec.ts:11:1 › v2 真实后端提案：GUI 提交、批量审批、单组撤销重做、重启与基线冲突 (6.8s)
+
+  6 passed (1.3m)

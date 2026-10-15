@@ -1,0 +1,8 @@
+
+> between-frames@0.1.0 contracts:check
+> node scripts/generate-command-contracts.mjs --check && node scripts/generate-v2-contracts.mjs --check
+
+M1 command contracts: OK
+Agent contracts: OK
+Memory contracts: OK
+PASS: v2 JSON Schema / Rust kind 映射一致（9 commands）

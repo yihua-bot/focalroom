@@ -9,12 +9,15 @@ use serde_json::{Value, json};
 use std::{collections::HashMap, path::PathBuf};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+#[path = "../harness_fixtures.rs"]
+mod fixtures;
+
 struct Harness {
     store: Store,
     agent: between_frames_lib::agent::runtime::AgentEngine,
     root: PathBuf,
     imports: ImportManager,
-    grants: HashMap<String, String>,
+    grants: HashMap<String, (String, PathBuf)>,
 }
 fn string<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key]
@@ -198,7 +201,12 @@ impl Harness {
                     .execute_gui(request)
                     .await
                 {
-                    Ok(receipt) => {
+                    Ok(mut receipt) => {
+                        if args["compact"].as_bool().unwrap_or(false) {
+                            receipt.project = receipt
+                                .project
+                                .map(between_frames_lib::photo_inspection::compact_project);
+                        }
                         json!({"ok":true,"revision":receipt.revision,"requestId":request_id,"data":receipt,"error":null})
                     }
                     Err(error) => {
@@ -210,8 +218,14 @@ impl Harness {
                 self.store
                     .list(args["archived"].as_bool().unwrap_or(false))
                     .await?
+                    .into_iter()
+                    .map(|project| gui_project(project, args))
+                    .collect::<Vec<_>>()
             ),
-            "get_project" => json!(self.store.get(id).await?),
+            "get_project" => json!(gui_project(self.store.get(id).await?, args)),
+            "get_original_photo" => json!(
+                between_frames_lib::photo_inspection::original_path(&self.store, id, photo).await?
+            ),
             "create_project" => json!(
                 self.store
                     .create(string(args, "title")?, string(args, "brief")?)
@@ -273,21 +287,31 @@ impl Harness {
             "choose_import" => {
                 self.store.get(id).await?;
                 let token = between_frames_lib::domain::id();
-                self.grants.insert(token.clone(), id.into());
+                let fixture_set = match args["fixtureSet"].as_str().unwrap_or("primary") {
+                    "primary" => "fixtures",
+                    "failures" => "fixture-failures",
+                    "inspection" => "fixture-inspection",
+                    "raw" => "fixture-raw",
+                    _ => return Err(AppError::new("PATH_NOT_AUTHORIZED", "未知测试素材集合")),
+                };
+                self.grants
+                    .insert(token.clone(), (id.into(), self.root.join(fixture_set)));
                 json!(token)
             }
             "import_photos" => {
                 let token = string(args, "selectionToken")?;
-                if self.grants.remove(token).as_deref() != Some(id) {
-                    return Err(AppError::new("PATH_NOT_AUTHORIZED", "测试授权令牌无效"));
-                }
+                let selection = self
+                    .grants
+                    .remove(token)
+                    .filter(|(project, _)| project == id)
+                    .ok_or_else(|| AppError::new("PATH_NOT_AUTHORIZED", "测试授权令牌无效"))?;
                 json!(
                     self.imports
                         .start(
                             self.store.clone(),
                             self.root.join("cache"),
                             id.into(),
-                            vec![self.root.join("fixtures")],
+                            vec![selection.1],
                             |_| {}
                         )
                         .await?
@@ -365,9 +389,20 @@ impl Harness {
                     between_frames_lib::agent::runtime::AgentEngine::new(self.store.clone());
                 json!(true)
             }
+            "test_fixture_info" => fixtures::info(&self.root)?,
             "test_fixture_checksums" => {
                 let mut checks = Vec::new();
-                for entry in std::fs::read_dir(self.root.join("fixtures"))? {
+                let mut directories = vec![self.root.join("fixtures")];
+                if args["includeRelocated"].as_bool().unwrap_or(false) {
+                    directories.push(self.root.join("relocated"));
+                }
+                for entry in directories
+                    .iter()
+                    .map(std::fs::read_dir)
+                    .collect::<std::io::Result<Vec<_>>>()?
+                    .into_iter()
+                    .flatten()
+                {
                     let path = entry?.path();
                     if path.is_file() {
                         checks.push((
@@ -386,7 +421,9 @@ impl Harness {
                     .root
                     .join("relocated")
                     .join(source.file_name().unwrap());
-                if !source.starts_with(self.root.join("fixtures")) {
+                if !source.starts_with(self.root.join("fixtures"))
+                    && !source.starts_with(self.root.join("fixture-inspection"))
+                {
                     return Err(AppError::new("INVALID_PATH", "只能移动测试生成的照片"));
                 }
                 std::fs::rename(source, target)?;
@@ -398,43 +435,25 @@ impl Harness {
     }
 }
 
+fn gui_project(
+    project: between_frames_lib::domain::Project,
+    args: &Value,
+) -> between_frames_lib::domain::Project {
+    if args["compact"].as_bool().unwrap_or(false) {
+        between_frames_lib::photo_inspection::compact_project(project)
+    } else {
+        project
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let root = PathBuf::from(std::env::args().nth(1).expect("需要测试专用目录"));
     for name in ["fixtures", "cache", "exports", "relocated"] {
         std::fs::create_dir_all(root.join(name)).unwrap();
     }
-    if std::fs::read_dir(root.join("fixtures"))
-        .unwrap()
-        .next()
-        .is_none()
-    {
-        for index in 0..200 {
-            let sample = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join(format!("../../assets/frame_{:02}.jpg", index % 28 + 1));
-            let mut image = image::open(sample).unwrap().thumbnail(480, 480).to_rgb8();
-            image.put_pixel(
-                0,
-                0,
-                image::Rgb([
-                    (index % 256) as u8,
-                    ((index * 7) % 256) as u8,
-                    ((index * 13) % 256) as u8,
-                ]),
-            );
-            let path = root.join("fixtures").join(format!("frame-{index:03}.jpg"));
-            image.save(&path).unwrap();
-            // JPEG 编码会抹掉单像素变化；测试文件使用唯一 COM 段保证内容指纹不同。
-            let bytes = std::fs::read(&path).unwrap();
-            let comment = format!("Between Frames automated fixture {index:03}");
-            let mut unique = bytes[..2].to_vec();
-            unique.extend([0xff, 0xfe]);
-            unique.extend(((comment.len() + 2) as u16).to_be_bytes());
-            unique.extend(comment.as_bytes());
-            unique.extend(&bytes[2..]);
-            std::fs::write(path, unique).unwrap();
-        }
-    }
+    let profile = std::env::args().nth(2).unwrap_or_else(|| "standard".into());
+    fixtures::prepare(&root, &profile).unwrap();
     let store = Store::open(&root.join("projects.sqlite")).await.unwrap();
     between_frames_lib::command_handler::CommandHandler::new(&store)
         .recover_agents()

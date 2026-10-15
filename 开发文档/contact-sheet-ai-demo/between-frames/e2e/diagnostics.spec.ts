@@ -46,7 +46,7 @@ test('M5 本地诊断：真实统计、查看后复制、刷新及正式状态�
   expect(shown.storage.database.bytes).toBeGreaterThan(0);
   expect(shown.storage.complete).toBe(true);
   expect(shown.provider.providerId).toBe('mock');
-  expect(shown.migrationsApplied).toBe(16);
+  expect(shown.migrationsApplied).toBe(17);
   expect(shown.database.projects).toBeGreaterThanOrEqual(1);
   expect(JSON.stringify(shown)).not.toMatch(/私密|originalPath|apiKeyTail|baseUrl|\/Users\//);
   await dialog.getByRole('button', { name: '复制诊断信息' }).click();

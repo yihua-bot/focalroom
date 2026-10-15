@@ -7,13 +7,37 @@ import { resolve, join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 const root = await realpath(await mkdtemp(join(tmpdir(), 'between-frames-m1-')));
-const child = spawn(resolve('src-tauri', process.env.CARGO_TARGET_DIR || 'target', 'debug/m1-harness'), [root], { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, BETWEEN_FRAMES_OPENAI_API_KEY: '' } });
+const fixtureProfile = process.argv.includes('--fixtures=m1-500') ? 'm1-500' : 'standard';
+const buildProfile = process.argv.includes('--release') ? 'release' : 'debug';
 let sequence = 0;
 const pending = new Map();
-createInterface({ input: child.stdout }).on('line', line => {
-  const result = JSON.parse(line);
-  pending.get(result.id)?.(result); pending.delete(result.id);
-});
+const originalGrants = new Set();
+let restarting = false;
+function startHarness() {
+  const worker = spawn(resolve('src-tauri', process.env.CARGO_TARGET_DIR || 'target', buildProfile, 'm1-harness'), [root, fixtureProfile], { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, BETWEEN_FRAMES_OPENAI_API_KEY: '' } });
+  createInterface({ input: worker.stdout }).on('line', line => {
+    const result = JSON.parse(line);
+    pending.get(result.id)?.(result); pending.delete(result.id);
+  });
+  worker.on('exit', () => { if (!restarting) { server.close(); process.exit(); } });
+  return worker;
+}
+let child = startHarness();
+async function restartHarness() {
+  if (pending.size || restarting) throw new Error('test harness is busy');
+  restarting = true;
+  const previousPid = child.pid;
+  originalGrants.clear();
+  try {
+    const stopped = new Promise(resolve => child.once('exit', resolve));
+    child.stdin.end();
+    await stopped;
+    child = startHarness();
+    const ready = await rpc('test_fixture_info', {});
+    if (!ready.ok) throw new Error('restarted fixtures not ready');
+    return { previousPid, pid: child.pid };
+  } finally { restarting = false; }
+}
 function rpc(command, args) {
   return new Promise(resolve => {
     const id = ++sequence;
@@ -30,18 +54,22 @@ const server = createServer(async (request, response) => {
   if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return; }
   try {
     const url = new URL(request.url, 'http://localhost:1422');
-    if (url.pathname === '/health') { response.end('ready'); return; }
+    if (url.pathname === '/health') { const ready = await rpc('test_fixture_info', {}); if (!ready.ok) throw new Error('test fixtures not ready'); response.end('ready'); return; }
     if (url.pathname === '/asset') {
       const path = resolve(url.searchParams.get('path') || '');
-      if (!path.startsWith(root + '/cache/') || !path.endsWith('.jpg')) { response.writeHead(403); response.end(); return; }
-      response.setHeader('Content-Type', 'image/jpeg'); response.end(await readFile(path)); return;
+      if (!(path.startsWith(root + '/cache/') && path.endsWith('.jpg')) && !originalGrants.has(path)) { response.writeHead(403); response.end(); return; }
+      response.setHeader('Content-Type', path.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'); response.end(await readFile(path)); return;
     }
     if (url.pathname !== '/rpc' || request.method !== 'POST' || request.headers['content-type'] !== 'application/json') { response.writeHead(404); response.end(); return; }
     let body = ''; for await (const chunk of request) { body += chunk; if (body.length > 100_000) throw new Error('request too large'); }
     const { command, args } = JSON.parse(body);
-    response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(await rpc(command, args)));
+    if (restarting) { response.writeHead(503); response.end('test harness restarting'); return; }
+    const result = command === 'test_process_restart'
+      ? { ok: true, value: await restartHarness() }
+      : await rpc(command, args);
+    if (command === 'get_original_photo' && result.ok) originalGrants.add(result.value.path ?? result.value);
+    response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(result));
   } catch (error) { response.writeHead(500); response.end(JSON.stringify({ error: String(error) })); }
 });
 server.listen(1422, '127.0.0.1', () => process.stdout.write(`测试服务 http://localhost:1422（${root}）\n`));
-child.on('exit', () => { server.close(); process.exit(); });
 process.on('SIGTERM', () => { child.kill(); server.close(); });

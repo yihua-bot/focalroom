@@ -1,0 +1,16 @@
+{
+  "commands": 1250,
+  "commandsPerSecond": 79.97370486081108,
+  "elapsedSeconds": 15.630137458,
+  "events": 1291,
+  "historyGroups": 40,
+  "logicalBytesAfterImport": 606208,
+  "logicalBytesFinal": 64733184,
+  "logicalGrowthBytesPer100Commands": 5130158.08,
+  "measurement": "logical bytes = PRAGMA page_count * page_size, including committed WAL pages; physical files sampled before closing; throughput includes preparation reads",
+  "physicalMainBytes": 63594496,
+  "physicalShmBytes": 32768,
+  "physicalWalBytes": 4247752,
+  "receiptAliases": 2502,
+  "receiptDelta": 1250
+}

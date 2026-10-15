@@ -1,0 +1,8 @@
+{
+  "src-tauri/src/command_handler.rs": "b9bf629a14ce235fea8d9a21d5565da5e188febb1dfaefd33aa5c6b40c1f070d",
+  "src-tauri/src/photo_inspection.rs": "9271b1a180d1fb5b99a326cc60bb27fbe0e61db5a52ebf4896443e7c47545042",
+  "src-tauri/tests/perf_baseline.rs": "b689d5e03a5fc6e7a2897b15c3dc72d288c34b367bef2e2b27bf49ee373b9226",
+  "src-tauri/tests/command_history.rs": "3c540c0e6a5b713396294346926b5d5124d10bcdedf4254a727ac5ca15401405",
+  "src-tauri/tests/photo_inspection.rs": "c6a6161d9326a2dc22320f682daf20219ad6669763470feb8eadfcd37f94dd21",
+  "src/components/shared/PhotoViewport.tsx": "bd6ecd6b5f4788e46035b58e908d52f5bcdc14bdbc6838e34d145ff1ecfac28b"
+}

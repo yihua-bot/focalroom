@@ -103,9 +103,32 @@ fn catalog() -> Vec<Route> {
 }
 
 pub fn route(request: &RouteRequest<'_>, openai_available: bool) -> Result<Route> {
+    route_candidates(request, openai_available, catalog())
+}
+/// 运行时保留任务已绑定的 provider，避免离线任务自动出网或恢复时更换提供方。
+pub fn route_for_provider(
+    request: &RouteRequest<'_>,
+    provider: &str,
+    openai_available: bool,
+) -> Result<Route> {
+    route_candidates(
+        request,
+        openai_available,
+        catalog()
+            .into_iter()
+            .filter(|route| route.provider_id == provider)
+            .collect(),
+    )
+}
+fn route_candidates(
+    request: &RouteRequest<'_>,
+    openai_available: bool,
+    catalog: Vec<Route>,
+) -> Result<Route> {
     let need = required_capability(request.task_type);
     // 过滤顺序遵循模板：region_eligibility → privacy_consent → required_capabilities → usage_budget。
-    let mut candidates: Vec<Route> = catalog()
+    let mut candidates: Vec<Route> = catalog
+        .clone()
         .into_iter()
         .filter(|route| {
             // 区域：受限部署中，云 provider 不满足驻留要求即拒（mock 恒本地）。
@@ -135,7 +158,7 @@ pub fn route(request: &RouteRequest<'_>, openai_available: bool) -> Result<Route
     }
     if candidates.is_empty() {
         // 区分三类拒绝原因（可读错误）。
-        let any_capability_match = catalog()
+        let any_capability_match = catalog
             .iter()
             .filter(|route| openai_available || route.provider_id == "mock")
             .any(|route| route.capabilities.contains(&need));
@@ -209,4 +232,12 @@ pub fn explain(request: &RouteRequest<'_>, openai_available: bool) -> Value {
         "outcome": outcome,
         "policy": {"neverAutoExpandImageScope": true, "providerSelectionInUI": false},
     })
+}
+
+/// v1 费用单位为美分；档位额度按整项任务的累计用量扣减。
+pub(crate) fn remaining_budget(task: &super::types::Task, tier: ServiceTier) -> f64 {
+    let used = f64::from(task.usage.cost_minor_usd) / 100.0;
+    (f64::from(task.budget.max_cost_minor_usd) / 100.0 - used)
+        .min(tier.max_cost_usd_per_task() - used)
+        .max(0.0)
 }

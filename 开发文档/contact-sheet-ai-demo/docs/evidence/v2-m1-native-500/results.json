@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-15",
+  "milestone": "v2 M1",
+  "nativeGenerated500Functional": "passed",
+  "m1Overall": "partial",
+  "fix": "Load bounded filmstrip CSS through shared app stylesheet; do not import legacy global resets",
+  "testsThisTurn": {
+    "rustDefaultPassed": 120,
+    "rustIgnored": 4,
+    "keychainWriteDeleteFiltered": 1,
+    "frontendPassed": 147,
+    "frontendFiles": 19,
+    "m1GuiPassed": 4,
+    "contracts": "passed",
+    "typecheck": "passed",
+    "lint": "passed",
+    "releaseNativeBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "existingDifferentE2EBaseline": 27,
+  "newDifferentE2EJourneys": 0,
+  "nativeProject": "31c253b6-6e1e-4041-b17f-2f58cec0e8d8",
+  "nativeRestart": {
+    "oldPid": 29204,
+    "newPid": 29978,
+    "oldExited": true,
+    "equalTables": 50,
+    "originalHashesUnchanged": 500
+  },
+  "agentTasks": 0,
+  "historicalScreenshotsUnchanged": 75,
+  "remaining": [
+    "true camera RAW detail inspection",
+    "orientation/ICC/high-bit-depth and professional display validation",
+    "real high-pixel photographer corpus",
+    "WKWebView total resource attribution and key-to-paint",
+    "long-session/low-end hardware acceptance"
+  ],
+  "newM2Started": false
+}

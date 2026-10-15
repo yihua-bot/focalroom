@@ -1,0 +1,10 @@
+{
+  "productName": "Between Frames M1 Review Fixes",
+  "identifier": "studio.betweenframes.m1reviewfixes",
+  "build": {
+    "beforeDevCommand": "npm run dev:desktop",
+    "beforeBuildCommand": "npm run build --workspace @betweenframes/desktop",
+    "frontendDist": "../apps/desktop/dist"
+  },
+  "app": { "windows": [{ "label": "main", "title": "序间 · M1 修复评审", "width": 1440, "height": 960, "minWidth": 960, "minHeight": 680, "backgroundColor": "#101113" }] }
+}

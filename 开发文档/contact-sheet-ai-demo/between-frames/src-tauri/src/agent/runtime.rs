@@ -2,6 +2,7 @@ use super::{
     context::ContextBuilder,
     openai::{OpenAiConfig, OpenAiProvider},
     provider::{MockProvider, ModelProvider},
+    router::{self, RegionPolicy, RouteRequest, ServiceTier, TaskType},
     types::*,
     vision,
 };
@@ -20,6 +21,8 @@ pub struct AgentEngine {
     openai: Option<Arc<OpenAiProvider>>,
     active: Arc<Mutex<HashSet<String>>>,
     notify: Notifier,
+    region: RegionPolicy,
+    tier: ServiceTier,
 }
 impl AgentEngine {
     pub fn new(db: Store) -> Self {
@@ -44,6 +47,8 @@ impl AgentEngine {
             openai,
             active: Default::default(),
             notify: Arc::new(|_| {}),
+            region: RegionPolicy::default(),
+            tier: ServiceTier::Standard,
         }
     }
     pub fn ai_config(&self) -> AiConfig {
@@ -72,20 +77,32 @@ impl AgentEngine {
             },
         }
     }
+    /// 部署端注入可信策略，任务/模型输出不能修改区域或档位。
+    pub fn with_routing_policy(mut self, region: RegionPolicy, tier: ServiceTier) -> Self {
+        self.region = region;
+        self.tier = tier;
+        self
+    }
     fn provider_for(&self, task: &Task) -> Result<Arc<dyn ModelProvider>> {
-        if task.provider_id == super::PROVIDER_OPENAI {
-            self.openai
+        let route = router::route_for_provider(
+            &RouteRequest {
+                task_type: TaskType::AgentOrchestrate,
+                tier: self.tier,
+                region: &self.region,
+                budget_remaining_usd: super::router::remaining_budget(task, self.tier),
+                images_required: false,
+                image_consent: false,
+            },
+            &task.provider_id,
+            self.openai.is_some(),
+        )?;
+        match route.provider_id.as_str() {
+            super::PROVIDER_OPENAI => self
+                .openai
                 .clone()
                 .map(|p| p as Arc<dyn ModelProvider>)
-                .ok_or_else(|| {
-                    // 经 Router 语义给出可读错误：能力缺失而非笼统不可用（M3/ADR 0018）。
-                    AppError::new(
-                        "MODEL_CAPABILITY_MISSING",
-                        "任务需要真实模型，但当前没有可用的云端提供方（缺少 API Key）；请配置后重新委托，或改用本地 Mock。",
-                    )
-                })
-        } else {
-            Ok(self.mock.clone())
+                .ok_or_else(|| AppError::new("MODEL_CAPABILITY_MISSING", "云端提供方不可用")),
+            _ => Ok(self.mock.clone()),
         }
     }
     pub fn with_notify(mut self, notify: Notifier) -> Self {
@@ -141,7 +158,6 @@ impl AgentEngine {
         if initial.task.state != "queued" {
             return Err(AppError::new("CANCELLED", "任务未排队"));
         }
-        let provider = self.provider_for(&initial.task)?;
         handler
             .agent_state(id, "planning", "加载可信 scope、预算与安全检查点")
             .await?;
@@ -173,8 +189,15 @@ impl AgentEngine {
                                 .filter(|_| vision::is_vision_tool(&call.name));
                             let prefetch = match openai {
                                 Some(provider) => {
-                                    match vision::prefetch(&self.db, provider, &input.task, &call)
-                                        .await
+                                    match vision::prefetch(
+                                        &self.db,
+                                        provider,
+                                        &input.task,
+                                        &call,
+                                        &self.region,
+                                        self.tier,
+                                    )
+                                    .await
                                     {
                                         Ok(data) => data,
                                         Err(e) if e.code == "BUDGET_EXCEEDED" => {
@@ -202,6 +225,14 @@ impl AgentEngine {
                 }
                 continue;
             }
+            let provider = match self.provider_for(&input.task) {
+                Ok(provider) => provider,
+                Err(error) if error.code == "BUDGET_EXCEEDED" => {
+                    handler.agent_state(id, "paused", &error.message).await?;
+                    return Ok(());
+                }
+                Err(error) => return Err(error),
+            };
             let estimate = ContextBuilder::input_estimate(&input);
             if let Err(e) = super::policy::PolicyGate::model_budget(&input.task, estimate) {
                 handler.agent_state(id, "paused", &e.message).await?;

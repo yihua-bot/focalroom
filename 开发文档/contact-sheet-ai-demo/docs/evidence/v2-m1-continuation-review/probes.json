@@ -1,0 +1,27 @@
+{
+  "receipt": {
+    "firstRevision": 2,
+    "firstProjectRevision": 2,
+    "firstTitle": "A",
+    "replayRevision": 2,
+    "replayProjectRevision": 3,
+    "replayTitle": "B",
+    "sameResult": false
+  },
+  "raw": {
+    "imported": true,
+    "importFailures": [],
+    "storedDimensions": [
+      7000,
+      5000
+    ],
+    "returnedKind": "embedded_preview",
+    "returnedDimensions": [
+      7000,
+      5000
+    ],
+    "returnedPixels": 35000000,
+    "sourceBytes": 35000122
+  },
+  "temporaryRoot": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/bf-m1-review-probe-3mcake8a"
+}

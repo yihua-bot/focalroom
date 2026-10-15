@@ -52,10 +52,10 @@ async fn bridge_run(db: &Store, command: Value) -> Value {
     .await
 }
 
-fn comment_envelope(project: &str, body: &str, photo: &str, key: &str) -> Value {
+fn comment_envelope(project: &str, revision: i64, body: &str, photo: &str, key: &str) -> Value {
     json!({
         "version": "2.0", "command_id": format!("cmd-{key}"), "workspace_id": "local-workspace",
-        "project_id": project, "expected_revision": 1, "idempotency_key": format!("idem-{key}"),
+        "project_id": project, "expected_revision": revision, "idempotency_key": format!("idem-{key}"),
         "kind": "comment.add",
         "payload": {"body": body, "anchor": {"type": "photo", "photo_id": photo, "x": 0.5, "y": 0.5}}
     })
@@ -65,17 +65,24 @@ fn comment_envelope(project: &str, body: &str, photo: &str, key: &str) -> Value 
 async fn comments_thread_aggregate_resolve_and_agent_read() {
     let temp = tempfile::tempdir().unwrap();
     let (db, project, photos) = setup(temp.path(), 2).await;
+    let revision = db.get(&project).await.unwrap().revision;
     // 同锚点两条评论聚合进同一线程。
     let first = bridge_run(
         &db,
-        comment_envelope(&project, "左图更克制", &photos[0], "cmt-first-01"),
+        comment_envelope(&project, revision, "左图更克制", &photos[0], "cmt-first-01"),
     )
     .await;
     assert!(first["ok"].as_bool().unwrap(), "{first}");
     let thread_id = first["thread_id"].as_str().unwrap().to_owned();
     let second = bridge_run(
         &db,
-        comment_envelope(&project, "同意，光也更好", &photos[0], "cmt-second-2"),
+        comment_envelope(
+            &project,
+            revision,
+            "同意，光也更好",
+            &photos[0],
+            "cmt-second-2",
+        ),
     )
     .await;
     assert_eq!(
@@ -86,7 +93,7 @@ async fn comments_thread_aggregate_resolve_and_agent_read() {
     // resolve → 关闭；再发同锚点 → 新线程。
     let mut resolve_cmd = json!({
         "version": "2.0", "command_id": "cmd-resolve-001", "workspace_id": "local-workspace",
-        "project_id": project, "expected_revision": 1, "idempotency_key": "idem-resolve-001",
+        "project_id": project, "expected_revision": revision, "idempotency_key": "idem-resolve-001",
         "kind": "comment.resolve", "payload": {"thread_id": thread_id, "state": "RESOLVED"}
     });
     let _ = &mut resolve_cmd;
@@ -95,7 +102,7 @@ async fn comments_thread_aggregate_resolve_and_agent_read() {
     assert_eq!(resolved["state"].as_str().unwrap(), "resolved");
     let third = bridge_run(
         &db,
-        comment_envelope(&project, "重新讨论", &photos[0], "cmt-third-003"),
+        comment_envelope(&project, revision, "重新讨论", &photos[0], "cmt-third-003"),
     )
     .await;
     assert_ne!(
@@ -104,7 +111,13 @@ async fn comments_thread_aggregate_resolve_and_agent_read() {
         "关闭后新线程"
     );
     // 跨项目锚点拒绝。
-    let foreign = comment_envelope(&project, "越权", "photo-not-exist", "cmt-foreign-4");
+    let foreign = comment_envelope(
+        &project,
+        revision,
+        "越权",
+        "photo-not-exist",
+        "cmt-foreign-4",
+    );
     let rejected = bridge_run(&db, foreign).await;
     assert!(!rejected["ok"].as_bool().unwrap());
     assert_eq!(rejected["error"]["code"], "PERMISSION_DENIED");

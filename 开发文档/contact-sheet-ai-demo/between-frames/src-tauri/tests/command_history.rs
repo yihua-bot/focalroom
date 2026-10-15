@@ -74,7 +74,7 @@ async fn durable_replay_checks_fingerprint_scope_and_returns_original_result() {
         .await
         .unwrap();
     let first = serde_json::to_value(&result).unwrap();
-    let current = result.project.unwrap();
+    let current = result.project.clone().unwrap();
     let later = apply(
         &store,
         &current,
@@ -84,15 +84,14 @@ async fn durable_replay_checks_fingerprint_scope_and_returns_original_result() {
         },
     )
     .await;
+    let replayed = CommandHandler::new(&store)
+        .execute_gui(req.clone())
+        .await
+        .unwrap();
     assert_eq!(
-        serde_json::to_value(
-            CommandHandler::new(&store)
-                .execute_gui(req.clone())
-                .await
-                .unwrap()
-        )
-        .unwrap(),
-        first
+        serde_json::to_value(&replayed).unwrap(),
+        first,
+        "后续编辑后须重放首次完整回执"
     );
     let mut changed = req.clone();
     changed.command = GuiCommand::SetPhotoDecision {
@@ -128,19 +127,17 @@ async fn durable_replay_checks_fingerprint_scope_and_returns_original_result() {
     let mut forged = serde_json::to_value(&req).unwrap();
     forged["actorType"] = json!("human");
     assert!(serde_json::from_value::<GuiCommandRequest>(forged).is_err());
+    // 重放不得改变状态：以重放前后的权威投影对比（ADR 0026 语义）。
     let before = serde_json::to_value(store.get(&p.id).await.unwrap()).unwrap();
     let mut same_key = req.clone();
     same_key.command_id = between_frames_lib::domain::id();
-    assert_eq!(
-        serde_json::to_value(
-            CommandHandler::new(&store)
-                .execute_gui(same_key.clone())
-                .await
-                .unwrap()
-        )
-        .unwrap(),
-        first
-    );
+    let replayed_new_key = CommandHandler::new(&store)
+        .execute_gui(same_key.clone())
+        .await
+        .unwrap();
+    let after = serde_json::to_value(store.get(&p.id).await.unwrap()).unwrap();
+    assert_eq!(before, after, "新 command_id 重放同一幂等键不得改变状态");
+    assert_eq!(serde_json::to_value(&replayed_new_key).unwrap(), first);
     let mut reused_alias = same_key.clone();
     reused_alias.idempotency_key = between_frames_lib::domain::id();
     reused_alias.command = GuiCommand::SetPhotoNote {
@@ -178,6 +175,108 @@ async fn durable_replay_checks_fingerprint_scope_and_returns_original_result() {
     let reopened = Store::open(&temp.path().join("projects.sqlite"))
         .await
         .unwrap();
+    let after_restart = CommandHandler::new(&reopened)
+        .execute_gui(req)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(after_restart).unwrap(),
+        first,
+        "进程重开后须重放首次完整回执"
+    );
+    assert_eq!(store_revision(&reopened, &p.id).await, later.revision);
+}
+async fn store_revision(store: &Store, id: &str) -> i64 {
+    store.get(id).await.unwrap().revision
+}
+
+#[tokio::test]
+async fn slim_receipt_cursor_and_both_legacy_formats_replay_the_same_snapshot() {
+    let temp = tempfile::tempdir().unwrap();
+    let (store, project) = setup(temp.path()).await;
+    let req = request(
+        &project,
+        GuiCommand::UpdateProject {
+            title: "首次标题".into(),
+            brief: "首次意图".into(),
+        },
+    );
+    let first = CommandHandler::new(&store)
+        .execute_gui(req.clone())
+        .await
+        .unwrap();
+    let expected = serde_json::to_value(&first).unwrap();
+    let stored: String =
+        sqlx::query_scalar("SELECT result_json FROM command_events WHERE command_id=?")
+            .bind(&req.command_id)
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+    let stored: Value = serde_json::from_str(&stored).unwrap();
+    assert!(stored["eventCursor"].as_i64().unwrap() > 0);
+    assert!(
+        stored["project"]["events"].as_array().unwrap().is_empty(),
+        "事件不能重新嵌套入库"
+    );
+    let current = first.project.as_ref().unwrap();
+    let later = apply(
+        &store,
+        current,
+        GuiCommand::SetPhotoRating {
+            photo_ids: vec![project.photos[0].id.clone()],
+            rating: 5,
+        },
+    )
+    .await;
+    let later = apply(
+        &store,
+        &later,
+        GuiCommand::SaveSequenceVersion {
+            label: "后续版本".into(),
+        },
+    )
+    .await;
+    let authoritative = serde_json::to_value(store.get(&project.id).await.unwrap()).unwrap();
+    assert_eq!(
+        serde_json::to_value(
+            CommandHandler::new(&store)
+                .execute_gui(req.clone())
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        expected
+    );
+    let mut legacy_slim = expected.clone();
+    legacy_slim["project"]["events"] = json!([]);
+    // append-only 表保持原状；追加旧编码的测试回执，不修改或禁用审计触发器。
+    for encoded in [&expected, &legacy_slim] {
+        let mut legacy_req = req.clone();
+        legacy_req.command_id = between_frames_lib::domain::id();
+        legacy_req.idempotency_key = between_frames_lib::domain::id();
+        sqlx::query("INSERT INTO command_events SELECT ?,project_id,?,?,request_fingerprint,actor_type,source,command_type,command_json,compensates_group_id,causation_id,transaction_group_id,before_json,after_json,?,project_revision_before,project_revision_after,created_at FROM command_events WHERE command_id=?")
+            .bind(between_frames_lib::domain::id()).bind(&legacy_req.command_id).bind(&legacy_req.idempotency_key)
+            .bind(encoded.to_string()).bind(&req.command_id).execute(&store.pool).await.unwrap();
+        assert_eq!(
+            serde_json::to_value(
+                CommandHandler::new(&store)
+                    .execute_gui(legacy_req)
+                    .await
+                    .unwrap()
+            )
+            .unwrap(),
+            expected
+        );
+        assert_eq!(
+            serde_json::to_value(store.get(&project.id).await.unwrap()).unwrap(),
+            authoritative
+        );
+    }
+    assert_eq!(store_revision(&store, &project.id).await, later.revision);
+    store.pool.close().await;
+    let reopened = Store::open(&temp.path().join("projects.sqlite"))
+        .await
+        .unwrap();
     assert_eq!(
         serde_json::to_value(
             CommandHandler::new(&reopened)
@@ -186,12 +285,40 @@ async fn durable_replay_checks_fingerprint_scope_and_returns_original_result() {
                 .unwrap()
         )
         .unwrap(),
-        first
+        expected
     );
-    assert_eq!(store_revision(&reopened, &p.id).await, later.revision);
 }
-async fn store_revision(store: &Store, id: &str) -> i64 {
-    store.get(id).await.unwrap().revision
+
+#[tokio::test]
+async fn no_op_receipt_replay_keeps_its_original_history_and_revision() {
+    let temp = tempfile::tempdir().unwrap();
+    let (store, project) = setup(temp.path()).await;
+    let req = request(
+        &project,
+        GuiCommand::SetPhotoRating {
+            photo_ids: vec![project.photos[0].id.clone()],
+            rating: 0,
+        },
+    );
+    let first = CommandHandler::new(&store)
+        .execute_gui(req.clone())
+        .await
+        .unwrap();
+    assert!(!first.changed);
+    let later = apply(
+        &store,
+        &project,
+        GuiCommand::SetPhotoDecision {
+            photo_ids: vec![project.photos[0].id.clone()],
+            status: "keep".into(),
+        },
+    )
+    .await;
+    assert_eq!(
+        serde_json::to_value(CommandHandler::new(&store).execute_gui(req).await.unwrap()).unwrap(),
+        serde_json::to_value(first).unwrap()
+    );
+    assert_eq!(store_revision(&store, &project.id).await, later.revision);
 }
 
 #[tokio::test]
@@ -616,7 +743,7 @@ async fn old_wal_database_is_backed_up_before_upgrade_and_backup_can_restore_pro
 fn generated_request_contract_round_trips_all_m1_examples_and_rejects_extra_fields() {
     let examples: Vec<Value> =
         serde_json::from_str(include_str!("../../contracts/m1-command-examples.json")).unwrap();
-    assert_eq!(examples.len(), 19);
+    assert_eq!(examples.len(), 20);
     for example in examples {
         let request: GuiCommandRequest = serde_json::from_value(example.clone()).unwrap();
         assert_eq!(serde_json::to_value(request).unwrap(), example);

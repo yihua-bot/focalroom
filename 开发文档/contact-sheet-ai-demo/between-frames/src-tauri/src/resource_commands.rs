@@ -10,6 +10,7 @@ use sqlx::Row;
 impl CommandHandler<'_> {
     pub async fn import_photo(&self, project: &str, prepared: &PreparedPhoto) -> Result<bool> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
         let revision: i64 =
             sqlx::query_scalar("SELECT revision FROM projects WHERE id=? AND deleted_at IS NULL")
                 .bind(project)
@@ -71,6 +72,7 @@ impl CommandHandler<'_> {
         expected: i64,
     ) -> Result<Project> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
         let previous = sqlx::query(
             "SELECT original_path,content_sha256 FROM photos WHERE project_id=? AND id=?",
         )

@@ -19,7 +19,7 @@ const envelope = {
   version: z.literal('2.0'), command_id: nonce, workspace_id: id, project_id: id,
   expected_revision: revision, idempotency_key: nonce, client_trace_id: id.optional(),
 };
-const approvalPayload = z.strictObject({ proposal_id: id, expected_proposal_revision: revision, accepted_operation_ids: ids(200), approval_nonce: nonce });
+const approvalPayload = z.strictObject({ proposal_id: id, expected_proposal_revision: revision, accepted_operation_ids: z.array(id).max(200).refine(values => new Set(values).size === values.length, 'ID 不得重复'), approval_nonce: nonce });
 export const approvalSchema = z.strictObject({ version: envelope.version, workspace_id: id, project_id: id, expected_revision: revision, ...approvalPayload.shape });
 export type Approval = z.infer<typeof approvalSchema>;
 export const projectModeSchema = z.enum(['LOCAL', 'SHARED']);

@@ -1,9 +1,7 @@
 use crate::{
     command_handler::{CommandHandler, GuiCommandRequest},
     commands_generated::GuiCommand,
-    domain::{
-        self, AppError, DecisionEvent, HistoryState, Photo, Project, Result, SequenceVersion,
-    },
+    domain::{self, AppError, HistoryState, Photo, Project, Result, SequenceVersion},
     image_pipeline::PreparedPhoto,
 };
 use sqlx::{
@@ -332,7 +330,7 @@ pub(crate) async fn snapshot_tx(
         photo.is_missing = !Path::new(&photo.original_path).is_file();
     }
     let sequence = sequence(tx, id).await?;
-    let events:Vec<DecisionEvent>=sqlx::query_as("SELECT id,photo_id,actor,event_type,previous_json,next_json,reason,context_json,created_at FROM decision_events WHERE project_id=? ORDER BY created_at DESC,rowid DESC").bind(id).fetch_all(&mut **tx).await?;
+    let events = crate::command_audit::events_through(tx, id, i64::MAX).await?;
     let cursor: i64 = sqlx::query_scalar("SELECT cursor FROM history_heads WHERE project_id=?")
         .bind(id)
         .fetch_optional(&mut **tx)

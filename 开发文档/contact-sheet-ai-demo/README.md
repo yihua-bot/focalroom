@@ -4,6 +4,16 @@
 
 用户提供了 `BetweenFrames-v2.0-Implementation-Kit`，方向升级为专业摄影 Agent、创作工作区、多人协作与后续私密专业服务。方向差异和阶段映射见 [V2.0-ADOPTION](docs/V2.0-ADOPTION.md)。**M0 工程/契约切片已本地验收**：npm workspaces、Desktop/Web 独立入口、共享 UI、TS/Rust 契约与权限骨架、CI 配置；83 Rust、134 单测、17 浏览器 E2E、5 后端旅程通过，独立原生包导入/选片/退出重启通过。M0 整体仍 partial/待架构与 UI/UX 评审；云服务、v2 生产迁移、远端 CI 均未验收，原用户库未升级。见 [M0 报告](docs/V2-M0-TEST-REPORT.md) 和 [启动说明](between-frames/V2-M0-README.md)。旧版 M0–M5 完成记录不代表新版阶段已通过。
 
+**v2 评审修复（2026-10-15）**：八项缺陷修复与回归完成，110 Rust、142 单测、16 预览、1 Web、6 条真实后端旅程通过；新增 0017 仅用于临时库兼容验证，原用户库未升级。见 [修复报告](docs/V2-REVIEW-FIXES-TEST-REPORT.md)。撤回“v2 工程侧完成”结论，当时 [验收总账](docs/V2-COMPLIANCE.md) 为 16 pass / 8 partial，云共享、Creator 隔离及真实支付仍需继续开发。
+
+**M1 的 500 张 GUI 切片（2026-10-15）**：500 张混合格式实际文件完成页面选片、序列、版本恢复、导出与新 Rust 进程重启，源 hash 前后一致；补齐取消/失败/重连验收，110 Rust、142 单测、25 E2E 通过。复现：`npm run test:m1-gui`。当前 [总账](docs/V2-COMPLIANCE.md) 为 17 pass / 7 partial；M1 整体仍 partial，原生选择器、原图 1:1/色彩与低端机/内存优化尚未关闭。见 [M1 报告](docs/V2-M1-500-GUI-TEST-REPORT.md)。
+
+**M1 原图与内存切片（2026-10-15，当前）**：JPEG/PNG 按需原图 1:1 / Retina、同步比较、精简 GUI 历史、独立原生选择器/保存/退出重启已验收；113 Rust、146 单测、26 E2E 通过。40 次编辑后投影减少 91.1%，JS Heap 从基线 220.8 降至 74.4MiB。49 表和原图 hash 重启前后一致。M1 仍 partial，其他原图格式、色彩、原生 500 图/低端性能待补；原用户库未升级。详见 [当前 M1 报告](docs/V2-M1-INSPECTION-TEST-REPORT.md)。
+
+**M1 接续评审修复（2026-10-15，当前）**：RAW 检视改为有界派生缓存并修正来源标识，幂等回执恢复首次完整结果，增长基准改按实际 1250 命令和回执增量计数；122 Rust 功能测试、1 增长基准、147 单测、27 独立 E2E 通过。旧 29 条 E2E 与 63.7MB/500 命令数字撤回。新原生标识完成边界图补验，未升级原用户库；M1 仍 partial。见 [当前修复报告](docs/V2-M1-REVIEW-FIXES-TEST-REPORT.md)。
+
+**M1 原生 500 图与灯箱修复（2026-10-15，当前）**：独立 release 经真实系统文件夹/保存面板完成 500 图导入、重复跳过、25 图编辑/序列/版本与导出、完整 Quit/重启；50 表和 500 源 hash 不变。修复胶片条 CSS 未加载导致的布局溢出；本轮 120 Rust 默认、147 单测、4 M1 GUI 通过。素材是 1200×800 派生测试图，宿主主进程采样不代表 WKWebView 总内存；RAW 细节、专业色彩/高像素素材与低端硬件仍待补，M1 保持 partial。见 [最新 M1 报告](docs/V2-M1-NATIVE-500-TEST-REPORT.md)。
+
 ## v1.0 需求与验收历史（2026-10-13 起）
 
 最终实施需求已原样纳入 [`planning-v1.0/`](planning-v1.0/README.md)，后续以 [`FINAL-IMPLEMENTATION-SPEC`](planning-v1.0/docs/FINAL-IMPLEMENTATION-SPEC.md) 为准。新要求明确动态工具闭环、可暂停任务、后端预算、检查点恢复、上传 consent 和 15 条 Agent 验收；需求包不等于已完成软件。

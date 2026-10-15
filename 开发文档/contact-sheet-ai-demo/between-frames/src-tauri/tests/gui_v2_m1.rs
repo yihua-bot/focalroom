@@ -27,6 +27,10 @@ async fn five_hundred_mixed_photos_survive_restart_with_hashes_unchanged() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     let sources: Vec<_> = (0..500).map(|index| mixed_fixture(root, index)).collect();
+    let original_hashes: Vec<_> = sources
+        .iter()
+        .map(|source| between_frames_lib::image_pipeline::fingerprint(source).unwrap())
+        .collect();
     let db = Store::open(&root.join("projects.sqlite")).await.unwrap();
     let project = db.create("M1 混合集", "").await.unwrap();
     let imports = ImportManager::default();
@@ -79,18 +83,22 @@ async fn five_hundred_mixed_photos_survive_restart_with_hashes_unchanged() {
     assert_eq!(revived.photos.len(), 500);
     assert_eq!(revived.sequence.len(), 100);
     assert_eq!(revived.sequence, after.sequence);
-    for source in &sources {
-        let before = between_frames_lib::image_pipeline::fingerprint(source).unwrap();
-        let _ = before; // 源文件本身保持原样（下方统一核对）
-    }
-    let snapshot = format!("{:?}", revived.sequence);
-    assert_eq!(snapshot.matches("deadbeef").count(), 0);
-    // 全量源指纹核对（M1：原始图片 hash 不变）。
-    use sha2::{Digest, Sha256};
-    for source in &sources {
-        let bytes = std::fs::read(source).unwrap();
-        let digest = format!("{:x}", Sha256::digest(&bytes));
-        assert_eq!(digest.len(), 64);
+    for (source, original_hash) in sources.iter().zip(&original_hashes) {
+        assert_eq!(
+            &between_frames_lib::image_pipeline::fingerprint(source).unwrap(),
+            original_hash,
+            "原图内容被修改：{}",
+            source.display()
+        );
+        let imported = revived
+            .photos
+            .iter()
+            .find(|photo| Path::new(&photo.original_path) == source.canonicalize().unwrap())
+            .unwrap();
+        assert_eq!(
+            &imported.content_sha256, original_hash,
+            "入库指纹必须对应原文件"
+        );
     }
 }
 
