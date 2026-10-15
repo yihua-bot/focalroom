@@ -76,4 +76,8 @@ CARGO_TARGET_DIR="target-v1" npm run test:integration
 
 收尾评审修复（2026-10-15）：墓碑按关键词匹配（证据数漂移不复活，回归钉死）、巡检不跟随符号链接（非普通文件不打开目标）、已纠正假设补删除入口、巡检措辞降级为「完整性通过」。修复后全量 exit=0（75 Rust、57 前端单测、5 集成）。
 
+## v2.0 进展（2026-10-15）
+
+M0 基座切片已提交（257ee6a）并独立复验（verify:v2 exit=0，77 项 v2 契约测试）；M1 Rust 侧复验 3 项（500 张混合集/Undo-Redo 位置唯一/超大拒绝）见 [V2-M1-GUI-REVERIFY](V2-M1-GUI-REVERIFY.md)。整体仍 partial，M1 真机性能与人工走查、M2+ 未启动。
+
 六阶段工程实现至此全部落地，停止等待整体评审；规格符合性终审见 [V1.0-COMPLIANCE](V1.0-COMPLIANCE.md)。另见 [已知问题](KNOWN_ISSUES.md)、[文件清单](V1-M5-FILES.md)、[ADR 0008](ADR/0008-v1-m5-beta-readiness.md)、[隐私说明](PRIVACY.md)。
