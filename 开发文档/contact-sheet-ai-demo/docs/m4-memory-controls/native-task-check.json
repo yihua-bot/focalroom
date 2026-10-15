@@ -1,0 +1,22 @@
+{
+  "tables": 35,
+  "formalRevision": 35,
+  "memoryRevision": 13,
+  "tasks": [
+    [
+      "验证记忆调整后必须重新委托",
+      "mock",
+      "paused",
+      12,
+      "{\"modelTurns\":1,\"toolCalls\":1,\"inputEstimate\":7679,\"outputEstimate\":173,\"cloudImages\":0,\"costMinorUsd\":0}"
+    ],
+    [
+      "基于当前记忆重新委托",
+      "mock",
+      "paused",
+      13,
+      "{\"modelTurns\":1,\"toolCalls\":1,\"inputEstimate\":7670,\"outputEstimate\":173,\"cloudImages\":0,\"costMinorUsd\":0}"
+    ]
+  ],
+  "formalAndEvidenceUnchanged": true
+}

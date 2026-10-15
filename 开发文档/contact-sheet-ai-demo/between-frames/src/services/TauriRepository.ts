@@ -1,3 +1,4 @@
+import { TauriDiagnosticsRepository } from './TauriDiagnosticsRepository';
 import { TauriAgentRepository } from './TauriAgentRepository';
 import { TauriMemoryRepository } from './TauriMemoryRepository';
 import type { SelectionDraft } from '../domain/agent';
@@ -33,6 +34,7 @@ export class TauriRepository implements DesktopProjectRepository {
    await invoke('set_project_tags', { projectId, tags });
   }
   readonly memory = new TauriMemoryRepository();
+  readonly diagnostics = new TauriDiagnosticsRepository();
   private snapshots = new Map<string, Project>();
 
   private map(raw: unknown): Project {

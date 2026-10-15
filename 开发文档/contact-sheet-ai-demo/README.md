@@ -8,6 +8,9 @@
 
 当前 **v1.0 M0–M5 工程实现全部完成，停止等待整体评审**：M5 补齐 Keychain 密钥存储（env→钥匙串解析链）、脱敏诊断命令、性能基线（Release：200 张导入 2.9s、决策 p95 23ms，均优于规格目标）、Beta 完整旅程 E2E（意图→选片→委托→草案→假设纠正→采纳→重启一致）与隐私文档。43 Rust 测试、24 前端单测、16 预览 E2E、3 真实后端集成旅程全部通过。**v1.1 已完成**：版本对比（任意两版 diff）、新建项目模板、项目标签（编辑/筛选，独立元数据通道）、沉浸审片（灯箱内决策评分 + 胶片条导航）。
 **v1.2 已完成**：印刷参考导出（A4 横版分页 HTML，打印即 PDF）、元数据侧车导出（每照片一 JSON + manifest）、册页跨图标记（spread/full 可撤销命令，印刷分页尊重标记）。
+**本轮评审修复（2026-10-14）**：修复真实工具协议、视觉任务 IPC、桌面新导出入口、上传前预算预留、单次授权绑定与记忆纠正复活，补强导出/重启旅程。59 Rust、44 单测、16 预览与 3 后端集成通过；钥匙串写删未执行。原生选择器、实际 PDF 和退出重启已补验，Safari 页脚多分页已修复并跑相关回归；真实模型/计价仍待补验。见 [评审修复报告](docs/REVIEW-FIXES-TEST-REPORT.md) 与 [原生补验报告](docs/NATIVE-REVIEW-FIXES-REPORT.md)。本轮独立应用为 `between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames Fix Review.app`。
+**M4 本地记忆控制增量（2026-10-15）**：新增假设确认/移除/恢复、证据排除/恢复、原文与反例查看、项目内 FTS5 搜索和任务记忆版本校验。记忆变更暂停执行中的任务，旧任务需重新委托；正式选片与 Undo 栈不变。全量验证 67 Rust、50 单测、16 预览、4 后端旅程通过，后续边界补验见 [记忆控制报告](docs/MEMORY-CONTROLS-TEST-REPORT.md)。跨项目与物理擦除未实现；审计与备份仍保留；原用户数据库未升级。解锁后已完成原生界面、旧任务拒绝/重新委托与完整重启补验：35 表快照一致，28 源 hash 不变。独立包：`between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames Memory Review.app`。
+**M5 本地存储诊断增量（2026-10-15）**：新增可查看、刷新和主动复制的存储诊断；桌面与 harness 共用 Rust 投影，包含数据库/WAL/共享内存、缓存、迁移备份占用。计数失败与不完整统计明确显示，无新增迁移或依赖。72 Rust、56 单测、16 预览、5 真实后端旅程及原生补验通过，35 表和 28 源 hash 不变。详见 [M5 存储诊断报告](docs/STORAGE-DIAGNOSTICS-TEST-REPORT.md)。最新独立构建仍为 `Between Frames Memory Review.app`（55.34MiB，包含本轮诊断），原用户库未升级。
 **规格符合性终审**：[V1.0-COMPLIANCE](docs/V1.0-COMPLIANCE.md)——P0 十二条与 AG-01–15 全矩阵逐条核对，可自动化范围内全部满足，无 Mock 假通过项。
 **待外部条件**：签名/公证需开发者证书、20 位用户 Beta 需真人、真实模型 E2E 需 API Key。
 

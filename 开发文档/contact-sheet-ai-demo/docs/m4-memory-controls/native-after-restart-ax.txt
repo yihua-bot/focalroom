@@ -1,0 +1,265 @@
+Window: "序间 · 记忆评审", App: Between Frames Memory Review.
+0 standard window 序间 · 记忆评审, Secondary Actions: Raise
+	1 scroll area
+		2 HTML content Description: 序间 · BETWEEN FRAMES, URL: tauri://localhost#/project/5c690610-5610-43b9-a5f6-26f71e863f39
+			3 container
+				4 text B BETWEEN FRAMES · STUDIO
+				5 button 收起导航
+				6 text WORKSPACE
+				7 container 主导航
+					8 button 选片工作台
+					9 button 作品序列
+					10 button 审美记忆
+					11 button 项目列表
+				12 text CURRENT PROJECT
+				13 button M4 原生 · 证据与记忆 28 张图像 · 2 张入选
+本地项目
+				14 button 快捷键帮助
+				15 text 本地保存 · 原图只读 完全离线选片 · 无云端上传
+			16 container
+				17 text PROJECT / NEW — EDITING ROOM
+				18 heading M4 原生 · 证据与记忆, Value: 1
+					19 text M4 原生 · 证据与记忆
+				20 text 从照片，到作品。 / 让每一次选择都有来处。
+				21 button 导入照片
+				22 button Agent · 本地 Mock
+				23 text “
+				24 text 验收人工记忆控制、反例和搜索，保留正式编辑。
+				25 button 编辑创作意图 ↗
+				26 container 编辑历史
+					27 button 撤销, Help: ⌘ / Ctrl Z
+					28 button (disabled) 重做, Help: ⌘ / Ctrl Shift Z
+					29 button 作品版本
+					30 text 6 次可撤销编辑 · 本地保存
+				31 container 照片筛选
+					32 toggle button 全部 28, Value: on
+					33 toggle button 已保留 2, Value: off
+					34 toggle button 待定 25, Value: off
+					35 toggle button 已淘汰 1, Value: off
+				36 toggle button 切换网格密度, Value: off
+				37 button 两图对比
+				38 button 导出 ↗
+				39 toggle button 收起序列带, Value: on
+				40 button 收起检查器
+				41 search text field (settable) 搜索照片文件名或备注, Placeholder: 搜索文件名或备注 · ⌘F
+					42 text 搜索文件名或备注 · ⌘F
+				43 text ⌘ / Ctrl 点选 · Shift 连选 CONTACT SHEET 28 FRAMES · 完整构图 · K / X 快捷操作 本地项目 · 所有已保存的判断和顺序将在重启后保留
+				44 container 照片网格
+					45 container
+						46 toggle button 查看第 1 张 frame_01.jpg, Value: on
+						47 text FRAME 01
+						48 toggle button 标记保留 frame_01.jpg, Value: on
+						49 toggle button 标记淘汰 frame_01.jpg, Value: off
+					50 container
+						51 toggle button 查看第 2 张 frame_02.jpg, Value: off
+						52 text FRAME 02
+						53 toggle button 标记保留 frame_02.jpg, Value: on
+						54 toggle button 标记淘汰 frame_02.jpg, Value: off
+					55 container
+						56 toggle button 查看第 3 张 frame_03.jpg, Value: off
+						57 text FRAME 03
+						58 toggle button 标记保留 frame_03.jpg, Value: off
+						59 toggle button 标记淘汰 frame_03.jpg, Value: on
+					60 container
+						61 toggle button 查看第 4 张 frame_04.jpg, Value: off
+						62 text FRAME 04
+						63 toggle button 标记保留 frame_04.jpg, Value: off
+						64 toggle button 标记淘汰 frame_04.jpg, Value: off
+					65 container
+						66 toggle button 查看第 5 张 frame_05.jpg, Value: off
+						67 text FRAME 05
+						68 toggle button 标记保留 frame_05.jpg, Value: off
+						69 toggle button 标记淘汰 frame_05.jpg, Value: off
+					70 container
+						71 toggle button 查看第 6 张 frame_06.jpg, Value: off
+						72 text FRAME 06
+						73 toggle button 标记保留 frame_06.jpg, Value: off
+						74 toggle button 标记淘汰 frame_06.jpg, Value: off
+					75 container
+						76 toggle button 查看第 7 张 frame_07.jpg, Value: off
+						77 text FRAME 07
+						78 toggle button 标记保留 frame_07.jpg, Value: off
+						79 toggle button 标记淘汰 frame_07.jpg, Value: off
+					80 container
+						81 toggle button 查看第 8 张 frame_08.jpg, Value: off
+						82 text FRAME 08
+						83 toggle button 标记保留 frame_08.jpg, Value: off
+						84 toggle button 标记淘汰 frame_08.jpg, Value: off
+					85 container
+						86 toggle button 查看第 9 张 frame_09.jpg, Value: off
+						87 text FRAME 09
+						88 toggle button 标记保留 frame_09.jpg, Value: off
+						89 toggle button 标记淘汰 frame_09.jpg, Value: off
+					90 container
+						91 toggle button 查看第 10 张 frame_10.jpg, Value: off
+						92 text FRAME 10
+						93 toggle button 标记保留 frame_10.jpg, Value: off
+						94 toggle button 标记淘汰 frame_10.jpg, Value: off
+					95 container
+						96 toggle button 查看第 11 张 frame_11.jpg, Value: off
+						97 text FRAME 11
+						98 toggle button 标记保留 frame_11.jpg, Value: off
+						99 toggle button 标记淘汰 frame_11.jpg, Value: off
+					100 container
+						101 toggle button 查看第 12 张 frame_12.jpg, Value: off
+						102 text FRAME 12
+						103 toggle button 标记保留 frame_12.jpg, Value: off
+						104 toggle button 标记淘汰 frame_12.jpg, Value: off
+					105 container
+						106 toggle button 查看第 13 张 frame_13.jpg, Value: off
+						107 text FRAME 13
+						108 toggle button 标记保留 frame_13.jpg, Value: off
+						109 toggle button 标记淘汰 frame_13.jpg, Value: off
+					110 container
+						111 toggle button 查看第 14 张 frame_14.jpg, Value: off
+						112 text FRAME 14
+						113 toggle button 标记保留 frame_14.jpg, Value: off
+						114 toggle button 标记淘汰 frame_14.jpg, Value: off
+					115 container
+						116 toggle button 查看第 15 张 frame_15.jpg, Value: off
+						117 text FRAME 15
+						118 toggle button 标记保留 frame_15.jpg, Value: off
+						119 toggle button 标记淘汰 frame_15.jpg, Value: off
+					120 container
+						121 toggle button 查看第 16 张 frame_16.jpg, Value: off
+						122 text FRAME 16
+						123 toggle button 标记保留 frame_16.jpg, Value: off
+						124 toggle button 标记淘汰 frame_16.jpg, Value: off
+					125 container
+						126 toggle button 查看第 17 张 frame_17.jpg, Value: off
+						127 text FRAME 17
+						128 toggle button 标记保留 frame_17.jpg, Value: off
+						129 toggle button 标记淘汰 frame_17.jpg, Value: off
+					130 container
+						131 toggle button 查看第 18 张 frame_18.jpg, Value: off
+						132 text FRAME 18
+						133 toggle button 标记保留 frame_18.jpg, Value: off
+						134 toggle button 标记淘汰 frame_18.jpg, Value: off
+					135 container
+						136 toggle button 查看第 19 张 frame_19.jpg, Value: off
+						137 text FRAME 19
+						138 toggle button 标记保留 frame_19.jpg, Value: off
+						139 toggle button 标记淘汰 frame_19.jpg, Value: off
+					140 container
+						141 toggle button 查看第 20 张 frame_20.jpg, Value: off
+						142 text FRAME 20
+						143 toggle button 标记保留 frame_20.jpg, Value: off
+						144 toggle button 标记淘汰 frame_20.jpg, Value: off
+					145 container
+						146 toggle button 查看第 21 张 frame_21.jpg, Value: off
+						147 text FRAME 21
+						148 toggle button 标记保留 frame_21.jpg, Value: off
+						149 toggle button 标记淘汰 frame_21.jpg, Value: off
+					150 container
+						151 toggle button 查看第 22 张 frame_22.jpg, Value: off
+						152 text FRAME 22
+						153 toggle button 标记保留 frame_22.jpg, Value: off
+						154 toggle button 标记淘汰 frame_22.jpg, Value: off
+					155 container
+						156 toggle button 查看第 23 张 frame_23.jpg, Value: off
+						157 text FRAME 23
+						158 toggle button 标记保留 frame_23.jpg, Value: off
+						159 toggle button 标记淘汰 frame_23.jpg, Value: off
+					160 container
+						161 toggle button 查看第 24 张 frame_24.jpg, Value: off
+						162 text FRAME 24
+						163 toggle button 标记保留 frame_24.jpg, Value: off
+						164 toggle button 标记淘汰 frame_24.jpg, Value: off
+					165 container
+						166 toggle button 查看第 25 张 frame_25.jpg, Value: off
+						167 text FRAME 25
+						168 toggle button 标记保留 frame_25.jpg, Value: off
+						169 toggle button 标记淘汰 frame_25.jpg, Value: off
+					170 container
+						171 toggle button 查看第 26 张 frame_26.jpg, Value: off
+						172 text FRAME 26
+						173 toggle button 标记保留 frame_26.jpg, Value: off
+						174 toggle button 标记淘汰 frame_26.jpg, Value: off
+					175 container
+						176 toggle button 查看第 27 张 frame_27.jpg, Value: off
+						177 text FRAME 27
+						178 toggle button 标记保留 frame_27.jpg, Value: off
+						179 toggle button 标记淘汰 frame_27.jpg, Value: off
+					180 container
+						181 toggle button 查看第 28 张 frame_28.jpg, Value: off
+						182 text FRAME 28
+						183 toggle button 标记保留 frame_28.jpg, Value: off
+						184 toggle button 标记淘汰 frame_28.jpg, Value: off
+				185 text Selected 02
+				186 text 作品初选序列
+				187 button 查看入选 frame_01.jpg
+				188 button 查看入选 frame_02.jpg
+				189 button 编辑序列 →
+			190 container
+				191 text THE EDITOR / WORKING NOTES
+				192 heading Value: 2, 每一次选择，
+都是你的表达。
+					193 text 每一次选择，
+都是你的表达。
+				194 text 保留你的判断，慢慢找到画面之间的关系。
+				195 container 检查器面板
+					196 toggle button 照片检查, Value: off
+					197 toggle button AI 建议, Value: off
+					198 toggle button 审美记忆, Value: on
+				199 heading 选择有来处，偏好有证据。, Value: 3
+					200 text 选择有来处，偏好有证据。
+				201 text 假设为项目内关键词规则推断，可确认、纠正或移除。排除证据只停止参与学习；原始人工记录、任务历史与备份仍保留。 YOUR CHOICES 3 人工选择 COMPARISONS 0 比较记录 HYPOTHESES 1 偏好假设 调整记忆会暂停当前 Agent，请基于当前记忆重新委托。选片、作品序列与撤销历史保持原样。
+				202 container
+					203 text 搜索偏好关键词
+					204 text field (settable) 搜索偏好关键词, Placeholder: 例如：留白、逆光
+				205 button 搜索
+				206 checkbox 显示已移除假设, Value: 0
+				207 text  显示已移除假设 PREFERENCE HYPOTHESES / 偏好假设 本项目多次人工判断的说明中出现「留白」
+				208 text 已纠正 · 初步置信 · 证据 1 条 · 反例 1 条 · 已停用检索
+				209 text 你的纠正：只是这两张照片的特点，不是稳定偏好。
+				210 summary 查看证据, Value: off
+					211 text 查看证据
+				212 summary 查看反例, Value: off
+					213 text 查看反例
+				214 button 移除此假设
+				215 text EVIDENCE / 人工证据
+				216 container 2026/10/15 10:25:08 #6 · 备注 · frame_03.jpg 留白太多
+					217 text 2026/10/15 10:25:08
+					218 text #6 · 备注 · frame_03.jpg
+					219 text 留白太多
+					220 button 排除证据 #6
+				221 container 2026/10/15 10:25:02 #5 · 人工淘汰 · frame_03.jpg 该操作没有留下文字理由。
+					222 text 2026/10/15 10:25:02
+					223 text #5 · 人工淘汰 · frame_03.jpg
+					224 text 该操作没有留下文字理由。
+					225 button 排除证据 #5
+				226 container 2026/10/15 10:25:01 #4 · 备注 · frame_02.jpg · 已排除学习 留白
+					227 text 2026/10/15 10:25:01
+					228 text #4 · 备注 · frame_02.jpg · 已排除学习
+					229 text 留白
+					230 button 恢复证据 #4
+				231 container 2026/10/15 10:24:56 #3 · 人工保留 · frame_02.jpg 该操作没有留下文字理由。
+					232 text 2026/10/15 10:24:56
+					233 text #3 · 人工保留 · frame_02.jpg
+					234 text 该操作没有留下文字理由。
+					235 button 排除证据 #3
+				236 container 2026/10/15 10:24:55 #2 · 备注 · frame_01.jpg 留白
+					237 text 2026/10/15 10:24:55
+					238 text #2 · 备注 · frame_01.jpg
+					239 text 留白
+					240 button 排除证据 #2
+				241 container 2026/10/15 10:24:49 #1 · 人工保留 · frame_01.jpg 该操作没有留下文字理由。
+					242 text 2026/10/15 10:24:49
+					243 text #1 · 人工保留 · frame_01.jpg
+					244 text 该操作没有留下文字理由。
+					245 button 排除证据 #1
+				246 text 证据仅记录你的明确操作；Agent 的草案与建议不会出现在这里。撤销或重做不重复计数。
+			247 button Mock · 已暂停 · 1 次工具
+	248 close button
+	249 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	250 minimize button
+	251 text 序间 · 记忆评审
+252 menu bar
+	253 Between Frames Memory Review
+	254 File
+	255 Edit
+	256 View
+	257 Window
+	258 Help
+
+The focused UI element is 2 HTML content Description: 序间 · BETWEEN FRAMES, URL: tauri://localhost#/project/5c690610-5610-43b9-a5f6-26f71e863f39

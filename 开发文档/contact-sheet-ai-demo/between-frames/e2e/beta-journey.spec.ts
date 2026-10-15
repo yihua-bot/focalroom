@@ -1,8 +1,8 @@
 // M5 Beta 完整旅程：意图 → 人工选片与备注 → Agent 委托 → 局部采纳 →
 // 记忆假设纠正 → 导出 → 重启一致性。真实 Rust 后端（stdio harness）。
 import { test, expect } from '@playwright/test';
-import { mkdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, readFile } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
 
 const rpc = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
   const response = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
@@ -80,14 +80,40 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   await page.waitForTimeout(2000);
   await page.screenshot({ path: resolve(screenshots, 'journey-applied.png') });
   // 6. 导出 CSV（默认私密）。
-  const exported = await rpc<unknown>('export_project', { projectId: project.id, format: 'csv', includePaths: false }).catch(() => null);
-  void exported;
+  const exported = await rpc<{ path: string }>('export_project', { projectId: project.id, format: 'csv', includePaths: false });
+  expect(await readFile(exported.path, 'utf8')).not.toContain('original_path');
+  // 6.1 新格式走实际前端按钮、IPC 和 Rust 导出器，不能只测库函数。
+  await page.getByRole('button', { name: '导出 ↗' }).click();
+  await page.getByRole('button', { name: '印刷参考', exact: true }).click();
+  await expect(page.locator('.export-receipt')).toContainText('已导出：');
+  const printPath = (await page.locator('.export-receipt p').innerText()).replace('已导出：', '');
+  expect(printPath).toMatch(/\.html$/);
+  const printHtml = await readFile(printPath, 'utf8');
+  expect(printHtml).toContain('class="sheet"');
+  // 实际排版成 PDF：HTML 节点数正确仍可能因页脚溢出而多印空白页。
+  const printPage = await page.context().newPage();
+  try {
+    await printPage.setContent(printHtml);
+    const pdf = await printPage.pdf({ preferCSSPageSize: true, printBackground: true });
+    const pages = pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)?.length ?? 0;
+    expect(pages).toBe(1 + (printHtml.match(/class="sheet"/g)?.length ?? 0));
+  } finally { await printPage.close(); }
+  await page.getByRole('button', { name: '元数据侧车', exact: true }).click();
+  await expect(page.locator('.export-receipt')).toContainText('已导出：');
+  const sidecarPath = (await page.locator('.export-receipt p').innerText()).replace('已导出：', '');
+  const manifest = JSON.parse(await readFile(join(sidecarPath, 'manifest.json'), 'utf8'));
+  expect(manifest.photos).toBe(200);
+  expect(manifest.files).toHaveLength(200);
+  expect(JSON.parse(await readFile(join(sidecarPath, manifest.files[0].file), 'utf8'))).not.toHaveProperty('originalPath');
   // 7. 重启一致性：重开数据库后证据/纠正/正式状态保持。
+  const beforeRestart = await rpc<Project>('get_project', { projectId: project.id });
+  await rpc('test_restart');
+  expect(await rpc<Project>('get_project', { projectId: project.id })).toEqual(beforeRestart);
   const memoryAfter = await rpc<{ evidence: unknown[]; hypotheses: { id: number; status: string }[] }>('get_memory_projection', { projectId: project.id });
   expect(memoryAfter.hypotheses.find(h => h.id === target!.id)?.status).toBe('corrected');
   // 诊断为 harness 全局计数（同 run 前序 spec 的数据也计入），断言用下界。
-  const diagnostics = await rpc<{ photos: number; evidence: number; provider: { providerId: string } }>('get_diagnostics');
-  expect(diagnostics.photos).toBeGreaterThanOrEqual(200);
-  expect(diagnostics.evidence).toBeGreaterThanOrEqual(11);
+  const diagnostics = await rpc<{ database: { photos: number; evidence: number }; provider: { providerId: string } }>('get_diagnostics');
+  expect(diagnostics.database.photos).toBeGreaterThanOrEqual(200);
+  expect(diagnostics.database.evidence).toBeGreaterThanOrEqual(11);
   expect(diagnostics.provider.providerId).toBe('mock');
 });

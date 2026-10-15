@@ -38,6 +38,12 @@ pub fn fingerprint(path: &Path) -> Result<String> {
 }
 
 pub const DEFAULT_CACHE_LIMIT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+pub fn cache_limit_bytes() -> u64 {
+    std::env::var("BETWEEN_FRAMES_CACHE_LIMIT_BYTES")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_CACHE_LIMIT_BYTES)
+}
 
 /// 缓存配额清理（M1-09 / M5）：删除不被任何 photo 行引用的孤儿缓存
 /// （重复导入、取消导入、照片删除后的残留）。被引用的缓存不动——

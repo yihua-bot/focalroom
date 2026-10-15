@@ -10,10 +10,20 @@ pub(crate) async fn authorize(
     count: i64,
 ) -> Result<Option<i64>> {
     let provider = task.provider_id.as_str();
+    if latest(tx, &task.project_id, provider, Some("deny"))
+        .await?
+        .is_some()
+    {
+        return Ok(None);
+    }
     let matches_project = |row: &sqlx::sqlite::SqliteRow| {
         row.get::<String, _>("project_id") == task.project_id
             && row.get::<String, _>("provider") == provider
             && row.get::<Option<String>, _>("revoked_at").is_none()
+            && (row.get::<String, _>("mode") == "project"
+                || (row.get::<String, _>("mode") == "task"
+                    && row.get::<Option<String>, _>("task_id").as_deref()
+                        == Some(task.id.as_str())))
     };
     if let Some(id) = task.consent_id {
         if let Some(row) = by_id(tx, id).await?
@@ -23,7 +33,7 @@ pub(crate) async fn authorize(
         }
         return Ok(None);
     }
-    if let Some(row) = latest(tx, &task.project_id, provider, None).await? {
+    if let Some(row) = latest(tx, &task.project_id, provider, Some("project")).await? {
         return grant(&row, count);
     }
     Ok(None)
@@ -51,36 +61,35 @@ async fn latest(
     provider: &str,
     mode: Option<&str>,
 ) -> Result<Option<sqlx::sqlite::SqliteRow>> {
-    let sql = match mode {
-        Some(_mode) => {
-            "SELECT * FROM privacy_consents WHERE project_id=? AND provider=? AND mode=? AND revoked_at IS NULL ORDER BY id DESC LIMIT 1"
-        }
-        None => {
-            "SELECT * FROM privacy_consents WHERE project_id=? AND provider=? AND revoked_at IS NULL ORDER BY CASE mode WHEN 'deny' THEN 0 ELSE 1 END, id DESC LIMIT 1"
-        }
-    };
+    let sql = "SELECT * FROM privacy_consents WHERE project_id=? AND provider=? AND (? IS NULL OR mode=?) AND revoked_at IS NULL AND (mode!='task' OR task_id IS NULL) ORDER BY CASE mode WHEN 'deny' THEN 0 ELSE 1 END, id DESC LIMIT 1";
     Ok(sqlx::query(sql)
         .bind(project)
         .bind(provider)
         .bind(mode)
+        .bind(mode)
         .fetch_optional(&mut **tx)
         .await?)
 }
-/// 上传成功后在同一事务消耗配额并累计任务用量/费用。
-pub(crate) async fn consume(
+/// 请求发送前预留配额与费用，网络结果未知时保留预留以防免费重传。
+pub(crate) async fn reserve_usage(
     tx: &mut Transaction<'_, Sqlite>,
     task: &mut super::types::Task,
     consent_id: i64,
     images: u32,
-    text_tokens: u32,
     cost_minor_usd: u32,
 ) -> Result<()> {
-    sqlx::query("UPDATE privacy_consents SET used=used+? WHERE id=? AND used+?<=quota")
+    let changed = sqlx::query("UPDATE privacy_consents SET used=used+? WHERE id=? AND used+?<=quota AND revoked_at IS NULL")
         .bind(images as i64)
         .bind(consent_id)
         .bind(images as i64)
         .execute(&mut **tx)
-        .await?;
+        .await?.rows_affected();
+    if changed != 1 {
+        return Err(AppError::new(
+            "PERMISSION_DENIED",
+            "图像授权已失效或配额不足",
+        ));
+    }
     task.usage.cloud_images = task.usage.cloud_images.saturating_add(images);
     task.usage.cost_minor_usd = task.usage.cost_minor_usd.saturating_add(cost_minor_usd);
     super::store::save(tx, task).await?;
@@ -93,7 +102,6 @@ pub(crate) async fn consume(
     .bind(format!("turn-{}", task.usage.model_turns))
     .execute(&mut **tx)
     .await?;
-    let _ = text_tokens;
     Ok(())
 }
 pub struct SetConsent {
@@ -127,6 +135,16 @@ pub async fn set(db: &crate::db::Store, r: SetConsent) -> Result<super::types::C
             .await?;
     if let Some(id) = existing {
         let view = view(&mut tx, id).await?;
+        if view.project_id != r.project_id
+            || view.mode != r.mode
+            || view.provider != r.provider
+            || view.quota != r.quota
+        {
+            return Err(AppError::new(
+                "IDEMPOTENCY_CONFLICT",
+                "授权请求 ID 已用于不同参数",
+            ));
+        }
         tx.commit().await?;
         return Ok(view);
     }

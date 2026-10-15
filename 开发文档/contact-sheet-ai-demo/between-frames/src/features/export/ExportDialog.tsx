@@ -21,7 +21,7 @@ export function ExportDialog({ onClose, repository, projectId }: { onClose: () =
     <label className="sync-toggle"><input type="checkbox" checked={includePaths} disabled={!repository || busy} onChange={event => setIncludePaths(event.target.checked)} />包含本机文件路径（迁移用途）</label>
     {includePaths && <p className="muted">导出文件将附加原图和缓存的位置引用，分享前请检查这些本机路径。</p>}
     <div className="export-options"><Button disabled={!repository || busy} variant="primary" onClick={() => { void save('json'); }}>项目 JSON</Button><Button disabled={!repository || busy} onClick={() => { void save('csv'); }}>选片 CSV</Button><Button disabled={!repository || busy} onClick={() => { void save('html'); }}>接触印相</Button><Button disabled={!repository || busy} onClick={() => { void save('print'); }}>印刷参考</Button><Button disabled={!repository || busy} onClick={() => { void save('sidecar'); }}>元数据侧车</Button></div>
-    <div className="info-card"><span className="eyebrow">{repository ? 'LOCAL SNAPSHOT' : 'BROWSER PREVIEW'}</span><p>{repository ? '接触印相 HTML 内嵌小尺寸缓存预览，可在浏览器打印。导出不复制、不改写原始照片。' : '浏览器只提供内存 UI 示例；请在桌面版导出真实项目。'}</p></div>
+    <div className="info-card"><span className="eyebrow">{repository ? 'LOCAL SNAPSHOT' : 'BROWSER PREVIEW'}</span><p>{repository ? '印刷参考保存为 HTML，可在浏览器打印为 PDF。元数据侧车会在所选文件夹内新建独立文件夹。导出不复制、不改写原始照片。' : '浏览器只提供内存 UI 示例；请在桌面版导出真实项目。'}</p></div>
     {receipt && <div role="status" className="export-receipt"><p>已导出：{receipt.path}</p><small>SHA256 {receipt.sha256}</small></div>}
     {error && <p role="alert" className="error-message">{error}</p>}
   </Modal>;

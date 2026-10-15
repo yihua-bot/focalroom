@@ -1,0 +1,7 @@
+{
+  "productName": "Between Frames Memory Review",
+  "identifier": "studio.betweenframes.memoryreview",
+  "app": {
+    "windows": [{ "label": "main", "title": "序间 · 记忆评审", "width": 1440, "height": 960, "minWidth": 960, "minHeight": 680, "backgroundColor": "#101113" }]
+  }
+}

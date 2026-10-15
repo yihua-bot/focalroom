@@ -1,0 +1,24 @@
+{
+  "identifier": "studio.betweenframes.memoryreview",
+  "nativeUiAccepted": true,
+  "copySuccessNotice": true,
+  "refreshSuccess": true,
+  "escapeCloses": true,
+  "databaseTablesCompared": 35,
+  "databaseExactMatch": true,
+  "sourceHashesCompared": 28,
+  "sourceHashesUnchanged": true,
+  "migrationsApplied": 9,
+  "formalRevision": 35,
+  "cacheFiles": 56,
+  "measuredFileBytes": {
+    "database": 335872,
+    "wal": 3802792,
+    "sharedMemory": 32768,
+    "cache": 1784605,
+    "backups": 0
+  },
+  "totalBytes": 5956037,
+  "newTasks": 0,
+  "originalDatabaseUpgraded": false
+}

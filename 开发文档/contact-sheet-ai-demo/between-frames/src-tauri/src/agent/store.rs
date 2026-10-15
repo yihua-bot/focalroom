@@ -18,6 +18,7 @@ pub(crate) async fn load(tx: &mut Transaction<'_, Sqlite>, id: &str) -> Result<T
         project_id: r.get("project_id"),
         goal: r.get("goal"),
         base_revision: r.get("base_revision"),
+        memory_revision: r.get("memory_revision"),
         allowed_photo_ids: parse(r.get("allowed_ids_json"))?,
         selected_photo_ids: parse(r.get("selected_ids_json"))?,
         target_count: r.get::<i64, _>("target_count") as u32,
@@ -127,7 +128,7 @@ pub(crate) async fn checkpoint(tx: &mut Transaction<'_, Sqlite>, task: &Task) ->
             .bind(&task.id)
             .fetch_all(&mut **tx)
             .await?;
-    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"providerId":task.provider_id,"modelId":model_id_of(&task.provider_id),"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"memoryRevision":task.memory_revision,"providerId":task.provider_id,"modelId":model_id_of(&task.provider_id),"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
     Ok(())
 }
 fn model_id_of(provider: &str) -> String {

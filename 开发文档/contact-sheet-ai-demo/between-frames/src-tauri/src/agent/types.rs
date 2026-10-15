@@ -108,6 +108,8 @@ pub struct Task {
     pub project_id: String,
     pub goal: String,
     pub base_revision: i64,
+    #[serde(default)]
+    pub memory_revision: i64,
     pub allowed_photo_ids: Vec<String>,
     pub selected_photo_ids: Vec<String>,
     pub target_count: u32,

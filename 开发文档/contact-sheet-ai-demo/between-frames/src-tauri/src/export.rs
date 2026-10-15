@@ -15,6 +15,22 @@ pub struct ExportReceipt {
     pub bytes: usize,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ExportDestination {
+    File(&'static str),
+    Directory,
+}
+/// 桌面入口与导出器共用格式映射，印刷参考的实际文件类型为 HTML。
+pub fn destination(format: &str) -> Result<ExportDestination> {
+    match format {
+        "json" => Ok(ExportDestination::File("json")),
+        "csv" => Ok(ExportDestination::File("csv")),
+        "html" | "print" => Ok(ExportDestination::File("html")),
+        "sidecar" => Ok(ExportDestination::Directory),
+        _ => Err(AppError::new("INVALID_INPUT", "导出格式不合法")),
+    }
+}
+
 pub fn render(project: &Project, format: &str) -> Result<Vec<u8>> {
     render_with_options(project, format, false)
 }
@@ -150,14 +166,16 @@ body {{ font-family: Georgia, 'Songti SC', serif; color: #222; margin: 0; }}
 .cover {{ page-break-after: always; padding: 40mm 20mm; }}
 .cover h1 {{ font-weight: 400; font-size: 34pt; margin: 0 0 8mm; }}
 .cover p {{ color: #555; max-width: 140mm; line-height: 1.7; }}
-.sheet {{ page-break-after: always; display: flex; flex-direction: column; height: 180mm; }}
-.sheet header, .sheet footer {{ display: flex; justify-content: space-between; font-size: 9pt; color: #777; border-bottom: 0.4pt solid #bbb; padding-bottom: 2mm; }}
-.sheet footer {{ border: none; border-top: 0.4pt solid #bbb; padding: 2mm 0 0; margin-top: auto; }}
-.plates {{ display: flex; gap: 10mm; flex: 1; align-items: center; }}
+.sheet {{ page-break-after: always; break-inside: avoid; position: relative; box-sizing: border-box; height: 168mm; padding: 10mm 0 12mm; }}
+.sheet:last-of-type {{ page-break-after: auto; }}
+.sheet header, .sheet footer {{ position: absolute; left: 0; right: 0; display: flex; justify-content: space-between; font-size: 9pt; color: #777; border-bottom: 0.4pt solid #bbb; padding-bottom: 2mm; }}
+.sheet header {{ top: 0; }}
+.sheet footer {{ bottom: 0; border: none; border-top: 0.4pt solid #bbb; padding: 2mm 0 0; }}
+.plates {{ display: flex; gap: 10mm; height: 100%; align-items: center; }}
 .plate {{ flex: 1; margin: 0; text-align: center; }}
 .plate img {{ max-width: 100%; max-height: 130mm; outline: 0.4pt dashed #bbb; outline-offset: 4mm; }}
 .plate.spread {{ flex: 1 1 100%; }}
-.plate.spread img {{ max-height: 155mm; }}
+.plate.spread img {{ max-height: 135mm; }}
 .plate.full {{ flex: 1 1 100%; max-width: 70%; margin: 0 auto; }}
 .plate figcaption {{ font-size: 9.5pt; margin-top: 3mm; color: #444; }}
 .plate strong {{ color: #000; margin-right: 2mm; }}

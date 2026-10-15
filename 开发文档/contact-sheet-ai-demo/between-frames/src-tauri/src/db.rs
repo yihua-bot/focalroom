@@ -29,6 +29,12 @@ impl Store {
             .max_connections(1)
             .connect_with(options)
             .await?;
+        let migrator = sqlx::migrate!("./migrations");
+        let latest = migrator
+            .iter()
+            .map(|migration| migration.version)
+            .max()
+            .unwrap_or(0);
         let migrations_exist: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_sqlx_migrations'",
         )
@@ -40,11 +46,17 @@ impl Store {
             )
             .fetch_one(&pool)
             .await?;
-            if version > 0 && version < 4 {
+            if version > 0 && version < latest {
                 // VACUUM INTO 包含已提交 WAL，备份成功后才升级；不覆盖既有文件。
                 let backup = path.with_extension(format!(
                     "backup-before-{}-{}.sqlite",
-                    if version < 3 { "m1" } else { "m2" },
+                    if version < 3 {
+                        "m1".to_owned()
+                    } else if version == 3 {
+                        "m2".to_owned()
+                    } else {
+                        format!("v{version}")
+                    },
                     domain::id()
                 ));
                 sqlx::query("VACUUM INTO ?")
@@ -81,7 +93,7 @@ impl Store {
                 }
             }
         }
-        sqlx::migrate!("./migrations")
+        migrator
             .run(&pool)
             .await
             .map_err(|error| AppError::new("MIGRATION", error.to_string()))?;

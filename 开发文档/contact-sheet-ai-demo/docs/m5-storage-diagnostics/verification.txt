@@ -1,0 +1,299 @@
+
+== 契约检查（GUI + Agent） ==
+
+> between-frames@0.1.0 contracts:check
+> node scripts/generate-command-contracts.mjs --check
+
+M1 command contracts: OK
+Agent contracts: OK
+Memory contracts: OK
+
+== 前端类型检查 ==
+
+> between-frames@0.1.0 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+
+
+== 前端 Lint ==
+
+> between-frames@0.1.0 lint
+> eslint . --max-warnings 0
+
+
+== 前端单元测试 ==
+
+> between-frames@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.11 /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames
+
+
+ Test Files  14 passed (14)
+      Tests  56 passed (56)
+   Start at  10:38:44
+   Duration  2.65s (transform 994ms, setup 1.53s, import 2.45s, tests 4.18s, environment 9.30s)
+
+
+== 浏览器预览 E2E ==
+
+> between-frames@0.1.0 test:e2e
+> playwright test
+
+[WebServer] (node:7901) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 16 tests using 1 worker
+
+(node:7902) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 e2e/gui-v1.spec.ts:10:1 › 多选、明确 K/X/U、批量人工评分和输入焦点隔离 (2.2s)
+  ✓   2 e2e/gui-v1.spec.ts:41:1 › 大图适合屏幕、100% 缓存像素、平移、翻片与关闭焦点 (745ms)
+  ✓   3 e2e/gui-v1.spec.ts:71:1 › 选中两张比较，同步与独立缩放平移不会改写状态 (797ms)
+  ✓   4 e2e/gui-v1.spec.ts:100:1 › 搜索快捷键、当前视图全选、面板折叠和双尺寸可用性 (1.0s)
+  ✓   5 e2e/history-v1.spec.ts:8:1 › 多选一次撤销，重做与新编辑分支；备注输入不触发项目撤销 (609ms)
+  ✓   6 e2e/history-v1.spec.ts:28:1 › 版本保存、范围预览、恢复与撤销恢复 (753ms)
+  ✓   7 e2e/workspace.spec.ts:17:1 › 实际运行原始 standalone Demo 并核对主要交互 (436ms)
+  ✓   8 e2e/workspace.spec.ts:33:1 › 工作台与检查器截图，完整构图、密度切换和面板收起 (786ms)
+  ✓   9 e2e/workspace.spec.ts:53:1 › 比较截图、焦点陷阱、Esc 与偏好不会改写选片 (683ms)
+  ✓  10 e2e/workspace.spec.ts:70:1 › 作品序列截图，鼠标拖拽与键盘上下移动一致 (1.7s)
+  ✓  11 e2e/workspace.spec.ts:100:1 › 序列把手支持 Space 与方向键拖放，不与全局快捷键冲突 (823ms)
+  ✓  12 e2e/workspace.spec.ts:116:1 › 序列把手处理单次合并移动事件，Escape 取消后顺序不变 (734ms)
+  ✓  13 e2e/workspace.spec.ts:147:1 › 新建项目的空状态截图与项目导航 (652ms)
+  ✓  14 e2e/workspace.spec.ts:162:1 › 备注编辑不会触发 K/X；刷新明确重置内存预览 (869ms)
+  ✓  15 e2e/workspace.spec.ts:176:1 › AI、导入和导出边界明示；没有外部请求 (615ms)
+  ✓  16 e2e/workspace.spec.ts:190:1 › 390px 窄屏能导航、选片和查看检查器，无横向溢出 (536ms)
+
+  16 passed (15.1s)
+
+== Rust 测试（target-v1） ==
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.28s
+     Running unittests src/lib.rs (src-tauri/target-v1/debug/deps/between_frames_lib-6088a414916a15ae)
+
+running 1 test
+test diagnostics::tests::scan_limit_is_reported_without_claiming_zero_usage ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (src-tauri/target-v1/debug/deps/between_frames-ae1bbc859704a68c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_memory.rs (src-tauri/target-v1/debug/deps/agent_memory-c29c20aacd70a3c9)
+
+running 14 tests
+test growing_support_updates_the_same_hypothesis_and_preserves_disabled_state ... ok
+test batch_decisions_keep_all_participants_and_do_not_invent_past_explanations ... ok
+test fts_search_is_scoped_and_goal_relevance_precedes_confirmation ... ok
+test ag11_correction_stops_retrieval_and_does_not_revive ... ok
+test memory_changes_pause_tasks_and_require_new_context_instead_of_old_history ... ok
+test evidence_is_deduplicated_and_hypotheses_are_deterministic ... ok
+test correction_survives_growing_evidence_legacy_duplicates_and_restart ... ok
+test controls_are_idempotent_reversible_and_leave_formal_edit_history_unchanged ... ok
+test excluded_evidence_updates_support_counters_retrieval_and_survives_restart ... ok
+test version_eight_upgrade_backs_up_committed_wal_before_new_schema ... ok
+test memory_scope_schema_and_receipt_fault_rollback_are_enforced ... ok
+test memory_exclusion_discards_a_model_reply_already_in_flight ... ok
+test retrieve_preferences_tool_returns_evidence_backed_and_rejects_cross_project ... ok
+test agent_drafts_are_not_evidence_until_human_applies ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.14s
+
+     Running tests/agent_runtime.rs (src-tauri/target-v1/debug/deps/agent_runtime-dd46a49c510c1fa1)
+
+running 13 tests
+test ag07_receipt_replay_does_not_duplicate_draft_even_after_timeout_and_restart ... ok
+test draft_and_receipt_fault_are_one_transaction_and_m1_upgrade_has_backup ... ok
+test ag05_06_13_14_security_schema_injection_and_invalid_final_are_rejected ... ok
+test in_flight_wait_is_charged_once_on_pause_and_interruption ... ok
+test ag10_backend_caps_model_tools_context_time_and_retry_failures ... ok
+test ag08_15_stale_rebase_partial_apply_and_undo_preserve_unapproved_state ... ok
+test formal_edit_during_loop_survives_and_completed_drafts_are_stale ... ok
+test ag09_pause_restart_resume_and_pending_calls_retain_protocol_links ... ok
+test human_feedback_and_cancel_are_persistent_without_formal_writes ... ok
+test two_hundred_scope_two_twenty_five_drafts_fit_default_context_without_losing_linkage ... ok
+test ag01_different_human_facts_change_search_path_and_formal_state_is_untouched ... ok
+test ag03_reorder_scope_avoids_whole_project_reads_for_two_orders ... ok
+test ag02_duplicate_annotation_drives_revision_not_fixed_tool_order ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.12s
+
+     Running tests/agent_vision.rs (src-tauri/target-v1/debug/deps/agent_vision-a3af68002b6c777d)
+
+running 11 tests
+test cloud_image_budget_cap_pauses_task_before_any_upload ... ok
+test unexpected_provider_usage_is_visible_and_stops_further_requests ... ok
+test consented_vision_uploads_once_then_cache_hits_without_reupload ... ok
+test malformed_vision_response_keeps_upload_reservation_instead_of_free_retry ... ok
+test task_consent_is_bound_once_and_never_used_as_project_fallback ... ok
+test timed_out_upload_is_charged_and_resume_does_not_send_it_again ... ok
+test crashed_in_flight_upload_keeps_reservation_and_cannot_retransmit_on_resume ... ok
+test ag04_without_consent_no_image_leaves_formal_state_untouched ... ok
+test paused_upload_settles_and_replays_after_restart_without_retransmission ... ok
+test hallucinated_photo_ids_are_dropped_and_quota_charged_for_real_transfer ... ok
+test zero_cost_and_exhausted_tool_budget_stop_before_upload ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.99s
+
+     Running tests/book_marks.rs (src-tauri/target-v1/debug/deps/book_marks-3b4ff2a4eeeda268)
+
+running 2 tests
+test mark_command_roundtrip_undo_and_snapshot_restore ... ok
+test print_paging_respects_spread_marks ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/cache_quota.rs (src-tauri/target-v1/debug/deps/cache_quota-85620da9864faf42)
+
+running 2 tests
+test sweep_missing_cache_dir_is_noop ... ok
+test sweep_keeps_live_and_oldest_first_orphans_only ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/command_history.rs (src-tauri/target-v1/debug/deps/command_history-c9cfed353838aa96)
+
+running 10 tests
+test generated_request_contract_round_trips_all_m1_examples_and_rejects_extra_fields ... ok
+test database_ownership_triggers_reject_cross_project_rows ... ok
+test concurrent_connections_have_one_success_and_deterministic_conflict ... ok
+test comparison_undo_is_logical_and_does_not_delete_evidence_rows ... ok
+test receipt_write_failure_rolls_back_every_projection_event_and_stack ... ok
+test project_brief_and_archive_restore_have_compensating_history ... ok
+test durable_replay_checks_fingerprint_scope_and_returns_original_result ... ok
+test old_wal_database_is_backed_up_before_upgrade_and_backup_can_restore_project ... ok
+test named_version_restore_is_scoped_atomic_and_undoable ... ok
+test batch_history_undo_redo_persists_and_new_edit_invalidates_redo_branch ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/diagnostics.rs (src-tauri/target-v1/debug/deps/diagnostics-a5d8b2f64e3f814f)
+
+running 4 tests
+test missing_cache_is_empty_but_missing_required_database_is_unknown ... ok
+test cache_and_backup_symlinks_and_nested_dirs_are_not_followed ... ok
+test unavailable_storage_is_partial_and_database_failure_is_not_zero ... ok
+test diagnostics_counts_sizes_are_read_only_and_redacted ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/export_v12.rs (src-tauri/target-v1/debug/deps/export_v12-2b5ff0939daa93de)
+
+running 3 tests
+test desktop_export_destinations_cover_every_visible_format ... ok
+test print_reference_html_has_cover_pages_and_plates ... ok
+test sidecar_export_writes_per_photo_json_and_manifest ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/keychain.rs (src-tauri/target-v1/debug/deps/keychain-aeaee7d85bbb56e4)
+
+running 1 test
+test tests::rejects_empty_key ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/local_core.rs (src-tauri/target-v1/debug/deps/local_core-d707b5ae1319ca6f)
+
+running 10 tests
+test jpeg_exif_orientation_is_applied_to_cache ... ok
+test archive_is_recoverable_and_keeps_source_and_journal ... ok
+test rating_migration_upgrades_old_database_without_changing_legacy_data ... ok
+test revision_conflicts_and_invalid_operations_roll_back_every_projection_and_event ... ok
+test missing_source_keeps_cache_and_relink_requires_identical_content ... ok
+test comparisons_are_evidence_only_and_exports_are_escaped_and_read_only ... ok
+test batch_edits_are_atomic_scoped_and_repeated_status_is_a_noop ... ok
+test imports_report_duplicates_bad_files_and_cancel_without_losing_committed_data ... ok
+test two_hundred_photos_survive_restart_without_changing_sources ... ok
+test native_heic_and_canon_raw_are_decoded_without_changing_originals ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.46s
+
+     Running tests/perf_baseline.rs (src-tauri/target-v1/debug/deps/perf_baseline-dbae57693ed62b6c)
+
+running 1 test
+test perf_baseline_200_import_and_decision_p95 ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/project_tags.rs (src-tauri/target-v1/debug/deps/project_tags-f924eeabed81ecff)
+
+running 1 test
+test tags_roundtrip_validation_and_no_revision_drift ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests between_frames_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+== Rust 格式检查 ==
+
+== Rust 严格 Clippy ==
+    Checking objc2-exception-helper v0.1.1
+    Checking ring v0.17.14
+   Compiling libsqlite3-sys v0.30.1
+    Checking objc2 v0.6.5
+   Compiling sqlx-sqlite v0.8.6
+    Checking rustls-webpki v0.103.15
+    Checking block2 v0.6.2
+    Checking objc2-core-foundation v0.3.2
+    Checking dispatch2 v0.3.1
+    Checking rustls v0.23.45
+    Checking objc2-foundation v0.3.2
+   Compiling sqlx-macros-core v0.8.6
+   Compiling sqlx-macros v0.8.6
+    Checking tokio-rustls v0.26.6
+    Checking hyper-rustls v0.27.10
+    Checking sqlx v0.8.6
+    Checking reqwest v0.12.28
+    Checking objc2-quartz-core v0.3.2
+    Checking objc2-app-kit v0.3.2
+    Checking objc2-web-kit v0.3.2
+    Checking tao v0.37.1
+    Checking muda v0.20.0
+    Checking window-vibrancy v0.8.1
+    Checking rfd v0.16.0
+    Checking wry v0.57.0
+    Checking tauri-runtime v2.12.1
+    Checking tauri-runtime-wry v2.12.1
+    Checking tauri v2.12.3
+    Checking tauri-plugin-fs v2.7.0
+    Checking tauri-plugin-dialog v2.8.2
+    Checking between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.34s
+
+== 重建集成 harness（重要：integration 依赖 target-v1 的最新 harness） ==
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.63s
+
+== 真实后端集成 E2E（含 Beta 旅程） ==
+
+> between-frames@0.1.0 test:integration
+> playwright test --config playwright.integration.config.ts
+
+[WebServer] (node:8464) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:8465) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 5 tests using 1 worker
+
+(node:8467) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/agent-core.spec.ts:13:1 › M2 真实后端：预算暂停、恢复、两份草案、人工冲突、局部采纳/撤销与重启 (52.7s)
+  ✓  2 e2e/beta-journey.spec.ts:14:1 › Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一致 (11.2s)
+  ✓  3 e2e/diagnostics.spec.ts:12:1 › M5 本地诊断：真实统计、查看后复制、刷新及正式状态只读 (1.3s)
+  ✓  4 e2e/local-core.spec.ts:13:1 › v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、版本恢复、私密导出与重启 (11.3s)
+  ✓  5 e2e/memory-controls.spec.ts:14:1 › M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索及重启 (6.5s)
+
+  5 passed (1.4m)
+
+全部通过。 性能基线（可选，手动运行）：
+  cargo test --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --release --test perf_baseline -- --nocapture --ignored

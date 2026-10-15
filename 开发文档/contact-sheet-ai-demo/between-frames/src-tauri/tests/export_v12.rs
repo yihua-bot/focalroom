@@ -64,6 +64,21 @@ async fn print_reference_html_has_cover_pages_and_plates() {
     assert!(html.contains("第 2 页"));
 }
 
+#[test]
+fn desktop_export_destinations_cover_every_visible_format() {
+    use export::ExportDestination::{Directory, File};
+    for (format, destination) in [
+        ("json", File("json")),
+        ("csv", File("csv")),
+        ("html", File("html")),
+        ("print", File("html")),
+        ("sidecar", Directory),
+    ] {
+        assert_eq!(export::destination(format).unwrap(), destination);
+    }
+    assert!(export::destination("pdf").is_err());
+}
+
 #[tokio::test]
 async fn sidecar_export_writes_per_photo_json_and_manifest() {
     let temp = tempfile::tempdir().unwrap();

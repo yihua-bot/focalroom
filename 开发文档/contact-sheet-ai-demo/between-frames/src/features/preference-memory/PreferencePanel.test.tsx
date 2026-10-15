@@ -17,10 +17,10 @@ const hypothesis: MemoryHypothesis = {
 };
 const projection: MemoryProjection = {
   evidence: [
-    { id: 1, projectId: 'p1', photoId: 'a', kind: 'keep', detail: {}, createdAt: '2026-10-14T01:00:00Z' },
-    { id: 2, projectId: 'p1', photoId: 'b', kind: 'note', detail: {}, createdAt: '2026-10-14T01:01:00Z' },
-    { id: 3, projectId: 'p1', photoId: 'c', kind: 'keep', detail: {}, createdAt: '2026-10-14T01:02:00Z' },
-    { id: 4, projectId: 'p1', photoId: null, kind: 'comparison', detail: {}, createdAt: '2026-10-14T01:03:00Z' },
+    { id: 1, projectId: 'p1', photoId: 'a', kind: 'keep', detail: {}, excluded: false, createdAt: '2026-10-14T01:00:00Z' },
+    { id: 2, projectId: 'p1', photoId: 'b', kind: 'note', detail: {}, excluded: false, createdAt: '2026-10-14T01:01:00Z' },
+    { id: 3, projectId: 'p1', photoId: 'c', kind: 'keep', detail: {}, excluded: false, createdAt: '2026-10-14T01:02:00Z' },
+    { id: 4, projectId: 'p1', photoId: null, kind: 'comparison', detail: {}, excluded: false, createdAt: '2026-10-14T01:03:00Z' },
   ],
   hypotheses: [hypothesis],
   notice: '证据仅来自人工命令；Agent 草案不构成偏好。假设为规则推断，可纠正或停用。',
@@ -30,10 +30,11 @@ function makeRepository() {
   return {
     memory: {
       query: vi.fn().mockResolvedValue(projection),
+      request: vi.fn().mockResolvedValue({ changed: true, memoryRevision: 1, requestId: 'm1' }),
       correct: vi.fn().mockResolvedValue({ ...hypothesis, status: 'corrected', disabled: true, userCorrection: '不是我的偏好' }),
       setEnabled: vi.fn().mockImplementation((_p: string, _id: number, enabled: boolean) => Promise.resolve({ ...hypothesis, disabled: !enabled })),
     },
-  } as unknown as { memory: { query: Mock; correct: Mock; setEnabled: Mock } };
+  } as unknown as { memory: { query: Mock; request: Mock; correct: Mock; setEnabled: Mock } };
 }
 function mount(repository?: unknown) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -74,4 +75,46 @@ describe('Memory Studio', () => {
     expect(screen.queryByText(hypothesis.statement)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '纠正此假设' })).not.toBeInTheDocument();
   });
+  it('确认、移除、恢复与证据排除走类型化命令，搜索传递关键词', async () => {
+    const repository = makeRepository();
+    mount(repository);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: '确认此假设' }));
+    await waitFor(() => expect(repository.memory.request).toHaveBeenCalledWith('p1', { type: 'ConfirmHypothesis', hypothesisId: 7 }));
+    await user.click(screen.getByRole('button', { name: '移除此假设' }));
+    await waitFor(() => expect(repository.memory.request).toHaveBeenCalledWith('p1', { type: 'RetireHypothesis', hypothesisId: 7 }));
+    await user.click(screen.getByRole('button', { name: '排除证据 #1' }));
+    await waitFor(() => expect(repository.memory.request).toHaveBeenCalledWith('p1', { type: 'SetEvidenceExcluded', evidenceId: 1, excluded: true }));
+    await user.type(screen.getByRole('textbox', { name: '搜索偏好关键词' }), '逆光');
+    await user.click(screen.getByRole('button', { name: '搜索' }));
+    await waitFor(() => expect(repository.memory.query).toHaveBeenCalledWith('p1', '逆光'));
+  });
+  it('已移除假设默认隐藏，展开后可恢复；展示反例与历史理由', async () => {
+    const repository = makeRepository();
+    repository.memory.query.mockResolvedValue({
+      ...projection, hypotheses: [{ ...hypothesis, status: 'retired', disabled: true }],
+      evidence: projection.evidence.map(item => item.id === 4 ? { ...item, detail: { reason: '留白太多', preference: 'right' }, excluded: true } : item),
+    });
+    mount(repository);
+    const user = userEvent.setup();
+    await screen.findByRole('button', { name: '恢复证据 #4' });
+    expect(screen.queryByText(hypothesis.statement)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: '显示已移除假设' }));
+    expect(screen.getByText(hypothesis.statement)).toBeInTheDocument();
+    expect(screen.getByText('查看反例')).toBeInTheDocument();
+    expect(screen.getAllByText('留白太多').length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('button', { name: '恢复此假设' }));
+    await waitFor(() => expect(repository.memory.request).toHaveBeenCalledWith('p1', { type: 'RestoreHypothesis', hypothesisId: 7 }));
+    await user.click(screen.getByRole('button', { name: '恢复证据 #4' }));
+    await waitFor(() => expect(repository.memory.request).toHaveBeenCalledWith('p1', { type: 'SetEvidenceExcluded', evidenceId: 4, excluded: false }));
+  });
+  it('失败的记忆操作显示错误，查询失败也可见', async () => {
+    const repository = makeRepository();
+    repository.memory.request.mockRejectedValue(new Error('回执未保存'));
+    mount(repository);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: '确认此假设' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('回执未保存');
+  });
+
 });

@@ -1,0 +1,83 @@
+// M4 本地记忆：浏览器界面驱动真实 Rust/SQLite，禁止外发。
+import { test, expect } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import type { MemoryProjection } from '../src/domain/memory';
+
+async function rpc<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
+  const response = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
+  if (!response.ok) throw new Error(response.error.message);
+  return response.value;
+}
+type Project = { id: string; revision: number; sequence: string[]; photos: { id: string; status: string; note: string }[] };
+
+test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索及重启', async ({ page }) => {
+  const screenshots = resolve('../docs/screenshots/m4-memory-controls');
+  await mkdir(screenshots, { recursive: true });
+  const errors: string[] = []; const outside: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/*', route => {
+    if (['localhost', '127.0.0.1', '[::1]'].includes(new URL(route.request().url()).hostname)) return route.continue();
+    outside.push(route.request().url()); return route.abort();
+  });
+  await page.addInitScript(() => Object.assign(globalThis, {
+    isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} },
+    __TAURI_INTERNALS__: {
+      invoke: async (command: string, args: unknown) => {
+        if (command.startsWith('plugin:event|')) return 0;
+        const reply = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
+        if (!reply.ok) throw reply.error; return reply.value;
+      },
+      convertFileSrc: (path: string) => 'http://localhost:1422/asset?path=' + encodeURIComponent(path), transformCallback: () => 0,
+    },
+  }));
+  let project = await rpc<Project>('create_project', { title: 'M4 · 选择有证据', brief: '人工证据可排除、假设可纠正与恢复。' });
+  const hashes = await rpc<string[][]>('test_fixture_checksums');
+  const selectionToken = await rpc<string>('choose_import', { projectId: project.id });
+  const jobId = await rpc<string>('import_photos', { projectId: project.id, selectionToken });
+  await expect.poll(async () => (await rpc<{ status: string }>('get_import_job', { jobId })).status, { timeout: 100000 }).toBe('completed');
+  project = await rpc<Project>('get_project', { projectId: project.id });
+  for (const index of [0, 1]) project = await rpc<Project>('update_photo_note', { projectId: project.id, expectedRevision: project.revision, photoId: project.photos[index].id, text: '留白' });
+  project = await rpc<Project>('update_photo_decision', { projectId: project.id, expectedRevision: project.revision, photoId: project.photos[2].id, status: 'reject' });
+  project = await rpc<Project>('update_photo_note', { projectId: project.id, expectedRevision: project.revision, photoId: project.photos[2].id, text: '留白太多' });
+  const formal = await rpc<Project>('get_project', { projectId: project.id });
+  const initial = await rpc<MemoryProjection>('get_memory_projection', { projectId: project.id });
+  const h = initial.hypotheses.find(h => h.statement.includes('留白'))!;
+  const support = h.evidenceIds[0];
+  await page.goto('/#/project/' + project.id);
+  await page.getByRole('button', { name: '审美记忆', exact: true }).last().click();
+  const card = page.locator('.memory-hypothesis').filter({ hasText: h.statement });
+  await expect(card).toContainText('证据 2 条 · 反例 1 条');
+  await card.getByText('查看反例', { exact: true }).click();
+  await expect(card).toContainText('留白太多');
+  await card.getByRole('button', { name: '确认此假设' }).click();
+  await expect(card).toHaveAttribute('data-status', 'confirmed');
+  await page.screenshot({ path: resolve(screenshots, 'confirmed-counterexample.png') });
+  await page.getByRole('button', { name: '排除证据 #' + support, exact: true }).click();
+  await expect(card).toContainText('证据 1 条');
+  await page.getByRole('button', { name: '恢复证据 #' + support, exact: true }).click();
+  await expect(card).toContainText('证据 2 条');
+  await card.getByRole('button', { name: '移除此假设' }).click();
+  await expect(card).toHaveCount(0);
+  await page.getByRole('checkbox', { name: '显示已移除假设' }).check();
+  await expect(card).toHaveAttribute('data-status', 'retired');
+  await card.getByRole('button', { name: '恢复此假设' }).click();
+  await expect(card).toHaveAttribute('data-status', 'unconfirmed');
+  await page.getByRole('textbox', { name: '搜索偏好关键词' }).fill('逆光');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(page.getByText('没有匹配的假设')).toBeVisible();
+  await page.getByRole('textbox', { name: '搜索偏好关键词' }).fill('留白');
+  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(card).toBeVisible();
+  await page.screenshot({ path: resolve(screenshots, 'restored-search.png') });
+  const memory = await rpc<MemoryProjection>('get_memory_projection', { projectId: project.id });
+  expect(await rpc<Project>('get_project', { projectId: project.id })).toEqual(formal);
+  await rpc('test_restart');
+  expect(await rpc<Project>('get_project', { projectId: project.id })).toEqual(formal);
+  expect(await rpc<MemoryProjection>('get_memory_projection', { projectId: project.id })).toEqual(memory);
+  expect(await rpc<string[][]>('test_fixture_checksums')).toEqual(hashes);
+  await page.reload();
+  await page.getByRole('button', { name: '审美记忆', exact: true }).last().click();
+  await expect(card).toHaveAttribute('data-status', 'unconfirmed');
+  expect(errors).toEqual([]); expect(outside).toEqual([]);
+});

@@ -31,6 +31,14 @@ pub(crate) async fn outcome(
     }
 
     let bytes = serde_json::to_vec(&result).unwrap().len() as u32;
+    if t.provider_id == super::PROVIDER_OPENAI {
+        let reserved = super::openai::model_reservation(&t, input);
+        let actual = super::openai::text_cost_minor_usd(input.saturating_add(bytes));
+        let refund = reserved.saturating_sub(actual);
+        t.usage.cost_minor_usd = t.usage.cost_minor_usd.saturating_sub(refund);
+        sqlx::query("UPDATE model_usage SET cost_minor_usd=cost_minor_usd-? WHERE task_id=? AND request_id=?")
+            .bind(i64::from(refund)).bind(id).bind(format!("turn-{}", t.usage.model_turns)).execute(&mut *tx).await?;
+    }
     t.usage.output_estimate = t.usage.output_estimate.saturating_add(bytes);
     t.elapsed_ms += elapsed;
     sqlx::query("UPDATE model_usage SET output_estimate=? WHERE task_id=? AND request_id=?")
@@ -39,7 +47,6 @@ pub(crate) async fn outcome(
         .bind(format!("turn-{}", t.usage.model_turns))
         .execute(&mut *tx)
         .await?;
-    let _ = input;
     if bytes > t.budget.max_output_tokens
         || t.elapsed_ms >= u64::from(t.budget.max_duration_seconds) * 1000
         || t.usage
@@ -284,11 +291,14 @@ pub(crate) async fn attempt(db: &Store, id: &str, input: u32) -> Result<()> {
     PolicyGate::model_budget(&t, input)?;
     t.usage.model_turns += 1;
     t.usage.input_estimate = t.usage.input_estimate.saturating_add(input);
-    sqlx::query("INSERT INTO model_usage VALUES(?,?,?,?,0,0)")
+    let reserved = super::openai::model_reservation(&t, input);
+    t.usage.cost_minor_usd = t.usage.cost_minor_usd.saturating_add(reserved);
+    sqlx::query("INSERT INTO model_usage VALUES(?,?,?,?,0,?)")
         .bind(id)
         .bind(format!("turn-{}", t.usage.model_turns))
         .bind(input as i64)
         .bind(0i64)
+        .bind(i64::from(reserved))
         .execute(&mut *tx)
         .await?;
     store::step(&mut tx,id,"model_attempt",json!({"round":t.usage.model_turns,"startedAt":crate::domain::timestamp(),"promptVersion":super::prompt_version(&t.provider_id),"providerId":t.provider_id}),"发起一轮模型请求").await?;

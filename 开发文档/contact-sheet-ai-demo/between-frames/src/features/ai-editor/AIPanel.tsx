@@ -1,3 +1,4 @@
+import { DiagnosticsDialog } from '../diagnostics/DiagnosticsDialog';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sparkles } from 'lucide-react';
@@ -55,18 +56,9 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
   } catch (error) { setConfigNote(error instanceof Error ? error.message : String(error)); }
   finally { setConfigBusy(false); }
  };
- const copyDiagnostics = async () => {
-  if (!repository || configBusy) return; setConfigBusy(true); setConfigNote('');
-  try {
-   const { invoke } = await import('@tauri-apps/api/core');
-   const diagnostics = await invoke('get_diagnostics');
-   await navigator.clipboard.writeText(JSON.stringify(diagnostics, null, 1));
-   setConfigNote('诊断信息已复制（不含照片、密钥与路径）。');
-  } catch (error) { setConfigNote(error instanceof Error ? error.message : String(error)); }
-  finally { setConfigBusy(false); }
- };
+ const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
  const visionWanted = budget.maxCloudImages > 0 && Boolean(config?.ready);
- const consentActive = config?.consent && config.consent.mode !== 'deny' && config.consent.quota - config.consent.used > 0 ? config.consent : null;
+ const consentActive = config?.consent?.mode === 'project' && config.consent.quota - config.consent.used > 0 ? config.consent : null;
  useEffect(() => {
   if (!repository) return;
   let stopped = false; let cleanup: (() => void) | undefined;
@@ -86,9 +78,10 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
   if (!repository || busy) return; setBusy(true); setError('');
   try {
    if (mode === 'deny') { setBudget(previous => ({ ...previous, maxCloudImages: 0 })); setBudgetEdited(true); }
-   else await repository.agent.setConsent(project.id, mode, mode === 'task' ? budget.maxCloudImages : 100);
+   const granted = await repository.agent.setConsent(project.id, mode, mode === 'task' ? budget.maxCloudImages : mode === 'project' ? 100 : 0);
    setConsentPrompt(false);
-   if (mode !== 'deny') { void configQuery.refetch(); await request({ type: 'StartTask', goal: goal.trim(), targetCount: count, selectedPhotoIds: scopeSelection ? selectedIds : [], budget, consentId: mode === 'task' ? (await repository.agent.aiConfig(project.id)).consent?.id ?? null : null }); }
+   void configQuery.refetch();
+   if (mode !== 'deny') { await request({ type: 'StartTask', goal: goal.trim(), targetCount: count, selectedPhotoIds: scopeSelection ? selectedIds : [], budget, consentId: mode === 'task' ? granted.id : null }); }
   }
   catch (error) { setError(error instanceof Error ? error.message : String(error)); }
   finally { setBusy(false); }
@@ -107,7 +100,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
     <input type="password" aria-label="API Key（存入钥匙串）" placeholder="sk-..." disabled={configBusy} value={apiKey} maxLength={4096} onChange={event => setApiKey(event.target.value)} />
     <Button size="small" disabled={configBusy || !apiKey.trim()} onClick={() => { void saveKey(); }}>存入钥匙串</Button>
     {config?.keySource === 'keychain' && <Button size="small" disabled={configBusy} onClick={() => { void removeKey(); }}>移除钥匙串密钥</Button>}
-    <Button size="small" disabled={configBusy} onClick={() => { void copyDiagnostics(); }}>复制诊断信息</Button>
+    <Button size="small" onClick={() => setDiagnosticsOpen(true)}>查看本地存储与诊断</Button>
    </div>
    {configNote && <p className="micro" role="status">{configNote}</p>}
   </details>}
@@ -141,6 +134,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
    <details open><summary>已执行步骤（{task.steps.length}）</summary><ol className="agent-steps">{task.steps.slice(-12).map(step => <li key={step.id}>{step.summary}</li>)}</ol></details>
   </section>}
   <div className="agent-drafts">{drafts.map(draft => <article key={draft.id}><strong>{draft.title}</strong><p>{draft.items.length} 项 · {draft.state === 'applied' ? '已采纳' : draft.state === 'discarded' ? '已丢弃' : draft.stale ? '基线过期' : '待审核'}</p><Button size="small" disabled={task && ['queued','planning','running'].includes(task.state)} onClick={() => setDraftId(draft.id)}>查看草案差异</Button></article>)}</div>
+  {diagnosticsOpen && repository && <DiagnosticsDialog repository={repository.diagnostics} onClose={() => setDiagnosticsOpen(false)} />}
   {draft && repository && <DraftReview key={draft.id + ':' + draft.revision} draft={draft} project={project} repository={repository} onClose={() => setDraftId(null)} onUpdated={updated => { onUpdated(updated); void query.refetch(); }} />}
  </section>;
 }

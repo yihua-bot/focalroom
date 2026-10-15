@@ -4,6 +4,7 @@ pub mod command_handler;
 mod commands;
 pub mod commands_generated;
 pub mod db;
+pub mod diagnostics;
 pub mod domain;
 mod edit_commands;
 mod edit_state;
@@ -50,10 +51,7 @@ pub fn run() {
             let sweep_store = store.clone();
             let sweep_cache = cache.clone();
             tauri::async_runtime::spawn(async move {
-                let limit = std::env::var("BETWEEN_FRAMES_CACHE_LIMIT_BYTES")
-                    .ok()
-                    .and_then(|value| value.trim().parse::<u64>().ok())
-                    .unwrap_or(image_pipeline::DEFAULT_CACHE_LIMIT_BYTES);
+                let limit = image_pipeline::cache_limit_bytes();
                 if let Ok(hashes) = sweep_store.photo_hashes().await
                     && let Ok(reclaimed) =
                         image_pipeline::sweep_orphans(&sweep_cache, &hashes, limit)
@@ -69,6 +67,7 @@ pub fn run() {
             commands::get_agent_projection,
             commands::get_ai_config,
             commands::get_memory_projection,
+            commands::execute_memory_command,
             commands::store_api_key,
             commands::delete_api_key,
             commands::get_diagnostics,

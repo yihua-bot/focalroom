@@ -1,0 +1,29 @@
+{
+  "identifier": "studio.betweenframes.memoryreview",
+  "migrationsApplied": 9,
+  "projectId": "5c690610-5610-43b9-a5f6-26f71e863f39",
+  "projectTitle": "M4 原生 · 证据与记忆",
+  "photos": 28,
+  "kept": 2,
+  "rejected": 1,
+  "formalRevision": 35,
+  "undoableEdits": 6,
+  "memoryCommands": 13,
+  "memoryRevision": 13,
+  "evidenceCount": 6,
+  "hypotheses": 1,
+  "excludedEvidenceIds": [
+    4
+  ],
+  "hypothesisStatus": "corrected",
+  "nativeUiAccepted": true,
+  "oldTaskMemoryRevision": 12,
+  "newTaskMemoryRevision": 13,
+  "cloudImages": 0,
+  "costMinorUsd": 0,
+  "restartTablesCompared": 35,
+  "restartExactMatch": true,
+  "sourceHashesCompared": 28,
+  "sourceHashesUnchanged": true,
+  "originalDatabaseUpgraded": false
+}

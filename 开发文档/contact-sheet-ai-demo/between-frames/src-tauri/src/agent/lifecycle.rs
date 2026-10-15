@@ -74,7 +74,7 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
         }
         if let Some(id) = consent_id {
             let owner: Option<i64> = sqlx::query_scalar(
-                "SELECT id FROM privacy_consents WHERE id=? AND project_id=? AND provider=? AND revoked_at IS NULL",
+                "SELECT id FROM privacy_consents WHERE id=? AND project_id=? AND provider=? AND revoked_at IS NULL AND (mode='project' OR (mode='task' AND task_id IS NULL AND used=0))",
             )
             .bind(id)
             .bind(&r.project_id)
@@ -118,6 +118,7 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
             project_id: r.project_id.clone(),
             goal: goal.trim().into(),
             base_revision: revision,
+            memory_revision: super::memory_control::revision(&mut tx, &r.project_id).await?,
             allowed_photo_ids: allowed,
             selected_photo_ids: selected_photo_ids.clone(),
             target_count: *target_count,
@@ -137,6 +138,15 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
         };
         sqlx::query("INSERT INTO agent_tasks(id,project_id,goal,base_revision,allowed_ids_json,selected_ids_json,target_count,state,reason,budget_json,usage_json,provider_id,consent_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
  .bind(&t.id).bind(&t.project_id).bind(&t.goal).bind(t.base_revision).bind(encode(&t.allowed_photo_ids)?).bind(encode(&t.selected_photo_ids)?).bind(t.target_count as i64).bind(&t.state).bind(&t.reason).bind(encode(&t.budget)?).bind(encode(&t.usage)?).bind(&t.provider_id).bind(t.consent_id).bind(&t.created_at).bind(&t.updated_at).execute(&mut *tx).await?;
+        sqlx::query("UPDATE agent_tasks SET memory_revision=? WHERE id=?")
+            .bind(t.memory_revision)
+            .bind(&t.id)
+            .execute(&mut *tx)
+            .await?;
+        if let Some(consent_id) = t.consent_id {
+            sqlx::query("UPDATE privacy_consents SET task_id=? WHERE id=? AND mode='task' AND task_id IS NULL")
+                .bind(&t.id).bind(consent_id).execute(&mut *tx).await?;
+        }
         store::step(&mut tx, &t.id, "state", json!({"to":"queued","providerId":t.provider_id,"modelId":"pending-first-turn","promptVersion":super::prompt_version(&t.provider_id)}), &t.reason).await?;
         sqlx::query(
             "INSERT INTO task_messages(task_id,kind,body,created_at) VALUES(?,'user_goal',?,?)",
@@ -148,6 +158,16 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
         .await?;
         t
     };
+    if matches!(
+        r.command,
+        TaskCommand::ResumeTask { .. } | TaskCommand::SubmitFeedback { .. }
+    ) && task.memory_revision != super::memory_control::revision(&mut tx, &r.project_id).await?
+    {
+        return Err(AppError::new(
+            "REVISION_CONFLICT",
+            "记忆已调整，请基于当前记忆重新委托",
+        ));
+    }
     if matches!(
         r.command,
         TaskCommand::PauseTask { .. } | TaskCommand::CancelTask { .. }

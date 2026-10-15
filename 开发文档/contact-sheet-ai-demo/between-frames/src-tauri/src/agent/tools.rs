@@ -110,17 +110,7 @@ pub(crate) async fn execute(
                                 .await?;
                         }
                     }
-                    if prefetch.uploaded > 0 {
-                        super::consent::consume(
-                            tx,
-                            task,
-                            prefetch.consent_id,
-                            prefetch.uploaded,
-                            prefetch.tokens,
-                            prefetch.cost_minor_usd,
-                        )
-                        .await?;
-                    }
+                    // 外发在网络请求前预留、返回后结算；此处只落观察，不能重复扣费。
                     let observations: Vec<Value> = prefetch
                         .observations
                         .iter()
@@ -147,7 +137,9 @@ pub(crate) async fn execute(
                 ));
             }
             let limit = a["limit"].as_u64().unwrap_or(5).min(10) as usize;
-            let memory = super::memory::retrievable(tx, &task.project_id, limit).await?;
+            let memory =
+                super::memory::retrievable_for_goal(tx, &task.project_id, limit, &task.goal)
+                    .await?;
             let mut facts = photos(tx, task).await?;
             facts.retain(|p| {
                 p["rating"].as_i64().unwrap_or(0) > 0

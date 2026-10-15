@@ -1,8 +1,15 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultAgentBudget } from '../domain/agent';
 const ipc = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke: ipc }));
 import { TauriAgentRepository } from './TauriAgentRepository';
+
+const task = {
+ id: 'vision-task', goal: '视觉选片', baseRevision: 1, providerId: 'openai', state: 'paused', reason: '预算',
+ budget: { ...defaultAgentBudget, maxCloudImages: 2 },
+ usage: { modelTurns: 2, toolCalls: 2, inputEstimate: 1200, outputEstimate: 500, cloudImages: 2, costMinorUsd: 5 },
+ elapsedMs: 2000, question: null, finalDraftIds: [], steps: [], createdAt: 'now',
+};
 beforeEach(() => ipc.mockReset());
 it('任务通信重试保留 requestId 和预算，不重复创建任务', async () => {
  ipc.mockRejectedValueOnce(new Error('lost reply')).mockResolvedValueOnce({ ok: true, data: { taskId: 'task' }, error: null, revision: null, requestId: 'ack' });
@@ -19,4 +26,20 @@ it('恢复业务冲突不自动换身份重试', async () => {
 it('查询拒绝未经校验的任务或虚构 projection 格式', async () => {
  ipc.mockResolvedValueOnce({ tasks: [{ id: 'fake', state: 'successful' }], drafts: [] });
  await expect(new TauriAgentRepository().query('project')).rejects.toThrow();
+});
+describe('视觉任务 IPC 投影', () => {
+ it('接收非零图像预算、外发数量与费用，允许任务暂停后继续显示', async () => {
+  ipc.mockResolvedValue({ tasks: [task], drafts: [] });
+  const data = await new TauriAgentRepository().query('p');
+  expect(data.tasks[0].usage).toEqual(task.usage);
+  expect(data.tasks[0].budget.maxCloudImages).toBe(2);
+  expect(ipc).toHaveBeenCalledWith('get_agent_projection', { projectId: 'p' });
+ });
+ it('拒绝负数用量与超出后端范围的图像预算', async () => {
+  const repository = new TauriAgentRepository();
+  ipc.mockResolvedValue({ tasks: [{ ...task, usage: { ...task.usage, costMinorUsd: -1 } }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+  ipc.mockResolvedValue({ tasks: [{ ...task, budget: { ...task.budget, maxCloudImages: 101 } }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+ });
 });

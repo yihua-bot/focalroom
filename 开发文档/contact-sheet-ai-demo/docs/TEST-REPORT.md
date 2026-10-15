@@ -1,3 +1,15 @@
+# 当前验收：M5 本地存储诊断（2026-10-15）
+
+已完成桌面/harness 共享诊断投影、固定目录存储统计、失败/不完整状态、脱敏 JSON 预览/复制和刷新。全量 **72 Rust、56 前端单测、16 预览、5 真实后端旅程** 通过，契约/typecheck/Lint/fmt/严格 Clippy 通过；原生补验前后 35 表逐行一致、28 源 hash 不变。无新增迁移、依赖或模型任务，原用户库未升级。见 [STORAGE-DIAGNOSTICS-TEST-REPORT](STORAGE-DIAGNOSTICS-TEST-REPORT.md) 与 [ADR 0013](ADR/0013-m5-local-storage-diagnostics.md)。本轮停止等待评审；签名公证、真实模型/计价、真人 Beta、真实大图库性能等边界保留。
+
+# 当前验收：M4 本地记忆控制（2026-10-15）
+
+已完成假设与证据控制、原文/反例、FTS5 项目内检索、幂等回执和任务记忆版本保护。全量 67 Rust、50 前端单测、16 预览及 4 真实后端旅程通过；新增边界与最终构建复验详见 [MEMORY-CONTROLS-TEST-REPORT](MEMORY-CONTROLS-TEST-REPORT.md) 和 [ADR 0012](ADR/0012-m4-local-memory-controls.md)。钥匙串写删与性能基线本轮未执行；解锁后的原生 UI、旧任务恢复拒绝、新任务委托与完整退出重启已补验通过，35 表快照及 28 源 hash 一致。原用户库未升级，跨项目仍关闭。下文保留之前的验收历史。
+
+# 当前评审修复验收（2026-10-14）
+
+评审发现的六项链路缺口已修复并补回归。前一轮 **59 Rust、44 前端单测、16 预览 E2E、3 真实后端旅程通过**，契约/类型/Lint/fmt/Clippy 与独立 Debug 构建通过；钥匙串写删测试未执行。**原生系统选择器、实际 PDF 和退出重启已补验；补验发现的 Safari 页脚分页问题已修复并跑相关回归。真实模型与计价待补验。**详见 [评审修复报告](REVIEW-FIXES-TEST-REPORT.md)、[原生补验报告](NATIVE-REVIEW-FIXES-REPORT.md) 与 [ADR 0011](ADR/0011-review-fixes.md)。以下为原 M5 及版本增量历史报告。
+
 # v1.0 M5 测试与验收（Beta 工程准备）
 
 日期：2026-10-14（Asia/Shanghai）。M5 工程部分已完成并验收：Keychain 密钥存储、诊断命令、性能基线（Release）、Beta 完整旅程 E2E、隐私文档。**发布流程项未完成**：签名/公证（无开发者证书）、DMG 打包、20 位真实用户 Beta 与真实摄影师试用——这些需要证书与真人，工程侧无法替代，留待发布执行。

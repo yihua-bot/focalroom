@@ -52,3 +52,16 @@ if (!('consentId' in start.properties)) throw new Error('agent-task-request：St
 const budget = start.properties.budget;
 if (budget.properties.maxCloudImages.maximum !== 100) throw new Error('agent-task-request：云端图像上限应为 100');
 console.log('Agent contracts: OK');
+
+// 人工记忆控制只接受明确的项目归属及目标 ID，不能声明权限来源。
+const memorySchema = JSON.parse(await readFile(new URL('../contracts/memory-command-request.schema.json', import.meta.url), 'utf8'));
+const memoryVariants = memorySchema.properties.command.oneOf;
+const memoryNames = ['SetEvidenceExcluded', 'ConfirmHypothesis', 'RetireHypothesis', 'RestoreHypothesis', 'CorrectHypothesis', 'SetHypothesisEnabled'];
+if (memorySchema.additionalProperties !== false || memoryVariants.length !== memoryNames.length) throw new Error('memory-command-request：请求结构漂移');
+for (const name of memoryNames) {
+  const branch = memoryVariants.find(item => item.properties?.type?.const === name);
+  if (!branch || branch.additionalProperties !== false || Object.keys(branch.properties).some(key => !branch.required.includes(key))) throw new Error('memory-command-request：缺少严格命令 ' + name);
+  const id = branch.properties.evidenceId ?? branch.properties.hypothesisId;
+  if (id.type !== 'integer' || id.minimum !== 1) throw new Error('memory-command-request：ID 边界漂移');
+}
+console.log('Memory contracts: OK');

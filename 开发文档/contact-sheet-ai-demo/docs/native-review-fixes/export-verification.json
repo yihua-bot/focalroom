@@ -1,0 +1,36 @@
+{
+  "project": {
+    "id": "ed0dba33-70e1-4e9a-bb13-6f1006ccf5d4",
+    "title": "修复评审 · 原生导出",
+    "revision": 34
+  },
+  "marks": [
+    {
+      "filename": "frame_01.jpg",
+      "status": "keep",
+      "book_mark": null
+    },
+    {
+      "filename": "frame_02.jpg",
+      "status": "keep",
+      "book_mark": "spread"
+    },
+    {
+      "filename": "frame_03.jpg",
+      "status": "keep",
+      "book_mark": "full"
+    }
+  ],
+  "htmlSheets": 3,
+  "sidecarPhotos": 28,
+  "privatePaths": false,
+  "sourcesUnchanged": 28,
+  "htmlSha256": "b2a2f561471c921bbdb0637aa0422d58c0289c4f4143ce164c668af6689a970a",
+  "manifestSha256": "dc8ec9a6efda37176e4608a9b222c67f66dfe018ecad419f8e52c3264b2a6538",
+  "fixedHtmlSha256": "48e54bfb163c27aec30ff5374d25e2d5867625ec029845c71d96372a25c9221f",
+  "fixedPdfSha256": "b0287e46d8134f463cf43e132033104894d06cbc38c99c9a46a36a2e294145b1",
+  "nativePdfPages": 4,
+  "sourceHashesUnchanged": 28,
+  "allDatabaseTablesUnchangedAfterRestart": 27,
+  "sidecarCancelCreatedNothing": true
+}

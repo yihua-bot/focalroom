@@ -62,7 +62,8 @@ describe('云端图像授权对话框', () => {
     await user.click(await screen.findByRole('button', { name: '仅本次任务（4 张）' }));
     const setConsentMock = (repository as { agent: { setConsent: Mock } }).agent.setConsent;
     await vi.waitFor(() => expect(setConsentMock).toHaveBeenCalledWith('p1', 'task', 4));
-    expect(calls.filter(call => call.command).every(call => (call.command as { consentId?: number | null }).consentId === null || (call.command as { consentId?: number | null }).consentId === 9)).toBe(true);
+    await vi.waitFor(() => expect(calls.filter(call => call.command)).toHaveLength(1));
+    expect(calls.find(call => call.command)?.command).toMatchObject({ type: 'StartTask', consentId: 9 });
   });
   it('禁止云端图像会把预算归零并回到本地任务', async () => {
     const { repository } = makeRepository();
@@ -75,5 +76,17 @@ describe('云端图像授权对话框', () => {
     await user.click(await screen.findByRole('button', { name: '禁止云端图像' }));
     expect((screen.getByLabelText('云端图像上限（张）') as HTMLInputElement).value).toBe('0');
     expect(screen.queryByRole('dialog', { name: '云端图像授权' })).not.toBeInTheDocument();
+    expect((repository as { agent: { setConsent: Mock } }).agent.setConsent).toHaveBeenCalledWith('p1', 'deny', 0);
+  });
+  it('旧的单次任务授权不能跳过下一次任务的确认', async () => {
+    const { repository, calls } = makeRepository({ consent: { id: 9, projectId: 'p1', mode: 'task', provider: 'openai', quota: 4, used: 1, grantedAt: 'now', revokedAt: null } });
+    mount(repository);
+    const user = userEvent.setup();
+    await screen.findByRole('button', { name: '开始本地 Mock 任务' });
+    await user.clear(screen.getByLabelText('云端图像上限（张）'));
+    await user.type(screen.getByLabelText('云端图像上限（张）'), '2');
+    await user.click(screen.getByRole('button', { name: '开始视觉任务' }));
+    expect(await screen.findByRole('dialog', { name: '云端图像授权' })).toBeInTheDocument();
+    expect(calls.filter(call => call.command)).toHaveLength(0);
   });
 });

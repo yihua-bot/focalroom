@@ -1,0 +1,156 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.96s
+     Running unittests src/lib.rs (src-tauri/target-v1/debug/deps/between_frames_lib-6088a414916a15ae)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (src-tauri/target-v1/debug/deps/between_frames-ae1bbc859704a68c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_memory.rs (src-tauri/target-v1/debug/deps/agent_memory-c29c20aacd70a3c9)
+
+running 14 tests
+test growing_support_updates_the_same_hypothesis_and_preserves_disabled_state ... ok
+test batch_decisions_keep_all_participants_and_do_not_invent_past_explanations ... ok
+test fts_search_is_scoped_and_goal_relevance_precedes_confirmation ... ok
+test ag11_correction_stops_retrieval_and_does_not_revive ... ok
+test memory_changes_pause_tasks_and_require_new_context_instead_of_old_history ... ok
+test evidence_is_deduplicated_and_hypotheses_are_deterministic ... ok
+test correction_survives_growing_evidence_legacy_duplicates_and_restart ... ok
+test controls_are_idempotent_reversible_and_leave_formal_edit_history_unchanged ... ok
+test excluded_evidence_updates_support_counters_retrieval_and_survives_restart ... ok
+test version_eight_upgrade_backs_up_committed_wal_before_new_schema ... ok
+test memory_scope_schema_and_receipt_fault_rollback_are_enforced ... ok
+test memory_exclusion_discards_a_model_reply_already_in_flight ... ok
+test retrieve_preferences_tool_returns_evidence_backed_and_rejects_cross_project ... ok
+test agent_drafts_are_not_evidence_until_human_applies ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.12s
+
+     Running tests/agent_runtime.rs (src-tauri/target-v1/debug/deps/agent_runtime-dd46a49c510c1fa1)
+
+running 13 tests
+test ag07_receipt_replay_does_not_duplicate_draft_even_after_timeout_and_restart ... ok
+test draft_and_receipt_fault_are_one_transaction_and_m1_upgrade_has_backup ... ok
+test ag05_06_13_14_security_schema_injection_and_invalid_final_are_rejected ... ok
+test in_flight_wait_is_charged_once_on_pause_and_interruption ... ok
+test ag10_backend_caps_model_tools_context_time_and_retry_failures ... ok
+test ag08_15_stale_rebase_partial_apply_and_undo_preserve_unapproved_state ... ok
+test formal_edit_during_loop_survives_and_completed_drafts_are_stale ... ok
+test ag09_pause_restart_resume_and_pending_calls_retain_protocol_links ... ok
+test human_feedback_and_cancel_are_persistent_without_formal_writes ... ok
+test two_hundred_scope_two_twenty_five_drafts_fit_default_context_without_losing_linkage ... ok
+test ag01_different_human_facts_change_search_path_and_formal_state_is_untouched ... ok
+test ag03_reorder_scope_avoids_whole_project_reads_for_two_orders ... ok
+test ag02_duplicate_annotation_drives_revision_not_fixed_tool_order ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.18s
+
+     Running tests/agent_vision.rs (src-tauri/target-v1/debug/deps/agent_vision-a3af68002b6c777d)
+
+running 11 tests
+test malformed_vision_response_keeps_upload_reservation_instead_of_free_retry ... ok
+test ag04_without_consent_no_image_leaves_formal_state_untouched ... ok
+test crashed_in_flight_upload_keeps_reservation_and_cannot_retransmit_on_resume ... ok
+test hallucinated_photo_ids_are_dropped_and_quota_charged_for_real_transfer ... ok
+test unexpected_provider_usage_is_visible_and_stops_further_requests ... ok
+test timed_out_upload_is_charged_and_resume_does_not_send_it_again ... ok
+test cloud_image_budget_cap_pauses_task_before_any_upload ... ok
+test consented_vision_uploads_once_then_cache_hits_without_reupload ... ok
+test paused_upload_settles_and_replays_after_restart_without_retransmission ... ok
+test task_consent_is_bound_once_and_never_used_as_project_fallback ... ok
+test zero_cost_and_exhausted_tool_budget_stop_before_upload ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.99s
+
+     Running tests/book_marks.rs (src-tauri/target-v1/debug/deps/book_marks-3b4ff2a4eeeda268)
+
+running 2 tests
+test mark_command_roundtrip_undo_and_snapshot_restore ... ok
+test print_paging_respects_spread_marks ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/cache_quota.rs (src-tauri/target-v1/debug/deps/cache_quota-85620da9864faf42)
+
+running 2 tests
+test sweep_missing_cache_dir_is_noop ... ok
+test sweep_keeps_live_and_oldest_first_orphans_only ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/command_history.rs (src-tauri/target-v1/debug/deps/command_history-c9cfed353838aa96)
+
+running 10 tests
+test generated_request_contract_round_trips_all_m1_examples_and_rejects_extra_fields ... ok
+test database_ownership_triggers_reject_cross_project_rows ... ok
+test comparison_undo_is_logical_and_does_not_delete_evidence_rows ... ok
+test receipt_write_failure_rolls_back_every_projection_event_and_stack ... ok
+test old_wal_database_is_backed_up_before_upgrade_and_backup_can_restore_project ... ok
+test durable_replay_checks_fingerprint_scope_and_returns_original_result ... ok
+test concurrent_connections_have_one_success_and_deterministic_conflict ... ok
+test named_version_restore_is_scoped_atomic_and_undoable ... ok
+test project_brief_and_archive_restore_have_compensating_history ... ok
+test batch_history_undo_redo_persists_and_new_edit_invalidates_redo_branch ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/export_v12.rs (src-tauri/target-v1/debug/deps/export_v12-2b5ff0939daa93de)
+
+running 3 tests
+test desktop_export_destinations_cover_every_visible_format ... ok
+test print_reference_html_has_cover_pages_and_plates ... ok
+test sidecar_export_writes_per_photo_json_and_manifest ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/keychain.rs (src-tauri/target-v1/debug/deps/keychain-aeaee7d85bbb56e4)
+
+running 1 test
+test tests::rejects_empty_key ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/local_core.rs (src-tauri/target-v1/debug/deps/local_core-d707b5ae1319ca6f)
+
+running 10 tests
+test jpeg_exif_orientation_is_applied_to_cache ... ok
+test archive_is_recoverable_and_keeps_source_and_journal ... ok
+test rating_migration_upgrades_old_database_without_changing_legacy_data ... ok
+test revision_conflicts_and_invalid_operations_roll_back_every_projection_and_event ... ok
+test missing_source_keeps_cache_and_relink_requires_identical_content ... ok
+test comparisons_are_evidence_only_and_exports_are_escaped_and_read_only ... ok
+test batch_edits_are_atomic_scoped_and_repeated_status_is_a_noop ... ok
+test imports_report_duplicates_bad_files_and_cancel_without_losing_committed_data ... ok
+test two_hundred_photos_survive_restart_without_changing_sources ... ok
+test native_heic_and_canon_raw_are_decoded_without_changing_originals ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.37s
+
+     Running tests/perf_baseline.rs (src-tauri/target-v1/debug/deps/perf_baseline-dbae57693ed62b6c)
+
+running 1 test
+test perf_baseline_200_import_and_decision_p95 ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/project_tags.rs (src-tauri/target-v1/debug/deps/project_tags-f924eeabed81ecff)
+
+running 1 test
+test tags_roundtrip_validation_and_no_revision_drift ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests between_frames_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.56s

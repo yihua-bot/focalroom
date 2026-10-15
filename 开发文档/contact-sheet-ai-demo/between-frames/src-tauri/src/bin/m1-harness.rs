@@ -45,31 +45,33 @@ impl Harness {
                     .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
                 json!({"ok": true, "tags": self.store.set_project_tags(id, &tags).await?})
             }
-            "get_diagnostics" => {
-                let config = self.agent.ai_config();
-                let photos: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photos")
-                    .fetch_one(&self.store.pool)
-                    .await
-                    .unwrap_or(0);
-                let tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM agent_tasks")
-                    .fetch_one(&self.store.pool)
-                    .await
-                    .unwrap_or(0);
-                let evidence: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM preference_evidence")
-                    .fetch_one(&self.store.pool)
-                    .await
-                    .unwrap_or(0);
-                json!({
-                    "appVersion": env!("CARGO_PKG_VERSION"),
-                    "provider": {"providerId": config.provider_id, "ready": config.ready, "keySource": config.key_source},
-                    "photos": photos, "agentTasks": tasks, "evidence": evidence,
-                    "notice": "诊断不含照片内容、API key、本地路径或备注文本",
-                })
-            }
+            "get_diagnostics" => json!(
+                between_frames_lib::diagnostics::collect(
+                    &self.store,
+                    &self.root,
+                    self.agent.ai_config()
+                )
+                .await?
+            ),
             "get_memory_projection" => serde_json::to_value(
-                between_frames_lib::agent::memory::projection(&self.store, id).await?,
+                between_frames_lib::agent::memory::projection_for_query(
+                    &self.store,
+                    id,
+                    args["query"].as_str().unwrap_or(""),
+                )
+                .await?,
             )
             .unwrap(),
+            "execute_memory_command" => {
+                let request: between_frames_lib::agent::memory_control::MemoryRequest =
+                    serde_json::from_value(args["request"].clone())
+                        .map_err(|error| AppError::new("VALIDATION_ERROR", error.to_string()))?;
+                let request_id = request.request_id.clone();
+                let result = between_frames_lib::command_handler::CommandHandler::new(&self.store)
+                    .execute_memory(request)
+                    .await;
+                between_frames_lib::agent::memory_control::reply(&request_id, result)
+            }
             "correct_hypothesis" => serde_json::to_value(
                 between_frames_lib::agent::memory::correct(
                     &self.store,
@@ -293,12 +295,15 @@ impl Harness {
             "export_project" => {
                 let project = self.store.get(id).await?;
                 let format = string(args, "format")?;
-                let path = self.root.join("exports").join(format!(
-                    "{}-{}.{}",
-                    id,
-                    between_frames_lib::domain::id(),
-                    format
-                ));
+                let filename = match export::destination(format)? {
+                    export::ExportDestination::File(extension) => {
+                        format!("{}-{}.{}", id, between_frames_lib::domain::id(), extension)
+                    }
+                    export::ExportDestination::Directory => {
+                        format!("{}-{}-sidecar", id, between_frames_lib::domain::id())
+                    }
+                };
+                let path = self.root.join("exports").join(filename);
                 json!(export::write_with_options(
                     &project,
                     format,

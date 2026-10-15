@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "requestId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "command": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "SetEvidenceExcluded"
+            },
+            "evidenceId": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "excluded": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "evidenceId",
+            "excluded"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "ConfirmHypothesis"
+            },
+            "hypothesisId": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type",
+            "hypothesisId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "RetireHypothesis"
+            },
+            "hypothesisId": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type",
+            "hypothesisId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "RestoreHypothesis"
+            },
+            "hypothesisId": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type",
+            "hypothesisId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "CorrectHypothesis"
+            },
+            "hypothesisId": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "correction": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "type",
+            "hypothesisId",
+            "correction"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "SetHypothesisEnabled"
+            },
+            "hypothesisId": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "hypothesisId",
+            "enabled"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "requestId",
+    "projectId",
+    "command"
+  ]
+}

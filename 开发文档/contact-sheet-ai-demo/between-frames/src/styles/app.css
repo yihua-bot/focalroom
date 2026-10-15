@@ -292,3 +292,22 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .agent-status { position: fixed; right: 24px; bottom: 24px; z-index: 30; box-shadow: 0 8px 24px #0008; }
 
 .agent-task-goal { max-height: 92px; overflow: auto; color: var(--text); white-space: pre-wrap; }
+
+/* 记忆控制沿用面板布局，长理由与文件名可换行。 */
+.memory-search { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.memory-search label { flex: 1; min-width: 160px; }
+.memory-search input { display: block; width: 100%; margin-top: 6px; }
+.memory-explanation { white-space: pre-wrap; overflow-wrap: anywhere; }
+.memory-hypothesis > strong, .timeline p { overflow-wrap: anywhere; }
+
+/* 本地诊断只展示快照统计；窄窗口内保留表格和 JSON 的可读性。 */
+.storage-diagnostics { display: grid; gap: 14px; margin-top: 18px; }
+.storage-diagnostics table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.storage-diagnostics th, .storage-diagnostics td { padding: 9px 6px; border-bottom: 1px solid var(--border); text-align: left; }
+.storage-diagnostics th { font-weight: 500; }
+.storage-diagnostics td small { display: block; color: var(--muted); }
+.storage-diagnostics pre { max-height: 280px; overflow: auto; padding: 12px; border: 1px solid var(--border); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diagnostic-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.diagnostic-counts > div { padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
+.diagnostic-counts dt { color: var(--muted); font-size: 11px; }
+.diagnostic-counts dd { margin: 4px 0 0; font-size: 17px; }

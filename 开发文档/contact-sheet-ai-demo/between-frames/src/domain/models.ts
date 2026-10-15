@@ -90,6 +90,7 @@ export interface ExportReceipt { path: string; sha256: string; bytes: number }
 
 export interface DesktopProjectRepository extends ProjectRepository, DraftRepository {
   memory: import('./memory').MemoryRepository;
+  diagnostics: import('./diagnostics').DiagnosticsRepository;
   readonly mode: 'desktop';
   subscribe(onChange: (projectId: string, revision?: number) => void): Promise<() => void>;
   archive(id: string): Promise<void>;

@@ -1,0 +1,129 @@
+{
+  "files": [
+    {
+      "file": "001-frame_01.json",
+      "photoId": "2369c984-0d8b-4dc4-a794-fa9f272c7ca6"
+    },
+    {
+      "file": "002-frame_02.json",
+      "photoId": "2ae02b28-65d1-432b-a6e3-2dcf1452a622"
+    },
+    {
+      "file": "003-frame_03.json",
+      "photoId": "32e3cd51-c09e-48dc-98a7-2dd3f874ece4"
+    },
+    {
+      "file": "004-frame_04.json",
+      "photoId": "f543a11e-9c46-42e7-ab55-e89b28acbc8f"
+    },
+    {
+      "file": "005-frame_05.json",
+      "photoId": "d8a24d6e-77d3-4707-8384-74ca3c888571"
+    },
+    {
+      "file": "006-frame_06.json",
+      "photoId": "57d15fa0-acfb-4c46-b272-3dc53b7323b6"
+    },
+    {
+      "file": "007-frame_07.json",
+      "photoId": "870c0c7a-be2a-47cf-8dd1-99b9587ce34b"
+    },
+    {
+      "file": "008-frame_08.json",
+      "photoId": "aac13ed5-e2fa-45dc-8535-72fd3dcbb125"
+    },
+    {
+      "file": "009-frame_09.json",
+      "photoId": "7511ce72-aaf3-4824-b734-781ea83498f5"
+    },
+    {
+      "file": "010-frame_10.json",
+      "photoId": "0038aee1-ecc9-4c58-85ac-c75a4bc1b6c6"
+    },
+    {
+      "file": "011-frame_11.json",
+      "photoId": "8f2f6fb1-8d47-48b1-ba7d-8a7c07bbb2f9"
+    },
+    {
+      "file": "012-frame_12.json",
+      "photoId": "d6b75575-b2a9-41d9-8e5b-00ba1b33e145"
+    },
+    {
+      "file": "013-frame_13.json",
+      "photoId": "4ec4a0e9-d935-4a46-a350-f2ff58b6560b"
+    },
+    {
+      "file": "014-frame_14.json",
+      "photoId": "79d55d73-faf8-4dba-a47d-d88ef1449698"
+    },
+    {
+      "file": "015-frame_15.json",
+      "photoId": "6e6e0447-6cce-4282-bbb5-00f3ea287e32"
+    },
+    {
+      "file": "016-frame_16.json",
+      "photoId": "28964359-6a2f-4128-96c0-7442acc647fa"
+    },
+    {
+      "file": "017-frame_17.json",
+      "photoId": "bba75c3d-7c8a-48f0-b8da-50b83291f0c2"
+    },
+    {
+      "file": "018-frame_18.json",
+      "photoId": "a9000175-a9a2-44a0-a503-feeecc72d56c"
+    },
+    {
+      "file": "019-frame_19.json",
+      "photoId": "d2f726e2-12cc-4e03-94cf-2dc1be9cad40"
+    },
+    {
+      "file": "020-frame_20.json",
+      "photoId": "b1b089dc-5429-4cb5-9363-823869e1719a"
+    },
+    {
+      "file": "021-frame_21.json",
+      "photoId": "cf372c8c-957e-4653-90e6-1fa335d6211e"
+    },
+    {
+      "file": "022-frame_22.json",
+      "photoId": "15528b1c-dd00-4812-8147-4bdb9027e45e"
+    },
+    {
+      "file": "023-frame_23.json",
+      "photoId": "f93a491e-2555-4ca9-9f55-7f0560d4c576"
+    },
+    {
+      "file": "024-frame_24.json",
+      "photoId": "1dd07a15-799a-4e19-b3e7-7fef7048d242"
+    },
+    {
+      "file": "025-frame_25.json",
+      "photoId": "c230d087-698a-49ae-9c12-e5f992392d08"
+    },
+    {
+      "file": "026-frame_26.json",
+      "photoId": "e005b21c-dc14-497d-9810-8583385aae6d"
+    },
+    {
+      "file": "027-frame_27.json",
+      "photoId": "fdd88e5e-f5e6-4436-9c38-abef7e683282"
+    },
+    {
+      "file": "028-frame_28.json",
+      "photoId": "31bc6cc1-a4a2-406c-9342-414297d66ff0"
+    }
+  ],
+  "notice": "侧车仅含编辑元数据，不含图像；原图永不修改",
+  "photos": 28,
+  "project": {
+    "id": "ed0dba33-70e1-4e9a-bb13-6f1006ccf5d4",
+    "revision": 34,
+    "title": "修复评审 · 原生导出"
+  },
+  "schemaVersion": 1,
+  "sequence": [
+    "2369c984-0d8b-4dc4-a794-fa9f272c7ca6",
+    "2ae02b28-65d1-432b-a6e3-2dcf1452a622",
+    "32e3cd51-c09e-48dc-98a7-2dd3f874ece4"
+  ]
+}

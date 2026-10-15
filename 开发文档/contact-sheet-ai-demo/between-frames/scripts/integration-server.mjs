@@ -7,7 +7,7 @@ import { resolve, join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 const root = await realpath(await mkdtemp(join(tmpdir(), 'between-frames-m1-')));
-const child = spawn(resolve('src-tauri', process.env.CARGO_TARGET_DIR || 'target', 'debug/m1-harness'), [root], { stdio: ['pipe', 'pipe', 'inherit'] });
+const child = spawn(resolve('src-tauri', process.env.CARGO_TARGET_DIR || 'target', 'debug/m1-harness'), [root], { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, BETWEEN_FRAMES_OPENAI_API_KEY: '' } });
 let sequence = 0;
 const pending = new Map();
 createInterface({ input: child.stdout }).on('line', line => {

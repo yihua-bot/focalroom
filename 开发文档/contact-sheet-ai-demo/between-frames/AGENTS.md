@@ -11,10 +11,11 @@
 ```
 src/                      React 前端（app 外壳 / domain 类型 / features 功能面板 / services IPC 仓库）
 src-tauri/src/
+  diagnostics.rs          桌面/harness 共用只读统计，失败不回退为 0，禁止返回路径/业务文本
   agent/                  Agent 域：runtime(引擎) provider/openai vision consent memory tools policy context lifecycle
   edit_commands.rs        GUI 命令执行（apply_gui）
   command_handler.rs      唯一命令通道（幂等回执、历史、证据挂钩）
-src-tauri/migrations/     0001–0006（改 schema 只能新增迁移，禁止改历史文件）
+src-tauri/migrations/     0001–0009（改 schema 只能新增迁移，禁止改历史文件）
 src-tauri/tests/          集成测试：agent_runtime / agent_vision / agent_memory / command_history / local_core / keychain / perf_baseline
 contracts/                机器契约（改后必须跑 contracts:check；GUI 命令 DTO 从契约生成，勿手改生成物）
 prompts/                  版本化提示词（agent-system-m2/m3、vision-observe-m3）
@@ -27,6 +28,7 @@ scripts/                  契约生成 / 集成服务器 / verify-all.sh 一键�
 ```bash
 bash scripts/verify-all.sh                  # 全量（约 5–8 分钟）
 bash scripts/verify-all.sh --skip-integration  # 跳过真实后端 E2E
+bash scripts/verify-all.sh --skip-keychain     # 跳过钥匙串写删回环，其余全量验证
 ```
 
 ## 不可违背的约束（违反会被测试与评审拒绝）
@@ -45,6 +47,10 @@ bash scripts/verify-all.sh --skip-integration  # 跳过真实后端 E2E
 - **命令回执快照的 revision 落后一步**：测试里要权威 revision 就重新 `db.get`。
 - **Playwright 无 console 监听时不显示页面 console.log**：调试 e2e 时先加 `page.on('console')`。
 - Node/cargo 在部分 shell 需 `export PATH=/opt/homebrew/bin:$PATH`。
+- 验证脚本与 integration harness 显式禁用真实 API Key；视觉测试只使用注入的本地 HTTP Provider。
+- M5 get_diagnostics 由 diagnostics::collect 统一桌面/harness；前端经 TauriDiagnosticsRepository 白名单解析后展示/复制。存储为逻辑文件大小，可不完整；不是清理入口。见 ADR 0013。
+- M4 记忆控制经 execute_memory/MemoryRequest；变更暂停执行任务并要求新委托，不推进正式 revision。0009 的 FTS5 是可重建索引，原证据与备份仍保留；跨项目关闭。见 ADR 0012。
+- 云端请求预留/结算复用 agent_steps：未知结果保留预算、恢复不重传；单次 consent 必须绑定 task_id。见 ADR 0011。
 
 ## 修改向导
 

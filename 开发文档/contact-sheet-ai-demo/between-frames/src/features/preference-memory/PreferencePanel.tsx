@@ -3,52 +3,70 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PreviewEvent, Project, DesktopProjectRepository } from '../../domain/models';
 import { zh } from '../../app/copy';
 import { EmptyState } from '../../components/shared/EmptyState';
+import { MemoryEvidenceList } from './MemoryEvidenceList';
 import { Button } from '../../components/shared/Button';
 
-const kindLabels: Record<string, string> = { keep: '人工保留', reject: '人工淘汰', comparison: '两图比较', draft_apply: '采纳草案', draft_reject: '丢弃草案', note: '备注' };
-const statusLabels: Record<string, string> = { unconfirmed: '未确认', confirmed: '已确认', corrected: '已纠正', retired: '已停用' };
+const statusLabels: Record<string, string> = { unconfirmed: '未确认', confirmed: '已确认', corrected: '已纠正', retired: '已移除' };
 
 export function PreferencePanel({ events, repository, project }: { events: PreviewEvent[]; repository?: DesktopProjectRepository; project: Project }) {
   const client = useQueryClient();
-  const query = useQuery({ queryKey: ['memory', project.id], queryFn: () => repository!.memory.query(project.id), enabled: Boolean(repository), staleTime: 5_000 });
+  const [search, setSearch] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [showRemoved, setShowRemoved] = useState(false);
+  const [evidenceLimit, setEvidenceLimit] = useState(20);
+  const query = useQuery({ queryKey: ['memory', project.id, keyword, project.revision], queryFn: () => repository!.memory.query(project.id, keyword), enabled: Boolean(repository), staleTime: 5_000 });
   const [correcting, setCorrecting] = useState<number | null>(null);
   const [correction, setCorrection] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const evidence = query.data?.evidence ?? [];
-  const hypotheses = query.data?.hypotheses ?? [];
+  const hypotheses = (query.data?.hypotheses ?? []).filter(item => showRemoved || item.status !== 'retired');
+  const activeEvidence = evidence.filter(item => !item.excluded);
   const act = async (action: () => Promise<unknown>) => {
     if (busy) return; setBusy(true); setError('');
-    try { await action(); await query.refetch(); void client.invalidateQueries({ queryKey: ['agent', project.id] }); }
+    try { await action(); await client.invalidateQueries({ queryKey: ['memory', project.id] }); void client.invalidateQueries({ queryKey: ['agent', project.id] }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   };
   return <section><h3>{zh.memoryTitle}</h3><p className="muted">{repository ? (query.data?.notice ?? zh.memoryHint) : `${zh.memoryHint} 桌面版可查看证据支持的偏好假设。`}</p>
    <div className="stat-row">
-    <div className="info-card"><span className="eyebrow">YOUR CHOICES</span><strong className="stat">{evidence.filter(item => item.kind === 'keep' || item.kind === 'reject').length || events.filter(event => event.type === 'decision').length}</strong><small>人工选择</small></div>
-    <div className="info-card"><span className="eyebrow">COMPARISONS</span><strong className="stat">{evidence.filter(item => item.kind === 'comparison').length || events.filter(event => event.type === 'compare').length}</strong><small>比较记录</small></div>
+    <div className="info-card"><span className="eyebrow">YOUR CHOICES</span><strong className="stat">{repository ? activeEvidence.filter(item => item.kind === 'keep' || item.kind === 'reject').length : events.filter(event => event.type === 'decision').length}</strong><small>人工选择</small></div>
+    <div className="info-card"><span className="eyebrow">COMPARISONS</span><strong className="stat">{repository ? activeEvidence.filter(item => item.kind === 'comparison').length : events.filter(event => event.type === 'compare').length}</strong><small>比较记录</small></div>
     <div className="info-card"><span className="eyebrow">HYPOTHESES</span><strong className="stat">{hypotheses.length}</strong><small>偏好假设</small></div></div>
-   {error && <p role="alert">{error}</p>}
+   {(error || query.error) && <p role="alert">{error || String(query.error)}</p>}
    {repository && <>
+    <p className="micro">调整记忆会暂停当前 Agent，请基于当前记忆重新委托。选片、作品序列与撤销历史保持原样。</p>
+    <form className="memory-search" onSubmit={event => { event.preventDefault(); setKeyword(search.trim()); }}>
+      <label>搜索偏好关键词<input className="text-input" aria-label="搜索偏好关键词" maxLength={400} value={search} onChange={event => setSearch(event.target.value)} placeholder="例如：留白、逆光" /></label>
+      <Button type="submit" size="small" disabled={busy}>搜索</Button>
+      {keyword && <Button size="small" onClick={() => { setSearch(''); setKeyword(''); }}>清空搜索</Button>}
+    </form>
+    <label className="micro"><input type="checkbox" checked={showRemoved} onChange={event => setShowRemoved(event.target.checked)} /> 显示已移除假设</label>
     <div className="divider" /><div className="eyebrow">PREFERENCE HYPOTHESES / 偏好假设</div>
     {hypotheses.length ? hypotheses.map(hypothesis => <article key={hypothesis.id} className="info-card memory-hypothesis" data-status={hypothesis.status}>
      <strong>{hypothesis.statement}</strong>
      <p className="micro">{statusLabels[hypothesis.status]} · {hypothesis.confidence === 'moderate' ? '中等' : '初步'}置信 · 证据 {hypothesis.evidenceIds.length} 条{hypothesis.counterexampleIds.length > 0 ? ` · 反例 ${hypothesis.counterexampleIds.length} 条` : ''}{hypothesis.disabled ? ' · 已停用检索' : ''}</p>
      {hypothesis.userCorrection && <p className="micro" role="note">你的纠正：{hypothesis.userCorrection}</p>}
-     <details><summary>查看证据</summary><ol className="timeline">{hypothesis.evidenceIds.map(id => evidence.find(item => item.id === id)).filter(Boolean).map(item => <li key={item!.id}><time>{new Date(item!.createdAt).toLocaleString('zh-CN')}</time><p>{kindLabels[item!.kind]}{item!.photoId ? ` · ${item!.photoId.slice(0, 8)}` : ''}</p></li>)}</ol></details>
-     {hypothesis.status !== 'corrected' && <div className="agent-task-actions">
+     <details><summary>查看证据</summary><MemoryEvidenceList ids={hypothesis.evidenceIds} evidence={evidence} photos={project.photos} /></details>
+     {hypothesis.counterexampleIds.length > 0 && <details><summary>查看反例</summary><MemoryEvidenceList ids={hypothesis.counterexampleIds} evidence={evidence} photos={project.photos} /></details>}
+     <div className="agent-task-actions">
+      {hypothesis.status === 'unconfirmed' && <Button size="small" disabled={busy || !hypothesis.evidenceIds.length} onClick={() => { void act(() => repository.memory.request(project.id, { type: 'ConfirmHypothesis', hypothesisId: hypothesis.id })); }}>确认此假设</Button>}
+      <Button size="small" disabled={busy} onClick={() => { void act(() => repository.memory.request(project.id, { type: hypothesis.status === 'retired' ? 'RestoreHypothesis' : 'RetireHypothesis', hypothesisId: hypothesis.id })); }}>{hypothesis.status === 'retired' ? '恢复此假设' : '移除此假设'}</Button>
+     </div>
+     {!['corrected', 'retired'].includes(hypothesis.status) && <div className="agent-task-actions">
       {correcting === hypothesis.id
        ? <form onSubmit={event => { event.preventDefault(); void act(async () => { await repository.memory.correct(project.id, hypothesis.id, correction.trim()); setCorrecting(null); setCorrection(''); }); }}>
-          <label>纠正说明<textarea aria-label="纠正说明" required maxLength={2000} value={correction} onChange={event => setCorrection(event.target.value)} /></label>
+          <label>纠正说明<textarea className="text-input" aria-label="纠正说明" required maxLength={2000} value={correction} onChange={event => setCorrection(event.target.value)} /></label>
           <Button type="submit" size="small" disabled={busy || !correction.trim()}>提交纠正</Button>
           <Button size="small" disabled={busy} onClick={() => { setCorrecting(null); setCorrection(''); }}>取消</Button>
          </form>
        : <><Button size="small" disabled={busy} onClick={() => { setCorrecting(hypothesis.id); setCorrection(''); }}>纠正此假设</Button>
           <Button size="small" disabled={busy} onClick={() => { void act(() => repository.memory.setEnabled(project.id, hypothesis.id, hypothesis.disabled)); }}>{hypothesis.disabled ? '恢复检索' : '停用检索'}</Button></>}
      </div>}
-    </article>) : <EmptyState title="还没有假设" hint="进行几次带理由的人工选择后，这里会出现证据支持的偏好假设。" />}
+    </article>) : <EmptyState title={keyword ? "没有匹配的假设" : "还没有假设"} hint="进行几次带理由的人工选择后，这里会出现证据支持的偏好假设。" />}
     <div className="divider" /><div className="eyebrow">EVIDENCE / 人工证据</div>
-    {evidence.length ? <ol className="timeline">{evidence.slice(0, 20).map(item => <li key={item.id}><time>{new Date(item.createdAt).toLocaleTimeString('zh-CN')}</time><p>{kindLabels[item.kind]}{item.photoId ? ` · ${item!.photoId.slice(0, 8)}` : ''}</p></li>)}</ol> : <EmptyState title={zh.noEvents} hint="从一次人工选择开始。" />}
+    {evidence.length ? <MemoryEvidenceList ids={evidence.slice(0, evidenceLimit).map(item => item.id)} evidence={evidence} photos={project.photos} busy={busy} onExclude={item => { void act(() => repository.memory.request(project.id, { type: 'SetEvidenceExcluded', evidenceId: item.id, excluded: !item.excluded })); }} /> : <EmptyState title={zh.noEvents} hint="从一次人工选择开始。" />}
+    {evidence.length > evidenceLimit && <Button size="small" onClick={() => setEvidenceLimit(value => value + 20)}>查看更多证据</Button>}
     <p className="micro">证据仅记录你的明确操作；Agent 的草案与建议不会出现在这里。撤销或重做不重复计数。</p>
    </>}
    {!repository && events.length ? <><div className="divider" /><div className="eyebrow">RECENT DECISIONS / 人工记录</div><ol className="timeline">{events.slice(0, 20).map(event => <li key={event.id}><time>{new Date(event.at).toLocaleTimeString('zh-CN')}</time><p>{event.description}</p></li>)}</ol></> : null}

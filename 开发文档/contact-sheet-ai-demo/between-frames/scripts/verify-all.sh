@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # Between Frames 一键全量验证：与 docs/TEST-REPORT.md 的复现命令保持一致。
-# 用法：bash scripts/verify-all.sh [--skip-e2e] [--skip-integration]
+# 用法：bash scripts/verify-all.sh [--skip-e2e] [--skip-integration] [--skip-keychain]
 # 依赖：Node（npm）、Rust（cargo）、Playwright 浏览器已安装。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SKIP_E2E=0
 SKIP_INTEGRATION=0
+SKIP_KEYCHAIN=0
 for arg in "$@"; do
   case "$arg" in
     --skip-e2e) SKIP_E2E=1 ;;
     --skip-integration) SKIP_INTEGRATION=1 ;;
+    --skip-keychain) SKIP_KEYCHAIN=1 ;;
     *) echo "未知参数：$arg"; exit 1 ;;
   esac
 done
+# 自动化默认离线；视觉测试使用显式注入的本地 HTTP Provider。
+export BETWEEN_FRAMES_OPENAI_API_KEY=''
 
 step() { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
 
@@ -35,7 +39,11 @@ if [ "$SKIP_E2E" = "0" ]; then
 fi
 
 step "Rust 测试（target-v1）"
-cargo test --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1"
+if [ "$SKIP_KEYCHAIN" = "1" ]; then
+  cargo test --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" -- --skip store_load_delete_roundtrip
+else
+  cargo test --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1"
+fi
 
 step "Rust 格式检查"
 cargo fmt --manifest-path "src-tauri/Cargo.toml" -- --check

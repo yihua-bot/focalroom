@@ -1,0 +1,42 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.15s
+     Running tests/agent_memory.rs (src-tauri/target-v1/debug/deps/agent_memory-c29c20aacd70a3c9)
+
+running 14 tests
+test growing_support_updates_the_same_hypothesis_and_preserves_disabled_state ... ok
+test batch_decisions_keep_all_participants_and_do_not_invent_past_explanations ... ok
+test memory_changes_pause_tasks_and_require_new_context_instead_of_old_history ... ok
+test fts_search_is_scoped_and_goal_relevance_precedes_confirmation ... ok
+test ag11_correction_stops_retrieval_and_does_not_revive ... ok
+test evidence_is_deduplicated_and_hypotheses_are_deterministic ... ok
+test correction_survives_growing_evidence_legacy_duplicates_and_restart ... ok
+test controls_are_idempotent_reversible_and_leave_formal_edit_history_unchanged ... ok
+test excluded_evidence_updates_support_counters_retrieval_and_survives_restart ... ok
+test version_eight_upgrade_backs_up_committed_wal_before_new_schema ... ok
+test memory_scope_schema_and_receipt_fault_rollback_are_enforced ... ok
+test memory_exclusion_discards_a_model_reply_already_in_flight ... ok
+test retrieve_preferences_tool_returns_evidence_backed_and_rejects_cross_project ... ok
+test agent_drafts_are_not_evidence_until_human_applies ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.13s
+
+    Checking between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.07s
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.32s
+
+> between-frames@0.1.0 test:integration
+> playwright test --config playwright.integration.config.ts memory-controls.spec.ts
+
+[WebServer] (node:68475) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:68476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:68478) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/memory-controls.spec.ts:14:1 › M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索及重启 (46.9s)
+
+  1 passed (47.9s)

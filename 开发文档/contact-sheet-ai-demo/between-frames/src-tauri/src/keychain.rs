@@ -89,10 +89,9 @@ pub fn delete_api_key() -> Result<()> {
 }
 /// 解析顺序：显式环境变量（开发）→ 钥匙串（用户存储）。返回 (key, source)。
 pub fn resolve_api_key() -> Option<(String, &'static str)> {
-    if let Ok(key) = std::env::var(crate::agent::openai::KEY_ENV)
-        && !key.trim().is_empty()
-    {
-        return Some((key.trim().to_owned(), "env"));
+    if let Ok(key) = std::env::var(crate::agent::openai::KEY_ENV) {
+        // 显式空值用于离线验证，不能回退到用户钥匙串而意外调用真实服务。
+        return (!key.trim().is_empty()).then(|| (key.trim().to_owned(), "env"));
     }
     load_api_key().map(|key| (key, "keychain"))
 }

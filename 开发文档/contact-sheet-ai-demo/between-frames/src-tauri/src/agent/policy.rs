@@ -193,6 +193,9 @@ impl PolicyGate {
                 > b.max_total_tokens
             || u.cloud_images > b.max_cloud_images
             || u.cost_minor_usd > b.max_cost_minor_usd
+            || u.cost_minor_usd
+                .saturating_add(super::openai::model_reservation(task, input))
+                > b.max_cost_minor_usd
         {
             return Err(AppError::new(
                 "BUDGET_EXCEEDED",

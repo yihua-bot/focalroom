@@ -1,0 +1,10 @@
+{
+  "identifier": "studio.betweenframes.memoryreview",
+  "migrationsApplied": 9,
+  "projects": 0,
+  "nativeUiAccepted": false,
+  "blocker": "The Mac is locked",
+  "originalDatabaseUpgraded": false,
+  "stage": "before-unlock",
+  "supersededBy": "native-verification.json"
+}

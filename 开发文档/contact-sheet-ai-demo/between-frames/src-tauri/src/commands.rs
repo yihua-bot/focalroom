@@ -264,25 +264,44 @@ pub async fn export_project(
     format: String,
     include_paths: Option<bool>,
 ) -> Result<Option<ExportReceipt>> {
-    if !["json", "csv", "html"].contains(&format.as_str()) {
-        return Err(AppError::new("INVALID_INPUT", "导出格式不合法"));
-    }
+    let destination = export::destination(&format)?;
     let snapshot = state.store.get(&project_id).await?;
     tokio::task::spawn_blocking(move || {
-        let filename = format!("between-frames-{}.{}", snapshot.id, format);
-        let Some(path) = app
-            .dialog()
-            .file()
-            .set_title("导出编辑快照（选择新的文件名）")
-            .set_file_name(&filename)
-            .add_filter("导出文件", &[format.as_str()])
-            .blocking_save_file()
-        else {
-            return Ok(None);
+        let path = match destination {
+            export::ExportDestination::File(extension) => {
+                let filename = format!("between-frames-{}.{}", snapshot.id, extension);
+                let Some(path) = app
+                    .dialog()
+                    .file()
+                    .set_title("导出编辑快照（选择新的文件名）")
+                    .set_file_name(&filename)
+                    .add_filter("导出文件", &[extension])
+                    .blocking_save_file()
+                else {
+                    return Ok(None);
+                };
+                path.into_path()
+                    .map_err(|error| AppError::new("INVALID_PATH", error.to_string()))?
+            }
+            export::ExportDestination::Directory => {
+                let Some(parent) = app
+                    .dialog()
+                    .file()
+                    .set_title("选择侧车导出的父文件夹（将在其中新建文件夹）")
+                    .blocking_pick_folder()
+                else {
+                    return Ok(None);
+                };
+                parent
+                    .into_path()
+                    .map_err(|error| AppError::new("INVALID_PATH", error.to_string()))?
+                    .join(format!(
+                        "between-frames-sidecar-{}-{}",
+                        snapshot.id,
+                        crate::domain::id()
+                    ))
+            }
         };
-        let path = path
-            .into_path()
-            .map_err(|error| AppError::new("INVALID_PATH", error.to_string()))?;
         export::write_with_options(&snapshot, &format, &path, include_paths.unwrap_or(false))
             .map(Some)
     })
@@ -353,51 +372,44 @@ pub async fn set_project_tags(
     Ok(serde_json::json!({"ok": true, "tags": cleaned}))
 }
 #[tauri::command]
-pub async fn get_diagnostics(state: State<'_, Backend>) -> Result<serde_json::Value> {
-    let mut counts = serde_json::Map::new();
-    for (label, table) in [
-        ("projects", "projects"),
-        ("photos", "photos"),
-        ("decisions", "photo_decisions"),
-        ("agentTasks", "agent_tasks"),
-        ("drafts", "drafts"),
-        ("toolCalls", "tool_calls"),
-        ("observations", "photo_observations"),
-        ("evidence", "preference_evidence"),
-        ("hypotheses", "preference_hypotheses"),
-    ] {
-        let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
-            .fetch_one(&state.store.pool)
-            .await
-            .unwrap_or(0);
-        counts.insert(label.into(), count.into());
-    }
-    let failed_tasks: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM agent_tasks WHERE state='failed'")
-            .fetch_one(&state.store.pool)
-            .await
-            .unwrap_or(0);
-    let migrations: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE success=1")
-            .fetch_one(&state.store.pool)
-            .await
-            .unwrap_or(0);
-    let config = state.agent.ai_config();
-    Ok(serde_json::json!({
-        "appVersion": env!("CARGO_PKG_VERSION"),
-        "provider": {"providerId": config.provider_id, "ready": config.ready, "keySource": config.key_source},
-        "database": counts,
-        "failedAgentTasks": failed_tasks,
-        "migrationsApplied": migrations,
-        "notice": "诊断不含照片内容、API key、本地路径或备注文本",
-    }))
+pub async fn get_diagnostics(state: State<'_, Backend>) -> Result<crate::diagnostics::Diagnostics> {
+    let root = state
+        .cache
+        .parent()
+        .ok_or_else(|| AppError::new("DIAGNOSTICS_UNAVAILABLE", "存储统计暂不可用"))?;
+    crate::diagnostics::collect(&state.store, root, state.agent.ai_config()).await
 }
 #[tauri::command]
 pub async fn get_memory_projection(
     state: State<'_, Backend>,
     project_id: String,
+    query: Option<String>,
 ) -> Result<crate::agent::memory::MemoryProjection> {
-    crate::agent::memory::projection(&state.store, &project_id).await
+    crate::agent::memory::projection_for_query(
+        &state.store,
+        &project_id,
+        query.as_deref().unwrap_or(""),
+    )
+    .await
+}
+#[tauri::command]
+pub async fn execute_memory_command(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    request: crate::agent::memory_control::MemoryRequest,
+) -> Result<serde_json::Value> {
+    let request_id = request.request_id.clone();
+    let project_id = request.project_id.clone();
+    let result = crate::command_handler::CommandHandler::new(&state.store)
+        .execute_memory(request)
+        .await;
+    if result.as_ref().is_ok_and(|receipt| receipt.changed) {
+        let _ = app.emit(
+            crate::commands_generated::AGENT_TASK_UPDATED_EVENT,
+            serde_json::json!({"projectId":project_id}),
+        );
+    }
+    Ok(crate::agent::memory_control::reply(&request_id, result))
 }
 #[tauri::command]
 pub async fn correct_hypothesis(
