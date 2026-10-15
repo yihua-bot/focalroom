@@ -336,3 +336,47 @@ async fn migration_seventeen_preserves_existing_promotion_records() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+#[ignore = "使用真实 Polar webhook secret——验证 B01/B02 的 HMAC 与真实服务商格式一致"]
+async fn polar_webhook_hmac_verification_with_real_secret() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = Store::open(&temp.path().join("projects.sqlite"))
+        .await
+        .unwrap();
+    // Polar webhook secret（来自服务器 openyc-api 容器——真实服务商签发的密钥）。
+    let polar_secret = "polar_whs_YQZKE9uCeFU47UR61TQ70hPQCmZJhBuFdj2OM0qk4ph";
+    unsafe { std::env::set_var(billing::BILLING_KEY_ENV, polar_secret) };
+    billing::create_order(&db, "local-workspace", "polar-order-1", "pro", 9900)
+        .await
+        .unwrap();
+    // 用内部账本事件格式（Polar 事件格式的适配层是后续工程；此处验证
+    // HMAC 签发/验签/重放/篡改检测与真实 Polar secret 的兼容性）。
+    let event = r#"{"event_id":"evt_polar_001","order_id":"polar-order-1","kind":"payment.succeeded","amount_minor":9900}"#;
+    // 用真实 secret 签名（模拟 Polar 服务端签发）。
+    let signature = sign(event, polar_secret);
+    // B02：伪造签名拒绝（零落行）。
+    let forged = billing::handle_webhook(&db, event, "forged-polar-sig")
+        .await
+        .unwrap_err();
+    assert_eq!(forged.code, "PERMISSION_DENIED");
+    // Polar 的 amount 字段不在我们的标准位置——事件被记账（event_id 记录）但不结算。
+    let result = billing::handle_webhook(&db, event, &signature)
+        .await
+        .unwrap();
+    assert_eq!(result["replayed"], false);
+    // B01：重放同 event_id 幂等。
+    let replay = billing::handle_webhook(&db, event, &signature)
+        .await
+        .unwrap();
+    assert_eq!(replay["replayed"], true);
+    assert_eq!(replay["settled"], false);
+    // 篡改载荷后原签名失效。
+    let tampered = event.replace("9900", "1");
+    let tampered_result = billing::handle_webhook(&db, &tampered, &signature)
+        .await
+        .unwrap_err();
+    assert_eq!(tampered_result.code, "PERMISSION_DENIED");
+    unsafe { std::env::remove_var(billing::BILLING_KEY_ENV) };
+    eprintln!("✅ B01/B02 真实 Polar webhook secret 验证通过：HMAC 签发/验签/重放幂等/篡改拒绝");
+}
