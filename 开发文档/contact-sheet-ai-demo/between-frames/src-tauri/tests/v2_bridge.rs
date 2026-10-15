@@ -174,7 +174,7 @@ async fn agent_principal_cannot_write_formal_state() {
 }
 
 #[tokio::test]
-async fn revision_conflict_maps_to_409_and_m5_kinds_stay_not_implemented() {
+async fn revision_conflict_maps_to_409_and_cross_project_operations_rejected() {
     let temp = tempfile::tempdir().unwrap();
     let db = setup(temp.path(), 1).await;
     let (project_id, ids, revision) = prepare(&db).await;
@@ -190,15 +190,19 @@ async fn revision_conflict_maps_to_409_and_m5_kinds_stay_not_implemented() {
     let result = run(&db, stale, owner.clone()).await;
     assert!(!result["ok"].as_bool().unwrap());
     assert_eq!(result["error"]["code"], "REVISION_CONFLICT");
-    // M5 审批提案仍未实现（评论已在本切片交付）：诚实拒绝，不假装成功。
+    // v2 提案协议已交付（ADR 0020）：create 成功返回 nonce。
     let mut proposal = envelope(
         "proposal.create",
-        json!({"base_revision": revision, "title": "t", "operations": [{"operation_id": "op-01", "photo_id": "photo-none", "op": "remove"}]}),
+        json!({"base_revision": revision, "title": "桥上提案", "operations": [{"operation_id": "op-1", "photo_id": "photo-none", "op": "remove"}]}),
         revision,
-        "proposal-will-fail",
+        "proposal-now-live",
     );
     proposal["project_id"] = json!(project_id);
-    let result = run(&db, proposal, owner).await;
-    assert!(!result["ok"].as_bool().unwrap());
-    assert_eq!(result["error"]["code"], "NOT_IMPLEMENTED");
+    let created = run(&db, proposal, owner).await;
+    assert!(
+        !created["ok"].as_bool().unwrap(),
+        "photo-none 不属项目应拒：{}",
+        created
+    );
+    assert_eq!(created["error"]["code"], "PERMISSION_DENIED");
 }

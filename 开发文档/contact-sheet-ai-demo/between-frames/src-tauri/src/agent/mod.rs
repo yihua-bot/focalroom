@@ -10,6 +10,7 @@ pub mod memory_control;
 mod memory_search;
 pub mod openai;
 pub mod policy;
+pub mod proposals;
 pub mod provider;
 pub mod router;
 pub mod runtime;

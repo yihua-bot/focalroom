@@ -92,14 +92,73 @@ pub async fn execute(store: &Store, execution: V2Execution, now: u64) -> Value {
                 }
             }
         }
-        CommandKind::ProposalCreate | CommandKind::ProposalSubmit | CommandKind::ProposalApply => {
-            return reply(
-                false,
-                command_id,
-                Some(authority.revision),
-                "NOT_IMPLEMENTED",
-                "v2.0 审批提案在 M5 交付；草案能力暂经既有 Agent 通道",
-            );
+        CommandKind::ProposalCreate => {
+            let proposal = crate::agent::proposals::create(
+                store,
+                project_id,
+                &betweenframes_local_domain::actor_label(&principal),
+                None,
+                payload["base_revision"].as_i64().unwrap_or(-1),
+                payload["title"].as_str().unwrap_or(""),
+                payload["operations"].clone(),
+            )
+            .await;
+            return match proposal {
+                Ok(proposal) => {
+                    let mut value = reply(true, command_id, None, "", "");
+                    value["proposal_id"] = json!(proposal.id);
+                    value["proposal_revision"] = json!(proposal.revision);
+                    value["approval_nonce"] = json!(proposal.approval_nonce);
+                    value
+                }
+                Err(error) => reply(false, command_id, None, &error.code, &error.message),
+            };
+        }
+        CommandKind::ProposalSubmit => {
+            let proposal = crate::agent::proposals::submit(
+                store,
+                project_id,
+                payload["proposal_id"].as_str().unwrap_or(""),
+                payload["expected_proposal_revision"].as_i64().unwrap_or(-1),
+            )
+            .await;
+            return match proposal {
+                Ok(proposal) => {
+                    let mut value = reply(true, command_id, None, "", "");
+                    value["proposal_id"] = json!(proposal.id);
+                    value["proposal_revision"] = json!(proposal.revision);
+                    value["state"] = json!(proposal.state);
+                    value
+                }
+                Err(error) => reply(false, command_id, None, &error.code, &error.message),
+            };
+        }
+        CommandKind::ProposalApply => {
+            let accepted: Vec<String> = payload["accepted_operation_ids"]
+                .as_array()
+                .map(|ids| {
+                    ids.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let outcome = crate::agent::proposals::apply(
+                store,
+                project_id,
+                payload["proposal_id"].as_str().unwrap_or(""),
+                payload["expected_proposal_revision"].as_i64().unwrap_or(-1),
+                &accepted,
+                payload["approval_nonce"].as_str().unwrap_or(""),
+            )
+            .await;
+            return match outcome {
+                Ok(value) => {
+                    let mut merged = reply(true, command_id, None, "", "");
+                    merged["outcome"] = value;
+                    merged
+                }
+                Err(error) => reply(false, command_id, None, &error.code, &error.message),
+            };
         }
         CommandKind::CommentAdd => {
             let thread = crate::agent::comments::add(
