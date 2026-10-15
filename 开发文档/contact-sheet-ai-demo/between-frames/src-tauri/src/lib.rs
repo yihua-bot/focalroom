@@ -68,6 +68,8 @@ pub fn run() {
             commands::get_agent_projection,
             commands::get_ai_config,
             commands::get_memory_projection,
+            commands::get_proposals,
+            commands::execute_v2_command,
             commands::execute_memory_command,
             commands::store_api_key,
             commands::delete_api_key,

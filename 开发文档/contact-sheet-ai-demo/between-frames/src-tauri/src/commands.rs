@@ -380,6 +380,60 @@ pub async fn get_diagnostics(state: State<'_, Backend>) -> Result<crate::diagnos
     crate::diagnostics::collect(&state.store, root, state.agent.ai_config()).await
 }
 #[tauri::command]
+pub async fn execute_v2_command(
+    state: State<'_, Backend>,
+    envelope: serde_json::Value,
+    principal: String,
+) -> Result<serde_json::Value> {
+    // principal 是受信入口标识（本地单机：local-owner）；角色/权限由 local-domain 判定，
+    // 客户端不能自报 OWNER/EDITOR 等角色。
+    let project_id = envelope["project_id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let trusted = match principal.as_str() {
+        "local-owner" => crate::v2_bridge::local_owner_principal("local-workspace", &project_id),
+        other => {
+            return Err(crate::domain::AppError::new(
+                "PERMISSION_DENIED",
+                format!("未知的受信主体标识：{other}"),
+            ));
+        }
+    };
+    let validated = match betweenframes_local_domain::parse_command(envelope) {
+        Ok(validated) => validated,
+        Err(code) => {
+            return Ok(
+                serde_json::json!({"ok": false, "command_id": "", "revision": null, "error": {"code": code, "message": "命令不符合 v2.0 契约"}}),
+            );
+        }
+    };
+    let authority = crate::v2_bridge::authority_for(&state.store, &project_id).await?;
+    Ok(crate::v2_bridge::execute(
+        &state.store,
+        crate::v2_bridge::V2Execution {
+            envelope: validated,
+            principal: trusted,
+            authority,
+        },
+        now_ms(),
+    )
+    .await)
+}
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+#[tauri::command]
+pub async fn get_proposals(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<serde_json::Value> {
+    crate::agent::proposals::list(&state.store, &project_id, 50).await
+}
+#[tauri::command]
 pub async fn get_memory_projection(
     state: State<'_, Backend>,
     project_id: String,

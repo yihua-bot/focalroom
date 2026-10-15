@@ -339,3 +339,33 @@ pub async fn view(store: &Store, proposal_id: &str) -> Result<Proposal> {
         updated_at: row.get("updated_at"),
     })
 }
+
+/// 项目提案列表（新在前；含操作与状态，供 GUI 审批视图）。
+pub async fn list(store: &Store, project_id: &str, limit: usize) -> Result<Value> {
+    let rows: Vec<(String, String)> = sqlx::query(
+        "SELECT id,state FROM proposals WHERE project_id=? ORDER BY updated_at DESC, rowid DESC LIMIT ?",
+    )
+    .bind(project_id)
+    .bind(limit as i64)
+    .fetch_all(&store.pool)
+    .await?
+    .iter()
+    .map(|r| (r.get("id"), r.get("state")))
+    .collect();
+    let mut items = vec![];
+    for (id, _) in rows {
+        let view = view(store, &id).await?;
+        items.push(json!({
+            "id": view.id, "taskId": view.task_id, "author": view.author,
+            "title": view.title, "state": view.state,
+            "baseRevision": view.base_revision, "revision": view.revision,
+            "approvalNonce": view.approval_nonce,
+            "operations": view.operations.iter().map(|op| json!({
+                "operationId": op.operation_id, "photoId": op.photo_id,
+                "op": op.op, "toIndex": op.to_index, "reason": op.reason,
+            })).collect::<Vec<_>>(),
+            "createdAt": view.created_at, "updatedAt": view.updated_at,
+        }));
+    }
+    Ok(json!({"proposals": items}))
+}

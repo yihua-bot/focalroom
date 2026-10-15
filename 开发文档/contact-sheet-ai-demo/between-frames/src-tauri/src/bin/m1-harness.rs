@@ -53,6 +53,50 @@ impl Harness {
                 )
                 .await?
             ),
+            "execute_v2_command" => {
+                let envelope = args["envelope"].clone();
+                let principal = string(args, "principal")?.to_owned();
+                let project_id = envelope["project_id"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned();
+                let trusted = match principal.as_str() {
+                    "local-owner" => between_frames_lib::v2_bridge::local_owner_principal(
+                        "local-workspace",
+                        &project_id,
+                    ),
+                    other => {
+                        return Err(AppError::new(
+                            "PERMISSION_DENIED",
+                            format!("未知主体：{other}"),
+                        ));
+                    }
+                };
+                match betweenframes_local_domain::parse_command(envelope.clone()) {
+                    Ok(validated) => {
+                        let authority =
+                            between_frames_lib::v2_bridge::authority_for(&self.store, &project_id)
+                                .await?;
+                        between_frames_lib::v2_bridge::execute(
+                            &self.store,
+                            between_frames_lib::v2_bridge::V2Execution {
+                                envelope: validated,
+                                principal: trusted,
+                                authority,
+                            },
+                            4_102_444_800_000,
+                        )
+                        .await
+                    }
+                    Err(code) => {
+                        json!({"ok": false, "command_id": "", "revision": null, "error": {"code": code, "message": "命令不符合 v2.0 契约"}})
+                    }
+                }
+            }
+            "get_proposals" => serde_json::to_value(
+                between_frames_lib::agent::proposals::list(&self.store, id, 50).await?,
+            )
+            .unwrap(),
             "get_memory_projection" => serde_json::to_value(
                 between_frames_lib::agent::memory::projection_for_query(
                     &self.store,
