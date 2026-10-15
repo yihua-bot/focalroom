@@ -128,6 +128,7 @@ dependencies = [
  "base64 0.22.1",
  "betweenframes-local-domain",
  "chrono",
+ "hmac",
  "image",
  "reqwest 0.12.28",
  "serde",

@@ -1,3 +1,4 @@
+pub mod billing;
 mod cloud;
 pub mod comments;
 pub mod consent;
@@ -11,6 +12,7 @@ mod memory_search;
 pub mod openai;
 pub mod org;
 pub mod policy;
+pub mod promotion;
 pub mod proposals;
 pub mod provider;
 pub mod router;
