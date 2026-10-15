@@ -179,10 +179,8 @@ async fn real_model_deepseek_vision_observation() {
         )
         .await
         .unwrap();
-    eprintln!(
-        "视觉观察返回: {}",
-        serde_json::to_string(&observations).unwrap_or_default()[..200.min(200)].to_string()
-    );
+    let text = serde_json::to_string(&observations).unwrap_or_default();
+    eprintln!("视觉观察返回: {}", &text[..text.len().min(200)]);
     eprintln!("真实 token: {tokens}");
     assert!(
         tokens > 0 || !observations.to_string().is_empty(),
