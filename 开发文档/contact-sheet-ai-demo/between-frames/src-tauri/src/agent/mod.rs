@@ -9,6 +9,7 @@ pub mod memory;
 pub mod memory_control;
 mod memory_search;
 pub mod openai;
+pub mod org;
 pub mod policy;
 pub mod proposals;
 pub mod provider;
