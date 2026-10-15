@@ -29,7 +29,7 @@ impl ToolRegistry {
     }
     /// v2 别名解析为规范工具名（无别名返回原名）；M5 评论类工具显式拒绝。
     pub fn canonical(name: &str) -> Result<String> {
-        if matches!(name, "get_comments" | "summarize_review_disagreement") {
+        if matches!(name, "summarize_review_disagreement") {
             return Err(AppError::new(
                 "NOT_IMPLEMENTED",
                 "评论协作工具在 M5 交付；当前任务请使用既有工具集",

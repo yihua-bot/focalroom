@@ -190,15 +190,15 @@ async fn revision_conflict_maps_to_409_and_m5_kinds_stay_not_implemented() {
     let result = run(&db, stale, owner.clone()).await;
     assert!(!result["ok"].as_bool().unwrap());
     assert_eq!(result["error"]["code"], "REVISION_CONFLICT");
-    // M5 范围：诚实未实现，不假装成功。
-    let mut comment = envelope(
-        "comment.add",
-        json!({"body": "好", "anchor": {"type": "photo", "photo_id": "photo-x", "x": 0.5, "y": 0.5}}),
+    // M5 审批提案仍未实现（评论已在本切片交付）：诚实拒绝，不假装成功。
+    let mut proposal = envelope(
+        "proposal.create",
+        json!({"base_revision": revision, "title": "t", "operations": [{"operation_id": "op-01", "photo_id": "photo-none", "op": "remove"}]}),
         revision,
-        "comment-add-01",
+        "proposal-will-fail",
     );
-    comment["project_id"] = json!(project_id);
-    let result = run(&db, comment, owner).await;
+    proposal["project_id"] = json!(project_id);
+    let result = run(&db, proposal, owner).await;
     assert!(!result["ok"].as_bool().unwrap());
     assert_eq!(result["error"]["code"], "NOT_IMPLEMENTED");
 }

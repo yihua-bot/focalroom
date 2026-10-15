@@ -101,14 +101,44 @@ pub async fn execute(store: &Store, execution: V2Execution, now: u64) -> Value {
                 "v2.0 审批提案在 M5 交付；草案能力暂经既有 Agent 通道",
             );
         }
-        CommandKind::CommentAdd | CommandKind::CommentResolve => {
-            return reply(
-                false,
-                command_id,
-                Some(authority.revision),
-                "NOT_IMPLEMENTED",
-                "评论与批注在 M5 交付",
-            );
+        CommandKind::CommentAdd => {
+            let thread = crate::agent::comments::add(
+                store,
+                project_id,
+                &betweenframes_local_domain::actor_label(&principal),
+                payload["body"].as_str().unwrap_or(""),
+                &payload["anchor"],
+            )
+            .await;
+            return match thread {
+                Ok(thread) => {
+                    let mut value = reply(true, command_id, None, "", "");
+                    value["thread_id"] = json!(thread.id);
+                    value["state"] = json!(thread.state);
+                    value
+                }
+                Err(error) => reply(false, command_id, None, &error.code, &error.message),
+            };
+        }
+        CommandKind::CommentResolve => {
+            let thread = crate::agent::comments::resolve(
+                store,
+                project_id,
+                payload["thread_id"].as_str().unwrap_or(""),
+                payload["state"]
+                    .as_str()
+                    .is_some_and(|state| state.eq_ignore_ascii_case("resolved")),
+            )
+            .await;
+            return match thread {
+                Ok(thread) => {
+                    let mut value = reply(true, command_id, None, "", "");
+                    value["thread_id"] = json!(thread.id);
+                    value["state"] = json!(thread.state);
+                    value
+                }
+                Err(error) => reply(false, command_id, None, &error.code, &error.message),
+            };
         }
     };
     // 3) 经唯一 CommandHandler 执行（幂等回执、历史、undo、证据全部继承 v1 语义）。

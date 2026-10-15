@@ -226,3 +226,11 @@ pub fn dispatch(
     };
     json!({"ok":false,"command_id":command.0.command_id,"error":{"code":code,"message":message}})
 }
+
+/// 可读作者标签（评论/审计展示用；不含密钥或端点）。
+pub fn actor_label(principal: &Principal) -> String {
+    match &principal.actor {
+        Actor::User { id, .. } => format!("user:{id}"),
+        Actor::Agent { id, .. } => format!("agent:{id}"),
+    }
+}

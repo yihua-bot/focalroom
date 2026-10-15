@@ -135,7 +135,10 @@ async fn v2_tool_names_complete_full_loop_and_m5_tools_are_rejected() {
     assert_eq!(projection.drafts.len(), 1);
     assert_eq!(projection.drafts[0].title, "v2 别名草案");
     // M5 评论工具：显式 NOT_IMPLEMENTED，不进入白名单。
-    assert!(between_frames_lib::agent::policy::ToolRegistry::canonical("get_comments").is_err());
+    assert!(
+        between_frames_lib::agent::policy::ToolRegistry::canonical("get_comments").is_ok(),
+        "评论读取工具随 M5 评论切片解锁"
+    );
     // M5 工具不在白名单：无论参数如何都被拒绝（这里以空参数触发，亦可在更早的 scope 检查被拒）。
     let rejected = CommandHandler::new(&db)
         .agent_tool(

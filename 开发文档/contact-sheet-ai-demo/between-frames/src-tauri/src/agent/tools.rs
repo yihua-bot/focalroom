@@ -131,6 +131,12 @@ pub(crate) async fn execute(
                 ),
             }
         }
+        "get_comments" => {
+            let photo = a["photo_id"].as_str().filter(|id| !id.is_empty());
+            let limit = a["limit"].as_u64().unwrap_or(10).min(50) as usize;
+            let listing = super::comments::list_tx(tx, &task.project_id, photo, limit).await?;
+            Ok(json!({"threads": listing["threads"], "notice": listing["notice"]}))
+        }
         "retrieve_preferences" => {
             if a["scope"] != "project_local" {
                 return Err(AppError::new(

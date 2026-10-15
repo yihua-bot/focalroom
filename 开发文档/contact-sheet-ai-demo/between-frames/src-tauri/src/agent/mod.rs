@@ -1,4 +1,5 @@
 mod cloud;
+pub mod comments;
 pub mod consent;
 pub mod context;
 mod drafts;

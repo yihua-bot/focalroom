@@ -449,6 +449,41 @@
     ],
     "additionalProperties": false
    }
+  },
+  {
+   "name": "get_comments",
+   "description": "读取本项目的审稿讨论线程（人工评论）；Agent 只读，评论不构成偏好证据。",
+   "strict": true,
+   "access": "read",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "photo_id": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+     }
+    },
+    "required": [
+     "project_id",
+     "photo_id",
+     "limit"
+    ],
+    "additionalProperties": false
+   }
   }
  ]
 }
