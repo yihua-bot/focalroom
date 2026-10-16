@@ -210,9 +210,10 @@ impl OpenAiProvider {
 }
 fn user_brief(task: &Task) -> String {
     format!(
-        "编辑目标：{}\n项目 ID：{}\n目标张数：{}\n当前选区：{} 张",
+        "编辑目标：{}\n项目 ID：{}\n任务 ID：{}\n目标张数：{}\n当前选区：{} 张",
         task.goal,
         task.project_id,
+        task.id,
         task.target_count,
         task.selected_photo_ids.len()
     )

@@ -720,11 +720,21 @@ fn main_response(body: &str, step: Option<String>) -> String {
         .as_deref()
         .and_then(|step| step.strip_prefix("metered:"))
     {
+        let inner = if [
+            "valid",
+            "excess_output",
+            "excess_cost",
+            "inconsistent",
+            "partial",
+        ]
+        .contains(&kind)
+        {
+            "tool:list_photos"
+        } else {
+            kind
+        };
         let mut response: Value =
-            serde_json::from_str(&main_response(body, Some("tool:list_photos".into()))).unwrap();
-        if kind == "text" {
-            response = serde_json::from_str(&main_response(body, Some("text".into()))).unwrap();
-        }
+            serde_json::from_str(&main_response(body, Some(inner.into()))).unwrap();
         response["usage"] = match kind {
             "excess_output" => {
                 json!({"input_tokens":1000,"output_tokens":9000,"total_tokens":10000})
@@ -771,6 +781,30 @@ fn main_response(body: &str, step: Option<String>) -> String {
         })
         .unwrap_or_default();
     match step.as_deref() {
+        Some("tool:create_from_history") => envelope(
+            json!([{"type":"function_call","call_id":"call-create","name":"create_selection_draft","arguments":json!({"project_id":project_id,"base_project_revision":0,"title":"两张候选","summary":"仅元数据","items":history_ids.iter().take(2).enumerate().map(|(i,id)|json!({"photo_id":id,"proposed_action":"keep","position":i,"rationale":"元数据候选，未做视觉判断"})).collect::<Vec<_>>()}).to_string()}]),
+        ),
+        Some("tool:finish_from_history") => {
+            let inputs = parsed["input"].as_array().unwrap();
+            let task_id = inputs
+                .iter()
+                .filter_map(|i| i["content"].as_array())
+                .flatten()
+                .filter_map(|p| p["text"].as_str())
+                .find_map(|s| s.split("任务 ID：").nth(1))
+                .and_then(|s| s.split_whitespace().next())
+                .unwrap_or("");
+            let draft_id = inputs
+                .iter()
+                .filter(|i| i["type"] == "function_call_output")
+                .filter_map(|i| i["output"].as_str())
+                .filter_map(|s| serde_json::from_str::<Value>(s).ok())
+                .find_map(|v| v["result"]["draft_id"].as_str().map(str::to_owned))
+                .unwrap_or_default();
+            envelope(
+                json!([{"type":"function_call","call_id":"call-finish","name":"finish_task","arguments":json!({"project_id":project_id,"task_id":task_id,"draft_ids":[draft_id],"summary":"两张草案待人类评审"}).to_string()}]),
+            )
+        }
         Some("http_error") => {
             json!({"fixture_http_error":true,"error":{"message":"invalid bearer test-key-abcd"}})
                 .to_string()
@@ -858,6 +892,36 @@ async fn malformed_model_batches_and_incomplete_responses_execute_no_tools() {
             serde_json::to_value(&p).unwrap()
         );
     }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn real_http_loop_receives_task_identity_and_finishes_reviewable_draft() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let (base, _) = spawn_server(Script {
+        main: [
+            "tool:list_photos",
+            "tool:create_from_history",
+            "tool:finish_from_history",
+        ]
+        .into_iter()
+        .map(|s| format!("metered:{s}"))
+        .collect(),
+        vision: VisionReply::Valid,
+    });
+    let task = start_vision_task(&db, &p, vec![], 0, None).await;
+    engine(&db, &base).run(&task.id).await.unwrap();
+    let view = agent::projection(&db, &p.id).await.unwrap();
+    assert_eq!(view.tasks[0].state, "review_ready");
+    assert_eq!(view.tasks[0].final_draft_ids.len(), 1);
+    assert_eq!(view.drafts[0].items.len(), 2);
+    assert_eq!(
+        serde_json::to_value(db.get(&p.id).await.unwrap()).unwrap(),
+        serde_json::to_value(&p).unwrap()
+    );
     unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
 }
 
