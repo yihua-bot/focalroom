@@ -1,0 +1,10 @@
+{
+  "provider": "DeepSeek",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-flash",
+  "test": "real_model_deepseek_full_agent_loop",
+  "exit_code": 101,
+  "seconds": 18.54,
+  "synthetic_images": 0,
+  "credential_persisted": false
+}

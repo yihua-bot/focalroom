@@ -2,6 +2,8 @@
 
 ## 新方向：v2.0（2026-10-15）
 
+**最新 M3 增量（2026-10-16）**：用户授权 LUMIX 真实照片，80 张中抽样观察 12 张并形成 8 张待评审草案，原图 hash 和正式项目不变；保留前次失败，尚无真人/竞品质量结论。新增预算收敛、版本化费率和离线评测；134 Rust、159 Vitest、16 预览、6 后端通过。M3 仍 partial，腾讯云目前没有 Between Frames API，不能宣布全计划完成。见 [M3 报告](docs/V2-M3-EVALUATION-TEST-REPORT.md) 与 [剩余计划](docs/V2-REMAINING-PLAN.md)。
+
 用户提供了 `BetweenFrames-v2.0-Implementation-Kit`，方向升级为专业摄影 Agent、创作工作区、多人协作与后续私密专业服务。方向差异和阶段映射见 [V2.0-ADOPTION](docs/V2.0-ADOPTION.md)。**M0 工程/契约切片已本地验收**：npm workspaces、Desktop/Web 独立入口、共享 UI、TS/Rust 契约与权限骨架、CI 配置；83 Rust、134 单测、17 浏览器 E2E、5 后端旅程通过，独立原生包导入/选片/退出重启通过。M0 整体仍 partial/待架构与 UI/UX 评审；云服务、v2 生产迁移、远端 CI 均未验收，原用户库未升级。见 [M0 报告](docs/V2-M0-TEST-REPORT.md) 和 [启动说明](between-frames/V2-M0-README.md)。旧版 M0–M5 完成记录不代表新版阶段已通过。
 
 **v2 评审修复（2026-10-15）**：八项缺陷修复与回归完成，110 Rust、142 单测、16 预览、1 Web、6 条真实后端旅程通过；新增 0017 仅用于临时库兼容验证，原用户库未升级。见 [修复报告](docs/V2-REVIEW-FIXES-TEST-REPORT.md)。撤回“v2 工程侧完成”结论，当时 [验收总账](docs/V2-COMPLIANCE.md) 为 16 pass / 8 partial，云共享、Creator 隔离及真实支付仍需继续开发。

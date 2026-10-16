@@ -45,6 +45,8 @@ pub(crate) async fn reserve(
     call: &ToolCall,
     images: u32,
     cost: u32,
+    cost_limit: u32,
+    rate: super::pricing::RateCard,
 ) -> Result<(i64, u64)> {
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, task).await?;
@@ -60,7 +62,7 @@ pub(crate) async fn reserve(
     if t.usage.tool_calls >= t.budget.max_tool_calls
         || t.elapsed_ms >= u64::from(t.budget.max_duration_seconds) * 1000
         || t.usage.cloud_images.saturating_add(images) > t.budget.max_cloud_images
-        || t.usage.cost_minor_usd.saturating_add(cost) > t.budget.max_cost_minor_usd
+        || t.usage.cost_minor_usd.saturating_add(cost) > t.budget.max_cost_minor_usd.min(cost_limit)
     {
         return Err(AppError::new(
             "BUDGET_EXCEEDED",
@@ -71,7 +73,7 @@ pub(crate) async fn reserve(
         .await?
         .ok_or_else(|| AppError::new("PERMISSION_DENIED", "图像授权已撤回或配额不足；未上传"))?;
     consent::reserve_usage(&mut tx, &mut t, consent, images, cost).await?;
-    store::step(&mut tx, task, "vision_reserved", json!({"callId":call.call_id,"fingerprint":fingerprint(&serde_json::to_value(call).unwrap()),"status":"reserved","images":images,"cost":cost,"round":t.usage.model_turns}), "视觉请求预算已预留；中断时不自动重传").await?;
+    store::step(&mut tx, task, "vision_reserved", json!({"callId":call.call_id,"fingerprint":fingerprint(&serde_json::to_value(call).unwrap()),"status":"reserved","images":images,"cost":cost,"round":t.usage.model_turns,"rateCard":rate,"effectiveCostLimitMinorUsd":t.budget.max_cost_minor_usd.min(cost_limit)}), "视觉请求预算已预留；中断时不自动重传").await?;
     store::checkpoint(&mut tx, &t).await?;
     tx.commit().await?;
     Ok((

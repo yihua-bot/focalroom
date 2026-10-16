@@ -13,6 +13,7 @@ mod memory_search;
 pub mod openai;
 pub mod org;
 pub mod policy;
+pub mod pricing;
 pub mod promotion;
 pub mod proposals;
 pub mod provider;
@@ -33,8 +34,10 @@ impl CommandHandler<'_> {
         call: &ToolCall,
         images: u32,
         cost: u32,
+        cost_limit: u32,
+        rate: pricing::RateCard,
     ) -> Result<(i64, u64)> {
-        cloud::reserve(self.store, task, call, images, cost).await
+        cloud::reserve(self.store, task, call, images, cost, cost_limit, rate).await
     }
     pub(crate) async fn settle_vision(
         &self,
@@ -52,8 +55,15 @@ impl CommandHandler<'_> {
     pub async fn recover_agents(&self) -> Result<()> {
         lifecycle::recover(self.store).await
     }
-    pub(crate) async fn agent_attempt(&self, id: &str, input: u32, cost_limit: u32) -> Result<()> {
-        execution::attempt(self.store, id, input, cost_limit).await
+    pub(crate) async fn agent_attempt(
+        &self,
+        id: &str,
+        input: u32,
+        cost_limit: u32,
+        output_limit: u32,
+        rate: pricing::RateCard,
+    ) -> Result<()> {
+        execution::attempt(self.store, id, input, cost_limit, output_limit, rate).await
     }
     pub(crate) async fn agent_elapsed(&self, id: &str, elapsed: u64) -> Result<()> {
         execution::elapsed(self.store, id, elapsed).await
@@ -97,7 +107,7 @@ pub const MODEL_ID: &str = "metadata-mock-1";
 pub const PROVIDER_OPENAI: &str = "openai";
 pub fn prompt_version(provider: &str) -> &'static str {
     if provider == PROVIDER_OPENAI {
-        "m3-openai-2"
+        "m3-openai-5"
     } else {
         PROMPT_VERSION
     }

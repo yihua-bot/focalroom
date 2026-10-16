@@ -239,14 +239,39 @@ impl AgentEngine {
             input.layers["execution"]["remainingCostMinorUsd"] = effective_limit
                 .saturating_sub(input.task.usage.cost_minor_usd)
                 .into();
+            input.layers["execution"]["configuredMaxOutputTokens"] =
+                input.task.budget.max_output_tokens.into();
+            let rate = self
+                .openai
+                .as_ref()
+                .map(|p| p.rate_card())
+                .unwrap_or_default();
+            input.layers["execution"]["rateCard"] = serde_json::to_value(rate).unwrap();
             let estimate = ContextBuilder::input_estimate(&input);
+            let output_limit = match super::policy::PolicyGate::output_limit(
+                &input.task,
+                estimate,
+                cost_limit,
+                rate,
+            ) {
+                Ok(limit) => limit,
+                Err(error) => {
+                    handler.agent_state(id, "paused", &error.message).await?;
+                    return Ok(());
+                }
+            };
+            // 收紧为不超过原值的整数，序列化长度不会增加，保留原估算作为上界。
+            input.task.budget.max_output_tokens = output_limit;
+            input.layers["execution"]["limits"]["maxOutputTokens"] = output_limit.into();
             if let Err(e) =
-                super::policy::PolicyGate::model_budget(&input.task, estimate, cost_limit)
+                super::policy::PolicyGate::model_budget(&input.task, estimate, cost_limit, rate)
             {
                 handler.agent_state(id, "paused", &e.message).await?;
                 return Ok(());
             }
-            handler.agent_attempt(id, estimate, cost_limit).await?;
+            handler
+                .agent_attempt(id, estimate, cost_limit, output_limit, rate)
+                .await?;
             let started = std::time::Instant::now();
             let remaining = (u64::from(input.task.budget.max_duration_seconds) * 1000)
                 .saturating_sub(input.task.elapsed_ms)

@@ -1,0 +1,11 @@
+{
+  "provider": "DeepSeek",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-flash",
+  "test": "real_model_deepseek_vision_observation",
+  "exit_code": 0,
+  "seconds": 7.92,
+  "synthetic_images": 1,
+  "max_output_tokens": 4096,
+  "credential_persisted": false
+}

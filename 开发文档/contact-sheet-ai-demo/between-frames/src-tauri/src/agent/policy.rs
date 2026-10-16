@@ -57,12 +57,48 @@ pub(crate) fn validate_schema(schema: &Value, value: &Value) -> Result<()> {
 }
 pub struct PolicyGate;
 impl PolicyGate {
+    /// 只收紧本轮输出，任务总预算和其他执行门槛保持权威值。
+    pub(crate) fn output_limit(
+        task: &Task,
+        input: u32,
+        cost_limit: u32,
+        rate: super::pricing::RateCard,
+    ) -> Result<u32> {
+        if task.provider_id != super::PROVIDER_OPENAI {
+            return Ok(task.budget.max_output_tokens);
+        }
+        let remaining = task
+            .budget
+            .max_cost_minor_usd
+            .min(cost_limit)
+            .saturating_sub(task.usage.cost_minor_usd);
+        if rate.model_cost(input, 128) > remaining {
+            return Err(AppError::new(
+                "BUDGET_EXCEEDED",
+                "剩余预算不足以预留输入和最少输出，任务已暂停",
+            ));
+        }
+        let (mut low, mut high) = (128, task.budget.max_output_tokens);
+        while low < high {
+            let middle = low + (high - low).div_ceil(2);
+            if rate.model_cost(input, middle) <= remaining {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        Ok(low)
+    }
     pub async fn validate(
         tx: &mut Transaction<'_, Sqlite>,
         task: &Task,
         call: &ToolCall,
     ) -> Result<()> {
-        ToolRegistry::validate(call)?;
+        ToolRegistry::validate(call).map_err(|error| {
+            if call.name == "list_photos" && error.code == "VALIDATION_ERROR" {
+                AppError::new("VALIDATION_ERROR", format!("list_photos 参数不合法；status 仅允许 keep/reject/undecided 或 JSON null。首个分页可用以下完整参数：{}。null 不加引号，不能写成字符串。", json!({"project_id":task.project_id,"status":null,"limit":100,"cursor":null})))
+            } else { error }
+        })?;
         if call.args["project_id"] != task.project_id {
             return Err(AppError::new("PERMISSION_DENIED", "工具不能访问其他项目"));
         }
@@ -109,7 +145,12 @@ impl PolicyGate {
         }
         Ok(())
     }
-    pub fn model_budget(task: &Task, input: u32, cost_limit: u32) -> Result<()> {
+    pub fn model_budget(
+        task: &Task,
+        input: u32,
+        cost_limit: u32,
+        rate: super::pricing::RateCard,
+    ) -> Result<()> {
         let b = &task.budget;
         let u = &task.usage;
         if u.model_turns >= b.max_model_turns
@@ -124,7 +165,7 @@ impl PolicyGate {
             || u.cloud_images > b.max_cloud_images
             || u.cost_minor_usd > b.max_cost_minor_usd.min(cost_limit)
             || u.cost_minor_usd
-                .saturating_add(super::openai::model_reservation(task, input))
+                .saturating_add(rate.reservation(task, input))
                 > b.max_cost_minor_usd.min(cost_limit)
         {
             return Err(AppError::new(

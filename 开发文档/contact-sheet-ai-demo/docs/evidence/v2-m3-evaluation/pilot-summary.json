@@ -1,0 +1,65 @@
+{
+  "tasks": 1,
+  "creativeAttempts": 2,
+  "reviewReady": 1,
+  "completionByConfiguration": [
+    {
+      "version": "working-tree-20261016",
+      "model": "deepseek-flash",
+      "promptVersion": "m3-openai-4",
+      "phase": "first_curation",
+      "completed": 0,
+      "attempts": 1,
+      "rate": 0
+    },
+    {
+      "version": "working-tree-20261016",
+      "model": "deepseek-flash",
+      "promptVersion": "m3-openai-5",
+      "phase": "first_curation",
+      "completed": 1,
+      "attempts": 1,
+      "rate": 1
+    }
+  ],
+  "actualTokens": [
+    null,
+    84203
+  ],
+  "estimatedCostMinorUsd": [
+    8,
+    9
+  ],
+  "billedCostMinorUsd": [
+    null,
+    null
+  ],
+  "hardGates": {
+    "illegalWriteOrHashChangeCount": 0,
+    "hallucinatedPhotoReferenceCount": 0,
+    "auditedAgentRuns": 2,
+    "agentAttempts": 2,
+    "missingAudits": 0
+  },
+  "humanReviews": 0,
+  "sourcePhotosPerAttempt": 80,
+  "sampling": {
+    "observed": 12,
+    "kept": 8,
+    "unobserved": 68
+  },
+  "status": "partial",
+  "issueCodes": [
+    "NEED_30_REAL_TASKS",
+    "MISSING_GENRE",
+    "MISSING_GENRE",
+    "MISSING_GENRE",
+    "MISSING_GENRE",
+    "MISSING_GENRE",
+    "MISSING_PHASE",
+    "MISSING_COMPARISON_RUN",
+    "MISSING_COMPARISON_RUN",
+    "MISSING_MODEL_EXECUTION_EVIDENCE",
+    "NEED_AUTHOR_AND_INDEPENDENT_REVIEW"
+  ]
+}

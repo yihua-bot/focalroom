@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
+    "agent:eval": "node tools/agent-eval/cli.ts",
     "test:e2e": "playwright test",
     "test:integration": "playwright test --config playwright.integration.config.ts",
     "tauri": "tauri",

@@ -20,6 +20,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "apps", "packages", "workers"],
+  "include": ["src", "apps", "packages", "workers", "tools"],
   "references": []
 }

@@ -1,5 +1,11 @@
 # Between Frames：接手开发交接说明
 
+## 当前接续：M3 真实素材与离线评审（2026-10-16）
+
+优先读 [本轮报告](V2-M3-EVALUATION-TEST-REPORT.md)、[剩余计划](V2-REMAINING-PLAN.md)、[ADR 0030](ADR/0030-m3-adaptive-output-and-evaluation.md)。用户授权 `/Volumes/LUMIX/DCIM/` 的选定 1400px 预览到 DeepSeek，并委托决定目标；前 80 JPEG 的 12 张抽样→8 张候选已预算内提交，前一结构失败仍保留。真实素材只在仓库外的 BetweenFrames-Reviews；未评分，不得代写真人结论。Prompt 最终 m3-openai-5 / vision-2；DeepSeek 费率版本与未知配置旧规则分开，不重算旧账。134 Rust / 159 Vitest / 16 预览 / 6 后端通过；原用户库不升级、密钥不落盘、不批量运行 ignored。下一步是 M3 真实分层任务/专家评测和已列工程缺口；云端当前只有 PG 基础设施与空库，没有 Between Frames API，按里程碑推进。以下为历史交接。
+
+接续真实服务验收见 [DeepSeek 报告](V2-DEEPSEEK-TEST-REPORT.md)：文件名任务与单图 Provider 协议通过；原始开放任务仍 paused，优先修复预算内收敛，不得据此宣布 M3 通过。已交付真实任务身份、token 来源/结算、严格工具批次与错误正文隔离，提示版本 m3-openai-2。不要自动提交草案、抬高预算或用明确的元数据任务覆盖开放选片失败；继续保留全部真实运行记录。密钥只曾进入测试子进程内存，不能复制到仓库或文档。
+
 最新接续（2026-10-16）：用户已授权继续推进。先读 [Agent 验证修复报告](V2-AGENT-VALIDATION-TEST-REPORT.md) 与 [CR2 交付报告](V2-M1-CR2-PREVIEW-TEST-REPORT.md)。有界 CR2 内嵌 JPEG 已交付，其他 RAW 仍明确回退；本轮修复现有视觉响应/缓存校验与真实模型验收假通过。不能用历史 needs_input 或非空 JSON 结果宣称 M3 通过；新门槛下真实模型尚待验收，后续重点是授权数据集和五维独立评测。保留 M1 色彩/总资源/低端设备待验项，完整 RAW 显影不扩展为 P0 阻塞项。以下旧任务指令与计数是历史交接，当前状态以上述报告为准。
 
 当前入口：[M1 原生 500 图报告](V2-M1-NATIVE-500-TEST-REPORT.md)。生成 PNG/JPEG 图库的原生功能切片已补验，50 表/500 源 hash 重启一致，胶片条 CSS 已修复。本轮重跑 120 Rust 默认、147 前端、4 M1 GUI；累计基线的额外格式样本与其他 E2E 未重跑。下一步优先 B（真正 RAW 细节与方向/色彩矩阵）及 C（WKWebView 总资源、长期/低端性能），不再把原生 500 图功能当作未做。M1 整体仍 partial，不能进入新 M2。以下旧数字和旧配置说明为历史交接基线，以当前报告及本段为准。

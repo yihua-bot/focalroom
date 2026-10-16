@@ -1,0 +1,95 @@
+[
+  {
+    "label": "adaptive-open-task",
+    "provider": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "test": "real_model_deepseek_full_agent_loop",
+    "exit_code": 101,
+    "seconds": 18.07,
+    "synthetic_images": 0,
+    "credential_persisted": false
+  },
+  {
+    "label": "adaptive-keep-validation",
+    "provider": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "test": "real_model_deepseek_full_agent_loop",
+    "exit_code": 101,
+    "seconds": 0.75,
+    "synthetic_images": 0,
+    "credential_persisted": false
+  },
+  {
+    "label": "adaptive-keep-validation-v2",
+    "provider": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "test": "real_model_deepseek_full_agent_loop",
+    "exit_code": 0,
+    "seconds": 20.39,
+    "synthetic_images": 0,
+    "credential_persisted": false
+  },
+  {
+    "label": "lumix-first80-preview3",
+    "provider": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "test": "real_model_lumix_authorized_agent_smoke",
+    "exit_code": 124,
+    "seconds": 600.01,
+    "synthetic_images": 0,
+    "authorized_real_preview_limit": 3,
+    "credential_persisted": false
+  },
+  {
+    "label": "lumix-verified-fixture-preview3",
+    "provider": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "test": "real_model_lumix_authorized_agent_smoke",
+    "exit_code": 101,
+    "seconds": 82.38,
+    "synthetic_images": 0,
+    "authorized_real_preview_limit": 3,
+    "credential_persisted": false
+  },
+  {
+    "label": "lumix-rated-smoke",
+    "provider": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "test": "real_model_lumix_authorized_agent_smoke",
+    "exit_code": 0,
+    "seconds": 107.16,
+    "synthetic_images": 0,
+    "authorized_real_preview_limit": 3,
+    "credential_persisted": false
+  },
+  {
+    "label": "lumix-light-space-pilot",
+    "provider": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "test": "real_model_lumix_exploratory_curation",
+    "exit_code": 101,
+    "seconds": 108.29,
+    "synthetic_images": 0,
+    "authorized_real_preview_limit": 12,
+    "credential_persisted": false
+  },
+  {
+    "label": "lumix-light-space-pilot-v2",
+    "provider": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "test": "real_model_lumix_exploratory_curation",
+    "exit_code": 0,
+    "seconds": 138.33,
+    "synthetic_images": 0,
+    "authorized_real_preview_limit": 12,
+    "credential_persisted": false
+  }
+]

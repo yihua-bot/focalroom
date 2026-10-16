@@ -59,7 +59,7 @@ pub(crate) async fn execute(
                 if let Some(cursor) = a["cursor"].as_str() {
                     let n = cursor
                         .parse::<usize>()
-                        .map_err(|_| AppError::new("VALIDATION_ERROR", "分页 cursor 不合法"))?;
+                        .map_err(|_| AppError::new("VALIDATION_ERROR", "分页 cursor 不合法：首个分页请传 JSON null（不加引号）或字符串 \"0\"；续页为十进制偏移字符串，如 \"100\"；空串和字符串 \"null\" 均不合法。"))?;
                     data = data.into_iter().skip(n).collect();
                 }
             } else {

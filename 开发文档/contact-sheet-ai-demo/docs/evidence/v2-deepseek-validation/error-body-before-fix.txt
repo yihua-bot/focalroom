@@ -1,0 +1,22 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.59s
+     Running tests/agent_vision.rs (src-tauri/target-v1/debug/deps/agent_vision-1f587ee42c813624)
+
+running 1 test
+test provider_error_bodies_cannot_leak_credentials_into_task_records ... FAILED
+
+failures:
+
+---- provider_error_bodies_cannot_leak_credentials_into_task_records stdout ----
+
+thread 'provider_error_bodies_cannot_leak_credentials_into_task_records' (9845087) panicked at tests/agent_vision.rs:834:5:
+assertion failed: !error.message.contains("test-key-abcd")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    provider_error_bodies_cannot_leak_credentials_into_task_records
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `--test agent_vision`

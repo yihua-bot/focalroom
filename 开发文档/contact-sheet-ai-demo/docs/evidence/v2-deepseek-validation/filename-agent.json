@@ -1,0 +1,10 @@
+{
+  "provider": "DeepSeek",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-flash",
+  "test": "real_model_deepseek_filename_curation",
+  "exit_code": 0,
+  "seconds": 18.0,
+  "synthetic_images": 0,
+  "credential_persisted": false
+}

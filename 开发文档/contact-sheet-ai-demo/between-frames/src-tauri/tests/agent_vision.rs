@@ -218,7 +218,7 @@ async fn grant(db: &Store, project: &Project, mode: &str) -> ConsentView {
 async fn zero_cost_and_exhausted_tool_budget_stop_before_upload() {
     let _guard = ENV_LOCK.lock().await;
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
-    for (cost, tools) in [(0, 40), (100, 1), (30, 40)] {
+    for (cost, tools) in [(0, 40), (100, 1), (15, 40)] {
         let temp = tempfile::tempdir().unwrap();
         let (db, p) = setup(temp.path(), 2).await;
         let consent = grant(&db, &p, "project").await;
@@ -713,7 +713,8 @@ fn read_body(stream: &mut std::net::TcpStream) -> std::io::Result<String> {
     Ok(String::from_utf8_lossy(&body).into_owned())
 }
 fn envelope(output: Value) -> String {
-    json!({"output": output, "usage": {"total_tokens": 120}}).to_string()
+    json!({"output": output, "usage": {"input_tokens":100,"output_tokens":20,"total_tokens": 120}})
+        .to_string()
 }
 fn main_response(body: &str, step: Option<String>) -> String {
     if let Some(kind) = step
@@ -726,6 +727,8 @@ fn main_response(body: &str, step: Option<String>) -> String {
             "excess_cost",
             "inconsistent",
             "partial",
+            "missing",
+            "cap_exceeded",
         ]
         .contains(&kind)
         {
@@ -742,6 +745,12 @@ fn main_response(body: &str, step: Option<String>) -> String {
             "excess_cost" => json!({"input_tokens":60000,"output_tokens":200,"total_tokens":60200}),
             "inconsistent" => json!({"input_tokens":1000,"output_tokens":200,"total_tokens":5}),
             "partial" => json!({"input_tokens":1000,"total_tokens":1000}),
+            "missing" => json!({"total_tokens":120}),
+            "cap_exceeded" => {
+                let request: Value = serde_json::from_str(body).unwrap();
+                let output = request["max_output_tokens"].as_u64().unwrap() + 1;
+                json!({"input_tokens":1000,"output_tokens":output,"total_tokens":1000+output})
+            }
             _ => json!({"input_tokens":1000,"output_tokens":200,"total_tokens":1200}),
         };
         return response.to_string();
@@ -781,9 +790,13 @@ fn main_response(body: &str, step: Option<String>) -> String {
         })
         .unwrap_or_default();
     match step.as_deref() {
-        Some("tool:create_from_history") => envelope(
-            json!([{"type":"function_call","call_id":"call-create","name":"create_selection_draft","arguments":json!({"project_id":project_id,"base_project_revision":0,"title":"两张候选","summary":"仅元数据","items":history_ids.iter().take(2).enumerate().map(|(i,id)|json!({"photo_id":id,"proposed_action":"keep","position":i,"rationale":"元数据候选，未做视觉判断"})).collect::<Vec<_>>()}).to_string()}]),
-        ),
+        Some("tool:create_from_history") => {
+            let text = parsed["input"][1]["content"][0]["text"].as_str().unwrap();
+            let context: Value = serde_json::from_str(&text[text.find('{').unwrap()..]).unwrap();
+            envelope(
+                json!([{"type":"function_call","call_id":"call-create","name":"create_selection_draft","arguments":json!({"project_id":project_id,"base_project_revision":context["project"]["base_revision"],"title":"两张候选","summary":"仅元数据","items":history_ids.iter().take(2).enumerate().map(|(i,id)|json!({"photo_id":id,"proposed_action":"keep","position":i,"rationale":"元数据候选，未做视觉判断"})).collect::<Vec<_>>()}).to_string()}]),
+            )
+        }
         Some("tool:finish_from_history") => {
             let inputs = parsed["input"].as_array().unwrap();
             let task_id = inputs
@@ -926,6 +939,88 @@ async fn real_http_loop_receives_task_identity_and_finishes_reviewable_draft() {
 }
 
 #[tokio::test]
+async fn remaining_budget_reduces_request_output_without_raising_task_budget() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    for kind in ["valid", "cap_exceeded"] {
+        let temp = tempfile::tempdir().unwrap();
+        let (db, p) = setup(temp.path(), 2).await;
+        let (base, state) = spawn_server(Script {
+            main: if kind == "cap_exceeded" {
+                vec!["metered:valid".into(), "metered:cap_exceeded".into()]
+            } else {
+                vec![format!("metered:{kind}"), "metered:text".into()]
+            },
+            vision: VisionReply::Valid,
+        });
+        let task = CommandHandler::new(&db)
+            .agent_request(AgentRequest {
+                request_id: domain::id(),
+                project_id: p.id.clone(),
+                command: TaskCommand::StartTask {
+                    goal: "元数据候选".into(),
+                    selected_photo_ids: vec![],
+                    target_count: 2,
+                    budget: Budget {
+                        max_cost_minor_usd: 19,
+                        ..Budget::default()
+                    },
+                    consent_id: None,
+                },
+            })
+            .await
+            .unwrap();
+        engine(&db, &base).run(&task.id).await.unwrap();
+        let view = agent::projection(&db, &p.id).await.unwrap();
+        let t = &view.tasks[0];
+        assert_eq!(
+            t.state,
+            if kind == "valid" {
+                "completed"
+            } else {
+                "paused"
+            }
+        );
+        assert_eq!(t.budget.max_output_tokens, 8192);
+        assert_eq!(t.budget.max_cost_minor_usd, 19);
+        let requests = state.lock().unwrap().requests.clone();
+        assert!(!requests.is_empty());
+        assert!(requests.iter().all(|r| {
+            r["max_output_tokens"]
+                .as_u64()
+                .is_some_and(|n| (128..=8192).contains(&n))
+        }));
+        assert!(
+            requests
+                .iter()
+                .any(|r| r["max_output_tokens"].as_u64().unwrap() < 8192),
+            "至少一轮应收紧输出上限：{:?}",
+            requests
+                .iter()
+                .map(|r| r["max_output_tokens"].as_u64())
+                .collect::<Vec<_>>()
+        );
+        let attempts:Vec<String> = sqlx::query_scalar("SELECT body_json FROM agent_steps WHERE task_id=? AND kind='model_attempt' ORDER BY id").bind(&task.id).fetch_all(&db.pool).await.unwrap();
+        for (raw, request) in attempts.iter().zip(&requests) {
+            let body: Value = serde_json::from_str(raw).unwrap();
+            assert_eq!(body["maxOutputTokens"], request["max_output_tokens"]);
+            assert!(body["reservedCostMinorUsd"].as_u64().unwrap() <= 19);
+        }
+        let calls: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tool_calls WHERE task_id=?")
+            .bind(&task.id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        assert_eq!(calls, 1, "超限轮不得执行新工具，前一合法轮仍保留");
+        assert_eq!(
+            serde_json::to_value(db.get(&p.id).await.unwrap()).unwrap(),
+            serde_json::to_value(&p).unwrap()
+        );
+    }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
 async fn reported_tokens_settle_reservations_and_excess_usage_stops_before_tools() {
     let _guard = ENV_LOCK.lock().await;
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
@@ -935,6 +1030,7 @@ async fn reported_tokens_settle_reservations_and_excess_usage_stops_before_tools
         "excess_cost",
         "inconsistent",
         "partial",
+        "missing",
     ] {
         let temp = tempfile::tempdir().unwrap();
         let (db, p) = setup(temp.path(), 2).await;
@@ -959,6 +1055,16 @@ async fn reported_tokens_settle_reservations_and_excess_usage_stops_before_tools
         .await
         .unwrap();
         match kind {
+            "missing" => {
+                result.unwrap();
+                assert_eq!(t.state, "completed");
+                assert_eq!(reports, 1);
+                let first: (i64,i64) = sqlx::query_as("SELECT input_estimate,cost_minor_usd FROM model_usage WHERE task_id=? AND request_id='turn-1'").bind(&task.id).fetch_one(&db.pool).await.unwrap();
+                assert_eq!(
+                    first.1 as u32,
+                    agent::openai::text_cost_minor_usd(first.0 as u32 + t.budget.max_output_tokens)
+                );
+            }
             "valid" => {
                 result.unwrap();
                 assert_eq!(t.state, "completed");

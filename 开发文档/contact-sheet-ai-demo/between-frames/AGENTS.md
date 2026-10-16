@@ -2,6 +2,10 @@
 
 给后续在此仓库工作的编码 Agent 与工程师。先读 `../docs/TEST-REPORT.md`（当前状态）与 `../README.md`，再按需深入。
 
+当前接续（2026-10-16）：先读 `../docs/V2-M3-EVALUATION-TEST-REPORT.md` 与 `../docs/V2-REMAINING-PLAN.md`。已用用户授权 LUMIX 前 80 JPEG、12 张 1400px 抽样预览生成 8 图待评审草案；保留前一结构失败，1 个任务/2 attempts，完整成功 run 实际 84,203 token、估算 9 美分，尚无真人/竞品质量结论。最终 Prompt m3-openai-5 / m3-vision-2；已确认端点/模型使用版本化峰时费率，未知配置沿用旧估算，绝非账单。模型/视觉请求均执行原任务和档位上限；不提高预算、不自动提交正式版。新增 `tools/agent-eval`，可离线收集五维评分、冻结候选并保留失败分母。134 Rust / 159 Vitest / 16 预览 / 6 后端通过。真实照片与评审包在 Git 仓库外的 `/Users/yihua/Documents/BetweenFrames-Reviews/m3-lumix-20261016-141130/`，不要复制进仓库或上传。M3 仍 partial；腾讯云仅实例和空库，没有本项目 API，不自动跳阶段。
+
+最新接续：`../docs/V2-DEEPSEEK-TEST-REPORT.md`。DeepSeek 官方实测：文件名任务进入 review_ready（3 轮/4 工具/13021 token），单图 Provider 协议通过（799 token）；原始开放选片仍预算暂停，不能算 M3 完成。已补真实 task_id、严格工具批次、错误正文隔离、实际 token 来源与预算结算；无分项计量保留预留。实际 token 与费用估算分开，不能将保守系数当账单。提示版本 m3-openai-2，旧检查点需重新委托；不自动提交草案或扩大预算。下一步优先解决开放任务预算内收敛，并建立授权素材评测。
+
 当前增量（2026-10-16）：先读 `../docs/V2-AGENT-VALIDATION-TEST-REPORT.md` 与 `../docs/V2-M1-CR2-PREVIEW-TEST-REPORT.md`。用户已授权继续推进；本轮修复既有 Agent 响应/缓存校验与真实测试假通过条件，不代表新增服务或 M1/M3 整体通过。新响应必须经本地 observation schema + ID 唯一性检查；缓存必须结构合法且 ID 匹配。真实任务验收须有预算内可审阅草案，暂停/等待输入/零草案不计完成；直接 observe 只属 Provider 冒烟。主循环计量仍为预算估算。完整 RAW 显影不扩展为 P0 阻塞项；后续优先授权素材质量评测。下方阶段入口及计数保留历史，以本段链接的报告为准。
 
 当前入口：`../docs/V2-M1-NATIVE-500-TEST-REPORT.md`。独立原生 release 的生成 500 图导入/重复跳过、虚拟网格、25 张批量保留/评分、原图比较、序列 Undo/Redo、版本恢复、系统导出与完整退出重启已通过；50 表和 500 源 hash 一致，Agent task 为 0。修复了胶片条样式误放在未加载 App.css 的问题，规则移入共享 app.css。本轮 120 Rust 默认测试、147 前端、4 M1 GUI 通过；累计基线仍为 122 Rust 功能 + 1 增长基准、27 独立 E2E（额外样本/其他 E2E 本轮未重跑）。M1 仍 partial：真正 RAW 细节、专业色彩/高像素素材、WKWebView 总资源与低端设备待补；不进入新 M2。主进程 RSS 不能称为应用总内存。原用户库未升级。

@@ -1,0 +1,12 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.66s
+     Running tests/real_model_e2e.rs (src-tauri/target-v1/debug/deps/real_model_e2e-6cf73796cfecb1e0)
+
+running 1 test
+视觉观察返回: {"model_id":"deepseek-flash","observations":[{"interpretation":"在当前「测试项目」意图下，这张图可能被用作纯色色块/主色调样本或占位背景图，用于验证色彩呈现或排版底色。","photo_id":"synthetic-red","uncertainty":"画面信息量极低，无法判断其真实拍摄或生成来源，也难以确认它在项目中是否仅作为色彩
+真实 token: 799
+Provider 视觉协议冒烟通过：单张生成图、合法结构/ID、799 tokens；非质量与授权验收
+test real_model_deepseek_vision_observation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.39s
+

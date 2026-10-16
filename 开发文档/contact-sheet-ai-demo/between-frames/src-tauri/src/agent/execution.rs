@@ -41,10 +41,33 @@ pub(crate) async fn outcome(
         .usage
         .as_ref()
         .map_or(bytes, |usage| usage.output_tokens);
+    let sent_output_limit: i64 = sqlx::query_scalar("SELECT COALESCE(json_extract(body_json,'$.maxOutputTokens'),?) FROM agent_steps WHERE task_id=? AND kind='model_attempt' AND json_extract(body_json,'$.round')=? ORDER BY id DESC LIMIT 1")
+        .bind(i64::from(t.budget.max_output_tokens)).bind(id).bind(i64::from(t.usage.model_turns)).fetch_optional(&mut *tx).await?.unwrap_or(i64::from(t.budget.max_output_tokens));
+    if !(128..=i64::from(t.budget.max_output_tokens)).contains(&sent_output_limit) {
+        return Err(AppError::new("RECOVERY_ERROR", "模型请求输出上限记录无效"));
+    }
+    let rate_json: Option<String> = sqlx::query_scalar("SELECT json_extract(body_json,'$.rateCard') FROM agent_steps WHERE task_id=? AND kind='model_attempt' AND json_extract(body_json,'$.round')=? ORDER BY id DESC LIMIT 1").bind(id).bind(i64::from(t.usage.model_turns)).fetch_optional(&mut *tx).await?.flatten();
+    let rate: super::pricing::RateCard = rate_json
+        .map(|v| serde_json::from_value(json!(v)))
+        .transpose()
+        .map_err(|_| AppError::new("RECOVERY_ERROR", "费率版本记录无效"))?
+        .unwrap_or_default();
     if t.provider_id == super::PROVIDER_OPENAI {
-        let reserved = super::openai::model_reservation(&t, input);
-        let actual =
-            super::openai::text_cost_minor_usd(settled_input.saturating_add(settled_output));
+        let reserved: i64 = sqlx::query_scalar(
+            "SELECT cost_minor_usd FROM model_usage WHERE task_id=? AND request_id=?",
+        )
+        .bind(id)
+        .bind(format!("turn-{}", t.usage.model_turns))
+        .fetch_one(&mut *tx)
+        .await?;
+        let reserved = u32::try_from(reserved)
+            .map_err(|_| AppError::new("RECOVERY_ERROR", "模型预留费用无效"))?;
+        let actual = if turn.usage.is_some() {
+            rate.model_cost(settled_input, settled_output)
+        } else {
+            // 未报告完整计量时不能按可见文本退款，隐藏推理也可能产生费用。
+            reserved
+        };
         t.usage.cost_minor_usd = t
             .usage
             .cost_minor_usd
@@ -77,11 +100,11 @@ pub(crate) async fn outcome(
             id,
             "model_usage_reported",
             serde_json::to_value(usage).unwrap(),
-            "提供方报告的实际 token；费用仍使用保守系数估算",
+            "提供方报告的实际 token；费用按记录的预算费率估算，非账单",
         )
         .await?;
     }
-    if settled_output > t.budget.max_output_tokens
+    if i64::from(settled_output) > sent_output_limit
         || t.usage.cost_minor_usd > t.budget.max_cost_minor_usd.min(cost_limit)
         || t.elapsed_ms >= u64::from(t.budget.max_duration_seconds) * 1000
         || t.usage
@@ -317,16 +340,31 @@ pub(crate) async fn final_outcome(db: &Store, id: &str, outcome: ModelOutcome) -
     Ok(())
 }
 
-pub(crate) async fn attempt(db: &Store, id: &str, input: u32, cost_limit: u32) -> Result<()> {
+pub(crate) async fn attempt(
+    db: &Store,
+    id: &str,
+    input: u32,
+    cost_limit: u32,
+    output_limit: u32,
+    rate: super::pricing::RateCard,
+) -> Result<()> {
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, id).await?;
     if t.state != "running" {
         return Err(AppError::new("CANCELLED", "任务已停止"));
     }
-    PolicyGate::model_budget(&t, input, cost_limit)?;
+    if !(128..=t.budget.max_output_tokens).contains(&output_limit) {
+        return Err(AppError::new(
+            "VALIDATION_ERROR",
+            "本轮输出上限不能扩大任务预算",
+        ));
+    }
+    let mut planned = t.clone();
+    planned.budget.max_output_tokens = output_limit;
+    PolicyGate::model_budget(&planned, input, cost_limit, rate)?;
     t.usage.model_turns += 1;
     t.usage.input_estimate = t.usage.input_estimate.saturating_add(input);
-    let reserved = super::openai::model_reservation(&t, input);
+    let reserved = rate.reservation(&planned, input);
     t.usage.cost_minor_usd = t.usage.cost_minor_usd.saturating_add(reserved);
     sqlx::query("INSERT INTO model_usage VALUES(?,?,?,?,0,?)")
         .bind(id)
@@ -336,7 +374,7 @@ pub(crate) async fn attempt(db: &Store, id: &str, input: u32, cost_limit: u32) -
         .bind(i64::from(reserved))
         .execute(&mut *tx)
         .await?;
-    store::step(&mut tx,id,"model_attempt",json!({"round":t.usage.model_turns,"startedAt":crate::domain::timestamp(),"promptVersion":super::prompt_version(&t.provider_id),"providerId":t.provider_id}),"发起一轮模型请求").await?;
+    store::step(&mut tx,id,"model_attempt",json!({"round":t.usage.model_turns,"startedAt":crate::domain::timestamp(),"promptVersion":super::prompt_version(&t.provider_id),"providerId":t.provider_id,"maxOutputTokens":output_limit,"reservedCostMinorUsd":reserved,"rateCard":rate}),"发起一轮模型请求").await?;
     store::save(&mut tx, &t).await?;
     tx.commit().await?;
     Ok(())

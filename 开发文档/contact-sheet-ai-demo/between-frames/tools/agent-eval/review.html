@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>序间 · 摄影任务盲评</title>
+<style>
+  :root { color-scheme: dark; font: 15px/1.6 system-ui,sans-serif; background:#171817; color:#eeeee8 }
+  body { max-width:1200px; margin:auto; padding:32px } h1 { font-size:24px; margin:0 0 8px }
+  p { color:#babeb4 } label { display:inline-flex; flex-direction:column; gap:5px; margin:8px 16px 8px 0 }
+  input,select,textarea,button { font:inherit; padding:8px; color:inherit; background:#252823; border:1px solid #555c4e; border-radius:6px }
+  button { cursor:pointer } button:disabled { opacity:.5; cursor:default } button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:2px solid #cad4b7 }
+  section { border-top:1px solid #3e433a; margin-top:24px; padding-top:20px } [hidden] { display:none!important }
+  #photos,#source { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px }
+  figure { margin:0; padding:12px; background:#22241f } img { width:100%; aspect-ratio:4/3; object-fit:contain; background:#111 }
+  figcaption { font-size:12px; overflow-wrap:anywhere; color:#b8beae } textarea { display:block; width:min(95%,700px); min-height:80px }
+  output { display:block; color:#d6deb9; margin:12px 0 } #progress { color:#aeb99a }
+  details { margin:20px 0 } #dimensions { display:flex; flex-wrap:wrap }
+  #rationale { white-space:pre-wrap }
+  .preview { display:block; width:100%; padding:0; border:0; background:#111 }
+  dialog { background:#171817; color:inherit; border:1px solid #555c4e; max-width:94vw; max-height:94vh; padding:16px }
+  dialog::backdrop { background:#000c } dialog img { width:auto; max-width:88vw; height:auto; max-height:78vh; aspect-ratio:auto; display:block }
+</style>
+<h1>摄影任务盲评</h1>
+<p>载入盲评材料与本地预览目录，逐个候选评分。照片和评语只留在当前页面；刷新会清空未导出的记录。请勿载入私人映射文件。</p>
+<details id="loader" open><summary>手动载入评测材料</summary>
+<label>盲评材料（blind-pack.json）<input id="pack" type="file" accept=".json,application/json"></label>
+<label>本地 1400px 预览目录<input id="assets" type="file" webkitdirectory multiple></label></details>
+<label>评审者 ID<input id="reviewer" autocomplete="off" maxlength="160"></label>
+<output id="status" role="status" aria-live="polite">尚未载入材料</output>
+<main id="workspace" hidden>
+  <section>
+    <label>任务<select id="cases"></select></label><label>候选<select id="candidates"></select></label>
+    <p id="goal"></p><details><summary>查看完整任务目标与约束</summary><p id="task-brief"></p></details>
+    <details><summary>阅读候选说明与逐图理由</summary><p id="rationale"></p></details>
+    <details><summary>查看本任务全部授权照片</summary><div id="source"></div></details>
+    <div id="photos"></div>
+  </section>
+  <section>
+    <h2>独立评分</h2><p>1 分最低，5 分最高；请根据本任务目标判断，允许多套合理方案。</p>
+    <div id="dimensions"></div>
+    <label>抽查的可观察事实数量<input id="checked" type="number" min="0" step="1" value="0"></label>
+    <label>其中错误数量<input id="incorrect" type="number" min="0" step="1" value="0"></label>
+    <label for="reason">至少一条可核验理由</label><textarea id="reason" maxlength="4000" placeholder="例如：第 2 张与第 3 张的主体动作重复；说明对应照片和观察依据。"></textarea>
+    <p><button id="save">保存当前候选评分</button> <button id="export">导出本次评语 JSON</button></p>
+    <p id="progress">已记录 0 条</p>
+  </section>
+</main>
+<dialog id="loupe" aria-label="放大本地预览"><button id="close-loupe">关闭预览（Esc）</button><p id="loupe-label"></p><img id="loupe-image" alt="放大的照片预览"></dialog>
+<script>
+  const $ = id => document.getElementById(id);
+  const dimensions = [['visual_facts','图像事实'],['creative_intent','创作意图'],['sequence_rhythm','序列节奏'],['explanation','选择理由'],['collaboration','专业审稿价值']];
+  let pack = null; let reviews = []; const assets = new Map();
+  const tell = message => { $('status').textContent = message; };
+  for (const [key,label] of dimensions) {
+    const wrapper = document.createElement('label'); wrapper.textContent = label;
+    const select = document.createElement('select'); select.id = key;
+    for (const value of ['',1,2,3,4,5]) select.add(new Option(value === '' ? '请选择' : String(value), String(value)));
+    wrapper.append(select); $('dimensions').append(wrapper);
+  }
+  function current() { const item = pack?.cases.find(c => c.caseId === $('cases').value); return [item,item?.candidates.find(c => c.candidateId === $('candidates').value)]; }
+  function photoNode(photoId, photos, index) {
+    const figure = document.createElement('figure'); const caption = document.createElement('figcaption');
+    caption.textContent = `照片 ${index + 1}`; caption.title = photoId;
+    const asset = photos.find(p => p.photoId === photoId); const url = asset && assets.get(asset.previewFilename);
+    if (url) {
+      const image = document.createElement('img'); image.src = url; image.alt = `照片 ${index + 1}`; image.loading = 'lazy';
+      const button = document.createElement('button'); button.className = 'preview'; button.setAttribute('aria-label',`放大照片 ${index + 1}`); button.append(image);
+      button.addEventListener('click',() => { $('loupe-image').src = url; $('loupe-label').textContent = photoId; $('loupe').showModal(); }); figure.append(button);
+    }
+    else { const missing = document.createElement('p'); missing.textContent = '预览未载入'; figure.append(missing); }
+    figure.append(caption); return figure;
+  }
+  function render() {
+    const [item,candidate] = current();
+    $('photos').replaceChildren(); $('source').replaceChildren();
+    if (!item) return;
+    const end = item.goal.indexOf('。');
+    const headline = (end >= 0 ? item.goal.slice(0,end+1) : item.goal).replace(/^目标[:：]\s*/,'');
+    $('goal').textContent = `目标：${headline}（${item.targetCount} 张）`;
+    $('task-brief').textContent = item.goal;
+    let explanation = candidate?.explanation;
+    try {
+      const structured = JSON.parse(explanation);
+      if (typeof structured.summary === 'string' && Array.isArray(structured.items)) {
+        explanation = [structured.summary,...structured.items.filter(i => i.proposed_action === 'keep').map((item,index) => `${index + 1}. ${String(item.rationale)}`)].join('\n\n');
+      }
+    } catch { /* 普通文本说明按原文展示。 */ }
+    $('rationale').textContent = candidate ? `候选说明：${explanation}` : '此任务暂无可审阅输出；失败记录由组织者另行汇总。';
+    item.photos.forEach((photo,index) => $('source').append(photoNode(photo.photoId,item.photos,index)));
+    candidate?.orderedPhotoIds.forEach((id,index) => $('photos').append(photoNode(id,item.photos,index)));
+    const previous = candidate && reviews.find(r => r.caseId === item.caseId && r.candidateId === candidate.candidateId && r.reviewerId === $('reviewer').value.trim());
+    for (const [key] of dimensions) $(key).value = previous ? String(previous.scores[key]) : '';
+    $('reason').value = previous?.reason ?? ''; $('checked').value = previous?.factCheck.checkedClaims ?? 0; $('incorrect').value = previous?.factCheck.incorrectClaims ?? 0;
+    $('save').disabled = !candidate;
+  }
+  function selectCase() {
+    const item = pack.cases.find(c => c.caseId === $('cases').value);
+    $('candidates').replaceChildren();
+    for (const candidate of item?.candidates ?? []) $('candidates').add(new Option(candidate.candidateId,candidate.candidateId));
+    render();
+  }
+  function loadPack(value) {
+    if (value.protocolVersion !== 'bf-m3-eval-1' || !Array.isArray(value.cases) || value.cases.some(c => !Array.isArray(c.photos) || !Array.isArray(c.candidates))) throw new Error();
+    pack = value; $('cases').replaceChildren();
+    for (const item of pack.cases) $('cases').add(new Option(item.caseId,item.caseId));
+    $('workspace').hidden = false; selectCase();
+  }
+  $('pack').addEventListener('change',async () => {
+    if (reviews.length) { tell('已有评分，请先导出；更换批次请重新打开页面。'); return; }
+    try {
+      const file = $('pack').files[0]; if (!file || file.size > 20*1024*1024) throw new Error();
+      const value = JSON.parse(await file.text());
+      loadPack(value); tell(`已载入 ${pack.cases.length} 个任务，请载入预览后评分。`);
+    } catch { tell('材料格式不正确；请使用生成的 blind-pack.json。'); }
+  });
+  $('assets').addEventListener('change',() => {
+    for (const url of assets.values()) URL.revokeObjectURL(url); assets.clear();
+    for (const file of $('assets').files) if (/^[a-f0-9]{64}-1400\.jpg$/.test(file.name) && file.size <= 16*1024*1024) assets.set(file.name,URL.createObjectURL(file));
+    render(); tell(`已在本地载入 ${assets.size} 张预览。`);
+  });
+  $('cases').addEventListener('change',selectCase); $('candidates').addEventListener('change',render); $('reviewer').addEventListener('change',render);
+  $('close-loupe').addEventListener('click',() => $('loupe').close());
+  $('save').addEventListener('click',() => {
+    const [item,candidate] = current(); const reviewerId = $('reviewer').value.trim();
+    const scores = Object.fromEntries(dimensions.map(([key]) => [key,Number($(key).value)]));
+    const checkedClaims = Number($('checked').value), incorrectClaims = Number($('incorrect').value); const reason = $('reason').value.trim();
+    const loaded = candidate?.orderedPhotoIds.every(id => assets.has(item.photos.find(p => p.photoId === id)?.previewFilename));
+    if (!item || !candidate || !loaded || !reviewerId || !reason || Object.values(scores).some(n => !Number.isInteger(n) || n < 1 || n > 5) || !Number.isInteger(checkedClaims) || !Number.isInteger(incorrectClaims) || incorrectClaims < 0 || checkedClaims < incorrectClaims) { tell('请载入候选预览，并完整填写评审者、五项评分、事实抽查数量和理由。'); return; }
+    reviews = reviews.filter(r => !(r.caseId === item.caseId && r.candidateId === candidate.candidateId && r.reviewerId === reviewerId));
+    reviews.push({caseId:item.caseId,candidateId:candidate.candidateId,reviewerId,scores,reason,factCheck:{checkedClaims,incorrectClaims}});
+    $('progress').textContent = `已记录 ${reviews.length} 条，请及时导出`; tell('当前候选评分已保存在页面内。');
+  });
+  $('export').addEventListener('click',() => {
+    if (!reviews.length) { tell('尚无评分可导出。'); return; }
+    const url = URL.createObjectURL(new Blob([JSON.stringify({reviews},null,2)],{type:'application/json'}));
+    const link = document.createElement('a'); link.href = url; link.download = 'blind-reviews.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
+  });
+  const embedded = $('embedded-data');
+  if (embedded) {
+    try {
+      const value = JSON.parse(embedded.textContent);
+      for (const [name,url] of Object.entries(value.assets)) assets.set(name,url);
+      loadPack(value.pack); tell(`已载入 ${pack.cases.length} 个任务和 ${assets.size} 张本地预览。请填写你的评审者 ID。`);
+      $('loader').open = false;
+    } catch { tell('内嵌材料无效，请使用文件选择器重新载入。'); }
+  }
+</script>
+</html>

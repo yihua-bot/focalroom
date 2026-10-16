@@ -1,0 +1,15 @@
+    Blocking waiting for file lock on artifact directory
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.51s
+     Running tests/real_model_e2e.rs (src-tauri/target-v1/debug/deps/real_model_e2e-6cf73796cfecb1e0)
+
+running 1 test
+任务状态: review_ready
+停止原因: 已完成目标：按文件名升序取最前两张，生成待评审草案 83454c51-219d-4f6a-b033-34e9f6feb6c8（base_project_revision 7，draft_revision 1，2 条）。依据工具返回事实：6 张已导入照片名为 real00.png ~ real05.png，升序最前两张为 real00.png（photo_id 58a484b3-210f-4728-811d-96b9c44fe874，position 0）与 real01.png（photo_id 84d0b56d-969f-4a2c-84cd-b789ed931dd1，position 1），均提议 keep。项目 cloud_images=false 且工具结果 mock=true，未进行任何图像读取，故无视觉观察、无评分/评论/偏好/审美判断。草案仅待人工审核，正式序列未改动。若文件名排序规则需改为其他口径（如按拍摄时间、按降序），请告知后我再出新草案。；预算用量: {"modelTurns":3,"toolCalls":4,"inputEstimate":11894,"outputEstimate":1127,"cloudImages":0,"costMinorUsd":15}
+工具轨迹: get_project_context → list_photos → create_selection_draft → finish_task
+agent steps: 17，实测 token 回执: 3，total_tokens: 13021；费用估算 15 美分
+真实模型协议与草案完成验收通过：4 次工具调用，1 份草案；不证明摄影质量
+test real_model_deepseek_filename_curation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 7.70s
+

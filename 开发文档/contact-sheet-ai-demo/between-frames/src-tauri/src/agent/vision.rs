@@ -2,7 +2,7 @@ use super::{consent, openai::OpenAiProvider, types::*};
 use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 
-pub const VISION_PROMPT_VERSION: &str = "m3-vision-1";
+pub const VISION_PROMPT_VERSION: &str = "m3-vision-2";
 
 /// 一次视觉工具调用的预取结果：缓存命中零上传；未命中部分经 HTTP 观察取得。
 /// 预取只持读事务与网络，写事务在 tools::execute 内完成配额消耗与观察落库。
@@ -160,13 +160,18 @@ pub(crate) async fn prefetch(
         + include_str!("../../../prompts/vision-observe-m3.md").len()
         + 512) as u32
         + uploaded * 4096;
-    let upper_cost = uploaded * super::openai::IMAGE_COST_MINOR_USD
-        + super::openai::text_cost_minor_usd(
-            input_bound.saturating_add(task.budget.max_output_tokens),
-        );
+    let rate = provider.rate_card();
+    let upper_cost = rate.vision_reservation(uploaded, input_bound, task.budget.max_output_tokens);
     let handler = crate::command_handler::CommandHandler::new(db);
     let (consent_id, remaining) = handler
-        .reserve_vision(&task.id, call, uploaded, upper_cost)
+        .reserve_vision(
+            &task.id,
+            call,
+            uploaded,
+            upper_cost,
+            (tier.max_cost_usd_per_task() * 100.0) as u32,
+            rate,
+        )
         .await?;
     let started = std::time::Instant::now();
     let result = tokio::time::timeout(
@@ -195,8 +200,7 @@ pub(crate) async fn prefetch(
             });
         }
     };
-    let cost =
-        uploaded * super::openai::IMAGE_COST_MINOR_USD + super::openai::text_cost_minor_usd(tokens);
+    let cost = rate.vision_cost(uploaded, tokens);
     let list = observation["observations"]
         .as_array()
         .cloned()

@@ -1,0 +1,23 @@
+    Blocking waiting for file lock on artifact directory
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.71s
+     Running tests/real_model_e2e.rs (src-tauri/target-v1/debug/deps/real_model_e2e-6cf73796cfecb1e0)
+
+running 1 test
+任务状态: paused
+停止原因: 后端预算已达到上限，请调整预算后恢复或取消；预算用量: {"modelTurns":5,"toolCalls":9,"inputEstimate":24515,"outputEstimate":2530,"cloudImages":0,"costMinorUsd":30}
+工具轨迹: get_project_context → list_photos → retrieve_preferences → get_comments → inspect_photos → search_photos → get_sequence → create_selection_draft → evaluate_draft
+
+thread 'real_model_deepseek_full_agent_loop' (9866524) panicked at tests/real_model_e2e.rs:152:5:
+必须在预算内提交引用真实照片的两张草案，实际状态 paused，最终引用 0 个
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test real_model_deepseek_full_agent_loop ... FAILED
+
+failures:
+
+failures:
+    real_model_deepseek_full_agent_loop
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 16.31s
+
+error: test failed, to rerun pass `--test real_model_e2e`

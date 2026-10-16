@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-16",
+  "starting_head": "6f17e20",
+  "final_head": "83f80e2927884a6aedc9f63a6e1ca9808d92303b",
+  "rust_default_passed": 132,
+  "rust_ignored": 8,
+  "rust_filtered": 1,
+  "frontend_passed": 149,
+  "preview_e2e_passed": 16,
+  "integration_e2e_passed": 6,
+  "real_cases_passed": [
+    "filename_curation",
+    "vision_provider"
+  ],
+  "open_curation_debug_runs_failed": 4,
+  "filename_total_reported_tokens": 13021,
+  "vision_reported_tokens": 799,
+  "actual_billed_cost_verified": false,
+  "credential_written_by_runner": false,
+  "historical_pngs_preserved": 120,
+  "historical_pngs_restored": 22,
+  "source_sha256": {
+    "src-tauri/src/agent/openai.rs": "fd9c55d9419650271dec8e7f23595ef199e9430f006e359289d6da150e69b9a1",
+    "src-tauri/src/agent/provider.rs": "f9442cf02e3019d3624aeb85e11911cb4a23f55ce38c4ca04c69c7c45871ac26",
+    "src-tauri/src/agent/runtime.rs": "52f0e312660bfbb731751f7a1d894289112f04e39010f519602201a317d32c3b",
+    "src-tauri/src/agent/execution.rs": "2a05c1d015a18d32190a0a6d64fa190f36ae9c92ff4f224a1b679b16d8cb4ea1",
+    "src-tauri/src/agent/policy.rs": "961800e081d205fd0c7f9dee1a9198b076efa7364cb548b09859689843be8aa8",
+    "src-tauri/src/agent/mod.rs": "ee39e37ac295e57ccee32075b5a43d02aaa9323ff96a2bf8407d005caaa9de03",
+    "src-tauri/src/agent/vision.rs": "18ea39e694c8e5198f9e5ac569e794ddf4c6cebf98e9243eb9854a741bdfe5c8",
+    "src-tauri/tests/agent_vision.rs": "70fa540831689a1a5dc235de5e5a1825faa2dd344b27355a92b594ae8fa54d21",
+    "src-tauri/tests/real_model_e2e.rs": "d35e3b8b0b61b47721ee3ba3c22eb1a8c186f60d79d5568fb2b0a74d589b7ad8",
+    "src-tauri/tests/v2_media_links.rs": "3f24ec6a7a6bfc0d5a9baa8fec5d81b3c5d363c01643adc3d009659ba43b0abf",
+    "prompts/agent-system-m3.md": "1d9ac23bc4904e97d8d097f1c82fa56ba723e8e2a8b44b7ebf4f6af2f644a662"
+  }
+}

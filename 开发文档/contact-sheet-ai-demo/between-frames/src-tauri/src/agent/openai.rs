@@ -67,6 +67,9 @@ impl OpenAiProvider {
     pub fn model_id(&self) -> &str {
         &self.model
     }
+    pub fn rate_card(&self) -> super::pricing::RateCard {
+        super::pricing::RateCard::for_endpoint(&self.base_url, &self.model)
+    }
     async fn post(&self, body: &Value) -> Result<Value> {
         let response = self
             .client
@@ -195,8 +198,9 @@ impl OpenAiProvider {
         let response = self.post(&body).await?;
         let usage_tokens = tokens_of(&response);
         let text = output_text(&response);
-        let mut observation: Value = serde_json::from_str(&text)
-            .map_err(|_| AppError::new("MODEL_UNAVAILABLE", "视觉观察输出不符合 JSON 结构"))?;
+        let mut observation: Value = serde_json::from_str(&text).map_err(|error| {
+            AppError::new("MODEL_UNAVAILABLE", format!("视觉观察输出不符合 JSON 结构（类别 {:?}，行 {} 列 {}，字节数 {}，代码围栏 {}）；原文未记录", error.classify(), error.line(), error.column(), text.len(), text.trim_start().starts_with("```")))
+        })?;
         // strict 是对提供方的请求，不能代替对不可信响应的本地校验。
         if !valid_observations(&observation) {
             return Err(AppError::new(
@@ -289,13 +293,6 @@ pub fn text_cost_minor_usd(tokens: u32) -> u32 {
     tokens
         .saturating_mul(TEXT_COST_MINOR_PER_K_TOKENS)
         .div_ceil(1000)
-}
-pub(crate) fn model_reservation(task: &Task, input: u32) -> u32 {
-    if task.provider_id == super::PROVIDER_OPENAI {
-        text_cost_minor_usd(input.saturating_add(task.budget.max_output_tokens))
-    } else {
-        0
-    }
 }
 impl ModelProvider for OpenAiProvider {
     fn generate<'a>(
