@@ -245,6 +245,31 @@ async fn load_evidence(
     })
     .collect())
 }
+async fn load_hypotheses_cross(tx: &mut Transaction<'_, Sqlite>) -> Result<Vec<HypothesisView>> {
+    // 跨项目模式：同一本地作者的全部活跃假设（M3 作者级授权）。
+    Ok(sqlx::query(
+        "SELECT * FROM preference_hypotheses WHERE status NOT IN('retired') AND disabled_for_retrieval=0 ORDER BY id DESC",
+    )
+    .fetch_all(&mut **tx)
+    .await?
+    .iter()
+    .map(|r| HypothesisView {
+        id: r.get("id"),
+        project_id: r.get("project_id"),
+        scope: r.get("scope"),
+        statement: r.get("statement"),
+        evidence_ids: parse_ids(r.get("evidence_ids_json")),
+        counterexample_ids: parse_ids(r.get("counterexample_ids_json")),
+        status: r.get("status"),
+        confidence: r.get("confidence"),
+        user_correction: r.get("user_correction"),
+        disabled: false,
+        created_at: r.get("created_at"),
+        updated_at: r.get("updated_at"),
+    })
+    .collect())
+}
+
 async fn load_hypotheses(
     tx: &mut Transaction<'_, Sqlite>,
     project: &str,
@@ -295,6 +320,8 @@ pub async fn projection_for_query(
     if query.chars().count() > 400 {
         return Err(AppError::new("VALIDATION_ERROR", "检索词过长"));
     }
+    // 在事务外读取设置（连接隔离：事务内开新连接可能看不到未提交状态）。
+    let cross = super::memory_scope::cross_project_enabled(db).await;
     let mut tx = db.pool.begin().await?;
     let exists: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM projects WHERE id=? AND deleted_at IS NULL")
@@ -304,9 +331,24 @@ pub async fn projection_for_query(
     if exists == 0 {
         return Err(AppError::new("NOT_FOUND", "项目不存在"));
     }
-    materialize(&mut tx, project).await?;
-    let matches = super::memory_search::ranks(&mut tx, project, query).await?;
-    let mut hypotheses = load_hypotheses(&mut tx, project).await?;
+    if cross {
+        // 跨项目：物化全部项目的假设进 FTS 索引（作者级授权已开启）。
+        let projects: Vec<String> =
+            sqlx::query_scalar("SELECT id FROM projects WHERE deleted_at IS NULL")
+                .fetch_all(&mut *tx)
+                .await?;
+        for pid in &projects {
+            materialize(&mut tx, pid).await?;
+        }
+    } else {
+        materialize(&mut tx, project).await?;
+    }
+    let matches = super::memory_search::ranks_scoped(&mut tx, project, query, cross).await?;
+    let mut hypotheses = if cross {
+        load_hypotheses_cross(&mut tx).await?
+    } else {
+        load_hypotheses(&mut tx, project).await?
+    };
     if !query.trim().is_empty() {
         hypotheses.retain(|h| matches.contains_key(&h.id));
     }

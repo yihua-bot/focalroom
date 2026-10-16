@@ -63,6 +63,15 @@ pub(crate) async fn ranks(
     project: &str,
     query: &str,
 ) -> Result<HashMap<i64, f64>> {
+    ranks_scoped(tx, project, query, false).await
+}
+/// cross_project=true 时同一本地作者的所有项目记忆参与排序（M3 作者级授权）。
+pub(crate) async fn ranks_scoped(
+    tx: &mut Transaction<'_, Sqlite>,
+    project: &str,
+    query: &str,
+    cross_project: bool,
+) -> Result<HashMap<i64, f64>> {
     let tokens = terms(query)
         .into_iter()
         .take(32)
@@ -71,6 +80,18 @@ pub(crate) async fn ranks(
     if tokens.is_empty() {
         return Ok(HashMap::new());
     }
-    let rows:Vec<(i64,f64)>=sqlx::query_as("SELECT rowid,bm25(memory_search) FROM memory_search WHERE memory_search MATCH ? AND project_id=?").bind(tokens.join(" OR ")).bind(project).fetch_all(&mut **tx).await?;
+    let rows: Vec<(i64, f64)> = if cross_project {
+        sqlx::query_as(
+            "SELECT rowid,bm25(memory_search) FROM memory_search WHERE memory_search MATCH ?",
+        )
+        .bind(tokens.join(" OR "))
+        .fetch_all(&mut **tx)
+        .await?
+    } else {
+        sqlx::query_as("SELECT rowid,bm25(memory_search) FROM memory_search WHERE memory_search MATCH ? AND project_id=?")
+            .bind(tokens.join(" OR ")).bind(project)
+            .fetch_all(&mut **tx)
+            .await?
+    };
     Ok(rows.into_iter().collect())
 }

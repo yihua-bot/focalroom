@@ -10,6 +10,7 @@ pub mod lifecycle;
 pub mod media_links;
 pub mod memory;
 pub mod memory_control;
+pub mod memory_scope;
 mod memory_search;
 pub mod model_binding;
 pub mod openai;

@@ -1461,3 +1461,119 @@ async fn deleted_hypothesis_stays_dead_when_evidence_count_changes() {
             .collect::<Vec<_>>()
     );
 }
+
+#[tokio::test]
+async fn cross_project_memory_authorization_controls_visibility() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = Store::open(&temp.path().join("m.sqlite")).await.unwrap();
+    let project_a = db.create("项目A", "").await.unwrap();
+    let project_b = db.create("项目B", "").await.unwrap();
+
+    // 直接插入假设（绕过证据工作流——本测试只验证跨项目检索授权逻辑）。
+    let now = "2026-10-16T00:00:00Z";
+    for (pid, word) in [(&project_a.id, "暗调"), (&project_b.id, "低饱和")] {
+        sqlx::query(
+            "INSERT INTO preference_hypotheses(project_id,scope,statement,evidence_ids_json,counterexample_ids_json,status,confidence,user_correction,disabled_for_retrieval,created_at,updated_at)              VALUES(?,'project_local',?,'[1,2]','[]','unconfirmed','moderate',NULL,0,?,?)",
+        )
+        .bind(pid)
+        .bind(format!("本项目多次人工判断的说明中出现「{word}」"))
+        .bind(now)
+        .bind(now)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    }
+    // FTS 索引同步——用 sync 的分词格式（二元分词 + 完整词，空格连接）。
+    for (pid, word, id) in [(&project_a.id, "暗调", 1i64), (&project_b.id, "低饱和", 2)] {
+        let chars: Vec<char> = word.chars().collect();
+        let mut tokens: Vec<String> = vec![word.to_owned()];
+        for pair in chars.windows(2) {
+            tokens.push(pair.iter().collect());
+        }
+        let fts_terms = tokens.join(" ");
+        sqlx::query("INSERT OR REPLACE INTO memory_search(rowid,project_id,terms) VALUES(?,?,?)")
+            .bind(id)
+            .bind(pid)
+            .bind(&fts_terms)
+            .execute(&db.pool)
+            .await
+            .unwrap();
+    }
+
+    // 默认隔离：A 搜「低饱和」不应看到 B 的假设。
+    let isolated = memory::projection_for_query(&db, &project_a.id, "低饱和")
+        .await
+        .unwrap();
+    assert!(
+        isolated
+            .hypotheses
+            .iter()
+            .all(|h| h.project_id == project_a.id),
+        "默认隔离：不应看到其他项目假设，实际 {:?}",
+        isolated
+            .hypotheses
+            .iter()
+            .map(|h| &h.project_id)
+            .collect::<Vec<_>>()
+    );
+
+    // 开启跨项目授权。
+    between_frames_lib::agent::memory_scope::set_cross_project(&db, "local", true)
+        .await
+        .unwrap();
+
+    // 直接查 FTS 索引验证。
+    let fts_check: Vec<i64> =
+        sqlx::query_scalar("SELECT rowid FROM memory_search WHERE memory_search MATCH ?")
+            .bind("\"低饱\"")
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    eprintln!("DEBUG FTS direct check for 低饱: {:?}", fts_check);
+    let all_fts: Vec<(i64, String)> = sqlx::query_as("SELECT rowid, project_id FROM memory_search")
+        .fetch_all(&db.pool)
+        .await
+        .unwrap();
+    eprintln!("DEBUG all FTS: {:?}", all_fts);
+    // 验证设置确实生效。
+    let setting = between_frames_lib::agent::memory_scope::cross_project_enabled(&db).await;
+    eprintln!("DEBUG cross setting: {}", setting);
+    let setting_row: Option<i64> = sqlx::query_scalar(
+        "SELECT cross_project_enabled FROM memory_scope_settings WHERE user_id='local'",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .ok();
+    eprintln!("DEBUG setting row: {:?}", setting_row);
+    // A 现在能搜到 B 的「低饱和」假设。
+    let cross = memory::projection_for_query(&db, &project_a.id, "低饱和")
+        .await
+        .unwrap();
+    assert!(
+        cross
+            .hypotheses
+            .iter()
+            .any(|h| h.project_id == project_b.id),
+        "跨项目开启后应看到 B 项目的假设，实际 {:?}",
+        cross
+            .hypotheses
+            .iter()
+            .map(|h| (&h.id, &h.project_id, &h.statement))
+            .collect::<Vec<_>>()
+    );
+
+    // 关闭后恢复隔离。
+    between_frames_lib::agent::memory_scope::set_cross_project(&db, "local", false)
+        .await
+        .unwrap();
+    let re_isolated = memory::projection_for_query(&db, &project_a.id, "低饱和")
+        .await
+        .unwrap();
+    assert!(
+        re_isolated
+            .hypotheses
+            .iter()
+            .all(|h| h.project_id == project_a.id),
+        "关闭跨项目后应恢复隔离"
+    );
+}
