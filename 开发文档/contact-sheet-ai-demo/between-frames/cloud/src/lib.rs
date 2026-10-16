@@ -1,5 +1,5 @@
 mod auth;
-pub mod collab;
+pub(crate) mod collab;
 mod error;
 mod handlers;
 mod previews;

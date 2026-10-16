@@ -42,6 +42,19 @@ pub async fn check_acl(
         }
     };
 
+    // 在同一处判定动作权限，拒绝结果也进入 ACL 审计。
+    let allowed = allowed
+        && match action {
+            "comment.create" | "comment.resolve" | "proposal.create" => {
+                matches!(role.as_str(), "owner" | "editor" | "reviewer")
+            }
+            "proposal.decide" => matches!(role.as_str(), "owner" | "editor"),
+            "comment.list" | "project.snapshot" | "ai.comment.read" => {
+                matches!(role.as_str(), "owner" | "editor" | "reviewer" | "viewer")
+            }
+            _ => false,
+        };
+
     // 审计（不因审计失败阻断业务）。
     let _ = sqlx::query(
         "INSERT INTO acl_audit(project_id,user_id,action,resource,allowed) VALUES(?,?,?,?,?)",
@@ -126,7 +139,8 @@ pub async fn create_comment(
         &state,
         &project_id,
         &json!({"type":"comment.created","comment_id":&id}),
-    );
+    )
+    .await;
     Ok(Json(created))
 }
 
@@ -236,7 +250,8 @@ pub async fn create_proposal(
         &state,
         &project_id,
         &json!({"type":"proposal.created","proposal_id":&id}),
-    );
+    )
+    .await;
     Ok(Json(
         json!({"proposal_id": id, "approval_nonce": nonce, "base_revision": req.base_revision}),
     ))
@@ -278,7 +293,8 @@ pub async fn decide_proposal(
             &state,
             &project_id,
             &json!({"type":"proposal.rejected","proposal_id":&proposal_id}),
-        );
+        )
+        .await;
         return Ok(Json(json!({"decided": "rejected"})));
     }
     // 审批前基线漂移检查（C02 核心：并发提案冲突）。
@@ -302,7 +318,8 @@ pub async fn decide_proposal(
         &state,
         &project_id,
         &json!({"type":"proposal.applied","proposal_id":&proposal_id,"revision":new_rev}),
-    );
+    )
+    .await;
     Ok(Json(json!({"decided": "applied", "revision": new_rev})))
 }
 

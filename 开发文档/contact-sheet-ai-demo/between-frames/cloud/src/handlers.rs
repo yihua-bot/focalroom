@@ -174,7 +174,7 @@ pub async fn build_router(pool: SqlitePool, preview_dir: std::path::PathBuf) -> 
     };
     let protected = Router::new()
         .route("/auth/logout", post(auth::logout))
-        .route("/projects", post(create_project))
+        .route("/projects", post(create_project).get(list_my_projects))
         .route("/projects/{id}/grants", post(grant_access))
         .route("/projects/{id}/grants/{gid}", delete(revoke_access))
         .route("/projects/{id}/previews", get(previews::list_previews))
@@ -203,6 +203,7 @@ pub async fn build_router(pool: SqlitePool, preview_dir: std::path::PathBuf) -> 
             auth::auth_middleware,
         ));
     Router::new()
+        .route("/", get(serve_index))
         .route("/auth/register", post(auth::register))
         .route("/auth/login", post(auth::login))
         .route("/health", get(|| async { Json(json!({"ok": true})) }))
@@ -227,4 +228,33 @@ async fn private_response(req: axum::extract::Request, next: Next) -> Response {
         "nosniff".parse().expect("静态头有效"),
     );
     response
+}
+
+async fn serve_index() -> impl axum::response::IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        include_str!("../static/index.html"),
+    )
+}
+
+async fn list_my_projects(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<CurrentUser>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let owned: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, title FROM cloud_projects WHERE owner_id=? ORDER BY created_at DESC",
+    )
+    .bind(&user.id)
+    .fetch_all(&state.pool)
+    .await?;
+    let granted: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT p.id, p.title, g.role FROM cloud_projects p JOIN project_grants g ON g.project_id=p.id WHERE g.grantee_id=? AND g.state='active'",
+    )
+    .bind(&user.id)
+    .fetch_all(&state.pool)
+    .await?;
+    Ok(Json(serde_json::json!({
+        "owned": owned.iter().map(|(id, t)| json!({"id": id, "title": t, "role": "owner"})).collect::<Vec<_>>(),
+        "shared": granted.iter().map(|(id, t, r)| json!({"id": id, "title": t, "role": r})).collect::<Vec<_>>(),
+    })))
 }

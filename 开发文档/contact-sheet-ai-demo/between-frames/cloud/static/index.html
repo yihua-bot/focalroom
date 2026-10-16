@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Between Frames · 审稿</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB",sans-serif}
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;--danger:#f85149;--ok:#3fb950}
+body{background:var(--bg);color:var(--text);min-height:100vh}
+.container{max-width:1200px;margin:0 auto;padding:2rem 1rem}
+h1{font-size:1.5rem;margin-bottom:1.5rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin-bottom:1rem}
+input,textarea,select{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:.6rem 1rem;font-size:.95rem;width:100%}
+input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.6rem 1.5rem;font-size:.95rem;cursor:pointer;font-weight:500}
+button:hover{opacity:.85}
+button.danger{background:var(--danger)}
+button.ok{background:var(--ok)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem}
+.photo-card{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .2s}
+.photo-card:hover{border-color:var(--accent)}
+.photo-card img{width:100%;aspect-ratio:3/2;object-fit:cover;display:block}
+.photo-card .info{padding:.75rem;font-size:.85rem;color:var(--text2)}
+.badge{display:inline-block;padding:.2rem .6rem;border-radius:10px;font-size:.75rem;font-weight:500}
+.badge.owner{background:#1a3a5c;color:var(--accent)}
+.badge.editor{background:#1a3c2e;color:var(--ok)}
+.badge.reviewer{background:#3c2e1a;color:#d29922}
+.badge.viewer{background:#2d2d2d;color:var(--text2)}
+.comment{border-left:3px solid var(--accent);padding:.75rem 1rem;margin:.5rem 0;background:rgba(88,166,255,.05);border-radius:0 6px 6px 0}
+.comment .meta{font-size:.8rem;color:var(--text2);margin-bottom:.3rem}
+.comment .meta strong{color:var(--accent)}
+.comment.resolved{opacity:.5;border-left-color:var(--ok)}
+.proposal{border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.5rem 0}
+.proposal .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+.proposal .state{font-size:.8rem;padding:.2rem .6rem;border-radius:10px}
+.proposal .state.submitted{background:#3c2e1a;color:#d29922}
+.proposal .state.applied{background:#1a3c2e;color:var(--ok)}
+.proposal .state.rejected{background:#3c1a1a;color:var(--danger)}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.5rem}
+.tab{padding:.75rem 1.5rem;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;font-weight:500}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover{color:var(--text)}
+.hidden{display:none!important}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem}
+.nav .user{font-size:.9rem;color:var(--text2)}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;font-size:.85rem;color:var(--text2);margin-bottom:.4rem}
+#toast{position:fixed;top:1rem;right:1rem;background:var(--card);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.5rem;color:var(--text);display:none;z-index:100}
+.empty{text-align:center;padding:3rem;color:var(--text2)}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- 登录视图 -->
+<div id="loginView" class="container" style="max-width:400px;margin-top:10vh">
+  <h1>🔍 Between Frames <span style="color:var(--text2);font-size:1rem;font-weight:400">· 审稿</span></h1>
+  <div class="card">
+    <div class="form-group">
+      <label>邮箱</label>
+      <input type="email" id="email" placeholder="your@email.com" value="">
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input type="password" id="password" placeholder="••••••••" value="">
+    </div>
+    <button onclick="login()" style="width:100%">登录</button>
+    <p style="text-align:center;margin-top:1rem;font-size:.85rem;color:var(--text2)">没有账号？<a href="#" onclick="showRegister()" style="color:var(--accent)">注册</a></p>
+  </div>
+</div>
+
+<!-- 注册视图 -->
+<div id="registerView" class="container hidden" style="max-width:400px;margin-top:10vh">
+  <h1>📝 注册审稿账号</h1>
+  <div class="card">
+    <div class="form-group">
+      <label>显示名称</label>
+      <input type="text" id="regName" placeholder="你的名字">
+    </div>
+    <div class="form-group">
+      <label>邮箱</label>
+      <input type="email" id="regEmail" placeholder="your@email.com">
+    </div>
+    <div class="form-group">
+      <label>密码（至少 8 位）</label>
+      <input type="password" id="regPassword" placeholder="••••••••">
+    </div>
+    <button onclick="register()" style="width:100%">注册</button>
+    <p style="text-align:center;margin-top:1rem;font-size:.85rem;color:var(--text2)">已有账号？<a href="#" onclick="showLogin()" style="color:var(--accent)">登录</a></p>
+  </div>
+</div>
+
+<!-- 项目列表视图 -->
+<div id="projectListView" class="container hidden">
+  <div class="nav">
+    <h1>📁 我的项目</h1>
+    <div class="user"><span id="userName"></span> · <a href="#" onclick="logout()" style="color:var(--danger)">退出</a></div>
+  </div>
+  <div id="projectList"></div>
+</div>
+
+<!-- 项目详情视图 -->
+<div id="projectDetailView" class="container hidden">
+  <div class="nav">
+    <div><a href="#" onclick="showProjects()" style="color:var(--text2)">← 返回</a></h1><h1 id="projectTitle" style="display:inline"></h1></div>
+    <div class="user"><span id="projectRole" class="badge"></span></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('photos')">照片</div>
+    <div class="tab" onclick="switchTab('comments')">评论</div>
+    <div class="tab" onclick="switchTab('proposals')">提案</div>
+  </div>
+  <div id="photosTab">
+    <div id="photoGrid" class="grid"></div>
+  </div>
+  <div id="commentsTab" class="hidden">
+    <div class="card">
+      <textarea id="commentBody" rows="2" placeholder="写下你的评论…"></textarea>
+      <button onclick="addComment()" style="margin-top:.75rem">发表评论</button>
+    </div>
+    <div id="commentList"></div>
+  </div>
+  <div id="proposalsTab" class="hidden">
+    <div id="proposalList"></div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let token = localStorage.getItem('bf_token') || '';
+let currentUser = null;
+let currentProject = null;
+
+function toast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.borderColor = isErr ? 'var(--danger)' : 'var(--accent)';
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+
+async function api(path, method = 'GET', body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(API + path, opts);
+  if (resp.status === 401) { logout(); throw new Error('请登录'); }
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error?.message || resp.statusText);
+  return data;
+}
+
+// ===== 认证 =====
+async function login() {
+  try {
+    const data = await api('/auth/login', 'POST', {
+      email: document.getElementById('email').value,
+      password: document.getElementById('password').value,
+    });
+    token = data.token;
+    currentUser = data;
+    localStorage.setItem('bf_token', token);
+    showProjects();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function register() {
+  try {
+    const data = await api('/auth/register', 'POST', {
+      display_name: document.getElementById('regName').value,
+      email: document.getElementById('regEmail').value,
+      password: document.getElementById('regPassword').value,
+    });
+    token = data.token;
+    currentUser = data;
+    localStorage.setItem('bf_token', token);
+    showProjects();
+  } catch (e) { toast(e.message, true); }
+}
+
+function logout() {
+  token = '';
+  currentUser = null;
+  localStorage.removeItem('bf_token');
+  showLogin();
+}
+
+function showLogin() {
+  ['registerView','projectListView','projectDetailView'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  document.getElementById('loginView').classList.remove('hidden');
+}
+function showRegister() {
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('registerView').classList.remove('hidden');
+}
+
+// ===== 项目 =====
+async function showProjects() {
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('projectListView').classList.remove('hidden');
+  document.getElementById('userName').textContent = currentUser?.display_name || '';
+  try {
+    const data = await api('/projects');
+    const el = document.getElementById('projectList');
+    const owned = data.owned || [];
+    const shared = data.shared || [];
+    if (!owned.length && !shared.length) {
+      el.innerHTML = '<div class="empty">还没有项目<br><br>创建新项目或等待被邀请</div>';
+      return;
+    }
+    let html = '';
+    if (owned.length) {
+      html += '<h2 style="font-size:1.1rem;margin-bottom:1rem;color:var(--text2)">我的项目</h2><div class="grid">';
+      owned.forEach(p => {
+        html += `<div class="photo-card" onclick="openProject('${p.id}','${p.title}','owner')"><div style="padding:2rem;text-align:center"><div style="font-size:2.5rem">📁</div><div class="info">${p.title}</div><span class="badge owner">所有者</span></div></div>`;
+      });
+      html += '</div>';
+    }
+    if (shared.length) {
+      html += '<h2 style="font-size:1.1rem;margin:2rem 0 1rem;color:var(--text2)">被邀请的项目</h2><div class="grid">';
+      shared.forEach(p => {
+        html += `<div class="photo-card" onclick="openProject('${p.id}','${p.title}','${p.role}')"><div style="padding:2rem;text-align:center"><div style="font-size:2.5rem">🤝</div><div class="info">${p.title}</div><span class="badge ${p.role}">${p.role}</span></div></div>`;
+      });
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  } catch (e) { toast(e.message, true); }
+}
+
+async function openProject(projectId, title, role) {
+  currentProject = { id: projectId, title, role };
+  document.getElementById('projectListView').classList.add('hidden');
+  document.getElementById('projectDetailView').classList.remove('hidden');
+  document.getElementById('projectTitle').textContent = title;
+  document.getElementById('projectRole').textContent = role;
+  document.getElementById('projectRole').className = 'badge ' + role;
+  loadPhotos(); loadComments(); loadProposals();
+}
+
+// ===== 照片 =====
+async function loadPhotos() {
+  try {
+    const data = await api(`/projects/${currentProject.id}/previews`);
+    const grid = document.getElementById('photoGrid');
+    if (!data.previews?.length) {
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">暂无照片</div>';
+      return;
+    }
+    grid.innerHTML = data.previews.map(p => `
+      <div class="photo-card" onclick="viewPhoto('${p.sha256_prefix}')">
+        <img src="/projects/${currentProject.id}/previews/${p.sha256_prefix}" alt="" onerror="this.parentElement.style.display='none'">
+        <div class="info">${p.width}×${p.height} · ${(p.size/1024).toFixed(0)}KB</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    document.getElementById('photoGrid').innerHTML = `<div class="empty" style="grid-column:1/-1;color:var(--danger)">${e.message}</div>`;
+  }
+}
+
+function viewPhoto(sha) { toast('照片详情功能开发中'); }
+
+// ===== 评论 =====
+async function loadComments() {
+  try {
+    const data = await api(`/projects/${currentProject.id}/comments`);
+    const list = document.getElementById('commentList');
+    if (!data.comments?.length) {
+      list.innerHTML = '<div class="empty">还没有评论</div>';
+      return;
+    }
+    list.innerHTML = data.comments.map(c => `
+      <div class="comment ${c.state === 'resolved' ? 'resolved' : ''}">
+        <div class="meta"><strong>${c.author || '匿名'}</strong> · ${c.createdAt || ''}</div>
+        <div>${c.body}</div>
+        ${c.state === 'open' && c.author === currentUser?.display_name ? `<button class="danger" style="margin-top:.5rem;padding:.3rem .8rem;font-size:.8rem" onclick="resolveComment('${c.id}')">标记已解决</button>` : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    document.getElementById('commentList').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+async function addComment() {
+  const body = document.getElementById('commentBody').value.trim();
+  if (!body) return;
+  try {
+    await api(`/projects/${currentProject.id}/comments`, 'POST', { body });
+    document.getElementById('commentBody').value = '';
+    loadComments();
+    toast('评论已发表');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function resolveComment(id) {
+  try {
+    await api(`/projects/${currentProject.id}/comments/${id}/resolve`, 'POST');
+    loadComments();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ===== 提案 =====
+async function loadProposals() {
+  try {
+    const data = await api(`/projects/${currentProject.id}/proposals`);
+    const list = document.getElementById('proposalList');
+    if (!data.proposals?.length) {
+      list.innerHTML = '<div class="empty">暂无提案</div>';
+      return;
+    }
+    list.innerHTML = data.proposals.map(p => `
+      <div class="proposal">
+        <div class="header">
+          <strong>${p.title}</strong>
+          <span class="state ${p.state}">${p.state}</span>
+        </div>
+        <div style="font-size:.85rem;color:var(--text2)">基于版本 v${p.base_revision}</div>
+        ${p.state === 'submitted' && (currentProject.role === 'owner' || currentProject.role === 'editor') ? `
+          <div style="margin-top:.75rem;display:flex;gap:.5rem">
+            <input type="text" id="nonce-${p.id}" placeholder="审批 nonce" style="width:200px">
+            <button class="ok" onclick="decideProposal('${p.id}', true)">批准</button>
+            <button class="danger" onclick="decideProposal('${p.id}', false)">驳回</button>
+          </div>
+        ` : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    document.getElementById('proposalList').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+async function decideProposal(id, approve) {
+  const nonce = document.getElementById(`nonce-${id}`)?.value?.trim();
+  if (!nonce) { toast('请输入审批 nonce', true); return; }
+  try {
+    await api(`/projects/${currentProject.id}/proposals/${id}/decide`, 'POST', { approve, approval_nonce: nonce });
+    loadProposals();
+    toast(approve ? '提案已批准' : '提案已驳回');
+  } catch (e) { toast(e.message, true); }
+}
+
+// ===== Tab 切换 =====
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  ['photos', 'comments', 'proposals'].forEach(t => {
+    document.getElementById(t + 'Tab').classList.toggle('hidden', t !== name);
+  });
+}
+
+// ===== 初始化 =====
+if (token) {
+  api('/health').catch(() => {});
+  showProjects();
+} else {
+  showLogin();
+}
+</script>
+</body>
+</html>

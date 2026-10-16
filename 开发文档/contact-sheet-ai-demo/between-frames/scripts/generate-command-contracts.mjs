@@ -38,7 +38,7 @@ const tools = JSON.parse(await readFile(new URL('../contracts/agent-tool-contrac
 if (!Array.isArray(tools.tools) || tools.tools.length === 0) throw new Error('agent-tool-contracts：tools 非数组或为空');
 const names = tools.tools.map(tool => tool.name);
 if (new Set(names).size !== names.length) throw new Error('agent-tool-contracts：工具名重复');
-const required = ['get_project_context','list_photos','search_photos','inspect_photos','compare_photos','retrieve_preferences','get_sequence','create_selection_draft','update_draft_sequence','evaluate_draft','request_feedback','finish_task'];
+const required = ['get_project_context','list_photos','search_photos','search_photos_semantic','inspect_photos','compare_photos','retrieve_preferences','get_sequence','create_selection_draft','update_draft_sequence','evaluate_draft','request_feedback','finish_task'];
 for (const name of required) if (!names.includes(name)) throw new Error(`agent-tool-contracts：缺少工具 ${name}`);
 for (const tool of tools.tools) {
   if (tool.strict !== true) throw new Error(`工具 ${tool.name} 未启用 strict`);

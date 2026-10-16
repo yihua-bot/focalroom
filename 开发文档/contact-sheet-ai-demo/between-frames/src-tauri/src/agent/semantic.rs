@@ -42,6 +42,7 @@ pub(crate) async fn rank(query: String, documents: Vec<String>, budget_ms: u32) 
     let count = documents.len();
     if count == 0
         || count > MAX_DOCUMENTS
+        || query.trim().is_empty()
         || query.chars().count() > 400
         || query.contains('\0')
         || budget_ms == 0
@@ -279,5 +280,21 @@ mod tests {
                 serde_json::to_string(&ranked.report).unwrap()
             );
         }
+        let limited = rank(
+            "骑两轮车的人".into(),
+            vec!["一位男子骑自行车经过街道".into(); 500],
+            1,
+        )
+        .await;
+        assert_eq!(limited.report.status, "time_limit");
+        assert!(limited.report.limited && limited.report.embedded < 500);
+        let unsupported = rank(
+            "Ночной город".into(),
+            vec!["一位男子骑自行车经过街道".into()],
+            3000,
+        )
+        .await;
+        assert_eq!(unsupported.report.status, "unsupported_language");
+        assert_eq!(unsupported.report.embedded, 0);
     }
 }

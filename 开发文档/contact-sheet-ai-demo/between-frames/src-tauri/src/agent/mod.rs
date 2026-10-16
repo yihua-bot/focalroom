@@ -21,6 +21,7 @@ pub mod pricing;
 pub mod promotion;
 pub mod proposals;
 pub mod provider;
+pub mod provider_fallback;
 pub mod router;
 pub mod runtime;
 mod semantic;

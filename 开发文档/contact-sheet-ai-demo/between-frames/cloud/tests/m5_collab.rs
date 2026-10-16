@@ -1,5 +1,5 @@
 //! M5 协作全量集成测试：评论/提案/审批/权限/并发冲突/快照恢复/AI ACL。
-use reqwest::{Client, Response};
+use reqwest::Client;
 use serde_json::{json, Value};
 
 fn val(r: Value, k: &str) -> String {
@@ -74,7 +74,7 @@ async fn grant(
 
 #[tokio::test]
 async fn m5_full_collaboration_suite() {
-    let (base, _pool) = spawn().await;
+    let (base, pool) = spawn().await;
     let client = Client::new();
 
     // 三个用户：owner、editor（可审批）、reviewer（只能评论）。
@@ -82,12 +82,30 @@ async fn m5_full_collaboration_suite() {
     let editor = register(&client, &base, "editor@m5.dev").await;
     let reviewer = register(&client, &base, "reviewer@m5.dev").await;
     let outsider = register(&client, &base, "outsider@m5.dev").await;
+    let viewer = register(&client, &base, "viewer@m5.dev").await;
 
     let pid = create_project(&client, &base, &owner).await;
 
     // 授权：editor 和 reviewer。
     let editor_grant_id = grant(&client, &base, &owner, &pid, "editor@m5.dev", "reviewer").await;
-    grant(&client, &base, &owner, &pid, "reviewer@m5.dev", "viewer").await;
+    grant(&client, &base, &owner, &pid, "reviewer@m5.dev", "reviewer").await;
+    grant(&client, &base, &owner, &pid, "viewer@m5.dev", "viewer").await;
+
+    let denied = client
+        .post(format!("{base}/projects/{pid}/comments"))
+        .header("authorization", &viewer)
+        .json(&json!({"body":"只读角色不能评论"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), 403, "Viewer 必须只读，不能写评论");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM project_comments")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        0
+    );
 
     // === C04: 评论坐标与线程 ===
     let sha = "a".repeat(64);
@@ -101,6 +119,13 @@ async fn m5_full_collaboration_suite() {
     assert_eq!(dbg_status, 200, "评论创建失败: {dbg_body}");
     let comment: Value = serde_json::from_str(&dbg_body).unwrap();
     let cid = val(comment.clone(), "id");
+    let denied = client
+        .post(format!("{base}/projects/{pid}/comments/{cid}/resolve"))
+        .header("authorization", &viewer)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), 403, "Viewer 不能修改评论状态");
     assert_eq!(comment["anchor_x"], 0.5, "坐标保留");
     assert_eq!(comment["author"], "reviewer@m5.dev", "评论者身份保留");
 
@@ -148,15 +173,32 @@ async fn m5_full_collaboration_suite() {
     let prop_id = val(proposal.clone(), "proposal_id");
     let nonce = val(proposal, "approval_nonce");
 
-    // C01: viewer 角色不能审批。
+    let denied = client
+        .post(format!("{base}/projects/{pid}/proposals"))
+        .header("authorization", &viewer)
+        .json(&json!({"title":"只读提案","base_revision":0,"operations":[]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), 403, "Viewer 不能创建提案");
+
+    // C01: reviewer 角色不能审批。
     let resp = client
         .post(format!("{base}/projects/{pid}/proposals/{prop_id}/decide"))
-        .header("authorization", &reviewer) // viewer 角色
+        .header("authorization", &reviewer)
         .json(&json!({"approve": true, "approval_nonce": nonce}))
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), 403, "C01: viewer 不能审批");
+    assert_eq!(resp.status(), 403, "C01: reviewer 不能审批");
+    let denied = client
+        .post(format!("{base}/projects/{pid}/proposals/{prop_id}/decide"))
+        .header("authorization", &viewer)
+        .json(&json!({"approve":true,"approval_nonce":nonce}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), 403, "Viewer 不能审批");
 
     // outsider 不能审批。
     let resp = client
@@ -255,7 +297,7 @@ async fn m5_full_collaboration_suite() {
     assert_eq!(resp.status(), 200, "AI 授权访问评论失败");
     let ai_comments: Value = resp.json().await.unwrap();
     assert!(
-        ai_comments["comments"].as_array().unwrap().len() >= 1,
+        !ai_comments["comments"].as_array().unwrap().is_empty(),
         "AI 获取评论"
     );
     assert!(
@@ -280,12 +322,14 @@ async fn m5_full_collaboration_suite() {
         .send()
         .await
         .unwrap();
-    // 先获取 grant 列表来撤销——简化：直接撤销所有。
-    let _resp2 = client
+    assert_eq!(resp.status(), 200);
+    let revoked = client
         .delete(format!("{base}/projects/{pid}/grants/{editor_grant_id}"))
         .header("authorization", &owner)
         .send()
-        .await;
+        .await
+        .unwrap();
+    assert_eq!(revoked.status(), 200);
     // 撤销后 editor 不能再评论。
     let resp3 = client
         .post(format!("{base}/projects/{pid}/comments"))

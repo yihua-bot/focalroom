@@ -14,6 +14,8 @@ use std::{future::Future, pin::Pin, sync::Arc};
 struct Search {
     query: String,
     limit: usize,
+    tool: &'static str,
+    replay: bool,
 }
 impl ModelProvider for Search {
     fn generate<'a>(
@@ -21,7 +23,9 @@ impl ModelProvider for Search {
         input: &'a ModelTurnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<ModelOutcome>> + Send + 'a>> {
         Box::pin(async move {
-            if input.protocol.iter().any(|message| message.kind == "tool") {
+            if input.protocol.iter().any(|message| message.kind == "tool")
+                && (!self.replay || input.task.usage.model_turns >= 2)
+            {
                 return Ok(ModelOutcome::NoAction {
                     reason: "合成检索测试结束，未创建草案".into(),
                 });
@@ -29,7 +33,7 @@ impl ModelProvider for Search {
             Ok(ModelOutcome::ToolCalls {
                 calls: vec![ToolCall {
                     call_id: "search-once".into(),
-                    name: "search_photos".into(),
+                    name: self.tool.into(),
                     args: json!({"project_id":input.task.project_id,"query":self.query,"limit":self.limit}),
                 }],
             })
@@ -73,6 +77,19 @@ async fn search(
     selected: Vec<String>,
     limit: usize,
 ) -> Value {
+    run_search(db, project, query, selected, limit, "search_photos", false)
+        .await
+        .0
+}
+async fn run_search(
+    db: &Store,
+    project: &Project,
+    query: &str,
+    selected: Vec<String>,
+    limit: usize,
+    tool: &'static str,
+    replay: bool,
+) -> (Value, String) {
     let task = CommandHandler::new(db)
         .agent_request(AgentRequest {
             request_id: domain::id(),
@@ -96,20 +113,278 @@ async fn search(
         Arc::new(Search {
             query: query.into(),
             limit,
+            tool,
+            replay,
         }),
         None,
     )
     .run(&task.id)
     .await
     .unwrap();
-    let raw: String = sqlx::query_scalar(
-        "SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name='search_photos'",
+    let raw: String =
+        sqlx::query_scalar("SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name=?")
+            .bind(&task.id)
+            .bind(tool)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    (serde_json::from_str(&raw).unwrap(), task.id)
+}
+
+#[tokio::test]
+async fn semantic_tool_explicitly_falls_back_without_cache_and_replays_one_receipt() {
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    sqlx::query("UPDATE photo_decisions SET user_note='找到这里' WHERE photo_id=?")
+        .bind(&project.photos[0].id)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let before = serde_json::to_value(db.get(&project.id).await.unwrap()).unwrap();
+    let (reply, task_id) = run_search(
+        &db,
+        &project,
+        "找到这里",
+        vec![],
+        2,
+        "search_photos_semantic",
+        true,
     )
-    .bind(&task.id)
-    .fetch_one(&db.pool)
+    .await;
+    assert_eq!(reply["ok"], true);
+    assert_eq!(reply["result"]["mode"], "local_keyword_fallback");
+    assert_eq!(
+        reply["result"]["semantic_retrieval"]["status"],
+        "no_documents"
+    );
+    assert_eq!(reply["result"]["semantic_retrieval"]["embedded"], 0);
+    assert_eq!(
+        reply["result"]["photos"][0]["match_sources"],
+        json!(["metadata"])
+    );
+    assert_eq!(reply["result"]["new_uploads"], 0);
+    let view = agent::projection(&db, &project.id).await.unwrap();
+    let task = view.tasks.iter().find(|t| t.id == task_id).unwrap();
+    assert_eq!(task.state, "completed");
+    assert_eq!(
+        task.usage.tool_calls, 1,
+        "相同调用回放不再执行检索或计算向量"
+    );
+    assert_eq!(task.usage.model_turns, 3);
+    assert_eq!(task.usage.cost_minor_usd, 0);
+    assert_eq!(task.usage.cloud_images, 0);
+    assert_eq!(
+        serde_json::to_value(db.get(&project.id).await.unwrap()).unwrap(),
+        before
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM photo_observations")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM preference_evidence")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[tokio::test]
+async fn semantic_tool_excludes_out_of_scope_and_invalid_cached_inputs_before_embedding() {
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 3).await;
+    let id = &project.photos[0].id;
+    cache(
+        &db,
+        &project.photos[1].id,
+        observation(&project.photos[1].id, "范围外狐狸"),
+    )
+    .await;
+    let foreign = db.create("其他创作者", "私有照片").await.unwrap();
+    db.insert_photo(
+        &foreign.id,
+        &image_pipeline::prepare(&temp.path().join("photo-0.png"), &temp.path().join("cache"))
+            .unwrap(),
+    )
     .await
     .unwrap();
-    serde_json::from_str(&raw).unwrap()
+    let foreign = db.get(&foreign.id).await.unwrap();
+    cache(
+        &db,
+        &foreign.photos[0].id,
+        observation(&foreign.photos[0].id, "狐狸"),
+    )
+    .await;
+    for invalid in [
+        json!({}),
+        observation("wrong-photo", "狐狸"),
+        json!({"photo_id":id,"visible_facts":["狐狸"],"interpretation":"长".repeat(30_000),"uncertainty":"测试"}),
+    ] {
+        cache(&db, id, invalid).await;
+        let (reply, _) = run_search(
+            &db,
+            &project,
+            "狐狸",
+            vec![id.clone()],
+            100,
+            "search_photos_semantic",
+            false,
+        )
+        .await;
+        assert_eq!(reply["result"]["photos"], json!([]));
+        assert_eq!(
+            reply["result"]["semantic_retrieval"]["status"],
+            "no_documents"
+        );
+        assert_eq!(reply["result"]["semantic_retrieval"]["embedded"], 0);
+        assert_eq!(reply["result"]["new_uploads"], 0);
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+#[ignore = "需本机已有 Apple 中英文句向量；只用合成观察，不下载、不上传"]
+async fn semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_scope() {
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 3).await;
+    use sha2::{Digest, Sha256};
+    let hashes = || {
+        (0..3)
+            .map(|i| {
+                format!(
+                    "{:x}",
+                    Sha256::digest(
+                        std::fs::read(temp.path().join(format!("photo-{i}.png"))).unwrap()
+                    )
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let before_hashes = hashes();
+    let before = serde_json::to_value(db.get(&project.id).await.unwrap()).unwrap();
+    for (query, facts, language) in [
+        (
+            "骑两轮车的人",
+            [
+                "一位男子骑自行车经过街道",
+                "餐桌上放着一盘水果",
+                "雪山前停着一辆汽车",
+            ],
+            "zh-Hans",
+        ),
+        (
+            "a person riding a bike",
+            [
+                "A man is riding a bicycle on a street.",
+                "A plate of fruit sits on a dining table.",
+                "A snowy mountain beneath a blue sky.",
+            ],
+            "en",
+        ),
+    ] {
+        for (photo, fact) in project.photos.iter().zip(facts) {
+            cache(&db, &photo.id, observation(&photo.id, fact)).await;
+        }
+        assert_eq!(
+            search(&db, &project, query, vec![], 1).await["result"]["photos"],
+            json!([]),
+            "查询与描述没有字面子串命中"
+        );
+        let (reply, task_id) = run_search(
+            &db,
+            &project,
+            query,
+            vec![],
+            1,
+            "search_photos_semantic",
+            true,
+        )
+        .await;
+        let result = &reply["result"];
+        assert_eq!(
+            result["semantic_retrieval"]["status"], "available",
+            "本机模型缺失不能算语义验收通过"
+        );
+        assert_eq!(result["semantic_retrieval"]["language"], language);
+        assert_eq!(result["semantic_retrieval"]["embedded"], 3);
+        assert_eq!(result["semantic_retrieval"]["revalidated"], 3);
+        assert_eq!(result["photos"][0]["photo_id"], project.photos[0].id);
+        assert_eq!(
+            result["photos"][0]["match_sources"],
+            json!(["semantic_cached_visual_fact"])
+        );
+        assert_eq!(
+            result["photos"][0]["visual_evidence"]["visible_facts"],
+            json!([facts[0]])
+        );
+        assert_eq!(
+            result["photos"][0]["visual_evidence"]["human_preference_evidence"],
+            false
+        );
+        assert!(
+            result["photos"][0]["visual_evidence"]["semantic_similarity"]
+                .as_f64()
+                .unwrap()
+                .is_finite()
+        );
+        assert_eq!(result["remaining"], 2);
+        let view = agent::projection(&db, &project.id).await.unwrap();
+        assert_eq!(
+            view.tasks
+                .iter()
+                .find(|t| t.id == task_id)
+                .unwrap()
+                .usage
+                .tool_calls,
+            1
+        );
+        let (scoped, _) = run_search(
+            &db,
+            &project,
+            query,
+            vec![project.photos[1].id.clone()],
+            1,
+            "search_photos_semantic",
+            false,
+        )
+        .await;
+        assert_eq!(
+            scoped["result"]["photos"][0]["photo_id"], project.photos[1].id,
+            "最接近仍仅是范围内候选，不保证相关"
+        );
+        assert_eq!(scoped["result"]["semantic_retrieval"]["embedded"], 1);
+        assert_eq!(result["new_uploads"], 0);
+        assert!(
+            !result.to_string().contains("直接批准"),
+            "主观 interpretation 不进入向量文本或返回证据"
+        );
+        eprintln!("semantic tool accepted: {}", result["semantic_retrieval"]);
+    }
+    assert_eq!(hashes(), before_hashes);
+    assert_eq!(
+        serde_json::to_value(db.get(&project.id).await.unwrap()).unwrap(),
+        before
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM preference_evidence")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COALESCE(SUM(cost_minor_usd+cloud_images),0) FROM model_usage"
+        )
+        .fetch_one(&db.pool)
+        .await
+        .unwrap(),
+        0
+    );
 }
 
 #[tokio::test]

@@ -119,6 +119,12 @@ fn parse_observation(row: &SqliteRow) -> Option<Value> {
 
 async fn cache_rows(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<Vec<SqliteRow>> {
     let identity = model_binding::load(tx, &task.id).await?;
+    if task.provider_id == super::PROVIDER_OPENAI && identity.is_none() {
+        return Err(AppError::new(
+            "RECOVERY_ERROR",
+            "云任务缺少模型身份，不能猜测缓存来源；请重新委托",
+        ));
+    }
     let model = identity.as_ref().map(|id| id.model_id.as_str());
     let version = identity.as_ref().map(|id| id.cache_version());
     // 仅取 scope 内每照片最新记录，正文有界；不展开全部历史 JSON。
@@ -162,6 +168,7 @@ pub(crate) async fn search(
     let mut scanned = 0;
     let mut valid = 0;
     let mut truncated = false;
+    let mut revalidated = 0;
     if query != "rating:4" {
         let rows = cache_rows(tx, task).await?;
         truncated = rows.len() > SCAN_LIMIT;
@@ -185,6 +192,7 @@ pub(crate) async fn search(
             let score = semantic
                 .and_then(|data| data.scores.get(&document_key(row, &value)))
                 .copied();
+            revalidated += usize::from(score.is_some());
             let semantic_only = facts.is_empty();
             if semantic_only && score.is_none() {
                 continue;
@@ -193,7 +201,7 @@ pub(crate) async fn search(
                 facts = semantic_facts(&value);
             }
             let mut cited = json!({"source":"cached_model_observation","observation_id":row.get::<i64,_>("id"),"model_id":row.get::<String,_>("model_id"),"cache_version":cache_version,"kind":row.get::<String,_>("kind"),"visible_facts":facts,"uncertainty":value["uncertainty"].as_str().unwrap_or("").chars().take(300).collect::<String>(),"human_preference_evidence":false});
-            if let Some(score) = score {
+            if let Some(score) = score.filter(|_| semantic_only) {
                 cited["semantic_similarity"] = json!(score);
             }
             evidence.insert(photo, (cited, semantic_only));
@@ -259,17 +267,198 @@ pub(crate) async fn search(
     photos.truncate(limit);
     let mut result = json!({"photos":photos,"remaining":total.saturating_sub(limit),"mode":"local_metadata_and_cached_facts","new_uploads":0,"cache_coverage":{"examined":scanned,"valid":valid,"scan_limit":SCAN_LIMIT,"limited":truncated},"notice":"本地关键词匹配；缓存事实是模型观察，可能有误，不是人工偏好证据。未命中不代表照片未包含该内容；未重新读图，未观察全图库。"});
     if call.name == "search_photos_semantic" {
-        result["mode"] = json!("local_hybrid_sentence_embeddings");
+        result["mode"] = json!(if revalidated > 0 {
+            "local_hybrid_sentence_embeddings"
+        } else {
+            "local_keyword_fallback"
+        });
         result["semantic_retrieval"] = serde_json::to_value(
             semantic
                 .map(|data| data.report.clone())
                 .unwrap_or_else(|| semantic::SemanticReport::skipped("not_prepared", 0)),
         )
         .unwrap();
+        result["semantic_retrieval"]["revalidated"] = json!(revalidated);
+        result["semantic_retrieval"]["discarded_prepared"] =
+            json!(semantic.map_or(0, |data| data.report.embedded.saturating_sub(revalidated)));
         result["semantic_facts_per_photo_limit"] = json!(2);
         result["notice"] = json!(
             "本地缓存描述的语义候选排序，关键词命中优先；每照片至多两条各400字事实。相似度不是内容置信度或审美评分，无相关性通过阈值，结果可能不相关；仅覆盖已生成向量的同语言描述，不读图、不上传、不新增偏好证据。请核对来源并按授权补充视觉观察。"
         );
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::types::{AgentRequest, Budget, TaskCommand};
+    use crate::{command_handler::CommandHandler, db::Store, domain, image_pipeline};
+
+    #[tokio::test]
+    async fn prepared_scores_revalidate_payload_scope_and_call_then_cancellation_stops_writes() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Store::open(&temp.path().join("scope.sqlite"))
+            .await
+            .unwrap();
+        let project = db.create("合成范围测试", "不进行真实推断").await.unwrap();
+        let path = temp.path().join("fixture.png");
+        image::RgbImage::from_pixel(8, 8, image::Rgb([1, 2, 3]))
+            .save(&path)
+            .unwrap();
+        db.insert_photo(
+            &project.id,
+            &image_pipeline::prepare(&path, &temp.path().join("cache")).unwrap(),
+        )
+        .await
+        .unwrap();
+        let project = db.get(&project.id).await.unwrap();
+        let photo = &project.photos[0].id;
+        let task = CommandHandler::new(&db)
+            .agent_request(AgentRequest {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                command: TaskCommand::StartTask {
+                    goal: "检索测试".into(),
+                    selected_photo_ids: vec![],
+                    target_count: 1,
+                    budget: Budget::default(),
+                    consent_id: None,
+                },
+            })
+            .await
+            .unwrap();
+        let call = ToolCall {
+            call_id: "semantic-unit".into(),
+            name: "search_photos_semantic".into(),
+            args: json!({"project_id":project.id,"query":"同义查找","limit":1}),
+        };
+        let value = json!({"photo_id":photo,"visible_facts":["自行车经过街道"],"interpretation":"不进入向量","uncertainty":"合成测试"});
+        sqlx::query("INSERT INTO photo_observations(photo_id,photo_hash,model_id,prompt_version,kind,observation_json,created_at) SELECT id,content_sha256,'test-model',?,'inspect_photos',?,CURRENT_TIMESTAMP FROM photos WHERE id=?")
+            .bind(format!("{}@{}",vision::VISION_PROMPT_VERSION,"a".repeat(64))).bind(value.to_string()).bind(photo).execute(&db.pool).await.unwrap();
+        let mut tx = db.pool.begin().await.unwrap();
+        let mut fixture_task = super::super::store::load(&mut tx, &task.id).await.unwrap();
+        fixture_task.provider_id = "mock".into();
+        let rows = cache_rows(&mut tx, &fixture_task).await.unwrap();
+        // 这里只注入排序分数验证失效规则；真实向量另外以显式原生测试验收。
+        let mut prepared = SemanticPrefetch {
+            task_id: task.id.clone(),
+            call_fingerprint: crate::command_audit::fingerprint(
+                &serde_json::to_value(&call).unwrap(),
+            ),
+            scores: HashMap::from([(document_key(&rows[0], &value), 0.9)]),
+            report: semantic::SemanticReport::skipped("test_fixture", 1),
+        };
+        prepared.report.embedded = 1;
+        let photos = || vec![json!({"photo_id":photo,"name":"fixture.png","note":""})];
+        let found = search(
+            &mut tx,
+            &fixture_task,
+            "同义查找",
+            1,
+            photos(),
+            &call,
+            Some(&prepared),
+        )
+        .await
+        .unwrap();
+        assert_eq!(found["photos"][0]["photo_id"], *photo);
+        assert_eq!(found["semantic_retrieval"]["revalidated"], 1);
+        let mut other_call = call.clone();
+        other_call.call_id = "different-call".into();
+        assert_eq!(
+            search(
+                &mut tx,
+                &fixture_task,
+                "同义查找",
+                1,
+                photos(),
+                &other_call,
+                Some(&prepared)
+            )
+            .await
+            .unwrap()["photos"],
+            json!([])
+        );
+        let mut restricted = fixture_task.clone();
+        restricted.allowed_photo_ids.clear();
+        assert_eq!(
+            search(
+                &mut tx,
+                &restricted,
+                "同义查找",
+                1,
+                photos(),
+                &call,
+                Some(&prepared)
+            )
+            .await
+            .unwrap()["photos"],
+            json!([])
+        );
+        let mut changed = value.clone();
+        changed["visible_facts"] = json!(["餐桌上有水果"]);
+        sqlx::query("UPDATE photo_observations SET observation_json=?")
+            .bind(changed.to_string())
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let stale = search(
+            &mut tx,
+            &fixture_task,
+            "同义查找",
+            1,
+            photos(),
+            &call,
+            Some(&prepared),
+        )
+        .await
+        .unwrap();
+        assert_eq!(stale["photos"], json!([]));
+        assert_eq!(stale["semantic_retrieval"]["discarded_prepared"], 1);
+        sqlx::query("DELETE FROM photo_observations")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        assert_eq!(
+            search(
+                &mut tx,
+                &fixture_task,
+                "同义查找",
+                1,
+                photos(),
+                &call,
+                Some(&prepared)
+            )
+            .await
+            .unwrap()["photos"],
+            json!([])
+        );
+        tx.rollback().await.unwrap();
+        CommandHandler::new(&db)
+            .agent_request(AgentRequest {
+                request_id: domain::id(),
+                project_id: project.id,
+                command: TaskCommand::CancelTask {
+                    task_id: task.id.clone(),
+                },
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            CommandHandler::new(&db)
+                .agent_tool(&task.id, &call, None)
+                .await
+                .unwrap_err()
+                .code,
+            "CANCELLED"
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tool_calls")
+                .fetch_one(&db.pool)
+                .await
+                .unwrap(),
+            0
+        );
+    }
 }
