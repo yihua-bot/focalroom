@@ -12,6 +12,7 @@ pub(crate) async fn execute(
     task: &mut Task,
     call: &ToolCall,
     vision_data: Option<&VisionPrefetch>,
+    semantic_data: Option<&super::photo_search::SemanticPrefetch>,
 ) -> Result<Value> {
     let a = &call.args;
     let canonical = super::policy::ToolRegistry::canonical(&call.name);
@@ -50,7 +51,7 @@ pub(crate) async fn execute(
             }
             Ok(json!({"photo_ids":scoped,"base_revision":task.base_revision}))
         }
-        "list_photos" | "search_photos" => {
+        "list_photos" | "search_photos" | "search_photos_semantic" => {
             let mut data = photos(tx, task).await?;
             if call.name == "list_photos" {
                 if let Some(status) = a["status"].as_str() {
@@ -69,6 +70,8 @@ pub(crate) async fn execute(
                     a["query"].as_str().unwrap(),
                     a["limit"].as_u64().unwrap() as usize,
                     data,
+                    call,
+                    semantic_data,
                 )
                 .await;
             }

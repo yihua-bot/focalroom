@@ -105,6 +105,38 @@
    }
   },
   {
+   "name": "search_photos_semantic",
+   "description": "任务范围内已有缓存事实的本地中英文句向量候选检索，关键词命中优先，返回向量版本/覆盖/观察来源；相似度仅用于排序，不证明内容或审美，不新增读图或上传，不可用时明确回到关键词结果。",
+   "strict": true,
+   "access": "read",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+     },
+     "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+     },
+     "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+     }
+    },
+    "required": [
+     "project_id",
+     "query",
+     "limit"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
    "name": "inspect_photos",
    "description": "M3：有图像授权且提供方可用时执行真实视觉观察（上传低分辨率预览，缓存命中不上传）；无授权时仅对照人工状态/评分/备注并明示未读图。观察区分可观察事实与主观解读。",
    "strict": true,

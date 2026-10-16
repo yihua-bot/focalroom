@@ -153,6 +153,9 @@ pub(crate) async fn tool(
     call: &ToolCall,
     vision_data: Option<&VisionPrefetch>,
 ) -> Result<ToolResult> {
+    let preparation_started = std::time::Instant::now();
+    let semantic = super::photo_search::prepare(db, id, call).await?;
+    let preparation_ms = preparation_started.elapsed().as_millis() as u64;
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, id).await?;
     // 身份和 task scope 在回放前检查，指纹不允许同 call ID 更换参数。
@@ -183,8 +186,10 @@ pub(crate) async fn tool(
         return Err(AppError::new("CANCELLED", "任务已停止"));
     }
     if t.usage.tool_calls >= t.budget.max_tool_calls
-        || t.elapsed_ms >= u64::from(t.budget.max_duration_seconds) * 1000
+        || t.elapsed_ms.saturating_add(preparation_ms)
+            >= u64::from(t.budget.max_duration_seconds) * 1000
     {
+        t.elapsed_ms = t.elapsed_ms.saturating_add(preparation_ms);
         store::transition(&mut tx, &mut t, "paused", "工具调用达到预算上限").await?;
         store::checkpoint(&mut tx, &t).await?;
         tx.commit().await?;
@@ -199,7 +204,7 @@ pub(crate) async fn tool(
     let execution = if let Err(e) = validated {
         Err(e)
     } else {
-        tools::execute(&mut tx, &mut t, call, vision_data).await
+        tools::execute(&mut tx, &mut t, call, vision_data, semantic.as_ref()).await
     };
     let mut result = match execution {
         Ok(v) => ToolResult::success(&call.call_id, v),
@@ -214,7 +219,7 @@ pub(crate) async fn tool(
         }
     };
     sqlx::query("RELEASE tool_effect").execute(&mut *tx).await?;
-    result.duration_ms = started.elapsed().as_millis() as u64;
+    result.duration_ms = preparation_ms.saturating_add(started.elapsed().as_millis() as u64);
     t.elapsed_ms += result.duration_ms;
     store::save(&mut tx, &t).await?;
     sqlx::query("INSERT INTO tool_calls VALUES(?,?,?,?,?)")
@@ -240,6 +245,10 @@ pub(crate) async fn tool(
             "get_project_context" => "读取项目目标与任务范围".into(),
             "list_photos" | "search_photos" => format!(
                 "检索了 {} 张授权照片的人工元数据",
+                v["photos"].as_array().map_or(0, Vec::len)
+            ),
+            "search_photos_semantic" => format!(
+                "返回 {} 张范围内语义候选；本地文本向量，不新增读图或上传",
                 v["photos"].as_array().map_or(0, Vec::len)
             ),
             "get_sequence" => format!(

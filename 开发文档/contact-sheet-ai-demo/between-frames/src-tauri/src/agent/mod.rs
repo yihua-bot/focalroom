@@ -23,6 +23,7 @@ pub mod proposals;
 pub mod provider;
 pub mod router;
 pub mod runtime;
+mod semantic;
 pub(crate) mod store;
 mod tools;
 pub mod types;
@@ -127,7 +128,7 @@ pub const MODEL_ID: &str = "metadata-mock-1";
 pub const PROVIDER_OPENAI: &str = "openai";
 pub fn prompt_version(provider: &str) -> &'static str {
     if provider == PROVIDER_OPENAI {
-        "m3-openai-6"
+        "m3-openai-7"
     } else {
         PROMPT_VERSION
     }
