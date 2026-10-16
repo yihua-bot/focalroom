@@ -1,7 +1,7 @@
-// v2.0 M3 ModelRouter：按能力/区域/预算/授权过滤并按质量-成本-延迟排序。
+// v2.0 M3 ModelRouter：按适配器声明能力、区域、预算和授权过滤；实测质量排名待补。
 // 错误可读：MODEL_CAPABILITY_MISSING / PRIVACY_REGION_REJECTED / BUDGET_EXCEEDED。
 // 路由永不扩大图像授权范围（never_auto_expand_image_scope）；普通 UI 不要求用户选模型。
-// 内置默认路由表（部署可用 JSON 覆盖文件扩展）；不引入 YAML 依赖（ADR 0018）。
+// 运行时使用可信适配器实际配置；质量尚未测量，不自动切换提供方。
 use crate::domain::{AppError, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -36,9 +36,10 @@ impl ServiceTier {
 pub struct Route {
     pub provider_id: String,
     pub model_id: String,
+    pub residency: String,
     pub quality: &'static str,
     pub est_cost_usd: f64,
-    pub capabilities: &'static [&'static str],
+    pub capabilities: Vec<&'static str>,
 }
 
 /// 部署区域约束：默认本地部署无区域限制；受限区域由配置注入。
@@ -60,72 +61,80 @@ pub struct RouteRequest<'a> {
     pub image_consent: bool,
 }
 
-fn required_capability(task: TaskType) -> &'static str {
+pub(crate) fn required_capabilities(task: TaskType) -> &'static [&'static str] {
     match task {
-        TaskType::Index => "embedding_or_multimodal",
-        TaskType::VisionObserve | TaskType::Curation => "vision",
-        TaskType::AgentOrchestrate => "tool_calling",
-        TaskType::MemoryExtract => "structured_output",
-        TaskType::ReviewSummary => "instruction_following",
+        TaskType::Index => &["embedding_or_multimodal"],
+        TaskType::VisionObserve | TaskType::Curation => {
+            &["vision", "structured_output", "instruction_following"]
+        }
+        TaskType::AgentOrchestrate => &["tool_calling", "instruction_following"],
+        TaskType::MemoryExtract => &["structured_output", "instruction_following"],
+        TaskType::ReviewSummary => &["instruction_following"],
     }
 }
 
 /// 内置路由目录：mock 本地零成本；openai 云端（视觉+工具）。
 /// 成本为保守估算系数，真实计费由 M3 质量与计费数据校准（不冒充报价）。
-fn catalog() -> Vec<Route> {
-    vec![
-        Route {
-            provider_id: "mock".into(),
-            model_id: "metadata-mock-1".into(),
-            quality: "baseline",
-            est_cost_usd: 0.0,
-            capabilities: &[
-                "embedding_or_multimodal",
-                "tool_calling",
-                "structured_output",
-                "instruction_following",
-            ],
-        },
-        Route {
+impl Route {
+    pub fn responses(model: &str, capabilities: Vec<&'static str>) -> Self {
+        Self {
             provider_id: "openai".into(),
-            model_id: "gpt-4o-mini".into(),
-            quality: "professional",
+            model_id: model.into(),
+            residency: "unknown".into(),
+            quality: "unmeasured",
             est_cost_usd: 0.02,
-            capabilities: &[
-                "vision",
-                "tool_calling",
-                "structured_output",
-                "instruction_following",
-                "embedding_or_multimodal",
-            ],
-        },
-    ]
+            capabilities,
+        }
+    }
+    fn mock() -> Self {
+        Self {
+            provider_id: "mock".into(),
+            model_id: super::MODEL_ID.into(),
+            residency: "local".into(),
+            quality: "mock",
+            est_cost_usd: 0.0,
+            capabilities: vec!["tool_calling", "structured_output", "instruction_following"],
+        }
+    }
 }
 
+/// 默认目录示例；实际执行必须用 route_for_provider 传入已实例化的配置。
 pub fn route(request: &RouteRequest<'_>, openai_available: bool) -> Result<Route> {
-    route_candidates(request, openai_available, catalog())
+    let mut routes = vec![Route::mock()];
+    if openai_available {
+        let profile = super::capabilities::builtin(
+            super::openai::DEFAULT_BASE_URL,
+            super::openai::DEFAULT_MODEL,
+        )?;
+        routes.push(Route::responses(
+            super::openai::DEFAULT_MODEL,
+            profile.profile.names(),
+        ));
+    }
+    route_candidates(request, routes)
 }
-/// 运行时保留任务已绑定的 provider，避免离线任务自动出网或恢复时更换提供方。
+/// 任务绑定 provider；不会因为环境新增适配器而自动切换。
 pub fn route_for_provider(
     request: &RouteRequest<'_>,
     provider: &str,
-    openai_available: bool,
+    configured: Option<Route>,
 ) -> Result<Route> {
-    route_candidates(
-        request,
-        openai_available,
-        catalog()
-            .into_iter()
+    let routes = match provider {
+        "mock" => vec![Route::mock()],
+        "openai" => configured
             .filter(|route| route.provider_id == provider)
+            .into_iter()
             .collect(),
-    )
+        _ => vec![],
+    };
+    route_candidates(request, routes)
 }
-fn route_candidates(
-    request: &RouteRequest<'_>,
-    openai_available: bool,
-    catalog: Vec<Route>,
-) -> Result<Route> {
-    let need = required_capability(request.task_type);
+fn route_candidates(request: &RouteRequest<'_>, catalog: Vec<Route>) -> Result<Route> {
+    let mut required = required_capabilities(request.task_type).to_vec();
+    if request.images_required && !required.contains(&"vision") {
+        required.push("vision");
+    }
+    let capable = |route: &Route| required.iter().all(|cap| route.capabilities.contains(cap));
     // 过滤顺序遵循模板：region_eligibility → privacy_consent → required_capabilities → usage_budget。
     let mut candidates: Vec<Route> = catalog
         .clone()
@@ -134,12 +143,13 @@ fn route_candidates(
             // 区域：受限部署中，云 provider 不满足驻留要求即拒（mock 恒本地）。
             let cloud = route.provider_id != "mock";
             if cloud
-                && !request.region.restricted.is_empty()
+                && (!request.region.restricted.is_empty()
+                    || !request.region.allowed_residencies.is_empty())
                 && !request
                     .region
                     .allowed_residencies
                     .iter()
-                    .any(|allowed| route.residency() == allowed)
+                    .any(|allowed| route.residency != "unknown" && route.residency == *allowed)
             {
                 return false;
             }
@@ -148,20 +158,12 @@ fn route_candidates(
                 return false;
             }
             // 能力。
-            route.capabilities.contains(&need)
+            capable(route)
         })
         .collect();
-    // 可用性：openai 需要 key；不可用时从候选剔除（保持可读错误语义）。
-    let openai_in_candidates = candidates.iter().any(|route| route.provider_id == "openai");
-    if !openai_available && openai_in_candidates {
-        candidates.retain(|route| route.provider_id != "openai");
-    }
     if candidates.is_empty() {
         // 区分三类拒绝原因（可读错误）。
-        let any_capability_match = catalog
-            .iter()
-            .filter(|route| openai_available || route.provider_id == "mock")
-            .any(|route| route.capabilities.contains(&need));
+        let any_capability_match = catalog.iter().any(capable);
         if request.images_required && !request.image_consent && any_capability_match {
             return Err(AppError::new(
                 "PRIVACY_REGION_REJECTED",
@@ -171,7 +173,10 @@ fn route_candidates(
         if !any_capability_match {
             return Err(AppError::new(
                 "MODEL_CAPABILITY_MISSING",
-                format!("当前可用提供方均不具备「{need}」能力；请检查模型配置或更换服务档位。"),
+                format!(
+                    "当前可用提供方缺少所需能力：{}；请检查模型能力配置，服务档位不会自动赋予能力。",
+                    required.join(", ")
+                ),
             ));
         }
         return Err(AppError::new(
@@ -179,11 +184,11 @@ fn route_candidates(
             "部署区域策略不允许当前提供方；请在设置中调整区域/驻留策略。",
         ));
     }
-    // 排序：质量档 → 估算成本 → （同分保持目录顺序=延迟稳定近似）。
+    // 默认部署优先级：配置云端优先、本地其次；不是已测质量/延迟排名。
     candidates.sort_by(|a, b| {
-        let rank = |quality: &str| if quality == "professional" { 0 } else { 1 };
-        rank(a.quality)
-            .cmp(&rank(b.quality))
+        let rank = |route: &Route| if route.provider_id == "mock" { 1 } else { 0 };
+        rank(a)
+            .cmp(&rank(b))
             .then(a.est_cost_usd.partial_cmp(&b.est_cost_usd).unwrap())
     });
     let best = candidates.remove(0);
@@ -204,16 +209,6 @@ fn route_candidates(
     Ok(best)
 }
 
-impl Route {
-    fn residency(&self) -> &'static str {
-        if self.provider_id == "mock" {
-            "local"
-        } else {
-            "global"
-        }
-    }
-}
-
 /// 路由决策的可解释投影（UI/诊断展示；不含密钥或端点）。
 pub fn explain(request: &RouteRequest<'_>, openai_available: bool) -> Value {
     let decision = route(request, openai_available);
@@ -224,9 +219,10 @@ pub fn explain(request: &RouteRequest<'_>, openai_available: bool) -> Value {
         Err(error) => json!({"code": error.code, "message": error.message}),
     };
     json!({
+        "decisionBasis": "default_adapter_example_unmeasured",
         "taskType": request.task_type,
         "tier": request.tier,
-        "requiredCapability": required_capability(request.task_type),
+        "requiredCapabilities": required_capabilities(request.task_type),
         "imagesRequired": request.images_required,
         "imageConsent": request.image_consent,
         "outcome": outcome,

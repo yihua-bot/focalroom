@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-16",
+  "milestone": "M3",
+  "milestoneStatus": "partial",
+  "slice": "model-capability-profiles",
+  "sliceStatus": "passed",
+  "tests": {
+    "desktopRustPassed": 151,
+    "desktopRustIgnored": 10,
+    "keychainFiltered": 1,
+    "cloudHttpProcessPassed": 11,
+    "vitestPassed": 169,
+    "vitestFiles": 21,
+    "previewE2ePassed": 16,
+    "backendE2ePassed": 6,
+    "targetedRustPassed": 34,
+    "strictChecksPassed": true,
+    "fullScriptFrontendCountBeforeFinalConsentTest": 168
+  },
+  "finalPreviewRun": {
+    "passed": 16,
+    "seconds": 15.6,
+    "evidence": "tool session 47464 output; original full preview log also archived in verify-all.txt"
+  },
+  "realCheck": {
+    "provider": "DeepSeek",
+    "model": "deepseek-flash",
+    "capabilitySource": "local_protocol_smoke",
+    "state": "review_ready",
+    "modelTurns": 3,
+    "toolCalls": 4,
+    "actualInputTokens": 12853,
+    "actualOutputTokens": 1054,
+    "actualTotalTokens": 13907,
+    "estimatedCostMinorUsd": 3,
+    "invoiceVerified": false,
+    "imagesSent": 0,
+    "newLumixImagesSent": 0,
+    "humanQualityEvidence": false
+  },
+  "noNewDependencies": true,
+  "noNewMigrations": true,
+  "productionDeployment": false,
+  "nativeArtifact": {
+    "path": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames M1 Review Fixes.app",
+    "bundleIdentifier": "studio.betweenframes.m1reviewfixes",
+    "executableSha256": "fcdf441dbaa3c3019dc1d7830a52dd4e76c8502476d475662ef37d9ef103ce07",
+    "launched": false,
+    "signedNotarizedAcceptance": false
+  },
+  "preservedPreviousSourceFiles": 19,
+  "preservedPngFiles": 104,
+  "sourceFilesHashed": 25,
+  "secretPatternMatches": 0,
+  "limitations": [
+    "single Responses provider; supplier-specific fallback pending",
+    "quality/residency not inferred from capability declaration",
+    "instance profile frozen; changes require restart and new delegation",
+    "semantic embedding index pending",
+    "real human and competitor quality gates remain open"
+  ]
+}

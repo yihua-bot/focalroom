@@ -1,0 +1,50 @@
+    Blocking waiting for file lock on artifact directory
+   Compiling objc2-exception-helper v0.1.1
+   Compiling objc2 v0.6.5
+   Compiling ring v0.17.14
+   Compiling libsqlite3-sys v0.30.1
+   Compiling objc2-foundation v0.3.2
+   Compiling wry v0.57.0
+   Compiling block2 v0.6.2
+   Compiling objc2-core-foundation v0.3.2
+   Compiling rustls v0.23.45
+   Compiling dispatch2 v0.3.1
+   Compiling sqlx-sqlite v0.8.6
+   Compiling rustls-webpki v0.103.15
+   Compiling sqlx-macros-core v0.8.6
+   Compiling sqlx-macros v0.8.6
+   Compiling tokio-rustls v0.26.6
+   Compiling objc2-quartz-core v0.3.2
+   Compiling sqlx v0.8.6
+   Compiling hyper-rustls v0.27.10
+   Compiling objc2-app-kit v0.3.2
+   Compiling reqwest v0.12.28
+   Compiling objc2-web-kit v0.3.2
+   Compiling tao v0.37.1
+   Compiling muda v0.20.0
+   Compiling window-vibrancy v0.8.1
+   Compiling rfd v0.16.0
+   Compiling tauri-runtime v2.12.1
+   Compiling tauri-runtime-wry v2.12.1
+   Compiling tauri v2.12.3
+   Compiling tauri-plugin-fs v2.7.0
+   Compiling tauri-plugin-dialog v2.8.2
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 36.82s
+     Running tests/real_model_e2e.rs (src-tauri/target-v1/debug/deps/real_model_e2e-6cf73796cfecb1e0)
+
+running 1 test
+实际模型绑定已核对：deepseek-flash；Prompt：m3-openai-6；图片发送：0
+任务状态: review_ready
+停止原因: 已生成待评审选片草案 4c9c74ba-a802-4946-a96d-58988071df24（base_project_revision 7，draft_revision 1，2 项，均为 keep，位置 0/1）：
+- 位置0：real00.png（photo_id 652fc8f2-30c2-49c9-8615-f5d96cb8a759）
+- 位置1：real01.png（photo_id 7ab9064b-cf19-4a55-8f8f-52b8fe76462a）
+
+排序依据仅为工具返回的文件名升序（real00.png → real01.png → … → real05.png），这两个是其中最前两张。未做视觉、评分、评论、偏好或审美判断；本项目 cloud_images=false，未读图，结论不涉及画面内容。所有 photo_id 均来自 list_photos 返回；正式序列未做任何修改，需人工审批。；预算用量: {"modelTurns":3,"toolCalls":4,"inputEstimate":12779,"outputEstimate":1013,"cloudImages":0,"costMinorUsd":3}
+工具轨迹: get_project_context → list_photos → create_selection_draft → finish_task
+agent steps: 18，实测 token 回执: 3，total_tokens: 13792；费用估算 3 美分
+真实模型协议与草案完成验收通过：4 次工具调用，1 份草案；不证明摄影质量
+test real_model_deepseek_filename_curation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 7.88s
+

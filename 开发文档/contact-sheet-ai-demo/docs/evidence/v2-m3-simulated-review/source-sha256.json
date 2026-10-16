@@ -1,0 +1,10 @@
+{
+  "tools/agent-eval/evaluation.ts": "cab2e1a3262eae401a0edbe0c56355b9e99f6e18719a8fd055fce373b295f874",
+  "tools/agent-eval/cli.ts": "5e680bb8b780ef9ad40ad6247e74f6387d8a3ed515fd2439b6bb891e5b011f8a",
+  "tools/agent-eval/review.html": "417098c42b60dc5b39631ba565253a6472f1cc9797a32e5809a5130c4adeddaf",
+  "tools/agent-eval/evaluation.test.ts": "066c6dd95ba92ee55318a7b835ec5b08986da6fbcbf27f8316f0cfac5776c4c3",
+  "tools/agent-eval/review.test.ts": "b16e4a449c3085afc57fe3256b82d7ec575eb31ce868fcff1ff55b8ddcb0e423",
+  "tools/agent-eval/README.md": "3ee1d4f6d924f09dd38698ea1624ba4aca4edd548d5c4a34e5b0613495de06fd",
+  "../docs/ADR/0032-m3-simulated-review-provenance.md": "4e7c802bc00795f207d95b0654f69fd9b024d02bb1a2bdf4cb228014071edc07",
+  "../docs/V2-M3-SIMULATED-REVIEW-TEST-REPORT.md": "9aa01df0ecb49be144998273b4ba9365987ef94679cb327b2a07d7cc892dcf3b"
+}

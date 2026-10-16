@@ -11,6 +11,18 @@ const task = {
  elapsedMs: 2000, question: null, finalDraftIds: [], steps: [], createdAt: 'now',
 };
 beforeEach(() => ipc.mockReset());
+it('能力投影保留声明来源，拒绝缺失能力字段及不支持的能力', async () => {
+ const repository = new TauriAgentRepository();
+ const config = { providerId: 'openai', modelId: 'custom', ready: true, apiKeyTail: 'abcd', keySource: 'env', baseUrl: 'https://example.invalid', promptVersion: 'm3-openai-6', consent: null, capabilities: ['tool_calling', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null };
+ ipc.mockResolvedValue(config);
+ expect(await repository.aiConfig('p')).toMatchObject({ capabilities: config.capabilities, capabilitySource: 'operator_declaration' });
+ ipc.mockResolvedValue({ ...config, capabilities: ['embedding_or_multimodal'] });
+ await expect(repository.aiConfig('p')).rejects.toThrow();
+ const missing = { ...config } as Record<string, unknown>;
+ delete missing.capabilities;
+ ipc.mockResolvedValue(missing);
+ await expect(repository.aiConfig('p')).rejects.toThrow();
+});
 it('任务通信重试保留 requestId 和预算，不重复创建任务', async () => {
  ipc.mockRejectedValueOnce(new Error('lost reply')).mockResolvedValueOnce({ ok: true, data: { taskId: 'task' }, error: null, revision: null, requestId: 'ack' });
  const repo = new TauriAgentRepository();

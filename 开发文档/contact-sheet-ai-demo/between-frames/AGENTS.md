@@ -1,5 +1,13 @@
 # AGENTS.md · Between Frames 工程导航
 
+当前接续（2026-10-16，M3 模型能力配置）：先读 ../docs/V2-M3-CAPABILITIES-TEST-REPORT.md、MODEL-CAPABILITIES.md、ADR 0034。未知端点/型号默认拒绝；内置精确目录与 16KiB 部署 JSON 声明分来源，不能声明驻留/质量/授权/embedding。组合能力规则用于 Router 和 Adapter；配置摘要绑定任务，变化或旧绑定缺摘要须新委托，key 可轮换；实例冻结，改文件须重启。Prompt 仍 m3-openai-6，缓存键沿用 ADR 0033。委托/授权能力门槛已接 UI，配置失效仍可禁止图像。151 桌面 Rust +11 云、169 Vitest、16 预览/6 后端全通过，独立 debug 构建通过；DeepSeek 无图回归 review_ready，3轮/4工具/13,907实际token/3美分估算。M3 仍 partial，未实现跨供应商 fallback 或语义索引。无新迁移、线上部署或 LUMIX 外发；旧记录保留。
+
+当前接续（2026-10-16，M3 路由/缓存检索）：先读 ../docs/V2-M3-ROUTING-SEARCH-TEST-REPORT.md、ADR 0033。Prompt m3-openai-6；实际实例模型/端点摘要绑定任务，恢复拒绝换端点/模型，key 可轮换；检查点不再猜环境。缓存 m3-vision-2@端点摘要，旧未绑定缓存保留不回填；search_photos 只读 scope 内元数据与可观察事实，带来源/覆盖，不触发上传/偏好证据。144 桌面 Rust + 11 云、164 Vitest、16 预览/6 后端全通过，额外 DeepSeek 文件名真实回归 review_ready：3轮/4工具/13,792实际token/3美分估算/0图片，独立 debug 构建通过。旧 queued 检查点失败释放名额；旧任务须新委托。质量 unmeasured、驻留 unknown，协议声明不冒充实测，M3 整体 partial。
+
+当前接续（2026-10-16，用户允许模拟真人）：先读 ../docs/V2-M3-SIMULATED-REVIEW-TEST-REPORT.md 和 ADR 0032。已实际录入/导出/复核 2 条 AI 模拟作者与编辑评语，0 条真人；原 83 个评审材料/预览文件字节一致。工具增加 reviewerKind/reviewerModel，真人与 simulation 分开，旧缺来源为 unverified，同一身份来源冲突排除，--reviews 导入保持冻结与失败分母。15 项定向测试通过。模拟不写偏好证据、不伪造 human_baseline/竞品/独立真人，也不阻塞继续做可验证工程。旧 M3/M4 剩余门槛仍单列；本轮无新外发/迁移/部署。
+
+当前接续（2026-10-16，M4 既有切片修复）：先读 ../docs/V2-M4-LOCAL-BOUNDARIES-TEST-REPORT.md、ADR 0031。9976b16 已新增 cloud/ 本地 axum/SQLite API，修复单 grant 撤销、Argon2id/摘要会话/24h 时限/注销、注册原子性、有界真实 JPEG 和首次启动/重启；全量通过：134 桌面 Rust + 11 云 HTTP/进程测试、159 Vitest、16 预览、6 后端及严格检查。没有已部署腾讯云 API，Postgres 不能只换连接串，M3/M4 整体仍 partial。旧 SHA 密码和明文会话不兼容，保留旧实验库并用新临时库；不碰用户库/线上 DDL。保留既有未跟踪 Dockerfile；不自动推进新云功能。下方“无 API 代码”为先前状态，以本段和当前报告为准。
+
 给后续在此仓库工作的编码 Agent 与工程师。先读 `../docs/TEST-REPORT.md`（当前状态）与 `../README.md`，再按需深入。
 
 当前接续（2026-10-16）：先读 `../docs/V2-M3-EVALUATION-TEST-REPORT.md` 与 `../docs/V2-REMAINING-PLAN.md`。已用用户授权 LUMIX 前 80 JPEG、12 张 1400px 抽样预览生成 8 图待评审草案；保留前一结构失败，1 个任务/2 attempts，完整成功 run 实际 84,203 token、估算 9 美分，尚无真人/竞品质量结论。最终 Prompt m3-openai-5 / m3-vision-2；已确认端点/模型使用版本化峰时费率，未知配置沿用旧估算，绝非账单。模型/视觉请求均执行原任务和档位上限；不提高预算、不自动提交正式版。新增 `tools/agent-eval`，可离线收集五维评分、冻结候选并保留失败分母。134 Rust / 159 Vitest / 16 预览 / 6 后端通过。真实照片与评审包在 Git 仓库外的 `/Users/yihua/Documents/BetweenFrames-Reviews/m3-lumix-20261016-141130/`，不要复制进仓库或上传。M3 仍 partial；腾讯云仅实例和空库，没有本项目 API，不自动跳阶段。

@@ -1,0 +1,50 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.34s
+     Running tests/agent_vision.rs (src-tauri/target-v1/debug/deps/agent_vision-1f587ee42c813624)
+
+running 25 tests
+test legacy_unbound_executed_task_requires_redelegation_without_any_http ... ok
+test invalid_cached_observations_require_fresh_authorized_upload ... ok
+test cloud_search_reads_only_current_bound_endpoint_facts_without_image_transfers ... ok
+test hallucinated_photo_ids_are_dropped_and_quota_charged_for_real_transfer ... ok
+test cloud_image_budget_cap_pauses_task_before_any_upload ... ok
+test malformed_model_batches_and_incomplete_responses_execute_no_tools ... ok
+test consented_vision_uploads_once_then_cache_hits_without_reupload ... ok
+test crashed_in_flight_upload_keeps_reservation_and_cannot_retransmit_on_resume ... ok
+test ag04_without_consent_no_image_leaves_formal_state_untouched ... ok
+test invalid_observations_never_enter_cache_and_uploads_remain_charged ... ok
+test malformed_vision_response_keeps_upload_reservation_instead_of_free_retry ... ok
+test observation_cache_is_scoped_to_endpoint_even_when_model_alias_matches ... ok
+test obsolete_queued_checkpoint_fails_once_and_releases_the_project_for_redelegation ... ok
+test paused_upload_settles_and_replays_after_restart_without_retransmission ... ok
+test provider_error_bodies_cannot_leak_credentials_into_task_records ... ok
+test real_http_loop_receives_task_identity_and_finishes_reviewable_draft ... ok
+test remaining_budget_reduces_request_output_without_raising_task_budget ... ok
+test reported_tokens_settle_reservations_and_excess_usage_stops_before_tools ... ok
+test runtime_router_keeps_offline_task_local_when_cloud_adapter_is_available ... ok
+test runtime_router_rejects_region_budget_and_missing_provider_before_http ... ok
+test task_binding_survives_restart_rejects_endpoint_or_model_switch_and_allows_key_rotation ... ok
+test task_consent_is_bound_once_and_never_used_as_project_fallback ... ok
+test timed_out_upload_is_charged_and_resume_does_not_send_it_again ... ok
+test unexpected_provider_usage_is_visible_and_stops_further_requests ... ok
+test zero_cost_and_exhausted_tool_budget_stop_before_upload ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.80s
+
+     Running tests/model_routing.rs (src-tauri/target-v1/debug/deps/model_routing-ad6ae93fa12313d3)
+
+running 2 tests
+test unknown_residency_and_unimplemented_embedding_cannot_pass_routing_as_verified ... ok
+test configured_model_identity_is_real_unmeasured_and_credential_independent ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/photo_search.rs (src-tauri/target-v1/debug/deps/photo_search-29f72b76a5da82b1)
+
+running 3 tests
+test search_combines_scoped_metadata_with_cited_cached_facts_without_new_uploads ... ok
+test search_rejects_cross_scope_stale_hash_malformed_and_subjective_cache_matches ... ok
+test cache_search_at_task_limit_does_not_scan_extra_project_photos ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.89s
+

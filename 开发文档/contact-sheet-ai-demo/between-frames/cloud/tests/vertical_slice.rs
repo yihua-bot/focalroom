@@ -70,16 +70,18 @@ async fn s02_vertical_slice_full_flow() {
 
     // 注册预览文件。
     let sha = "a".repeat(64);
+    let mut preview = std::io::Cursor::new(Vec::new());
+    image::RgbImage::new(1400, 933)
+        .write_to(&mut preview, image::ImageFormat::Jpeg)
+        .unwrap();
+    let preview = preview.into_inner();
     // 使用 spawn_server 返回的共享 pool。
     sqlx::query("INSERT INTO preview_files(id,project_id,sha256,width,height,file_size) VALUES(?,?,?,?,?,?)")
-        .bind(uuid::Uuid::new_v4().to_string()).bind(&pid).bind(&sha).bind(1400).bind(933).bind(45000)
+        .bind(uuid::Uuid::new_v4().to_string()).bind(&pid).bind(&sha).bind(1400).bind(933).bind(preview.len() as i64)
         .execute(&pool).await.unwrap();
-    tokio::fs::write(
-        preview_dir.join(format!("{sha}-1400.jpg")),
-        vec![0xFF, 0xD8, 0xFF, 0xE0],
-    )
-    .await
-    .unwrap();
+    tokio::fs::write(preview_dir.join(format!("{sha}-1400.jpg")), preview)
+        .await
+        .unwrap();
 
     // 未授权拒绝。
     let resp = client

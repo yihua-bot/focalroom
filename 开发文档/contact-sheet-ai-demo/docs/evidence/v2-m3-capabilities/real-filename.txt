@@ -1,0 +1,15 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.39s
+     Running tests/real_model_e2e.rs (src-tauri/target-v1/debug/deps/real_model_e2e-6cf73796cfecb1e0)
+
+running 1 test
+实际模型绑定已核对：deepseek-flash；Prompt：m3-openai-6；图片发送：0
+任务状态: review_ready
+停止原因: 已生成 1 个待评审选片草案 c5136c09-8786-4a4f-9544-0b75b45cce3f（draft_revision 1，base_project_revision 7）。仅依据文件名升序，选入最前两张：real00.png = 8d1372e0-2424-440b-9c7a-768f7f774984（position 0）、real01.png = 935faf42-f581-4aa6-bb71-2281d5450336（position 1），proposed_action 均为 keep。候选池共 6 张（real00–real05），其余 4 张未纳入。未做视觉验证：项目 cloud_images=false、maxCloudImages=0，list_photos/get_project_context 返回 mock 元数据，因此结论不含评分、评论、偏好或审美判断，仅基于工具返回的文件名与 photo_id。未写入正式人类选择，正式序列保持不变；请人工审核后决定是否应用。；预算用量: {"modelTurns":3,"toolCalls":4,"inputEstimate":12853,"outputEstimate":1054,"cloudImages":0,"costMinorUsd":3}
+工具轨迹: list_photos → get_project_context → create_selection_draft → finish_task
+agent steps: 18，实测 token 回执: 3，total_tokens: 13907；费用估算 3 美分
+真实模型协议与草案完成验收通过：4 次工具调用，1 份草案；不证明摄影质量
+test real_model_deepseek_filename_curation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 7.54s
+

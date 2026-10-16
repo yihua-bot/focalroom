@@ -18,9 +18,15 @@ pub struct VisionPrefetch {
     pub consent_id: i64,
     pub cost_minor_usd: u32,
     pub model_id: String,
+    #[serde(default)]
+    pub cache_version: String,
 }
 pub(crate) fn is_vision_tool(name: &str) -> bool {
     name == "inspect_photos" || name == "compare_photos"
+}
+pub(crate) fn valid_cached_observation(value: &Value, photo: &str) -> bool {
+    value["photo_id"] == photo
+        && super::openai::valid_observations(&json!({"observations":[value]}))
 }
 pub(crate) async fn prefetch(
     db: &crate::db::Store,
@@ -77,25 +83,24 @@ pub(crate) async fn prefetch(
         return Ok(None);
     }
     let model_id = provider.model_id();
+    let cache_version = provider.identity().cache_version();
     let mut cached: Vec<(String, Value)> = vec![];
     let mut missing: Vec<(String, String, String)> = vec![];
     for photo in &scoped {
         let hit: Option<String> = sqlx::query_scalar(
-            "SELECT observation_json FROM photo_observations WHERE photo_hash=? AND model_id=? AND prompt_version=? AND kind=? ORDER BY id DESC LIMIT 1",
+            "SELECT observation_json FROM photo_observations WHERE photo_id=? AND photo_hash=? AND model_id=? AND prompt_version=? AND kind=? ORDER BY id DESC LIMIT 1",
         )
+        .bind(&photo.0)
         .bind(&photo.1)
         .bind(model_id)
-        .bind(VISION_PROMPT_VERSION)
+        .bind(&cache_version)
         .bind(call.name.as_str())
         .fetch_optional(&mut *tx)
         .await?;
         // 旧缓存也经过同一契约校验；无效项视为未命中，仍需授权/预算才能重新观察。
         let valid_hit = hit
             .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-            .filter(|value| {
-                value["photo_id"] == photo.0
-                    && super::openai::valid_observations(&json!({"observations":[value]}))
-            });
+            .filter(|value| valid_cached_observation(value, &photo.0));
         match valid_hit {
             Some(value) => cached.push((photo.0.clone(), value)),
             None => missing.push(photo.clone()),
@@ -112,6 +117,7 @@ pub(crate) async fn prefetch(
             consent_id: 0,
             cost_minor_usd: 0,
             model_id: model_id.to_owned(),
+            cache_version,
         }));
     }
     // 授权在预取阶段只读校验；配额扣减在写事务，同项目唯一执行任务避免并发超用。
@@ -131,7 +137,7 @@ pub(crate) async fn prefetch(
             image_consent: true,
         },
         &task.provider_id,
-        true,
+        Some(provider.route()?),
     )?;
     if task.usage.cloud_images + missing.len() as u32 > task.budget.max_cloud_images {
         return Err(AppError::new(
@@ -241,6 +247,7 @@ pub(crate) async fn prefetch(
         consent_id,
         cost_minor_usd: cost,
         model_id: model_id.to_owned(),
+        cache_version,
     };
     handler
         .settle_vision(

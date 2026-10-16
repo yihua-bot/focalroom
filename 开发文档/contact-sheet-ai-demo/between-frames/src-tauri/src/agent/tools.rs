@@ -63,20 +63,14 @@ pub(crate) async fn execute(
                     data = data.into_iter().skip(n).collect();
                 }
             } else {
-                let query = a["query"].as_str().unwrap().to_lowercase();
-                if query == "rating:4" {
-                    data.retain(|p| p["rating"].as_i64().unwrap_or(0) >= 4);
-                } else {
-                    data.retain(|p| {
-                        format!(
-                            "{} {}",
-                            p["name"].as_str().unwrap_or(""),
-                            p["note"].as_str().unwrap_or("")
-                        )
-                        .to_lowercase()
-                        .contains(&query)
-                    });
-                }
+                return super::photo_search::search(
+                    tx,
+                    task,
+                    a["query"].as_str().unwrap(),
+                    a["limit"].as_u64().unwrap() as usize,
+                    data,
+                )
+                .await;
             }
             let limit = a["limit"].as_u64().unwrap() as usize;
             let total = data.len();
@@ -104,7 +98,7 @@ pub(crate) async fn execute(
                                 .bind(photo_id)
                                 .bind(&hash)
                                 .bind(&prefetch.model_id)
-                                .bind(super::vision::VISION_PROMPT_VERSION)
+                                .bind(&prefetch.cache_version)
                                 .bind(call.name.as_str())
                                 .bind(observation.to_string())
                                 .bind(domain::timestamp())

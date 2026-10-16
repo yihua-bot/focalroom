@@ -277,6 +277,9 @@ pub struct AiConfig {
     pub key_source: Option<String>,
     pub base_url: String,
     pub prompt_version: String,
+    pub capabilities: Vec<String>,
+    pub capability_source: Option<String>,
+    pub configuration_error: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

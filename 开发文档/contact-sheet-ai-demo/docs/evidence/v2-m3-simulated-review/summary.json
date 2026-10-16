@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-16",
+  "baseline": "9976b16 with preserved prior M4 boundary fixes",
+  "scope": "AI simulated author/editor review workflow and provenance/batch isolation",
+  "realHumanReviews": 0,
+  "simulatedAiReviews": 2,
+  "independentHumanReviewers": 0,
+  "sameAiSessionForBothRoles": true,
+  "realCreativeTasks": 1,
+  "registeredAttempts": 2,
+  "reviewReadyAttempts": 1,
+  "originalPacketFilesUnchanged": 83,
+  "externalModelCalls": 0,
+  "photoUploads": 0,
+  "offlinePageHttpRequests": 0,
+  "sourceEvidence": "outside Git: /Users/yihua/Documents/BetweenFrames-Reviews/m3-simulated-2026-10-16T12-02-56-437Z",
+  "reviewPacketBound": true,
+  "packetId": "6919ca22d01d075b6d25b1e8a9272d8199b684fe75a4a42f38a3ec6885786bc7",
+  "humanDimensionMeans": null,
+  "status": "partial",
+  "formalWrites": 0,
+  "preferenceEvidenceWrites": 0,
+  "fullVerify": {
+    "exitCode": 0,
+    "desktopRustPassed": 134,
+    "cloudRustPassed": 11,
+    "vitestPassedAtFullRun": 163,
+    "previewE2E": 16,
+    "backendE2E": 6,
+    "ignoredRust": 10,
+    "filteredKeychain": 1
+  },
+  "finalFrontend": {
+    "typecheck": "passed",
+    "lint": "passed",
+    "vitestPassed": 164,
+    "files": 21,
+    "evaluationTestsIncluded": 15
+  },
+  "screenshotsPreserved": 120,
+  "screenshotsRestoredToStartingBytes": 24,
+  "unchangedRustNotRepeatedAfterFinalTsChange": true,
+  "remoteCI": "not run",
+  "schemaChanges": 0,
+  "remaining": [
+    "M3 actual photographer/independent/competitor evidence",
+    "measured model routing and layered indexing",
+    "M4 actual shared authority and deployment"
+  ]
+}

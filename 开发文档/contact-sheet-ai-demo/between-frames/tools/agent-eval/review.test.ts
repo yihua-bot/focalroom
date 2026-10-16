@@ -12,7 +12,7 @@ it('offline blind review requires photos and human scores, exports alias-only re
   const previews = join(directory, 'previews'); mkdirSync(previews);
   const previewFilename = `${'a'.repeat(64)}-1400.jpg`;
   writeFileSync(join(previews, previewFilename), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jL1sAAAAASUVORK5CYII=', 'base64'));
-  const pack = { protocolVersion: 'bf-m3-eval-1' as const, cases: [{ caseId: 'case-1', goal: '</script><img src=https://example.invalid/private>', targetCount: 1,
+  const pack = { protocolVersion: 'bf-m3-eval-1' as const, packetId: 'b'.repeat(64), cases: [{ caseId: 'case-1', goal: '</script><img src=https://example.invalid/private>', targetCount: 1,
     photos: [{ photoId: 'photo-1', previewFilename }], candidates: [{ candidateId: 'candidate-1', orderedPhotoIds: ['photo-1'], explanation: '待人工核对的顺序' }] }] };
   const browser = await chromium.launch();
   try {
@@ -34,13 +34,30 @@ it('offline blind review requires photos and human scores, exports alias-only re
     await page.locator('#checked').fill('1'); await page.locator('#incorrect').fill('2');
     await page.locator('#save').click(); expect(await page.locator('#progress').textContent()).toContain('0 条');
     await page.locator('#incorrect').fill('0'); await page.locator('#save').click();
+    expect(await page.locator('#status').textContent()).toContain('请选择评审来源');
+    await page.locator('#reviewer-kind').selectOption('human'); await page.locator('#save').click();
     expect(await page.locator('#progress').textContent()).toContain('1 条');
     const downloadEvent = page.waitForEvent('download'); await page.locator('#export').click();
     const download = await downloadEvent; const saved = join(directory, 'reviews.json'); await download.saveAs(saved);
     const result = JSON.parse(readFileSync(saved, 'utf8'));
     expect(result.reviews).toHaveLength(1);
-    expect(result.reviews[0]).toMatchObject({ caseId: 'case-1', candidateId: 'candidate-1', reviewerId: 'real-human-id', factCheck: { checkedClaims: 1, incorrectClaims: 0 } });
+    expect(result.reviews[0]).toMatchObject({ packetId: pack.packetId, caseId: 'case-1', candidateId: 'candidate-1', reviewerId: 'real-human-id', reviewerKind: 'human', reviewerModel: null, factCheck: { checkedClaims: 1, incorrectClaims: 0 } });
     expect(Object.keys(result.reviews[0])).not.toContain('system');
+    await page.locator('#reviewer').fill('simulated-author'); await page.locator('#reviewer').blur();
+    await page.locator('#reviewer-kind').selectOption('simulated_ai');
+    expect(await page.locator('#source-notice').textContent()).toContain('不计作者或独立真人');
+    for (const key of ['visual_facts', 'creative_intent', 'sequence_rhythm', 'explanation', 'collaboration']) await page.locator(`#${key}`).selectOption('3');
+    await page.locator('#reason').fill('AI 模拟：此为工作流演练，并非真人审美结论。');
+    await page.locator('#save').click(); expect(await page.locator('#status').textContent()).toContain('实际模型名称');
+    await page.locator('#reviewer-model').fill('test-only-model'); await page.locator('#save').click();
+    expect(await page.locator('#progress').textContent()).toContain('2 条');
+    const mixedEvent = page.waitForEvent('download'); await page.locator('#export').click();
+    const mixed = await mixedEvent; expect(mixed.suggestedFilename()).toBe('mixed-source-reviews.json');
+    const mixedPath = join(directory, 'mixed.json'); await mixed.saveAs(mixedPath);
+    expect(JSON.parse(readFileSync(mixedPath, 'utf8')).reviews[1]).toMatchObject({ reviewerKind: 'simulated_ai', reviewerModel: 'test-only-model' });
+    await page.locator('#reviewer-kind').selectOption('human'); await page.locator('#save').click();
+    expect(await page.locator('#status').textContent()).toContain('来源和模型不能更改');
+    expect(await page.locator('#progress').textContent()).toContain('2 条');
     expect(requests).toEqual([]);
     await page.screenshot({ path: join(directory, 'review.png'), fullPage: true });
     writeFileSync(join(previews, previewFilename), await page.screenshot({ type: 'jpeg', clip: { x: 0, y: 0, width: 4, height: 4 } }));
@@ -52,6 +69,12 @@ it('offline blind review requires photos and human scores, exports alias-only re
     expect(await page.locator('#photos img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(4);
     expect(await page.locator('#goal').textContent()).toContain(pack.cases[0].goal);
     expect(await page.locator('#goal img').count()).toBe(0);
+    await page.locator('#reviewer').fill('ai-only'); await page.locator('#reviewer-kind').selectOption('simulated_ai');
+    await page.locator('#reviewer-model').fill('test-only-model');
+    for (const key of ['visual_facts', 'creative_intent', 'sequence_rhythm', 'explanation', 'collaboration']) await page.locator(`#${key}`).selectOption('3');
+    await page.locator('#reason').fill('AI 模拟导出。'); await page.locator('#save').click();
+    const simulatedEvent = page.waitForEvent('download'); await page.locator('#export').click();
+    expect((await simulatedEvent).suggestedFilename()).toBe('simulated-ai-reviews.json');
     expect(requests).toEqual([]);
     writeFileSync(join(previews, previewFilename), 'not an image');
     await expect(embedPreviews(template, pack, previews)).rejects.toThrow('JPEG');

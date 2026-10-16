@@ -32,7 +32,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
  const [consentPrompt, setConsentPrompt] = useState(false);
  const configQuery = useQuery({ queryKey: ['ai-config', project.id], queryFn: () => repository!.agent.aiConfig(project.id), enabled: Boolean(repository), staleTime: 30_000 });
  const config = configQuery.data;
- const providerLabel = config ? (config.ready ? `真实模型 ${config.modelId}${config.apiKeyTail ? ` ···${config.apiKeyTail}` : ''}（密钥：${config.keySource === 'keychain' ? '钥匙串' : '环境变量'}）` : '本地 Mock（未配置 API Key）') : '';
+ const providerLabel = config ? (config.ready ? `真实模型 ${config.modelId}${config.apiKeyTail ? ` ···${config.apiKeyTail}` : ''}（密钥：${config.keySource === 'keychain' ? '钥匙串' : config.keySource === 'env' ? '环境变量' : '部署配置'}）` : '本地 Mock（未配置 API Key）') : '';
  const [apiKey, setApiKey] = useState('');
  const [configBusy, setConfigBusy] = useState(false);
  const [configNote, setConfigNote] = useState('');
@@ -58,6 +58,9 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
  };
  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
  const visionWanted = budget.maxCloudImages > 0 && Boolean(config?.ready);
+ const visionSupported = config?.capabilities.includes('vision') && config.capabilities.includes('structured_output') && config.capabilities.includes('instruction_following');
+ const configurationError = config?.configurationError || (visionWanted && !visionSupported ? '当前模型未配置图像观察能力。请将云端图像上限设为 0，或联系部署方调整配置。' : '');
+ const configurationBlocked = Boolean(configurationError) || !config || configQuery.isError;
  const consentActive = config?.consent?.mode === 'project' && config.consent.quota - config.consent.used > 0 ? config.consent : null;
  useEffect(() => {
   if (!repository) return;
@@ -75,7 +78,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
   finally { setBusy(false); }
  };
  const grantConsent = async (mode: 'task' | 'project' | 'deny') => {
-  if (!repository || busy) return; setBusy(true); setError('');
+  if (!repository || busy || (mode !== 'deny' && configurationBlocked)) return; setBusy(true); setError('');
   try {
    if (mode === 'deny') { setBudget(previous => ({ ...previous, maxCloudImages: 0 })); setBudgetEdited(true); }
    const granted = await repository.agent.setConsent(project.id, mode, mode === 'task' ? budget.maxCloudImages : mode === 'project' ? 100 : 0);
@@ -87,6 +90,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
   finally { setBusy(false); }
  };
  const startFlow = () => {
+  if (configurationBlocked) return;
   if (visionWanted && !consentActive) { setConsentPrompt(true); return; }
   void request({ type: 'StartTask', goal: goal.trim(), targetCount: count, selectedPhotoIds: scopeSelection ? selectedIds : [], budget, consentId: consentActive?.id ?? null });
  };
@@ -94,6 +98,8 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
  const draft = query.data?.drafts.find(item => item.id === draftId);
  return <section className="ai-panel agent-panel"><Sparkles size={27} strokeWidth={1} /><h3>摄影编辑{config ? (config.ready ? ' · 真实模型' : ' · 本地 Mock') : ''}</h3><p className="micro">{providerLabel && `提供方：${providerLabel}。`}验证受控工具闭环。AI 不直接修改正式选片；云端图像仅在明确授权后上传。</p>
   {!repository && <p className="info-card">浏览器为内存 UI 预览。本地 Mock 任务和草案审批请在桌面版运行。</p>}
+  {configurationError && <p role="alert">{configurationError}</p>}
+  {configQuery.isError && <p role="alert">模型配置读取失败，请刷新后重试。</p>}
   {repository && <details className="ai-config"><summary>模型与密钥 · 诊断</summary>
    <p className="micro">{providerLabel}。密钥存入 macOS 钥匙串，不写入数据库或日志；也可用环境变量 BETWEEN_FRAMES_OPENAI_API_KEY。</p>
    <div className="agent-task-actions">
@@ -110,14 +116,14 @@ export function AIPanel({ repository, project, selectedIds, onUpdated }: { repos
    <label>目标照片数<input aria-label="Agent 目标照片数" disabled={busy} type="number" min={1} max={100} required value={count} onChange={event => setCount(Number(event.target.value))} /></label>
    <label className="agent-scope"><input type="checkbox" disabled={busy} checked={scopeSelection} onChange={event => setScopeSelection(event.target.checked)} />限制到当前选区（{selectedIds.length} 张；无选区则为项目）</label>
    <details><summary>任务预算 · 后端执行</summary><div className="agent-budget">{budgetFields.map(field => <label key={field.key}>{field.label}<input type="number" aria-label={field.label} disabled={busy} min={field.min} max={field.max} required value={budget[field.key]} onChange={event => { setBudgetEdited(true); setBudget(previous => ({ ...previous, [field.key]: Number(event.target.value) })); }} /></label>)}</div><p>Mock 费用 $0、云端图像 0；文本为保守估算。恢复时使用上面明确设置的预算。</p></details>
-   <Button type="submit" variant="primary" disabled={!repository || busy || running || !project.photos.length}>{visionWanted ? '开始视觉任务' : '开始本地 Mock 任务'}</Button>
+   <Button type="submit" variant="primary" disabled={!repository || configurationBlocked || busy || running || !project.photos.length}>{visionWanted ? '开始视觉任务' : config?.ready ? '开始编辑任务（不上传照片）' : '开始本地 Mock 任务'}</Button>
    {consentPrompt && <div className="consent-card" role="dialog" aria-label="云端图像授权">
     <strong>云端图像授权</strong>
     <p className="micro">将向 {config?.modelId} 上传至多 {budget.maxCloudImages} 张最长边 1400px 的 JPEG 预览（重编码、不含 EXIF/GPS）；用于项目内视觉观察，服务商数据政策见其条款；观察结果仅保存在本机。拒绝后仍可用全部本地功能，视觉工具将降级为人工元数据对照。</p>
     <p className="micro">费用按保守估算计入预算上限（每张 1 美分 + 文本）；授权可随时撤回。</p>
     <div className="agent-task-actions">
-     <Button size="small" disabled={busy} onClick={() => { void grantConsent('task'); }}>仅本次任务（{budget.maxCloudImages} 张）</Button>
-     <Button size="small" disabled={busy} onClick={() => { void grantConsent('project'); }}>本项目（可撤回，100 张）</Button>
+     <Button size="small" disabled={busy || configurationBlocked} onClick={() => { void grantConsent('task'); }}>仅本次任务（{budget.maxCloudImages} 张）</Button>
+     <Button size="small" disabled={busy || configurationBlocked} onClick={() => { void grantConsent('project'); }}>本项目（可撤回，100 张）</Button>
      <Button size="small" disabled={busy} onClick={() => { void grantConsent('deny'); }}>禁止云端图像</Button>
     </div>
    </div>}

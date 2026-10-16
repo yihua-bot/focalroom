@@ -1,5 +1,21 @@
 # Between Frames：接手开发交接说明
 
+## 最新接续：M3 模型能力配置（2026-10-16）
+
+先读 [本轮报告](V2-M3-CAPABILITIES-TEST-REPORT.md)、[配置说明](MODEL-CAPABILITIES.md)、ADR 0034。未知模型/代理默认拒绝，16KiB JSON 声明仅来自部署端；显式文件无效不能回退内置目录。来源分官方文档/既有协议冒烟/部署声明，不授予质量、驻留、费用或图片权限。Router/Adapter 共用组合要求，任务恢复绑定能力摘要；旧无摘要须新委托，密钥可轮换。实例冻结、改文件重启；Prompt 仍 m3-openai-6、视觉缓存键不变。配置错误时禁止新增委托/授权，授权卡中拒绝图像仍可用。151 桌面 Rust +11 云、169 Vitest、16 预览/6 后端通过，独立 debug 包已构建；DeepSeek 无图任务 review_ready（3轮/4工具/13,907实际token/3美分估算）。未启动用户库、未部署、无新 LUMIX 上传。M3 仍 partial；下一块继续语义索引/索引与策展分工，随后推进独立 Adapter、供应商专属授权与 fallback；真人/模拟评测门槛继续单列。
+
+## 最新接续：M3 路由/缓存检索（2026-10-16）
+
+先读 [本轮报告](V2-M3-ROUTING-SEARCH-TEST-REPORT.md)、ADR 0033。Prompt m3-openai-6；身份首次执行绑定到步骤/检查点，旧任务不猜绑定、不静默换配置；cached vision namespace 加端点摘要。关键词检索只读项目/task scope、当前源 hash 和版本的可观察事实，非 embedding，不写人工证据。144 桌面 Rust + 11 云、164 Vitest、16 预览/6 后端通过；DeepSeek 纯文件名真实回归 review_ready（13,792 token/3美分估算/0图片），debug 构建通过。下一步继续模型特定能力/质量实测、分层语义检索与授权 fallback；真人/模拟指标继续分开，不以协议声明作为专业质量证明，不推进生产迁移/部署。
+
+## 最新接续：允许 AI 模拟角色继续开发（2026-10-16）
+
+先读 [模拟评审报告](V2-M3-SIMULATED-REVIEW-TEST-REPORT.md)、ADR 0032、评测工具 README。2 AI 角色/0 真人已实际完成 UI 导出→--reviews 汇总，原 83 文件一致。新字段 reviewerKind/reviewerModel，旧缺来源 unverified；真人均值与 AI simulation 分开。模拟材料在仓库外 m3-simulated-2026-10-16T12-02-56-437Z，不能转为真人/采纳率/偏好证据；不回写原批次或正式数据库。可继续 M3 工程，不因缺真人停止全部工作；真实质量、阶段发布与云部署门槛分别保留。
+
+## 最新接续：M4 已有切片修复（2026-10-16）
+
+先读 [V2-M4-LOCAL-BOUNDARIES-TEST-REPORT.md](V2-M4-LOCAL-BOUNDARIES-TEST-REPORT.md)、ADR 0031。当前已有 cloud/ 本地 axum/SQLite 协议，全量通过：134 桌面 Rust + 11 云 HTTP/二进制、159 Vitest、16 预览/6 后端及严格检查；verify-all 包含 verify:cloud。单 grant 撤销、会话失效、注册事务和预览边界已修复；Postgres 需要独立实现而非换连接串，线上未部署。旧 SHA 实验凭证不兼容，禁止清库/修改用户库。未跟踪 Dockerfile 保留原样未验收。M3 真实质量门槛仍开，优先继续评测和既定 M3 工程；不因本地 M4 修复擅自新增云协作功能。
+
 ## 当前接续：M3 真实素材与离线评审（2026-10-16）
 
 优先读 [本轮报告](V2-M3-EVALUATION-TEST-REPORT.md)、[剩余计划](V2-REMAINING-PLAN.md)、[ADR 0030](ADR/0030-m3-adaptive-output-and-evaluation.md)。用户授权 `/Volumes/LUMIX/DCIM/` 的选定 1400px 预览到 DeepSeek，并委托决定目标；前 80 JPEG 的 12 张抽样→8 张候选已预算内提交，前一结构失败仍保留。真实素材只在仓库外的 BetweenFrames-Reviews；未评分，不得代写真人结论。Prompt 最终 m3-openai-5 / vision-2；DeepSeek 费率版本与未知配置旧规则分开，不重算旧账。134 Rust / 159 Vitest / 16 预览 / 6 后端通过；原用户库不升级、密钥不落盘、不批量运行 ignored。下一步是 M3 真实分层任务/专家评测和已列工程缺口；云端当前只有 PG 基础设施与空库，没有 Between Frames API，按里程碑推进。以下为历史交接。

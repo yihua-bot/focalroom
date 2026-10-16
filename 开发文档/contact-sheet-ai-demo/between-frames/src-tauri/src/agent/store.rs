@@ -74,7 +74,10 @@ pub(crate) async fn transition(
     reason: &str,
 ) -> Result<()> {
     let legal = match t.state.as_str() {
-        "queued" => matches!(next, "planning" | "paused" | "cancelled" | "interrupted"),
+        "queued" => matches!(
+            next,
+            "planning" | "paused" | "cancelled" | "interrupted" | "failed"
+        ),
         "planning" => matches!(
             next,
             "running" | "paused" | "cancelled" | "interrupted" | "failed"
@@ -123,23 +126,22 @@ pub(crate) async fn protocol(
 }
 pub(crate) async fn checkpoint(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<()> {
     let history = protocol(tx, &task.id).await?;
+    let identity = super::model_binding::load(tx, &task.id).await?;
+    let model = identity
+        .as_ref()
+        .map(|value| value.model_id.as_str())
+        .unwrap_or(if task.provider_id == super::PROVIDER_OPENAI {
+            "unbound"
+        } else {
+            super::MODEL_ID
+        });
     let ids: Vec<String> =
         sqlx::query_scalar("SELECT call_id FROM tool_calls WHERE task_id=? ORDER BY rowid")
             .bind(&task.id)
             .fetch_all(&mut **tx)
             .await?;
-    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"memoryRevision":task.memory_revision,"providerId":task.provider_id,"modelId":model_id_of(&task.provider_id),"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"memoryRevision":task.memory_revision,"providerId":task.provider_id,"modelId":model,"modelIdentity":identity,"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
     Ok(())
-}
-fn model_id_of(provider: &str) -> String {
-    if provider == super::PROVIDER_OPENAI {
-        std::env::var(super::openai::MODEL_ENV)
-            .ok()
-            .filter(|v| !v.trim().is_empty())
-            .unwrap_or_else(|| super::openai::DEFAULT_MODEL.into())
-    } else {
-        super::MODEL_ID.into()
-    }
 }
 pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection> {
     let mut tx = store.pool.begin().await?;

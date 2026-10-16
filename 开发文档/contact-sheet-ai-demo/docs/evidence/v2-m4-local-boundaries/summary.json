@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-16",
+  "baseline": "9976b1619cd3aed7a024350a80a7184ee2c086fc",
+  "scope": "existing M4 local HTTP slice hardening, not milestone completion",
+  "command": "bash scripts/verify-all.sh --skip-keychain",
+  "exitCode": 0,
+  "desktopRust": {
+    "passed": 134,
+    "ignored": 10,
+    "filteredKeychainRoundtrip": 1
+  },
+  "cloudRust": {
+    "passed": 11,
+    "ignored": 0,
+    "newTests": 9
+  },
+  "vitest": {
+    "files": 21,
+    "passed": 159
+  },
+  "previewE2E": 16,
+  "realBackendE2E": 6,
+  "formatClippyContractsTypesLint": "passed",
+  "screenshots": {
+    "preserved": 120,
+    "restoredToStartingBytes": 22
+  },
+  "productionDatabaseAccessed": false,
+  "desktopUserDatabaseAccessed": false,
+  "realModelCalls": 0,
+  "photoUploads": 0,
+  "schemaChanged": false,
+  "containerBuild": "not run",
+  "remoteCI": "not run",
+  "deployed": false,
+  "legacyCredentialPolicy": "SHA-256 passwords and raw sessions rejected; no automatic rewrite",
+  "milestones": {
+    "M3": "partial",
+    "M4": "partial"
+  }
+}

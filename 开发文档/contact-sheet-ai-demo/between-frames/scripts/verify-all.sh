@@ -51,6 +51,9 @@ cargo fmt --manifest-path "src-tauri/Cargo.toml" -- --check
 step "Rust 严格 Clippy"
 cargo clippy --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --all-targets --features integration-harness -- -D warnings
 
+step "云协议本地切片（独立 SQLite，不访问线上数据库）"
+npm run verify:cloud
+
 step "重建集成 harness（重要：integration 依赖 target-v1 的最新 harness）"
 cargo build --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --features integration-harness --bin m1-harness
 

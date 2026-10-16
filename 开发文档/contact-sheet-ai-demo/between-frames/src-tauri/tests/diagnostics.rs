@@ -35,6 +35,9 @@ fn config() -> AiConfig {
         key_source: Some("env".into()),
         base_url: "https://secret-gateway.invalid".into(),
         prompt_version: "private-prompt".into(),
+        capabilities: vec![],
+        capability_source: None,
+        configuration_error: None,
     }
 }
 async fn store(root: &Path) -> Store {

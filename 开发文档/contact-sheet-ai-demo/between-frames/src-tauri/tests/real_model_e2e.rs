@@ -116,6 +116,8 @@ async fn real_model_deepseek_filename_curation() {
 
 async fn run_real_curation(goal: &str, filename_order: bool) {
     let config = require_real_config();
+    let provider = std::sync::Arc::new(agent::openai::OpenAiProvider::new(config));
+    let expected_identity = provider.identity();
     let temp = tempfile::tempdir().unwrap();
     let (db, project) = project_with_photos(temp.path(), 6).await;
 
@@ -139,9 +141,7 @@ async fn run_real_curation(goal: &str, filename_order: bool) {
     agent::runtime::AgentEngine::with_providers(
         db.clone(),
         std::sync::Arc::new(agent::provider::MockProvider),
-        Some(std::sync::Arc::new(agent::openai::OpenAiProvider::new(
-            config,
-        ))),
+        Some(provider),
     )
     .run(&task.id)
     .await
@@ -149,6 +149,34 @@ async fn run_real_curation(goal: &str, filename_order: bool) {
 
     let projection = agent::projection(&db, &project.id).await.unwrap();
     let task = projection.tasks.iter().find(|t| t.id == task.id).unwrap();
+    let binding: String = sqlx::query_scalar(
+        "SELECT body_json FROM agent_steps WHERE task_id=? AND kind='model_binding'",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let binding: agent::model_binding::ModelIdentity = serde_json::from_str(&binding).unwrap();
+    assert_eq!(binding, expected_identity, "实测任务须保存实际实例身份");
+    let checkpoint: String = sqlx::query_scalar(
+        "SELECT context_json FROM agent_checkpoints WHERE task_id=? ORDER BY id DESC LIMIT 1",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let checkpoint: serde_json::Value = serde_json::from_str(&checkpoint).unwrap();
+    assert_eq!(checkpoint["modelId"], binding.model_id);
+    assert_eq!(
+        checkpoint["modelIdentity"],
+        serde_json::to_value(&binding).unwrap()
+    );
+    assert_eq!(task.usage.cloud_images, 0, "纯元数据任务不发送图片");
+    eprintln!(
+        "实际模型绑定已核对：{}；Prompt：{}；图片发送：0",
+        binding.model_id,
+        agent::prompt_version(agent::PROVIDER_OPENAI)
+    );
     eprintln!("任务状态: {}", task.state);
     eprintln!(
         "停止原因: {}；预算用量: {}",

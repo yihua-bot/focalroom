@@ -1,3 +1,19 @@
+# 当前接续：M3 模型能力配置（2026-10-16）
+
+已补精确端点/模型能力目录、有界部署声明、组合能力要求和 Adapter 直接入口检查；恢复拒绝能力变化或旧无摘要绑定。界面阻止错误委托/授权但仍允许拒绝图像，纯文本真实任务不误标 Mock。151 桌面 Rust +11 云、169 Vitest、16 预览/6 后端及严格检查通过；独立 debug 构建通过。DeepSeek 新门槛无图任务 review_ready，3轮/4工具/13,907实际token/3美分估算；实际模型账本/checkpoint 一致。Prompt 仍 m3-openai-6，未改缓存键、迁移、用户库或 LUMIX 评审样本。M3 整体 partial，见 [本轮报告](V2-M3-CAPABILITIES-TEST-REPORT.md)、[配置说明](MODEL-CAPABILITIES.md)、ADR 0034。以下为历史切片。
+
+# 先前切片：M3 配置路由、任务恢复与缓存检索（2026-10-16）
+
+本轮 Prompt m3-openai-6、实际模型/端点身份绑定、检查点核对、旧 queued 失败退出、缓存端点隔离、可观察事实关键词检索已验收。144 桌面 Rust + 11 云、164 Vitest、16 预览/6 后端、契约/类型/Lint/fmt/严格 Clippy 全通过；DeepSeek 纯文件名回归 3轮/4工具/13,792 实际 token、3 美分估算、0 图片，独立 debug 构建通过。未启动用户库，未改变原 LUMIX 记录。M3 质量/语义索引/多 Adapter 仍 partial；见 [本轮报告](V2-M3-ROUTING-SEARCH-TEST-REPORT.md)、ADR 0033。以下为历史切片。
+
+# 当前接续：M3 AI 模拟评审和来源分离（2026-10-16）
+
+用户允许模拟真人；本轮真实页面录入/导出 2 条 AI 角色评语，0 真人，CLI 复核原 key/冻结材料并单独统计模拟分数。没有修改原批次、正式作品或审美记忆。15 项定向测试通过；见 [本轮报告](V2-M3-SIMULATED-REVIEW-TEST-REPORT.md) 和 ADR 0032。真实质量门槛仍单列，工程可继续。以下为历史切片。
+
+# 当前接续：M4 既有本地 API 边界修复（2026-10-16）
+
+仓库 9976b16 已新增 cloud/ axum/SQLite 服务，现修复单授权撤销误伤、Argon2id/摘要令牌/时限与注销、注册原子性、有界 JPEG 和新目录/进程重启。全量脚本通过：134 桌面 Rust + 11 云 HTTP/进程测试、159 Vitest、16 预览/6 后端、契约/类型/Lint/fmt/严格 Clippy。没有腾讯云部署、Postgres 权威或真实 Web 审稿；M3/M4 整体仍 partial。详见 [本轮报告](V2-M4-LOCAL-BOUNDARIES-TEST-REPORT.md)、[剩余计划](V2-REMAINING-PLAN.md)。以下为历史切片，原“无 API 代码”不再代表当前仓库。
+
 # 当前增量：M3 授权真实素材与离线评测（2026-10-16）
 
 80 张 LUMIX JPEG 的授权链路已实测，12 张抽样观察形成 8 张 keep 草案；正式项目和 80 源 hash 不变。保留前一失败，1 个探索任务/2 次调试运行，成功 run 84,203 实际 token、9 美分版本化费率估算，尚无真人质量验收。补齐预算内单轮输出、已核对端点费率、视觉档位预留、明确错误反馈及离线盲评/冻结材料。134 Rust、159 Vitest、16 预览、6 后端与严格检查通过，独立 debug 构建通过。完整结果、真实素材外发次数、失败与剩余工程见 [M3 报告](V2-M3-EVALUATION-TEST-REPORT.md)，全阶段缺口见 [剩余计划](V2-REMAINING-PLAN.md)。M3 整体 partial，M4 云 API 确认尚不存在；未修改原用户库或线上数据。以下为历史记录。

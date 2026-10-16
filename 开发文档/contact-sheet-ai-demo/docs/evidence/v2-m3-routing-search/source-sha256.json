@@ -1,0 +1,20 @@
+{
+  "src-tauri/src/agent/router.rs": "93f9f42a0bb618e8d0d695ad8a9ac07803541557ceb5849e1a43a163033b09c4",
+  "src-tauri/src/agent/model_binding.rs": "12bb28caa3e5be16201f72580d984c53c3f42e3968d2100976e8bfe209ef0571",
+  "src-tauri/src/agent/photo_search.rs": "328e01b4a06608c3b34fcdaafd35bb2722cee51faa9505e3e429a2e521054d77",
+  "src-tauri/src/agent/runtime.rs": "7c71c92bc6c3b38ebb410ea7962a86fc440cc6ab5f326a89716d8819a7470f8e",
+  "src-tauri/src/agent/openai.rs": "346fe052ab271a4e97857eac1f11a9baf670f3e6edfe9d135a5996be408a6460",
+  "src-tauri/src/agent/store.rs": "1af6c5590de491a1b2c278b86b230bd38e4d5d472811c9b2c9f2895056f94b77",
+  "src-tauri/src/agent/context.rs": "290f6b62179489fe6e69e87598bbd07b0852ef176f01a39e8803602535eec4db",
+  "src-tauri/src/agent/tools.rs": "cadead8901950f81474d53d1551e160f6a88154c2960f0bda5d8483c1a164c96",
+  "src-tauri/src/agent/vision.rs": "40b038ae661ef015081cc8b21b7c3dd151760d6c216444e7665b76aec9fc4bc2",
+  "src-tauri/src/agent/mod.rs": "aa5cef8d2e3ed43c99769458839ab04479216bcada829341e68db9c9aea21f83",
+  "src-tauri/tests/model_routing.rs": "2c284ee905c76423d92ab72d57dce9fdf5100767cb6a61e94faa40769068f59f",
+  "src-tauri/tests/photo_search.rs": "cc660bfddbc197ab2340f80601e6f6dea1b5eeeb012a49fbdac762d066f2ab2f",
+  "src-tauri/tests/agent_vision.rs": "54196da1a37a97030251bb78f0d41f50833090de88c8767712b8d383d99c55a6",
+  "src-tauri/tests/real_model_e2e.rs": "8ef5e8f2c045801709270c088ac43a5abd30aedaf2575a0198d5f56576d1f495",
+  "prompts/agent-system-m3.md": "ee2f6f636f701187a8cabae34634eedd38d6b674b97bff93511a85c49c860244",
+  "contracts/agent-tool-contracts.json": "6d1b81cb22a9ff8e7b6ef5f661577310389dfe962b8561b1b1783e83bd6ebbba",
+  "../docs/ADR/0033-m3-configured-model-and-cached-search.md": "a71463bce3c96289870c0863aa3f003dad907829c08e04ed6b0473ecb554f502",
+  "../docs/V2-M3-ROUTING-SEARCH-TEST-REPORT.md": "e5c7fcfd7afc8a1503d0eb272894f4c69fc872bc49434e4ccc29dae73931531f"
+}

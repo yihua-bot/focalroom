@@ -1,0 +1,19 @@
+{
+  "cloud/Cargo.toml": "6732935cd4e911401f52edd5b575196a6daef53352e23edac39a6836a3032706",
+  "cloud/Cargo.lock": "98de3a6145904d168aa13250404d368d167d7946dd782f107e838e6486bdb3f3",
+  "cloud/src/lib.rs": "f4cd5d46f9b739734785bf2b42957b2dfbe50f100e904478aab94d20c9d06c9a",
+  "cloud/src/handlers.rs": "32f38c5610ad94d945df4724f09c0a732a33be9fcfa8072d9944412e8126e9bf",
+  "cloud/src/auth.rs": "24e4c06d098dfb9168354f6f64c3279ae97fbeabb96f18e2ad5c8e5cbef3c2d0",
+  "cloud/src/error.rs": "458d3f36f660a62debb24f846b94e7e4d2aa4606ad9a136d4c08ca3d28c3fa8d",
+  "cloud/src/previews.rs": "943d19d7d50a63a882893014b05c8bcdb4d73da91a4580aa65b677a158b053af",
+  "cloud/src/main.rs": "6166d23e8ab070c59932bb85af0a1b7cceddf1d7814860bffbb936cd6de648d2",
+  "cloud/src/schema.rs": "395e83d73894ab2aa439e1dc77b69b45b60856f5e98a6211356688559a807052",
+  "cloud/tests/vertical_slice.rs": "b7740e74da5356ccf76449cf7ec9888e4546cb12459b8f1a2213cd96abc8b6b3",
+  "cloud/tests/security_boundaries.rs": "74ebd04f79436ef2eed3476df1e9f70b27ccd089358905d3ee301b3ac03c64e2",
+  "scripts/verify-cloud.sh": "eeb1f19577f8cb91904443bdae2b98d4b357f94eec54f29eb90befc02f558d67",
+  "scripts/verify-all.sh": "a2edf99d022fba8b8316766361cfac86d81e6d8c660d0d537ca53dce3deb43fd",
+  "package.json": "862dbfcb00e40095b46fe5292357513218f8f5bffe44785e8d198007aa16a6c3",
+  "cloud/README.md": "b7a43cf7bd14104b1cf995baca130e16ce2b71b7cdb28594cfa30a4deb2ddd9d",
+  "../docs/ADR/0031-m4-local-cloud-boundaries.md": "1e968b933e8f754ee58eb800780cec4c703aae2d61cd27e8ce0fcd6aafba2666",
+  "../docs/V2-M4-LOCAL-BOUNDARIES-TEST-REPORT.md": "c6ceccb242910fe83e5b2dcd95a9fda62cf4fc80f01e2597ba7b00fbea96f125"
+}

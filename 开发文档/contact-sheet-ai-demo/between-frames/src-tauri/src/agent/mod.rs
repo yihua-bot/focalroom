@@ -1,4 +1,5 @@
 pub mod billing;
+pub mod capabilities;
 mod cloud;
 pub mod comments;
 pub mod consent;
@@ -10,8 +11,10 @@ pub mod media_links;
 pub mod memory;
 pub mod memory_control;
 mod memory_search;
+pub mod model_binding;
 pub mod openai;
 pub mod org;
+mod photo_search;
 pub mod policy;
 pub mod pricing;
 pub mod promotion;
@@ -28,6 +31,22 @@ pub(crate) use drafts::human as apply_human_draft;
 use crate::{command_handler::CommandHandler, domain::Result};
 use types::*;
 impl CommandHandler<'_> {
+    pub(crate) async fn agent_bind_model(
+        &self,
+        id: &str,
+        identity: &model_binding::ModelIdentity,
+    ) -> Result<()> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let task = store::load(&mut tx, id).await?;
+        if task.state != "running" {
+            return Err(crate::domain::AppError::new("CANCELLED", "任务已停止"));
+        }
+        if model_binding::ensure(&mut tx, &task, identity).await? {
+            store::checkpoint(&mut tx, &task).await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
     pub(crate) async fn reserve_vision(
         &self,
         task: &str,
@@ -107,7 +126,7 @@ pub const MODEL_ID: &str = "metadata-mock-1";
 pub const PROVIDER_OPENAI: &str = "openai";
 pub fn prompt_version(provider: &str) -> &'static str {
     if provider == PROVIDER_OPENAI {
-        "m3-openai-5"
+        "m3-openai-6"
     } else {
         PROMPT_VERSION
     }

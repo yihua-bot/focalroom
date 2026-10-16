@@ -27,6 +27,9 @@
 <label>盲评材料（blind-pack.json）<input id="pack" type="file" accept=".json,application/json"></label>
 <label>本地 1400px 预览目录<input id="assets" type="file" webkitdirectory multiple></label></details>
 <label>评审者 ID<input id="reviewer" autocomplete="off" maxlength="160"></label>
+<label>评审来源<select id="reviewer-kind"><option value="unverified">请选择来源</option><option value="human">本人填写（真人）</option><option value="simulated_ai">AI 模拟评审</option></select></label>
+<label id="reviewer-model-label" hidden>模拟所用模型<input id="reviewer-model" autocomplete="off" maxlength="160" placeholder="填写实际模型或 AI 会话名称"></label>
+<p id="source-notice">请选择评审来源；未注明来源的记录不会计入真人质量评测。</p>
 <output id="status" role="status" aria-live="polite">尚未载入材料</output>
 <main id="workspace" hidden>
   <section>
@@ -37,7 +40,7 @@
     <div id="photos"></div>
   </section>
   <section>
-    <h2>独立评分</h2><p>1 分最低，5 分最高；请根据本任务目标判断，允许多套合理方案。</p>
+    <h2>候选评分</h2><p>1 分最低，5 分最高；请根据本任务目标判断，允许多套合理方案。</p>
     <div id="dimensions"></div>
     <label>抽查的可观察事实数量<input id="checked" type="number" min="0" step="1" value="0"></label>
     <label>其中错误数量<input id="incorrect" type="number" min="0" step="1" value="0"></label>
@@ -52,6 +55,14 @@
   const dimensions = [['visual_facts','图像事实'],['creative_intent','创作意图'],['sequence_rhythm','序列节奏'],['explanation','选择理由'],['collaboration','专业审稿价值']];
   let pack = null; let reviews = []; const assets = new Map();
   const tell = message => { $('status').textContent = message; };
+  function updateReviewSource() {
+    const kind = $('reviewer-kind').value;
+    $('reviewer-model-label').hidden = kind !== 'simulated_ai';
+    if (kind !== 'simulated_ai') $('reviewer-model').value = '';
+    $('source-notice').textContent = kind === 'simulated_ai' ? 'AI 模拟演练：单独汇总，不计作者或独立真人质量验收。多个模拟角色仍属于 AI 评审。'
+      : kind === 'human' ? '请由你本人填写并说明观察依据。作者与独立评审者需分别实际审阅。'
+      : '请选择评审来源；未注明来源的记录不会计入真人质量评测。';
+  }
   for (const [key,label] of dimensions) {
     const wrapper = document.createElement('label'); wrapper.textContent = label;
     const select = document.createElement('select'); select.id = key;
@@ -90,6 +101,9 @@
     item.photos.forEach((photo,index) => $('source').append(photoNode(photo.photoId,item.photos,index)));
     candidate?.orderedPhotoIds.forEach((id,index) => $('photos').append(photoNode(id,item.photos,index)));
     const previous = candidate && reviews.find(r => r.caseId === item.caseId && r.candidateId === candidate.candidateId && r.reviewerId === $('reviewer').value.trim());
+    const profile = previous || reviews.find(r => r.reviewerId === $('reviewer').value.trim());
+    if (profile) { $('reviewer-kind').value = profile.reviewerKind; $('reviewer-model').value = profile.reviewerModel ?? ''; }
+    updateReviewSource();
     for (const [key] of dimensions) $(key).value = previous ? String(previous.scores[key]) : '';
     $('reason').value = previous?.reason ?? ''; $('checked').value = previous?.factCheck.checkedClaims ?? 0; $('incorrect').value = previous?.factCheck.incorrectClaims ?? 0;
     $('save').disabled = !candidate;
@@ -101,7 +115,7 @@
     render();
   }
   function loadPack(value) {
-    if (value.protocolVersion !== 'bf-m3-eval-1' || !Array.isArray(value.cases) || value.cases.some(c => !Array.isArray(c.photos) || !Array.isArray(c.candidates))) throw new Error();
+    if (value.protocolVersion !== 'bf-m3-eval-1' || !/^[a-f0-9]{64}$/.test(value.packetId) || !Array.isArray(value.cases) || value.cases.some(c => !Array.isArray(c.photos) || !Array.isArray(c.candidates))) throw new Error();
     pack = value; $('cases').replaceChildren();
     for (const item of pack.cases) $('cases').add(new Option(item.caseId,item.caseId));
     $('workspace').hidden = false; selectCase();
@@ -120,21 +134,30 @@
     render(); tell(`已在本地载入 ${assets.size} 张预览。`);
   });
   $('cases').addEventListener('change',selectCase); $('candidates').addEventListener('change',render); $('reviewer').addEventListener('change',render);
+  $('reviewer-kind').addEventListener('change',updateReviewSource);
   $('close-loupe').addEventListener('click',() => $('loupe').close());
   $('save').addEventListener('click',() => {
     const [item,candidate] = current(); const reviewerId = $('reviewer').value.trim();
+    const reviewerKind = $('reviewer-kind').value;
+    const reviewerModel = reviewerKind === 'simulated_ai' ? $('reviewer-model').value.trim() : null;
     const scores = Object.fromEntries(dimensions.map(([key]) => [key,Number($(key).value)]));
     const checkedClaims = Number($('checked').value), incorrectClaims = Number($('incorrect').value); const reason = $('reason').value.trim();
     const loaded = candidate?.orderedPhotoIds.every(id => assets.has(item.photos.find(p => p.photoId === id)?.previewFilename));
     if (!item || !candidate || !loaded || !reviewerId || !reason || Object.values(scores).some(n => !Number.isInteger(n) || n < 1 || n > 5) || !Number.isInteger(checkedClaims) || !Number.isInteger(incorrectClaims) || incorrectClaims < 0 || checkedClaims < incorrectClaims) { tell('请载入候选预览，并完整填写评审者、五项评分、事实抽查数量和理由。'); return; }
+    if (!['human','simulated_ai'].includes(reviewerKind) || (reviewerKind === 'simulated_ai' && !reviewerModel)) { tell('请选择评审来源；AI 模拟还须填写实际模型名称。'); return; }
+    if (/\s/.test(reviewerId)) { tell('评审者 ID 不能包含空白字符。'); return; }
+    const profile = reviews.find(r => r.reviewerId === reviewerId);
+    if (profile && (profile.reviewerKind !== reviewerKind || profile.reviewerModel !== reviewerModel)) { tell('同一评审者 ID 的来源和模型不能更改；请为不同身份使用新 ID。'); return; }
     reviews = reviews.filter(r => !(r.caseId === item.caseId && r.candidateId === candidate.candidateId && r.reviewerId === reviewerId));
-    reviews.push({caseId:item.caseId,candidateId:candidate.candidateId,reviewerId,scores,reason,factCheck:{checkedClaims,incorrectClaims}});
+    reviews.push({packetId:pack.packetId,caseId:item.caseId,candidateId:candidate.candidateId,reviewerId,reviewerKind,reviewerModel,scores,reason,factCheck:{checkedClaims,incorrectClaims}});
     $('progress').textContent = `已记录 ${reviews.length} 条，请及时导出`; tell('当前候选评分已保存在页面内。');
   });
   $('export').addEventListener('click',() => {
     if (!reviews.length) { tell('尚无评分可导出。'); return; }
     const url = URL.createObjectURL(new Blob([JSON.stringify({reviews},null,2)],{type:'application/json'}));
-    const link = document.createElement('a'); link.href = url; link.download = 'blind-reviews.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
+    const link = document.createElement('a'); link.href = url;
+    link.download = reviews.every(r => r.reviewerKind === 'simulated_ai') ? 'simulated-ai-reviews.json' : reviews.some(r => r.reviewerKind === 'simulated_ai') ? 'mixed-source-reviews.json' : 'blind-reviews.json';
+    link.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
   });
   const embedded = $('embedded-data');
   if (embedded) {

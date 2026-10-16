@@ -3,7 +3,13 @@
 // 幻觉 photo_id 丢弃且配额按真实传输扣减、图像预算触顶暂停。
 use between_frames_lib::{
     agent::{
-        self, consent, openai::OpenAiConfig, openai::OpenAiProvider, runtime::AgentEngine, types::*,
+        self,
+        capabilities::{Capability, CapabilityProfile},
+        consent,
+        openai::OpenAiConfig,
+        openai::OpenAiProvider,
+        runtime::AgentEngine,
+        types::*,
     },
     command_handler::CommandHandler,
     db::Store,
@@ -790,6 +796,9 @@ fn main_response(body: &str, step: Option<String>) -> String {
         })
         .unwrap_or_default();
     match step.as_deref() {
+        Some("tool:search_cache") => envelope(
+            json!([{"type":"function_call","call_id":"call-search-cache","name":"search_photos","arguments":json!({"project_id":project_id,"query":"均匀背景","limit":10}).to_string()}]),
+        ),
         Some("tool:create_from_history") => {
             let text = parsed["input"][1]["content"][0]["text"].as_str().unwrap();
             let context: Value = serde_json::from_str(&text[text.find('{').unwrap()..]).unwrap();
@@ -1205,12 +1214,25 @@ fn engine(db: &Store, base_url: &str) -> AgentEngine {
     AgentEngine::with_providers(
         db.clone(),
         Arc::new(between_frames_lib::agent::provider::MockProvider),
-        Some(Arc::new(OpenAiProvider::new(OpenAiConfig {
+        Some(Arc::new(configured_provider(OpenAiConfig {
             base_url: base_url.into(),
             api_key: "test-key-abcd".into(),
             model: "test-model".into(),
         }))),
     )
+}
+fn configured_provider(config: OpenAiConfig) -> OpenAiProvider {
+    let profile = CapabilityProfile::declared(
+        &config.base_url,
+        &config.model,
+        &[
+            Capability::Vision,
+            Capability::ToolCalling,
+            Capability::StructuredOutput,
+            Capability::InstructionFollowing,
+        ],
+    );
+    OpenAiProvider::with_capability_profile(config, profile).unwrap()
 }
 fn image_requests(state: &State) -> usize {
     state
@@ -1226,6 +1248,485 @@ fn image_requests(state: &State) -> usize {
             })
         })
         .count()
+}
+
+#[tokio::test]
+async fn task_binding_survives_restart_rejects_endpoint_or_model_switch_and_allows_key_rotation() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    for change in ["endpoint", "model", "key", "capabilities"] {
+        let temp = tempfile::tempdir().unwrap();
+        let (db, project) = setup(temp.path(), 2).await;
+        grant(&db, &project, "project").await;
+        let (base, state) = spawn_server(Script {
+            main: vec!["metered:valid".into(), "text".into()],
+            vision: VisionReply::Valid,
+        });
+        let first_engine = engine(&db, &base);
+        assert_eq!(first_engine.ai_config().base_url, base);
+        assert_eq!(first_engine.ai_config().model_id, "test-model");
+        let task = CommandHandler::new(&db)
+            .agent_request(AgentRequest {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                command: TaskCommand::StartTask {
+                    goal: "测试模型身份恢复".into(),
+                    selected_photo_ids: vec![],
+                    target_count: 2,
+                    budget: Budget {
+                        max_model_turns: 1,
+                        max_cloud_images: 2,
+                        ..Budget::default()
+                    },
+                    consent_id: None,
+                },
+            })
+            .await
+            .unwrap();
+        first_engine.run(&task.id).await.unwrap();
+        assert_eq!(
+            agent::projection(&db, &project.id).await.unwrap().tasks[0].state,
+            "paused"
+        );
+        let checkpoint: String = sqlx::query_scalar(
+            "SELECT context_json FROM agent_checkpoints WHERE task_id=? ORDER BY id DESC LIMIT 1",
+        )
+        .bind(&task.id)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+        let checkpoint: Value = serde_json::from_str(&checkpoint).unwrap();
+        assert_eq!(checkpoint["modelId"], "test-model");
+        assert!(checkpoint["modelIdentity"]["endpointSha256"].is_string());
+        assert!(!checkpoint.to_string().contains(&base));
+        if change != "key" {
+            // 构造已持久化的待执行视觉调用；切换配置必须在回放/新上传之前被拒绝。
+            let pending = ModelOutcome::ToolCalls {
+                calls: vec![ToolCall {
+                    call_id: "pending-inspect".into(),
+                    name: "inspect_photos".into(),
+                    args: json!({"project_id":project.id,"photo_ids":project.photos.iter().map(|photo|photo.id.clone()).collect::<Vec<_>>()}),
+                }],
+            };
+            sqlx::query("UPDATE agent_tasks SET pending_json=? WHERE id=?")
+                .bind(serde_json::to_string(&pending).unwrap())
+                .bind(&task.id)
+                .execute(&db.pool)
+                .await
+                .unwrap();
+        }
+        db.pool.close().await;
+        let db = Store::open(&temp.path().join("projects.sqlite"))
+            .await
+            .unwrap();
+        CommandHandler::new(&db).recover_agents().await.unwrap();
+        CommandHandler::new(&db)
+            .agent_request(AgentRequest {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                command: TaskCommand::ResumeTask {
+                    task_id: task.id.clone(),
+                    budget: Budget {
+                        max_cloud_images: 2,
+                        ..Budget::default()
+                    },
+                },
+            })
+            .await
+            .unwrap();
+        let (new_base, new_state) = spawn_server(Script {
+            main: vec!["text".into()],
+            vision: VisionReply::Valid,
+        });
+        let config = OpenAiConfig {
+            base_url: if change == "endpoint" {
+                new_base
+            } else {
+                format!("{base}/")
+            },
+            model: if change == "model" {
+                "other-model"
+            } else {
+                "test-model"
+            }
+            .into(),
+            api_key: "rotated-test-key".into(),
+        };
+        let provider = if change == "capabilities" {
+            let profile = CapabilityProfile::declared(
+                &config.base_url,
+                &config.model,
+                &[Capability::ToolCalling, Capability::InstructionFollowing],
+            );
+            OpenAiProvider::with_capability_profile(config, profile).unwrap()
+        } else {
+            configured_provider(config)
+        };
+        let resumed = AgentEngine::with_providers(
+            db.clone(),
+            Arc::new(agent::provider::MockProvider),
+            Some(Arc::new(provider)),
+        );
+        let result = resumed.run(&task.id).await;
+        let view = agent::projection(&db, &project.id).await.unwrap();
+        let current = view.tasks.iter().find(|item| item.id == task.id).unwrap();
+        if change == "key" {
+            result.unwrap();
+            assert_eq!(current.state, "completed");
+            assert_eq!(state.lock().unwrap().requests.len(), 2);
+        } else {
+            assert_eq!(result.unwrap_err().code, "RECOVERY_ERROR");
+            assert_eq!(current.state, "failed");
+            assert_eq!(state.lock().unwrap().requests.len(), 1);
+            assert_eq!(current.usage.cloud_images, 0);
+        }
+        assert!(new_state.lock().unwrap().requests.is_empty());
+        let bindings: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM agent_steps WHERE task_id=? AND kind='model_binding'",
+        )
+        .bind(&task.id)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+        assert_eq!(bindings, 1);
+        assert_eq!(
+            serde_json::to_value(db.get(&project.id).await.unwrap()).unwrap(),
+            serde_json::to_value(&project).unwrap()
+        );
+    }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn legacy_unbound_executed_task_requires_redelegation_without_any_http() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let task = start_vision_task(&db, &project, vec![], 0, None).await;
+    sqlx::query(
+        "UPDATE agent_tasks SET usage_json=json_set(usage_json,'$.modelTurns',1) WHERE id=?",
+    )
+    .bind(&task.id)
+    .execute(&db.pool)
+    .await
+    .unwrap();
+    let (base, state) = spawn_server(Script {
+        main: vec!["text".into()],
+        vision: VisionReply::Valid,
+    });
+    assert_eq!(
+        engine(&db, &base).run(&task.id).await.unwrap_err().code,
+        "RECOVERY_ERROR"
+    );
+    assert!(state.lock().unwrap().requests.is_empty());
+    assert_eq!(
+        agent::projection(&db, &project.id).await.unwrap().tasks[0].state,
+        "failed"
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn obsolete_queued_checkpoint_fails_once_and_releases_the_project_for_redelegation() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let task = start_vision_task(&db, &project, vec![], 0, None).await;
+    sqlx::query("UPDATE agent_checkpoints SET context_json=json_set(context_json,'$.promptVersion','obsolete-prompt') WHERE task_id=?").bind(&task.id).execute(&db.pool).await.unwrap();
+    let (base, state) = spawn_server(Script {
+        main: vec!["text".into()],
+        vision: VisionReply::Valid,
+    });
+    assert_eq!(
+        engine(&db, &base).run(&task.id).await.unwrap_err().code,
+        "RECOVERY_ERROR"
+    );
+    assert_eq!(
+        agent::projection(&db, &project.id).await.unwrap().tasks[0].state,
+        "failed"
+    );
+    let replacement = start_vision_task(&db, &project, vec![], 0, None).await;
+    assert_ne!(replacement.id, task.id);
+    assert!(state.lock().unwrap().requests.is_empty());
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn unknown_model_profile_stops_before_any_http_or_budget_reservation() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let task = start_vision_task(&db, &project, vec![], 0, None).await;
+    let (base, state) = spawn_server(Script {
+        main: vec!["text".into()],
+        vision: VisionReply::Valid,
+    });
+    let provider = Arc::new(OpenAiProvider::new(OpenAiConfig {
+        base_url: base,
+        model: "gpt-4o-mini".into(),
+        api_key: "test-key-abcd".into(),
+    }));
+    let engine = AgentEngine::with_providers(
+        db.clone(),
+        Arc::new(agent::provider::MockProvider),
+        Some(provider.clone()),
+    );
+    let config = engine.ai_config();
+    assert!(config.ready, "密钥已配置不能冒充模型能力已满足");
+    assert!(config.configuration_error.is_some());
+    assert!(config.capabilities.is_empty());
+    assert_eq!(
+        engine.run(&task.id).await.unwrap_err().code,
+        "MODEL_CAPABILITY_MISSING"
+    );
+    assert!(state.lock().unwrap().requests.is_empty());
+    let projection = agent::projection(&db, &project.id).await.unwrap();
+    assert_eq!(projection.tasks[0].state, "failed");
+    assert_eq!(projection.tasks[0].usage.model_turns, 0);
+    assert_eq!(projection.tasks[0].usage.cloud_images, 0);
+    assert_eq!(projection.tasks[0].usage.cost_minor_usd, 0);
+    let request = agent::context::ContextBuilder::build(&db, &task.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        agent::provider::ModelProvider::generate_metered(&*provider, &request)
+            .await
+            .err()
+            .unwrap()
+            .code,
+        "MODEL_CAPABILITY_MISSING"
+    );
+    assert!(state.lock().unwrap().requests.is_empty());
+    assert_eq!(
+        serde_json::to_value(db.get(&project.id).await.unwrap()).unwrap(),
+        serde_json::to_value(project).unwrap()
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn text_only_profile_cannot_upload_images_even_with_project_consent_or_direct_observe() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    for capabilities in [
+        vec![Capability::ToolCalling, Capability::InstructionFollowing],
+        vec![
+            Capability::ToolCalling,
+            Capability::InstructionFollowing,
+            Capability::Vision,
+        ],
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let (db, project) = setup(temp.path(), 2).await;
+        let consent = grant(&db, &project, "project").await;
+        let task = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
+        let (base, state) = spawn_server(Script {
+            main: vec![
+                "tool:list_photos".into(),
+                "tool:inspect_from_history".into(),
+            ],
+            vision: VisionReply::Valid,
+        });
+        let profile = CapabilityProfile::declared(&base, "limited", &capabilities);
+        let provider = Arc::new(
+            OpenAiProvider::with_capability_profile(
+                OpenAiConfig {
+                    base_url: base,
+                    model: "limited".into(),
+                    api_key: "test-key-abcd".into(),
+                },
+                profile,
+            )
+            .unwrap(),
+        );
+        assert!(
+            provider.configuration_error().is_none(),
+            "工具编排可以继续，视觉须独立过滤"
+        );
+        let engine = AgentEngine::with_providers(
+            db.clone(),
+            Arc::new(agent::provider::MockProvider),
+            Some(provider.clone()),
+        );
+        assert_eq!(
+            engine.run(&task.id).await.unwrap_err().code,
+            "MODEL_CAPABILITY_MISSING"
+        );
+        assert_eq!(image_requests(&state.lock().unwrap()), 0);
+        let prior = state.lock().unwrap().requests.len();
+        let request = agent::context::ContextBuilder::build(&db, &task.id)
+            .await
+            .unwrap();
+        // Adapter 的直接入口也不能绕过能力门槛。
+        assert_eq!(
+            provider
+                .observe(
+                    "test",
+                    "test",
+                    &[("fake-photo".into(), "fake-image".into())],
+                    128
+                )
+                .await
+                .unwrap_err()
+                .code,
+            "MODEL_CAPABILITY_MISSING"
+        );
+        assert_eq!(state.lock().unwrap().requests.len(), prior);
+        assert_eq!(request.task.usage.cloud_images, 0);
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT used FROM privacy_consents WHERE id=?")
+                .bind(consent.id)
+                .fetch_one(&db.pool)
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM photo_observations")
+                .fetch_one(&db.pool)
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            serde_json::to_value(db.get(&project.id).await.unwrap()).unwrap(),
+            serde_json::to_value(project).unwrap()
+        );
+    }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn legacy_binding_without_capability_fingerprint_requires_new_delegation() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let task = start_vision_task(&db, &project, vec![], 0, None).await;
+    let (base, state) = spawn_server(Script {
+        main: vec!["text".into()],
+        vision: VisionReply::Valid,
+    });
+    let mut identity = serde_json::to_value(
+        configured_provider(OpenAiConfig {
+            base_url: base.clone(),
+            model: "test-model".into(),
+            api_key: "test-key-abcd".into(),
+        })
+        .identity(),
+    )
+    .unwrap();
+    identity
+        .as_object_mut()
+        .unwrap()
+        .remove("capabilityProfileSha256");
+    // 只向临时夹具追加上一版合法形状，不改不可变回执/历史触发器。
+    sqlx::query("INSERT INTO agent_steps(task_id,kind,body_json,summary,created_at) VALUES(?,'model_binding',?,'legacy binding',?)")
+        .bind(&task.id).bind(identity.to_string()).bind(domain::timestamp()).execute(&db.pool).await.unwrap();
+    assert_eq!(
+        engine(&db, &base).run(&task.id).await.unwrap_err().code,
+        "RECOVERY_ERROR"
+    );
+    assert!(state.lock().unwrap().requests.is_empty());
+    assert_eq!(
+        agent::projection(&db, &project.id).await.unwrap().tasks[0].state,
+        "failed"
+    );
+    assert!(start_vision_task(&db, &project, vec![], 0, None).await.id != task.id);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn observation_cache_is_scoped_to_endpoint_even_when_model_alias_matches() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let consent = grant(&db, &project, "project").await;
+    let script = || Script {
+        main: ["tool:list_photos", "tool:inspect_from_history", "text"]
+            .repeat(2)
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        vision: VisionReply::Valid,
+    };
+    let (a, state_a) = spawn_server(script());
+    let (b, state_b) = spawn_server(script());
+    for base in [&a, &b, &b] {
+        let task = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
+        engine(&db, base).run(&task.id).await.unwrap();
+    }
+    assert_eq!(image_requests(&state_a.lock().unwrap()), 1);
+    assert_eq!(
+        image_requests(&state_b.lock().unwrap()),
+        1,
+        "新端点不能命中旧端点缓存，同端点新任务可复用"
+    );
+    let versions: Vec<String> =
+        sqlx::query_scalar("SELECT DISTINCT prompt_version FROM photo_observations")
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(versions.len(), 2);
+    assert!(
+        versions
+            .iter()
+            .all(|value| value.starts_with(&format!("{}@", agent::vision::VISION_PROMPT_VERSION)))
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn cloud_search_reads_only_current_bound_endpoint_facts_without_image_transfers() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let consent = grant(&db, &project, "project").await;
+    let (a, state_a) = spawn_server(Script {
+        main: [
+            "tool:list_photos",
+            "tool:inspect_from_history",
+            "text",
+            "tool:search_cache",
+            "text",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        vision: VisionReply::Valid,
+    });
+    let (b, state_b) = spawn_server(Script {
+        main: ["tool:search_cache", "text"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let first = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
+    engine(&db, &a).run(&first.id).await.unwrap();
+    for (base, count) in [(&b, 0), (&a, 2)] {
+        let task = start_vision_task(&db, &project, vec![], 0, None).await;
+        engine(&db, base).run(&task.id).await.unwrap();
+        let raw: String = sqlx::query_scalar(
+            "SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name='search_photos'",
+        )
+        .bind(&task.id)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+        let reply: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(reply["ok"], true);
+        assert_eq!(reply["result"]["photos"].as_array().unwrap().len(), count);
+        assert_eq!(reply["result"]["new_uploads"], 0);
+    }
+    assert_eq!(image_requests(&state_a.lock().unwrap()), 1);
+    assert_eq!(image_requests(&state_b.lock().unwrap()), 0);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
 }
 
 #[tokio::test]

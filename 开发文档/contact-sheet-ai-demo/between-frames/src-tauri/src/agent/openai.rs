@@ -18,6 +18,7 @@ pub struct OpenAiProvider {
     base_url: String,
     api_key: String,
     model: String,
+    profile: Result<super::capabilities::ResolvedProfile>,
 }
 pub struct OpenAiConfig {
     pub base_url: String,
@@ -54,18 +55,88 @@ impl OpenAiConfig {
 }
 impl OpenAiProvider {
     pub fn new(config: OpenAiConfig) -> Self {
+        let profile = super::capabilities::resolve(&config.base_url, &config.model);
+        Self::build(config, profile)
+    }
+    /// 可信部署端或测试显式注入；仍须与实例端点和模型完全匹配。
+    pub fn with_capability_profile(
+        config: OpenAiConfig,
+        profile: super::capabilities::CapabilityProfile,
+    ) -> Result<Self> {
+        profile.validate(&config.base_url, &config.model)?;
+        Ok(Self::build(
+            config,
+            Ok(super::capabilities::ResolvedProfile {
+                profile,
+                source: "operator_declaration",
+            }),
+        ))
+    }
+    fn build(config: OpenAiConfig, profile: Result<super::capabilities::ResolvedProfile>) -> Self {
         Self {
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(120))
                 .build()
                 .expect("reqwest client"),
-            base_url: config.base_url,
+            base_url: config.base_url.trim().trim_end_matches('/').to_owned(),
             api_key: config.api_key,
             model: config.model,
+            profile,
         }
     }
     pub fn model_id(&self) -> &str {
         &self.model
+    }
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+    pub fn api_key_tail(&self) -> String {
+        crate::keychain::tail(&self.api_key)
+    }
+    pub(crate) fn matches_key(&self, key: &str) -> bool {
+        self.api_key == key
+    }
+    pub fn route(&self) -> Result<super::router::Route> {
+        let profile = self
+            .profile
+            .as_ref()
+            .map_err(|error| AppError::new(&error.code, &error.message))?;
+        Ok(super::router::Route::responses(
+            &self.model,
+            profile.profile.names(),
+        ))
+    }
+    pub fn capability_source(&self) -> Option<&'static str> {
+        self.profile.as_ref().ok().map(|profile| profile.source)
+    }
+    pub fn configuration_error(&self) -> Option<String> {
+        self.require_capabilities(super::router::TaskType::AgentOrchestrate)
+            .err()
+            .map(|error| error.message)
+    }
+    fn require_capabilities(&self, task: super::router::TaskType) -> Result<()> {
+        let required = super::router::required_capabilities(task);
+        let route = self.route()?;
+        if required.iter().all(|cap| route.capabilities.contains(cap)) {
+            Ok(())
+        } else {
+            Err(AppError::new(
+                "MODEL_CAPABILITY_MISSING",
+                "当前模型能力配置不支持该请求；未发送数据或切换提供方",
+            ))
+        }
+    }
+    pub fn identity(&self) -> super::model_binding::ModelIdentity {
+        super::model_binding::ModelIdentity {
+            provider_id: super::PROVIDER_OPENAI.into(),
+            model_id: self.model.clone(),
+            endpoint_sha256: super::capabilities::endpoint_sha256(&self.base_url),
+            capability_profile_sha256: self
+                .profile
+                .as_ref()
+                .ok()
+                .map(|profile| profile.profile.sha256()),
+        }
     }
     pub fn rate_card(&self) -> super::pricing::RateCard {
         super::pricing::RateCard::for_endpoint(&self.base_url, &self.model)
@@ -173,6 +244,7 @@ impl OpenAiProvider {
         images: &[(String, String)], // (photo_id, base64 jpeg)
         max_output_tokens: u32,
     ) -> Result<(Value, u32)> {
+        self.require_capabilities(super::router::TaskType::VisionObserve)?;
         let mut content = vec![json!({
             "type": "input_text",
             "text": format!("项目意图：{}\n观察问题：{}\n共 {} 张照片，每张图像前一行标注其 photo_id；输出时原样引用。", brief, question, images.len()),
@@ -306,6 +378,7 @@ impl ModelProvider for OpenAiProvider {
         input: &'a ModelTurnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<super::provider::ModelTurnResult>> + Send + 'a>> {
         Box::pin(async move {
+            self.require_capabilities(super::router::TaskType::AgentOrchestrate)?;
             let body = self.turn_body(input);
             let response = self.post(&body).await?;
             let usage = reported_usage(&response, &self.model)?;

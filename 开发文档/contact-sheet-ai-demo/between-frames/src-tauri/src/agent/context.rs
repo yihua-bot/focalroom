@@ -63,6 +63,19 @@ impl ContextBuilder {
                 "执行版本已变，请基于新版本重新委托",
             ));
         }
+        let identity = super::model_binding::load(&mut tx, id).await?;
+        if checkpoint.get("modelIdentity").is_some_and(|value| {
+            !value.is_null()
+                && Some(value.clone())
+                    != identity
+                        .as_ref()
+                        .map(|value| serde_json::to_value(value).unwrap())
+        }) {
+            return Err(AppError::new(
+                "RECOVERY_ERROR",
+                "检查点模型身份与任务绑定不一致，请重新委托",
+            ));
+        }
         let mut protocol: Vec<ProtocolMessage> =
             serde_json::from_value(checkpoint["protocol"].clone())
                 .map_err(crate::command_audit::serialization)?;

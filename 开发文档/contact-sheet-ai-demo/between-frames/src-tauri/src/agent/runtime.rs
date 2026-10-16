@@ -59,11 +59,19 @@ impl AgentEngine {
                     provider_id: super::PROVIDER_OPENAI.into(),
                     model_id: provider.model_id().into(),
                     ready: true,
-                    api_key_tail: resolved.as_ref().map(|(key, _)| crate::keychain::tail(key)),
-                    key_source: resolved.as_ref().map(|(_, source)| (*source).to_owned()),
-                    base_url: std::env::var(super::openai::BASE_URL_ENV)
-                        .unwrap_or_else(|_| super::openai::DEFAULT_BASE_URL.into()),
+                    api_key_tail: Some(provider.api_key_tail()),
+                    key_source: resolved
+                        .as_ref()
+                        .filter(|(key, _)| provider.matches_key(key))
+                        .map(|(_, source)| (*source).to_owned()),
+                    base_url: provider.base_url().into(),
                     prompt_version: super::prompt_version(super::PROVIDER_OPENAI).into(),
+                    capabilities: provider
+                        .route()
+                        .map(|route| route.capabilities.into_iter().map(str::to_owned).collect())
+                        .unwrap_or_default(),
+                    capability_source: provider.capability_source().map(str::to_owned),
+                    configuration_error: provider.configuration_error(),
                 }
             }
             None => AiConfig {
@@ -74,6 +82,9 @@ impl AgentEngine {
                 key_source: None,
                 base_url: String::new(),
                 prompt_version: super::PROMPT_VERSION.into(),
+                capabilities: vec![],
+                capability_source: None,
+                configuration_error: None,
             },
         }
     }
@@ -94,7 +105,14 @@ impl AgentEngine {
                 image_consent: false,
             },
             &task.provider_id,
-            self.openai.is_some(),
+            if task.provider_id == super::PROVIDER_OPENAI {
+                self.openai
+                    .as_ref()
+                    .map(|provider| provider.route())
+                    .transpose()?
+            } else {
+                None
+            },
         )?;
         match route.provider_id.as_str() {
             super::PROVIDER_OPENAI => self
@@ -178,6 +196,15 @@ impl AgentEngine {
             if input.task.state != "running" {
                 return Ok(());
             }
+            if input.task.provider_id == super::PROVIDER_OPENAI {
+                let provider = self
+                    .openai
+                    .as_ref()
+                    .ok_or_else(|| AppError::new("MODEL_CAPABILITY_MISSING", "云端提供方不可用"))?;
+                handler.agent_bind_model(id, &provider.identity()).await?;
+                input.layers["execution"]["modelId"] = provider.model_id().into();
+                input.layers["execution"]["modelQuality"] = "unmeasured".into();
+            }
             if let Some(outcome) = input.task.pending.clone() {
                 match outcome {
                     ModelOutcome::ToolCalls { calls } => {
@@ -244,6 +271,7 @@ impl AgentEngine {
             let rate = self
                 .openai
                 .as_ref()
+                .filter(|_| input.task.provider_id == super::PROVIDER_OPENAI)
                 .map(|p| p.rate_card())
                 .unwrap_or_default();
             input.layers["execution"]["rateCard"] = serde_json::to_value(rate).unwrap();

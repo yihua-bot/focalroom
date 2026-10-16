@@ -28,8 +28,9 @@ function corpus(): EvaluationInput {
     cloudPreviewProvider: 'deepseek',
   })));
   const input: EvaluationInput = { protocolVersion: 'bf-m3-eval-1', datasetId: 'unit-fixture-not-real-evidence', registeredRunIds: runs.map(r => r.id), tasks, runs, reviews: [] };
-  input.reviews = createBlindPack(input, 'fixed-test-seed').privateKey.flatMap(k => ['photographer', 'independent'].map(reviewerId => ({
-    caseId: k.caseId, candidateId: k.candidateId, reviewerId,
+  const pack = createBlindPack(input, 'fixed-test-seed');
+  input.reviews = pack.privateKey.flatMap(k => ['photographer', 'independent'].map(reviewerId => ({
+    caseId: k.caseId, candidateId: k.candidateId, reviewerId, packetId: pack.publicPack.packetId, reviewerKind: 'human' as const, reviewerModel: null,
     scores: { visual_facts: 4, creative_intent: 3, sequence_rhythm: 2, explanation: 5, collaboration: 4 },
     reason: 'Test-only verifiable observation; not a real review.', factCheck: { checkedClaims: 2, incorrectClaims: 1 },
   })));
@@ -116,12 +117,100 @@ describe('M3 evidence evaluation', () => {
     const key = join(output, 'private-key.json');
     const saved = JSON.parse(readFileSync(key, 'utf8')) as { seed: string };
     const pack = createBlindPack(input, saved.seed);
-    input.reviews = pack.privateKey.flatMap(k => ['photographer', 'independent'].map(reviewerId => ({ caseId: k.caseId, candidateId: k.candidateId, reviewerId, scores: { visual_facts: 4, creative_intent: 3, sequence_rhythm: 2, explanation: 5, collaboration: 4 }, reason: 'test observation', factCheck: { checkedClaims: 0, incorrectClaims: 0 } })));
+    input.reviews = pack.privateKey.flatMap(k => ['photographer', 'independent'].map(reviewerId => ({ caseId: k.caseId, candidateId: k.candidateId, reviewerId, packetId: pack.publicPack.packetId, reviewerKind: 'human' as const, reviewerModel: null, scores: { visual_facts: 4, creative_intent: 3, sequence_rhythm: 2, explanation: 5, collaboration: 4 }, reason: 'test observation', factCheck: { checkedClaims: 0, incorrectClaims: 0 } })));
     writeFileSync(source, JSON.stringify(input));
     expect(run(source, join(directory, 'without-key')).status).toBe(1);
     execFileSync(process.execPath, [cli, source, join(directory, 'reviewed'), key]);
     input.runs.pop(); writeFileSync(source, JSON.stringify(input));
     expect(run(source, join(directory, 'changed'), key).status).toBe(1);
     expect(JSON.parse(readFileSync(join(output, 'report.json'), 'utf8')).status).toBe('partial');
+  });
+  it('keeps simulated author/editor roles out of human gates, facts and scores', () => {
+    const input = corpus();
+    for (const review of input.reviews) { review.reviewerKind = 'simulated_ai'; review.reviewerModel = 'test-model'; }
+    const report = evaluate(input, 'fixed-test-seed').report;
+    expect(report.status).toBe('partial');
+    expect(report.reviewSources).toEqual({ human: 0, simulatedAi: 180, unverified: 0, conflicted: 0 });
+    expect(report.issues.filter(i => i.code === 'NEED_AUTHOR_AND_INDEPENDENT_REVIEW')).toHaveLength(90);
+    expect(report.dimensions.visual_facts).toEqual({ mean: null, count: 0 });
+    expect(report.visualFactError).toEqual({ checkedClaims: 0, incorrectClaims: 0, rate: null });
+    expect(report.simulation.dimensions.visual_facts).toEqual({ mean: 4, count: 180 });
+    expect(report.simulation.visualFactError).toEqual({ checkedClaims: 360, incorrectClaims: 180, rate: .5 });
+    expect(report.simulation.isHumanQualityEvidence).toBe(false);
+  });
+  it('does not silently upgrade legacy or contradictory reviewer identities to human evidence', () => {
+    const input = corpus();
+    for (const review of input.reviews) { Reflect.deleteProperty(review, 'reviewerKind'); Reflect.deleteProperty(review, 'reviewerModel'); }
+    const report = evaluate(input, 'fixed-test-seed').report;
+    expect(report.reviewSources.unverified).toBe(180);
+    expect(report.reviewSources.human).toBe(0);
+    expect(report.issues.some(i => i.code === 'REVIEW_SOURCE_UNVERIFIED')).toBe(true);
+    const conflict = corpus();
+    conflict.reviews[0].reviewerKind = 'simulated_ai'; conflict.reviews[0].reviewerModel = 'test-model';
+    const conflictingReport = evaluate(conflict, 'fixed-test-seed').report;
+    expect(conflictingReport.issues.some(i => i.code === 'REVIEWER_PROVENANCE_CONFLICT')).toBe(true);
+    expect(conflictingReport.reviewSources.conflicted).toBe(90);
+    expect(conflictingReport.reviewSources.human).toBe(90);
+    const invalid = corpus(); invalid.reviews[0].reviewerModel = 'model-on-human-record';
+    expect(() => evaluate(invalid, 'fixed-test-seed')).toThrow();
+    invalid.reviews[0].reviewerKind = 'simulated_ai'; invalid.reviews[0].reviewerModel = null;
+    expect(() => evaluate(invalid, 'fixed-test-seed')).toThrow();
+  });
+  it('preserves genuine human metrics when additional simulated reviews are present', () => {
+    const input = corpus();
+    input.reviews.push(...input.reviews.filter(r => r.reviewerId === 'photographer').map(r => ({ ...r, reviewerId: 'ai-editor', reviewerKind: 'simulated_ai' as const, reviewerModel: 'test-model', scores: { visual_facts: 1, creative_intent: 1, sequence_rhythm: 1, explanation: 1, collaboration: 1 } })));
+    const report = evaluate(input, 'fixed-test-seed').report;
+    expect(report.status).toBe('ready_for_human_release_review');
+    expect(report.reviewSources).toEqual({ human: 180, simulatedAi: 90, unverified: 0, conflicted: 0 });
+    expect(report.dimensions.visual_facts).toEqual({ mean: 4, count: 180 });
+    expect(report.scoreByRun[0].dimensions.visual_facts.count).toBe(2);
+    expect(report.simulation.scoreByRun[0].dimensions.visual_facts.count).toBe(1);
+    expect(report.simulation.dimensions.visual_facts.mean).toBe(1);
+  });
+  it('CLI imports exported simulated reviews with the original key without editing frozen source data', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'bf-simulated-review-'));
+    const source = join(directory, 'input.json'); const initial = join(directory, 'initial');
+    const input = corpus(); input.reviews = [];
+    const original = JSON.stringify(input); writeFileSync(source, original);
+    const cli = resolve('tools/agent-eval/cli.ts');
+    const run = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+    expect(run(source, initial).status).toBe(2);
+    const key = join(initial, 'private-key.json');
+    const saved = JSON.parse(readFileSync(key, 'utf8')) as { seed: string };
+    const pack = createBlindPack(input, saved.seed);
+    const candidate = pack.privateKey[0];
+    const exported = join(directory, 'simulated-ai-reviews.json');
+    writeFileSync(exported, JSON.stringify({ reviews: ['photographer', 'ai-editor'].map(reviewerId => ({
+      caseId: candidate.caseId, candidateId: candidate.candidateId, reviewerId, packetId: pack.publicPack.packetId,
+      reviewerKind: 'simulated_ai', reviewerModel: 'test-only-model',
+      scores: { visual_facts: 3, creative_intent: 3, sequence_rhythm: 3, explanation: 3, collaboration: 3 },
+      reason: 'Test-only AI simulation.', factCheck: { checkedClaims: 1, incorrectClaims: 0 },
+    })) }));
+    expect(run(source, join(directory, 'no-key'), '--reviews', exported).status).toBe(1);
+    const result = run(source, join(directory, 'simulated'), key, '--reviews', exported);
+    expect(result.status).toBe(2);
+    const report = JSON.parse(readFileSync(join(directory, 'simulated/report.json'), 'utf8'));
+    expect(report.reviewSources).toEqual({ human: 0, simulatedAi: 2, unverified: 0, conflicted: 0 });
+    expect(report.dimensions.visual_facts.mean).toBeNull();
+    expect(readFileSync(source, 'utf8')).toBe(original);
+    const repeated = join(directory, 'repeated');
+    expect(run(source, repeated, key, '--reviews', exported, '--reviews', exported).status).toBe(2);
+    expect(JSON.parse(readFileSync(join(repeated, 'report.json'), 'utf8')).issues.some((issue: { code: string }) => issue.code === 'DUPLICATE_REVIEW')).toBe(true);
+    input.runs[0].orderedPhotoIds.reverse(); writeFileSync(source, JSON.stringify(input));
+    expect(run(source, join(directory, 'changed'), key, '--reviews', exported).status).toBe(1);
+  });
+  it('rejects reviews from another frozen packet even when anonymous case/candidate aliases match', () => {
+    const input = corpus();
+    const original = createBlindPack(input, 'fixed-test-seed').publicPack;
+    const other = createBlindPack(input, 'another-seed').publicPack;
+    expect(original.cases[0].caseId).toBe(other.cases[0].caseId);
+    expect(original.cases[0].candidates[0].candidateId).toBe(other.cases[0].candidates[0].candidateId);
+    expect(original.packetId).not.toBe(other.packetId);
+    const report = evaluate(input, 'another-seed').report;
+    expect(report.status).toBe('partial');
+    expect(report.reviewSources.human).toBe(0);
+    expect(report.issues.filter(i => i.code === 'REVIEW_BATCH_MISSING_OR_MISMATCH')).toHaveLength(180);
+    for (const review of input.reviews) Reflect.deleteProperty(review, 'packetId');
+    expect(codes(input)).toContain('REVIEW_BATCH_MISSING_OR_MISMATCH');
   });
 });
