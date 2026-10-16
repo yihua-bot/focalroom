@@ -52,8 +52,8 @@ impl CommandHandler<'_> {
     pub async fn recover_agents(&self) -> Result<()> {
         lifecycle::recover(self.store).await
     }
-    pub(crate) async fn agent_attempt(&self, id: &str, input: u32) -> Result<()> {
-        execution::attempt(self.store, id, input).await
+    pub(crate) async fn agent_attempt(&self, id: &str, input: u32, cost_limit: u32) -> Result<()> {
+        execution::attempt(self.store, id, input, cost_limit).await
     }
     pub(crate) async fn agent_elapsed(&self, id: &str, elapsed: u64) -> Result<()> {
         execution::elapsed(self.store, id, elapsed).await
@@ -64,11 +64,12 @@ impl CommandHandler<'_> {
     pub(crate) async fn agent_outcome(
         &self,
         id: &str,
-        o: ModelOutcome,
+        o: provider::ModelTurnResult,
         input: u32,
         elapsed: u64,
+        cost_limit: u32,
     ) -> Result<()> {
-        execution::outcome(self.store, id, o, input, elapsed).await
+        execution::outcome(self.store, id, o, input, elapsed, cost_limit).await
     }
     pub async fn agent_tool(
         &self,
@@ -96,7 +97,7 @@ pub const MODEL_ID: &str = "metadata-mock-1";
 pub const PROVIDER_OPENAI: &str = "openai";
 pub fn prompt_version(provider: &str) -> &'static str {
     if provider == PROVIDER_OPENAI {
-        "m3-openai-1"
+        "m3-openai-2"
     } else {
         PROMPT_VERSION
     }

@@ -1,5 +1,7 @@
 # v2.0 规格符合性总账（24 验收场景映射）
 
+**2026-10-16 复核说明**：文末历史“真实模型双通过”采用的旧测试允许暂停、等待输入、零草案及非空 JSON，不能证明可审阅任务完成或严格视觉结构。现已修复生产响应/缓存校验与验收门槛，见 [本轮报告](V2-AGENT-VALIDATION-TEST-REPORT.md)；新门槛未执行真实服务验收。主循环现有记录是预算估算，非提供方实测 token。总账仍为 17 pass / 7 partial（限各行声明的验证层级），不代表 M3 摄影质量、共享服务或产品整体完成。M1 最新格式证据见 [CR2 报告](V2-M1-CR2-PREVIEW-TEST-REPORT.md)。
+
 日期：2026-10-15。基线：`33e5ff9` + ADR 0023 评审修复与 ADR 0024 的 M1 GUI 验收（未提交工作区）。对照 `BetweenFrames-v2.0-Implementation-Kit/tests/acceptance-matrix.json`。状态：**pass**（自动化证据）、**partial**（本地/模拟层验证，云或真模型层待外部）、**missing**（依赖未建基础设施）。
 
 | ID | 场景 | 状态 | 证据 |
@@ -70,3 +72,11 @@ R1–R3 已修复，见 [当前报告](V2-M1-REVIEW-FIXES-TEST-REPORT.md) 与 AD
 - **M3 真实模型 E2E 通过**（`301f0c1`）：DeepSeek（OpenAI 兼容 Responses API）跑完整 Agent 任务循环——真实工具调用、草案校验、Agent 不改正式序列、API key 零泄漏全部断言通过。测试 `real_model_e2e.rs`（#[ignore]，需真实 key）。
 - **工具 schema 兼容修复**：`model_specs` 补 `type: "function"` 字段——标准 Responses API 与 DeepSeek/Qwen 等 OpenAI 兼容端点必需。
 - 剩余：真实视觉观察（DeepSeek deepseek-chat 已支持视觉输入，下一轮测试）、token 费用精确校准、竞品对比。
+
+### 增量记录（2026-10-15 第六轮：真实资源接入）
+
+- **macOS Developer ID 签名**：Developer ID Application (KXSFCZF4S3) + 时间戳 + 运行时加固 + strict 验证；zip 分发格式就绪（公证待 Apple ID）。
+- **真实模型 E2E 双通过**：Agent 任务循环（needs_input 终态 + 7 工具调用）+ 视觉观察（731 tokens + 严格 JSON schema）。
+- **B01/B02 真实 Polar secret**：HMAC 签发/验签/重放幂等/篡改拒绝全部通过真实 Polar webhook secret（polar_whs_...格式）验证。
+- **腾讯云 PostgreSQL**：16.14 + pgvector，betweenframes 库就绪于南京服务器。
+- 工具 schema 兼容修复：type: function 字段使 OpenAI provider 兼容 DeepSeek/Qwen 等全部 OpenAI 兼容端点。

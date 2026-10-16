@@ -2,6 +2,8 @@
 
 给后续在此仓库工作的编码 Agent 与工程师。先读 `../docs/TEST-REPORT.md`（当前状态）与 `../README.md`，再按需深入。
 
+当前增量（2026-10-16）：先读 `../docs/V2-AGENT-VALIDATION-TEST-REPORT.md` 与 `../docs/V2-M1-CR2-PREVIEW-TEST-REPORT.md`。用户已授权继续推进；本轮修复既有 Agent 响应/缓存校验与真实测试假通过条件，不代表新增服务或 M1/M3 整体通过。新响应必须经本地 observation schema + ID 唯一性检查；缓存必须结构合法且 ID 匹配。真实任务验收须有预算内可审阅草案，暂停/等待输入/零草案不计完成；直接 observe 只属 Provider 冒烟。主循环计量仍为预算估算。完整 RAW 显影不扩展为 P0 阻塞项；后续优先授权素材质量评测。下方阶段入口及计数保留历史，以本段链接的报告为准。
+
 当前入口：`../docs/V2-M1-NATIVE-500-TEST-REPORT.md`。独立原生 release 的生成 500 图导入/重复跳过、虚拟网格、25 张批量保留/评分、原图比较、序列 Undo/Redo、版本恢复、系统导出与完整退出重启已通过；50 表和 500 源 hash 一致，Agent task 为 0。修复了胶片条样式误放在未加载 App.css 的问题，规则移入共享 app.css。本轮 120 Rust 默认测试、147 前端、4 M1 GUI 通过；累计基线仍为 122 Rust 功能 + 1 增长基准、27 独立 E2E（额外样本/其他 E2E 本轮未重跑）。M1 仍 partial：真正 RAW 细节、专业色彩/高像素素材、WKWebView 总资源与低端设备待补；不进入新 M2。主进程 RSS 不能称为应用总内存。原用户库未升级。
 
 当前方向已接入 v2.0：先读 `../docs/V2-M0-TEST-REPORT.md`、`../docs/V2.0-ADOPTION.md`。M0 工程/契约切片本地验收通过，整体仍 partial/待评审；下文的 M0–M5 完成状态指 v1.0 历史。新增入口见 `V2-M0-README.md`，一键验证 `npm run verify:v2`。不要直接应用新包初始 SQL、覆盖旧迁移，或将示例 Web / skeleton 当成云协作；旧 src/src-tauri 保留以保护已有能力。
@@ -50,7 +52,7 @@ bash scripts/verify-all.sh --skip-keychain     # 跳过钥匙串写删回环，�
 - 500 与既有 integration 测试共用 1420/1422，须顺序执行。进程重启前先关闭页面轮询，测试服务退出旧 Rust 子进程后用同目录启动新进程，断言 PID 改变及快照相等。
 - 性能采样关闭 trace，区分自动化等待、keydown→下一帧和 IPC；GPU 为软件渲染，不伪造硬件利用率；当前 RSS 偏高不能宣称低端机通过。
 - 原图保护必须保存并比较操作前后 SHA-256，不只检查长度。所有移动/重连仅针对临时生成素材。
-- 原图检视走 `get_original_photo(projectId, photoId)`，仅授权后端核对过的精确文件，直通 JPEG/PNG/TIFF/HEIC 的边界为 64 MiB / 3200 万像素；不接受前端路径，也不扩展云视觉入口。桌面入口称“100% 像素”，按实际显示源与屏幕物理像素计算；RAW 返回 `derived_preview`，每次检查已有 JPEG 不超过 1400px / 16MiB，不能启动无界转换或声明嵌入预览。预览仓库仍为缓存像素。
+- 原图检视走 `get_original_photo(projectId, photoId)`，仅授权后端核对过的精确文件，直通 JPEG/PNG/TIFF/HEIC 的边界为 64 MiB / 3200 万像素；不接受前端路径，也不扩展云视觉入口。桌面入口称“100% 像素”，按实际显示源与屏幕物理像素计算。CR2 v2 小端 IFD0 支持有界内嵌 JPEG，kind=`embedded_preview`，data URL 限 4MiB / 1600 万像素，不授权整个 RAW；见 ADR 0029。其他 RAW 或失败情况返回 `derived_preview`，每次检查已有 JPEG 不超过 1400px / 16MiB，不能启动无界转换或冒充全分辨率。预览仓库仍为缓存像素。
 - GUI 的 `compact: true` 只缩减返回副本的历史前后状态/上下文；不得改数据库审计、已存幂等回执、Undo/Redo 或导出。完整默认接口保留兼容。
 - `BF_M1_ACCEPTANCE_SLICE="v2-m1-inspection" npm run test:m1-gui` 运行 4 项旅程并保留旧 500 图基线证据。当前原生评审使用 `tauri.m1-review-fixes.conf.json` / `studio.betweenframes.m1reviewfixes` 的独立标识，禁止拿旧应用标识启动新 schema。
 
@@ -71,7 +73,7 @@ bash scripts/verify-all.sh --skip-keychain     # 跳过钥匙串写删回环，�
 - 验证脚本与 integration harness 显式禁用真实 API Key；视觉测试只使用注入的本地 HTTP Provider。
 - M5 get_diagnostics 由 diagnostics::collect 统一桌面/harness；前端经 TauriDiagnosticsRepository 白名单解析后展示/复制。存储为逻辑文件大小，可不完整；不是清理入口。见 ADR 0013。
 - 回执保存历史业务快照 + eventCursor（ADR 0028），重放仅补当时事件；不得用当前 snapshot_tx 替换整个回执。兼容旧完整与无游标瘦回执，不修改旧记录/触发器。增长基准按实际成功次数与回执行增量核对，逻辑大小为 page_count×page_size，WAL 单列。
-- 原图检视：TIFF/HEIC 保留直通边界；RAW 只复用并验证导入阶段的派生缓存，kind=derived_preview，不再读取旧全局临时检视缓存。HEIC/CR2 样本测试默认显式 ignored，具备样本后单独执行，缺样本不能返回成功。原生修复补验使用新标识 studio.betweenframes.m1reviewfixes，禁止启动旧用户库。
+- 原图检视：TIFF/HEIC 保留直通边界；CR2 内嵌 JPEG 支持子集见 ADR 0029，其他 RAW 验证并复用导入派生缓存，不读取旧全局临时检视缓存。HEIC/CR2 样本测试默认显式 ignored，具备样本后单独执行，缺样本不能返回成功。原生修复补验使用新标识 studio.betweenframes.m1reviewfixes，禁止启动旧用户库。
 - M4 记忆控制经 execute_memory/MemoryRequest；变更暂停执行任务并要求新委托，不推进正式 revision。0009 的 FTS5 是可重建索引，原证据与备份仍保留；跨项目关闭。见 ADR 0012。
 - 云端请求预留/结算复用 agent_steps：未知结果保留预算、恢复不重传；单次 consent 必须绑定 task_id。见 ADR 0011。
 

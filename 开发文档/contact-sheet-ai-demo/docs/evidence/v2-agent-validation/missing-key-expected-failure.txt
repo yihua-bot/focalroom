@@ -1,0 +1,21 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.81s
+     Running tests/real_model_e2e.rs (src-tauri/target-v1/debug/deps/real_model_e2e-6cf73796cfecb1e0)
+
+running 1 test
+test real_model_deepseek_full_agent_loop ... FAILED
+
+failures:
+
+---- real_model_deepseek_full_agent_loop stdout ----
+
+thread 'real_model_deepseek_full_agent_loop' (9829488) panicked at tests/real_model_e2e.rs:18:32:
+显式运行真实验收必须配置 BETWEEN_FRAMES_OPENAI_API_KEY；缺配置不能记为通过
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    real_model_deepseek_full_agent_loop
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test real_model_e2e`

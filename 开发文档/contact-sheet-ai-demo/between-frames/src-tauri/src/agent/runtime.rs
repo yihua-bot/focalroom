@@ -173,7 +173,7 @@ impl AgentEngine {
             .await?;
         let mut retries = 0;
         loop {
-            let input = ContextBuilder::build(&self.db, id).await?;
+            let mut input = ContextBuilder::build(&self.db, id).await?;
             (self.notify)(&input.task.project_id);
             if input.task.state != "running" {
                 return Ok(());
@@ -233,25 +233,39 @@ impl AgentEngine {
                 }
                 Err(error) => return Err(error),
             };
+            let cost_limit = (self.tier.max_cost_usd_per_task() * 100.0) as u32;
+            let effective_limit = input.task.budget.max_cost_minor_usd.min(cost_limit);
+            input.layers["execution"]["effectiveMaxCostMinorUsd"] = effective_limit.into();
+            input.layers["execution"]["remainingCostMinorUsd"] = effective_limit
+                .saturating_sub(input.task.usage.cost_minor_usd)
+                .into();
             let estimate = ContextBuilder::input_estimate(&input);
-            if let Err(e) = super::policy::PolicyGate::model_budget(&input.task, estimate) {
+            if let Err(e) =
+                super::policy::PolicyGate::model_budget(&input.task, estimate, cost_limit)
+            {
                 handler.agent_state(id, "paused", &e.message).await?;
                 return Ok(());
             }
-            handler.agent_attempt(id, estimate).await?;
+            handler.agent_attempt(id, estimate, cost_limit).await?;
             let started = std::time::Instant::now();
             let remaining = (u64::from(input.task.budget.max_duration_seconds) * 1000)
                 .saturating_sub(input.task.elapsed_ms)
                 .max(1);
             let result = tokio::time::timeout(
                 std::time::Duration::from_millis(remaining),
-                provider.generate(&input),
+                provider.generate_metered(&input),
             )
             .await;
             match result {
                 Ok(Ok(outcome)) => {
                     handler
-                        .agent_outcome(id, outcome, estimate, started.elapsed().as_millis() as u64)
+                        .agent_outcome(
+                            id,
+                            outcome,
+                            estimate,
+                            started.elapsed().as_millis() as u64,
+                            cost_limit,
+                        )
                         .await?;
                     retries = 0;
                 }

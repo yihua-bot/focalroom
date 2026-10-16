@@ -2,6 +2,10 @@
 use between_frames_lib::{agent::media_links, db::Store, image_pipeline};
 use std::path::Path;
 
+// 两项测试会修改同一进程变量，必须覆盖完整生命周期，避免彼此移除密钥。
+static ENV_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+
 async fn setup(path: &Path) -> (Store, String, String) {
     let db = Store::open(&path.join("projects.sqlite")).await.unwrap();
     let project = db.create("链接", "").await.unwrap();
@@ -17,6 +21,7 @@ async fn setup(path: &Path) -> (Store, String, String) {
 
 #[tokio::test]
 async fn s02_revoked_link_denied_even_with_valid_signature() {
+    let _guard = ENV_LOCK.lock().await;
     let temp = tempfile::tempdir().unwrap();
     let (db, project, photo) = setup(temp.path()).await;
     unsafe { std::env::set_var(media_links::MEDIA_KEY_ENV, "media-test-key") };
@@ -65,6 +70,7 @@ async fn s02_revoked_link_denied_even_with_valid_signature() {
 
 #[tokio::test]
 async fn revoke_project_kills_all_active_links() {
+    let _guard = ENV_LOCK.lock().await;
     let temp = tempfile::tempdir().unwrap();
     let (db, project, photo) = setup(temp.path()).await;
     unsafe { std::env::set_var(media_links::MEDIA_KEY_ENV, "media-test-key") };

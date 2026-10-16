@@ -93,12 +93,26 @@ impl OpenAiProvider {
                 status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS;
             let mut error = AppError::new(
                 "MODEL_UNAVAILABLE",
-                format!("模型服务返回 {status}：{}", truncate(&text, 300)),
+                // 服务端错误正文可能回显 Authorization 或用户数据，不能写入任务/日志。
+                format!("模型服务返回 {status}"),
             );
             error.retriable = is_retriable;
             return Err(error);
         }
-        serde_json::from_str(&text).map_err(crate::command_audit::serialization)
+        let response: Value = serde_json::from_str(&text)
+            .map_err(|_| AppError::new("MODEL_UNAVAILABLE", "模型响应不是合法 JSON"))?;
+        // 提供方可能以 HTTP 200 返回失败或截断结果；不能执行其中的工具子集。
+        if response
+            .get("status")
+            .is_some_and(|status| status != "completed")
+            || response.get("error").is_some_and(|error| !error.is_null())
+        {
+            return Err(AppError::new(
+                "MODEL_UNAVAILABLE",
+                "模型响应失败或尚未完整结束，未执行工具",
+            ));
+        }
+        Ok(response)
     }
     pub fn turn_body(&self, request: &ModelTurnRequest) -> Value {
         let mut input: Vec<Value> = vec![json!({
@@ -183,6 +197,13 @@ impl OpenAiProvider {
         let text = output_text(&response);
         let mut observation: Value = serde_json::from_str(&text)
             .map_err(|_| AppError::new("MODEL_UNAVAILABLE", "视觉观察输出不符合 JSON 结构"))?;
+        // strict 是对提供方的请求，不能代替对不可信响应的本地校验。
+        if !valid_observations(&observation) {
+            return Err(AppError::new(
+                "MODEL_UNAVAILABLE",
+                "视觉观察不符合严格 schema 或包含重复照片",
+            ));
+        }
         observation["model_id"] = json!(self.model);
         Ok((observation, usage_tokens))
     }
@@ -228,9 +249,6 @@ fn tokens_of(response: &Value) -> u32 {
         .unwrap_or(0)
         .min(u32::MAX as u64) as u32
 }
-fn truncate(text: &str, max: usize) -> String {
-    text.chars().take(max).collect()
-}
 fn retriable(mut error: AppError) -> AppError {
     error.retriable = true;
     error
@@ -258,6 +276,14 @@ pub fn observation_schema() -> Value {
         "additionalProperties": false
     })
 }
+pub(crate) fn valid_observations(value: &Value) -> bool {
+    if !betweenframes_local_domain::schema::valid(&observation_schema(), value) {
+        return false;
+    }
+    let items = value["observations"].as_array().unwrap();
+    let ids: std::collections::HashSet<_> = items.iter().map(|item| &item["photo_id"]).collect();
+    ids.len() == items.len()
+}
 pub fn text_cost_minor_usd(tokens: u32) -> u32 {
     tokens
         .saturating_mul(TEXT_COST_MINOR_PER_K_TOKENS)
@@ -275,29 +301,55 @@ impl ModelProvider for OpenAiProvider {
         &'a self,
         input: &'a ModelTurnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<ModelOutcome>> + Send + 'a>> {
+        Box::pin(async move { Ok(self.generate_metered(input).await?.outcome) })
+    }
+    fn generate_metered<'a>(
+        &'a self,
+        input: &'a ModelTurnRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<super::provider::ModelTurnResult>> + Send + 'a>> {
         Box::pin(async move {
             let body = self.turn_body(input);
             let response = self.post(&body).await?;
-            let calls: Vec<ToolCall> = response["output"]
-                .as_array()
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter(|item| item["type"] == "function_call")
-                        .filter_map(|item| {
-                            let arguments = item["arguments"].as_str()?;
-                            let args: Value = serde_json::from_str(arguments).ok()?;
-                            Some(ToolCall {
-                                call_id: item["call_id"].as_str()?.into(),
-                                name: item["name"].as_str()?.into(),
-                                args,
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
+            let usage = reported_usage(&response, &self.model)?;
+            let invalid_call = || {
+                AppError::new(
+                    "MODEL_UNAVAILABLE",
+                    "模型工具调用不完整或参数不是 JSON 对象，整个批次未执行",
+                )
+            };
+            let mut calls = vec![];
+            if let Some(items) = response["output"].as_array() {
+                for item in items.iter().filter(|item| item["type"] == "function_call") {
+                    let call_id = item["call_id"]
+                        .as_str()
+                        .filter(|id| !id.trim().is_empty() && id.len() <= 160)
+                        .ok_or_else(invalid_call)?;
+                    let name = item["name"]
+                        .as_str()
+                        .filter(|name| !name.trim().is_empty())
+                        .ok_or_else(invalid_call)?;
+                    let arguments = item["arguments"].as_str().ok_or_else(invalid_call)?;
+                    let args: Value =
+                        serde_json::from_str(arguments).map_err(|_| invalid_call())?;
+                    if !args.is_object()
+                        || item
+                            .get("status")
+                            .is_some_and(|status| status != "completed")
+                    {
+                        return Err(invalid_call());
+                    }
+                    calls.push(ToolCall {
+                        call_id: call_id.into(),
+                        name: name.into(),
+                        args,
+                    });
+                }
+            }
             if !calls.is_empty() {
-                return Ok(ModelOutcome::ToolCalls { calls });
+                return Ok(super::provider::ModelTurnResult {
+                    outcome: ModelOutcome::ToolCalls { calls },
+                    usage,
+                });
             }
             let text = output_text(&response);
             if text.trim().is_empty() {
@@ -306,7 +358,42 @@ impl ModelProvider for OpenAiProvider {
                     "模型未返回工具调用或文本",
                 ));
             }
-            Ok(ModelOutcome::NoAction { reason: text })
+            Ok(super::provider::ModelTurnResult {
+                outcome: ModelOutcome::NoAction { reason: text },
+                usage,
+            })
         })
     }
+}
+
+fn reported_usage(
+    response: &Value,
+    model: &str,
+) -> Result<Option<super::provider::ModelTokenUsage>> {
+    let usage = &response["usage"];
+    // 兼容只返回 total_tokens 的旧适配端点，继续保留保守预留，不伪造分项。
+    if usage.get("input_tokens").is_none() && usage.get("output_tokens").is_none() {
+        return Ok(None);
+    }
+    let read = |name: &str| {
+        usage[name]
+            .as_u64()
+            .and_then(|n| u32::try_from(n).ok())
+            .ok_or_else(|| AppError::new("MODEL_UNAVAILABLE", "模型 token 计量无效，保留预算预留"))
+    };
+    let input_tokens = read("input_tokens")?;
+    let output_tokens = read("output_tokens")?;
+    let total_tokens = read("total_tokens")?;
+    if input_tokens.checked_add(output_tokens) != Some(total_tokens) {
+        return Err(AppError::new(
+            "MODEL_UNAVAILABLE",
+            "模型 token 分项与总量不符，保留预算预留",
+        ));
+    }
+    Ok(Some(super::provider::ModelTokenUsage {
+        input_tokens,
+        output_tokens,
+        total_tokens,
+        model_id: model.into(),
+    }))
 }

@@ -109,7 +109,7 @@ impl PolicyGate {
         }
         Ok(())
     }
-    pub fn model_budget(task: &Task, input: u32) -> Result<()> {
+    pub fn model_budget(task: &Task, input: u32, cost_limit: u32) -> Result<()> {
         let b = &task.budget;
         let u = &task.usage;
         if u.model_turns >= b.max_model_turns
@@ -122,10 +122,10 @@ impl PolicyGate {
                 .saturating_add(b.max_output_tokens)
                 > b.max_total_tokens
             || u.cloud_images > b.max_cloud_images
-            || u.cost_minor_usd > b.max_cost_minor_usd
+            || u.cost_minor_usd > b.max_cost_minor_usd.min(cost_limit)
             || u.cost_minor_usd
                 .saturating_add(super::openai::model_reservation(task, input))
-                > b.max_cost_minor_usd
+                > b.max_cost_minor_usd.min(cost_limit)
         {
             return Err(AppError::new(
                 "BUDGET_EXCEEDED",

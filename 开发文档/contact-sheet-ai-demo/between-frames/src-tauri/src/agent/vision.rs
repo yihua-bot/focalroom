@@ -89,12 +89,15 @@ pub(crate) async fn prefetch(
         .bind(call.name.as_str())
         .fetch_optional(&mut *tx)
         .await?;
-        match hit {
-            Some(raw) => {
-                let value: Value =
-                    serde_json::from_str(&raw).map_err(crate::command_audit::serialization)?;
-                cached.push((photo.0.clone(), value));
-            }
+        // 旧缓存也经过同一契约校验；无效项视为未命中，仍需授权/预算才能重新观察。
+        let valid_hit = hit
+            .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+            .filter(|value| {
+                value["photo_id"] == photo.0
+                    && super::openai::valid_observations(&json!({"observations":[value]}))
+            });
+        match valid_hit {
+            Some(value) => cached.push((photo.0.clone(), value)),
             None => missing.push(photo.clone()),
         }
     }

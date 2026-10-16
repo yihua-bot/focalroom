@@ -17,9 +17,10 @@ pub(crate) async fn state(db: &Store, id: &str, next: &str, reason: &str) -> Res
 pub(crate) async fn outcome(
     db: &Store,
     id: &str,
-    result: ModelOutcome,
+    turn: super::provider::ModelTurnResult,
     input: u32,
     elapsed: u64,
+    cost_limit: u32,
 ) -> Result<()> {
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, id).await?;
@@ -30,24 +31,58 @@ pub(crate) async fn outcome(
         ));
     }
 
+    let result = turn.outcome;
     let bytes = serde_json::to_vec(&result).unwrap().len() as u32;
+    let settled_input = turn
+        .usage
+        .as_ref()
+        .map_or(input, |usage| usage.input_tokens);
+    let settled_output = turn
+        .usage
+        .as_ref()
+        .map_or(bytes, |usage| usage.output_tokens);
     if t.provider_id == super::PROVIDER_OPENAI {
         let reserved = super::openai::model_reservation(&t, input);
-        let actual = super::openai::text_cost_minor_usd(input.saturating_add(bytes));
-        let refund = reserved.saturating_sub(actual);
-        t.usage.cost_minor_usd = t.usage.cost_minor_usd.saturating_sub(refund);
-        sqlx::query("UPDATE model_usage SET cost_minor_usd=cost_minor_usd-? WHERE task_id=? AND request_id=?")
-            .bind(i64::from(refund)).bind(id).bind(format!("turn-{}", t.usage.model_turns)).execute(&mut *tx).await?;
+        let actual =
+            super::openai::text_cost_minor_usd(settled_input.saturating_add(settled_output));
+        t.usage.cost_minor_usd = t
+            .usage
+            .cost_minor_usd
+            .saturating_sub(reserved)
+            .saturating_add(actual);
+        sqlx::query("UPDATE model_usage SET cost_minor_usd=? WHERE task_id=? AND request_id=?")
+            .bind(i64::from(actual))
+            .bind(id)
+            .bind(format!("turn-{}", t.usage.model_turns))
+            .execute(&mut *tx)
+            .await?;
     }
-    t.usage.output_estimate = t.usage.output_estimate.saturating_add(bytes);
+    t.usage.input_estimate = t
+        .usage
+        .input_estimate
+        .saturating_sub(input)
+        .saturating_add(settled_input);
+    t.usage.output_estimate = t.usage.output_estimate.saturating_add(settled_output);
     t.elapsed_ms += elapsed;
-    sqlx::query("UPDATE model_usage SET output_estimate=? WHERE task_id=? AND request_id=?")
-        .bind(bytes as i64)
+    sqlx::query("UPDATE model_usage SET input_estimate=?,output_estimate=? WHERE task_id=? AND request_id=?")
+        .bind(i64::from(settled_input))
+        .bind(i64::from(settled_output))
         .bind(&t.id)
         .bind(format!("turn-{}", t.usage.model_turns))
         .execute(&mut *tx)
         .await?;
-    if bytes > t.budget.max_output_tokens
+    if let Some(usage) = &turn.usage {
+        store::step(
+            &mut tx,
+            id,
+            "model_usage_reported",
+            serde_json::to_value(usage).unwrap(),
+            "提供方报告的实际 token；费用仍使用保守系数估算",
+        )
+        .await?;
+    }
+    if settled_output > t.budget.max_output_tokens
+        || t.usage.cost_minor_usd > t.budget.max_cost_minor_usd.min(cost_limit)
         || t.elapsed_ms >= u64::from(t.budget.max_duration_seconds) * 1000
         || t.usage
             .input_estimate
@@ -58,7 +93,7 @@ pub(crate) async fn outcome(
             &mut tx,
             &mut t,
             "paused",
-            "模型输出或时间达到预算上限，未执行工具",
+            "模型输出、费用或时间达到预算上限，未执行工具",
         )
         .await?;
     } else {
@@ -282,13 +317,13 @@ pub(crate) async fn final_outcome(db: &Store, id: &str, outcome: ModelOutcome) -
     Ok(())
 }
 
-pub(crate) async fn attempt(db: &Store, id: &str, input: u32) -> Result<()> {
+pub(crate) async fn attempt(db: &Store, id: &str, input: u32, cost_limit: u32) -> Result<()> {
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, id).await?;
     if t.state != "running" {
         return Err(AppError::new("CANCELLED", "任务已停止"));
     }
-    PolicyGate::model_budget(&t, input)?;
+    PolicyGate::model_budget(&t, input, cost_limit)?;
     t.usage.model_turns += 1;
     t.usage.input_estimate = t.usage.input_estimate.saturating_add(input);
     let reserved = super::openai::model_reservation(&t, input);

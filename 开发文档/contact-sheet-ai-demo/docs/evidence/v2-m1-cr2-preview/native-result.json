@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-16",
+  "projectId": "c6ae5861-0f0a-493d-ac2e-5890eaaebc44",
+  "source": "Existing single CR2 fixture; provenance scope limited",
+  "nativeImport": {
+    "added": 1,
+    "failed": 0
+  },
+  "embeddedPreviewDimensions": [
+    1936,
+    1288
+  ],
+  "kind": "embedded_preview",
+  "sourceLabelVisible": true,
+  "sourceLabel": "RAW 内嵌 JPEG 预览 · 非 RAW 全分辨率",
+  "cspDataJpegRendered": true,
+  "originalPid": 34997,
+  "originalPidExited": true,
+  "restartedPid": 36215,
+  "equalTables": 50,
+  "newJpegCacheFiles": 0,
+  "agentTasks": 0,
+  "nativeScreenshots": "Verified inline via CUA only; no local native PNG archive"
+}

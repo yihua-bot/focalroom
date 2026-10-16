@@ -1,0 +1,10 @@
+{
+  "src-tauri/src/cr2_preview.rs": "2f154a8204c853580e2da075ece261b099f5a4213f12a21ce9393b9785631f29",
+  "src-tauri/src/photo_inspection.rs": "1308f3f9e5e22dfdf8c88010ba249ad1cbb87e84987a3e38dcd984944c94514d",
+  "src-tauri/src/commands.rs": "655bcd69fa6c71748e154d6f1fc4f3a55ce83b5f033f8f21951229ddc3efc7b2",
+  "src-tauri/tauri.conf.json": "cbf2b8e3336b9fd8ceaba6357bd9c4b5c3e57b626dc9c12e932d2c7c7709213e",
+  "src/domain/models.ts": "fcdfd2e4d4fc9fda9c7de4de0c70599b54fc505a5bdf7409e911de6aeaf5f0b7",
+  "src/services/TauriRepository.ts": "06dcb25f804e267b0ebbdd73f1f261b6fc82efe5f0e7ac0cebf79708d05eef76",
+  "src/components/shared/PhotoViewport.tsx": "ff8d71a844bc4ac2507ac3a0a196b4cf0ce9bae304b525b7496bf30a23986b11",
+  "src/styles/app.css": "c879e3a100c0218198feed74d06c773da081256c41a535b1d5cd34fa019e8235"
+}

@@ -3,11 +3,35 @@ use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 use std::{collections::HashSet, future::Future, pin::Pin};
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelTokenUsage {
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub total_tokens: u32,
+    pub model_id: String,
+}
+pub struct ModelTurnResult {
+    pub outcome: ModelOutcome,
+    pub usage: Option<ModelTokenUsage>,
+}
 pub trait ModelProvider: Send + Sync {
     fn generate<'a>(
         &'a self,
         input: &'a ModelTurnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<ModelOutcome>> + Send + 'a>>;
+    /// 旧/离线 Provider 保持原接口；真实 Provider 可附带经过校验的计量。
+    fn generate_metered<'a>(
+        &'a self,
+        input: &'a ModelTurnRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<ModelTurnResult>> + Send + 'a>> {
+        Box::pin(async move {
+            Ok(ModelTurnResult {
+                outcome: self.generate(input).await?,
+                usage: None,
+            })
+        })
+    }
 }
 pub struct MockProvider;
 impl ModelProvider for MockProvider {
