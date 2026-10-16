@@ -19,6 +19,13 @@ impl AppError {
     pub(crate) fn forbidden(message: &str) -> Self {
         Self::new(StatusCode::FORBIDDEN, "PERMISSION_DENIED", message)
     }
+    pub(crate) fn conflict(message: &str) -> Self {
+        Self::new(
+            axum::http::StatusCode::CONFLICT,
+            "REVISION_CONFLICT",
+            message,
+        )
+    }
     pub(crate) fn not_found(message: &str) -> Self {
         Self::new(StatusCode::NOT_FOUND, "NOT_FOUND", message)
     }

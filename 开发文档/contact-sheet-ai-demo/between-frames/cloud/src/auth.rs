@@ -174,7 +174,7 @@ pub(crate) async fn login(
 }
 
 #[derive(Clone)]
-pub(crate) struct CurrentUser {
+pub struct CurrentUser {
     pub id: String,
     token_hash: String,
 }

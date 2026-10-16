@@ -62,3 +62,16 @@ pub async fn migrate(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .await?;
     Ok(())
 }
+
+pub async fn migrate_collab(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    for ddl in [
+        "CREATE TABLE IF NOT EXISTS project_comments (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, author_id TEXT NOT NULL, photo_sha256 TEXT, anchor_x REAL, anchor_y REAL, body TEXT NOT NULL, parent_id TEXT, state TEXT DEFAULT 'open', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')))",
+        "CREATE TABLE IF NOT EXISTS project_proposals (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, author_id TEXT NOT NULL, title TEXT NOT NULL, base_revision INTEGER NOT NULL, state TEXT DEFAULT 'submitted', operations_json TEXT DEFAULT '[]', approval_nonce TEXT NOT NULL, decided_by TEXT, decided_at TEXT, created_at TEXT DEFAULT (datetime('now')))",
+        "CREATE TABLE IF NOT EXISTS project_revisions (project_id TEXT NOT NULL, revision INTEGER NOT NULL, snapshot_json TEXT NOT NULL, author_id TEXT NOT NULL, cause TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')), PRIMARY KEY(project_id, revision))",
+        "CREATE TABLE IF NOT EXISTS project_presence (project_id TEXT NOT NULL, user_id TEXT NOT NULL, session_id TEXT NOT NULL, last_seen TEXT DEFAULT (datetime('now')), viewing_sha256 TEXT, PRIMARY KEY(project_id, user_id, session_id))",
+        "CREATE TABLE IF NOT EXISTS acl_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT NOT NULL, user_id TEXT NOT NULL, action TEXT NOT NULL, resource TEXT NOT NULL, allowed INTEGER NOT NULL, created_at TEXT DEFAULT (datetime('now')))",
+    ] {
+        sqlx::query(ddl).execute(pool).await?;
+    }
+    Ok(())
+}

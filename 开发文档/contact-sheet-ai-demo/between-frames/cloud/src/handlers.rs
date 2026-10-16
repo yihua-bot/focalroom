@@ -4,6 +4,7 @@
 
 use crate::{
     auth::{self, CurrentUser},
+    collab,
     error::AppError,
     previews,
 };
@@ -20,7 +21,7 @@ use serde_json::json;
 use sqlx::SqlitePool;
 
 #[derive(Clone)]
-pub(crate) struct AppState {
+pub struct AppState {
     pub pool: SqlitePool,
     pub preview_dir: std::path::PathBuf,
     pub auth_slots: std::sync::Arc<tokio::sync::Semaphore>,
@@ -163,6 +164,9 @@ pub(crate) async fn can_read(
 
 pub async fn build_router(pool: SqlitePool, preview_dir: std::path::PathBuf) -> Router {
     crate::schema::migrate(&pool).await.expect("数据库迁移失败");
+    crate::schema::migrate_collab(&pool)
+        .await
+        .expect("协作表迁移失败");
     let state = AppState {
         pool,
         preview_dir,
@@ -178,6 +182,22 @@ pub async fn build_router(pool: SqlitePool, preview_dir: std::path::PathBuf) -> 
             "/projects/{id}/previews/{file}",
             get(previews::serve_preview),
         )
+        // M5 协作：评论/提案/审批/快照/AI 评论访问
+        .route(
+            "/projects/{id}/comments",
+            post(collab::create_comment).get(collab::list_comments),
+        )
+        .route(
+            "/projects/{id}/comments/{cid}/resolve",
+            post(collab::resolve_comment),
+        )
+        .route("/projects/{id}/proposals", post(collab::create_proposal))
+        .route(
+            "/projects/{id}/proposals/{pid}/decide",
+            post(collab::decide_proposal),
+        )
+        .route("/projects/{id}/snapshot", get(collab::project_snapshot))
+        .route("/ai/comments", get(collab::ai_accessible_comments))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,

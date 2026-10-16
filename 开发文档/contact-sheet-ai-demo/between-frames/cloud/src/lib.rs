@@ -1,4 +1,5 @@
 mod auth;
+pub mod collab;
 mod error;
 mod handlers;
 mod previews;
