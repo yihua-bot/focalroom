@@ -1,4 +1,4 @@
-import { sendPasswordResetEmail } from "./email";
+import { sendPasswordResetEmail, sendVerificationEmail } from "./email";
 import { listTaskResults, storeTaskResult, summarizeProjectComments } from "./agent-tasks";
 import { randomBytes, randomUUID, scrypt } from "node:crypto";
 import type { Pool } from "pg";
@@ -1040,6 +1040,47 @@ export class CloudService {
         permits_model_upload: false,
         creates_author_memory: false,
       };
+    });
+  }
+
+  async verifyEmail(input: unknown) {
+    const token = String((input as Record<string, unknown>)?.token ?? "");
+    assert(token.length === 64, 400, "VALIDATION_ERROR", "验证令牌不合法");
+    return transaction(this.pool, async (tx) => {
+      const row = (
+        await tx.query(
+          "SELECT * FROM fr_email_verify_tokens WHERE digest=$1 AND used_at IS NULL AND expires_at>now() FOR UPDATE",
+          [digest(token)],
+        )
+      ).rows[0];
+      assert(row, 400, "VALIDATION_ERROR", "令牌无效或已过期");
+      await tx.query("UPDATE fr_users SET email_verified_at=now() WHERE id=$1", [row.user_id]);
+      await tx.query("UPDATE fr_email_verify_tokens SET used_at=now() WHERE digest=$1", [digest(token)]);
+      return { verified: true };
+    });
+  }
+
+  async resendVerification(headers: Headers) {
+    return transaction(this.pool, async (tx) => {
+      const user = await this.auth.authenticate(headers, true, tx);
+      const already = (
+        await tx.query("SELECT email_verified_at FROM fr_users WHERE id=$1", [user.id])
+      ).rows[0];
+      if (already?.email_verified_at) return { already_verified: true };
+      const recent = (
+        await tx.query(
+          "SELECT COUNT(*) FROM fr_email_verify_tokens WHERE user_id=$1 AND created_at>now()-interval '10 minutes'",
+          [user.id],
+        )
+      ).rows[0].count;
+      assert(Number(recent) < 3, 429, "RATE_LIMITED", "重发过于频繁，请 10 分钟后再试");
+      const raw = randomBytes(32).toString("hex");
+      await tx.query(
+        "INSERT INTO fr_email_verify_tokens(digest,user_id,expires_at) VALUES($1,$2,now()+interval '48 hours')",
+        [digest(raw), user.id],
+      );
+      await sendVerificationEmail(user.email, raw, process.env.FOCALROOM_WEB_ORIGIN ?? "http://127.0.0.1:8084");
+      return { sent: true };
     });
   }
 
