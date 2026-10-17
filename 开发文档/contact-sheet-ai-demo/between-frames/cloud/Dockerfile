@@ -1,6 +1,9 @@
-# M4 云 API：多阶段构建（Rust 编译 → 轻量运行时）
+# M4/M5 云 API：中国镜像加速 + 多阶段构建
 FROM rust:slim AS builder
 WORKDIR /build
+# rsproxy 中国镜像（解决 crates.io 下载慢）
+RUN mkdir -p /usr/local/cargo && \
+    printf '[source.crates-io]\nreplace-with = "rsproxy"\n[source.rsproxy]\nregistry = "sparse+https://rsproxy.cn/index/"\n' > /usr/local/cargo/config.toml
 COPY Cargo.toml ./
 COPY src/ ./src/
 RUN cargo build --release

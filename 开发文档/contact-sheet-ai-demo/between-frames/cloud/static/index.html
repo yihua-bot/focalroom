@@ -349,8 +349,31 @@ function switchTab(name) {
   });
 }
 
+// ===== 共享项目视图 =====
+async function showSharedProject(projectId) {
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('projectListView').classList.add('hidden');
+  document.getElementById('projectDetailView').classList.remove('hidden');
+  document.getElementById('projectTitle').textContent = '共享项目';
+  document.getElementById('projectRole').textContent = 'shared';
+  currentProject = { id: projectId, title: '共享项目', role: 'viewer' };
+  loadPhotos(); loadComments();
+}
+
 // ===== 初始化 =====
-if (token) {
+const sharedMatch = location.hash.match(/^#project=(.+)$/);
+if (sharedMatch) {
+  if (token) showSharedProject(sharedMatch[1]);
+  else {
+    showLogin();
+    // 登录成功后跳转共享项目
+    const origLogin = login;
+    window.login = async () => {
+      await origLogin();
+      if (location.hash.match(/^#project=(.+)$/)) showSharedProject(RegExp.$1);
+    };
+  }
+} else if (token) {
   api('/health').catch(() => {});
   showProjects();
 } else {
