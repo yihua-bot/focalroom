@@ -63,6 +63,16 @@ pub async fn migrate(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
+pub async fn migrate_v2(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    for ddl in [
+        "CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '默认工作区', created_at TEXT DEFAULT (datetime('now')))",
+        "CREATE TABLE IF NOT EXISTS v2_cloud_promotions (id TEXT PRIMARY KEY, cloud_project_id TEXT NOT NULL, workspace_id TEXT NOT NULL, local_project_id TEXT, manifest_digest TEXT NOT NULL, from_revision INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'SHARED' CHECK(state IN('SHARED','FINALIZED','ABORTED')), manifest_json TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')))",
+    ] {
+        sqlx::query(ddl).execute(pool).await?;
+    }
+    Ok(())
+}
+
 pub async fn migrate_collab(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     for ddl in [
         "CREATE TABLE IF NOT EXISTS project_comments (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, author_id TEXT NOT NULL, photo_sha256 TEXT, anchor_x REAL, anchor_y REAL, body TEXT NOT NULL, parent_id TEXT, state TEXT DEFAULT 'open', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')))",

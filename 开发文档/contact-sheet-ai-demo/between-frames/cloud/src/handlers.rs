@@ -6,7 +6,7 @@ use crate::{
     auth::{self, CurrentUser},
     collab,
     error::AppError,
-    previews,
+    previews, v2_api,
 };
 use axum::{
     extract::{DefaultBodyLimit, Path, State},
@@ -167,6 +167,9 @@ pub async fn build_router(pool: SqlitePool, preview_dir: std::path::PathBuf) -> 
     crate::schema::migrate_collab(&pool)
         .await
         .expect("协作表迁移失败");
+    crate::schema::migrate_v2(&pool)
+        .await
+        .expect("v2 表迁移失败");
     let state = AppState {
         pool,
         preview_dir,
@@ -198,6 +201,15 @@ pub async fn build_router(pool: SqlitePool, preview_dir: std::path::PathBuf) -> 
         )
         .route("/projects/{id}/snapshot", get(collab::project_snapshot))
         .route("/ai/comments", get(collab::ai_accessible_comments))
+        // v2 API（桌面 Promotion）
+        .route("/api/v2/workspaces", get(v2_api::v2_workspaces))
+        .route("/api/v2/promotions", post(v2_api::v2_create_promotion))
+        .route(
+            "/api/v2/projects/{id}/previews/{sha}",
+            axum::routing::put(v2_api::v2_upload_preview),
+        )
+        .route("/api/v2/projects/{id}/finalize", post(v2_api::v2_finalize))
+        .route("/api/v2/projects/{id}/abort", post(v2_api::v2_abort))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,
@@ -207,6 +219,8 @@ pub async fn build_router(pool: SqlitePool, preview_dir: std::path::PathBuf) -> 
         .route("/auth/register", post(auth::register))
         .route("/auth/login", post(auth::login))
         .route("/health", get(|| async { Json(json!({"ok": true})) }))
+        // v2 API（桌面 Promotion 对接层）
+        .route("/api/v2/auth/login", post(v2_api::v2_login))
         .merge(protected)
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(middleware::from_fn(private_response))
