@@ -24,7 +24,7 @@ function PhotoTile({ photo, activeId, selectedIds, busy, onSelect, onDecide, onE
         <img loading="lazy" src={photo.src} alt={photo.name} draggable={false} />
         <span className="number">{String(photo.index).padStart(2, '0')}</span>
         {photo.isMissing && <span className="missing-flag">原图失联</span>}
-        {photo.status !== 'undecided' && <span className={`flag ${photo.status}`}>{photo.status === 'keep' ? '◇' : '×'} {zh.status[photo.status]}</span>}
+        {photo.status !== 'undecided' && <span className={`flag ${photo.status}`}>{photo.status === 'keep' ? '◇' : '×'} {String(zh['status.' + photo.status] ?? photo.status)}</span>}
       </button><div className="tile-under"><span>FRAME {String(photo.index).padStart(2, '0')}</span><div className="tile-actions">
         <button disabled={busy} aria-label={`标记保留 ${photo.name}`} aria-pressed={photo.status === 'keep'} onClick={() => onDecide(photo.id, 'keep')}><Check size={14} /></button>
         <button disabled={busy} aria-label={`标记淘汰 ${photo.name}`} aria-pressed={photo.status === 'reject'} onClick={() => onDecide(photo.id, 'reject')}><X size={14} /></button>

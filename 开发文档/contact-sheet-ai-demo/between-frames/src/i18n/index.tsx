@@ -9,7 +9,7 @@ export const LOCALES: { code: Locale; label: string; flag: string }[] = [
 ];
 
 // 动态加载语言包
-const bundles: Record<Locale, () => Promise<Record<string, string>>> = {
+const bundles: Record<Locale, () => Promise<Record<string, unknown>>> = {
   zh: () => import('./locales/zh.json').then(m => m.default),
   en: () => import('./locales/en.json').then(m => m.default),
   ja: () => import('./locales/ja.json').then(m => m.default),
@@ -38,11 +38,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     if (browser.startsWith('zh')) return 'zh';
     return 'en';
   });
-  const [bundle, setBundle] = useState<Record<string, string>>({});
+  const [bundle, setBundle] = useState<Record<string, unknown>>({});
 
-  // 加载语言包
+  // 加载语言包 + 同步 copy locale
   useState(() => {
     bundles[locale]().then(setBundle);
+    import('../app/copy').then(({ setCopyLocale }) => setCopyLocale(locale));
   });
 
   const setLocale = useCallback((l: Locale) => {
@@ -50,10 +51,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('focalroom-locale', l);
     bundles[l]().then(setBundle);
     document.documentElement.lang = l;
+    // 同步 copy.ts 的 locale 代理。
+    import('../app/copy').then(({ setCopyLocale }) => setCopyLocale(l));
   }, []);
 
   const t = useCallback((key: string, fallback?: string) => {
-    return bundle[key] ?? fallback ?? key;
+    return String(bundle[key] ?? fallback ?? key);
   }, [bundle]);
 
   return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>;

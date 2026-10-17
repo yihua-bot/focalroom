@@ -1,30 +1,50 @@
-// 中文文案集中维护，后续英文语言包使用相同键名。
-export const zh = {
-  workspace: '选片工作台', sequence: '作品序列', memory: '审美记忆', projects: '项目列表',
-  tagline: '从照片，到作品。 / 让每一次选择都有来处。',
-  preview: '浏览器示例 · 内存数据 · 刷新后重置',
-  import: '导入照片', ai: '摄影编辑 Agent',
-  importPending: '真实照片导入将在 M1 接入。目前使用 28 张示例照片验收布局和交互。',
-  aiPending: 'AI 服务尚未开放。没有模型调用、模拟推理或照片上传。',
-  keep: '保留作品', reject: '淘汰作品', undecided: '恢复待定',
-  status: { undecided: '待定', keep: '已保留', reject: '已淘汰' },
-  filters: { all: '全部', keep: '已保留', undecided: '待定', reject: '已淘汰' },
-  note: '为什么保留 / 淘汰这张照片？', notePlaceholder: '写下构图、光线或节奏上的判断…', saveNote: '保存我的判断',
-  compare: '两图对比', compareTitle: '两张照片，哪一张更适合项目？',
-  preferLeft: '偏好左张', preferRight: '偏好右张', uncertain: '不确定',
-  compareReason: '为什么更喜欢它？（可选）', compareHint: '比较只记录偏好，不改变任一照片的保留或淘汰状态。',
-  export: '导出', exportTitle: '导出作品与创作记录', exportPending: 'M0 展示导出流程。文件导出将在 M1 接入持久化快照后开放。',
-  emptyTitle: '这里还没有照片', emptyHint: '真实文件导入将在 M1 开放。可以返回项目列表，打开示例项目体验选片。',
-  emptyFilter: '当前筛选没有照片', emptySequence: '序列还是空的', sequenceHint: '在选片工作台保留照片，让它们形成一组作品。',
-  allPhotos: '查看全部', toWorkspace: '返回选片工作台',
-  projectTitle: '项目名称', projectBrief: '你希望这组照片表达什么？',
-  editIntent: '编辑创作意图', newProject: '新建项目', saveProject: '保存项目描述', createProject: '创建并打开',
-  projectListTitle: '你的创作，从这里继续。', projectListHint: '每个项目，都是一次观看与取舍。',
-  close: '关闭对话框', enlarge: '查看完整大图',
-  help: '快捷键帮助', helpHint: '在输入框和对话框中，全局选片快捷键暂停。',
-  editorTitle: '每一次选择，\n都是你的表达。', editorHint: '保留你的判断，慢慢找到画面之间的关系。',
-  aiTitle: '让建议，等待你的判断。', memoryTitle: '选择有来处，偏好有证据。',
-  memoryHint: '这里只展示人工操作及理由，不推断稳定审美偏好。', noEvents: '还没有决策记录',
-  savedNote: '判断已保存到本次预览', savedProject: '项目已更新到本次预览', savedCompare: '比较偏好已记录，照片状态保持原样',
-  savedSequence: '序列已调整到本次预览', inspector: '照片检查器',
+// 文案集中维护 + locale 感知代理：所有已用 zh.xxx 的组件自动支持四语言。
+import zhStrings from '../i18n/locales/zh.json';
+import enStrings from '../i18n/locales/en.json';
+import jaStrings from '../i18n/locales/ja.json';
+import koStrings from '../i18n/locales/ko.json';
+
+const bundles: Record<string, Record<string, unknown>> = {
+  zh: zhStrings, en: enStrings, ko: koStrings, ja: jaStrings,
 };
+
+let currentLocale = 'zh';
+export function setCopyLocale(locale: string) { currentLocale = locale; }
+export function getCopyLocale() { return currentLocale; }
+
+function pick(obj: Record<string, unknown>, key: string): unknown {
+  if (key in obj) return obj[key];
+  // 支持点号嵌套（如 status.keep → copy.status.keep）。
+  const parts = key.split('.');
+  const nested = parts.reduce<unknown>((acc, k) =>
+    acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[k] : undefined, obj);
+  if (nested !== undefined) return nested;
+  // 查 copy.* 子对象。
+  const copy = obj.copy;
+  if (copy && typeof copy === 'object') {
+    const c = copy as Record<string, unknown>;
+    if (key in c) return c[key];
+    return parts.reduce<unknown>((acc, k) =>
+      acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[k] : undefined, c);
+  }
+  return undefined;
+}
+
+// 代理：zh.xxx 读当前语言的对应键；缺键回落中文原文。
+export const zh = new Proxy({} as Record<string, string>, {
+  get(_, key: string) {
+    const bundle = bundles[currentLocale] ?? bundles.zh;
+    const value = pick(bundle, key);
+    if (typeof value === 'string') return value;
+    if (value !== undefined && typeof value !== 'object') return String(value);
+    // 回落到中文源。
+    const fallback = pick(bundles.zh, key);
+    if (typeof fallback === 'string') return fallback;
+    if (fallback !== undefined && typeof fallback !== 'object') return String(fallback);
+    return key;
+  },
+});
+
+export function t(key: string): string {
+  return String(zh[key]);
+}
