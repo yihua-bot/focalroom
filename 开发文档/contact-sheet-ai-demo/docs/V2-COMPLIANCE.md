@@ -1,5 +1,7 @@
 # v2.0 规格符合性总账（24 验收场景映射）
 
+**2026-10-17 M4/M5 共享工程**：正式 NestJS/PostgreSQL、真实Rust Promotion、三独立Web会话、私有预览网关/邀请/撤权、事务审批与完整命令审计、草案私有修订/部分批准/历史版本、WS/Presence/重连和项目评论Task已在独立本地环境验收。旧SQLite /api/v2统一501封闭。S01/S02/C03补充真实本地云证据，但生产/R2/规模与真人项目仍未关闭；17 pass/7 partial总账层级不提升，不表示v2最终计划完成。见 [本轮报告](V2-M4-M5-SHARED-AUTHORITY-TEST-REPORT.md)、ADR0040。M3专业质量与多Adapter等缺口保留；M6/M7未开展。
+
 **2026-10-17 M3 同端点模型分工**：两个型号的观察/策展执行、独立能力/费率、观察收件人、角色冻结恢复及缓存/检索已在本地验收，新增9项Rust/3项前端；190桌面Rust+13本地云、183单测、23项E2E、独立界面与打包通过。真实成本优势/摄影质量、自动选模、跨服务Adapter/fallback和真人门槛仍开，17 pass/7 partial层级不提升。见 [本轮报告](V2-M3-MODEL-ROLES-TEST-REPORT.md)、ADR0039；M3仍partial。
 
 **2026-10-17 M3 图像收件人授权**：实际端点/型号隔离、旧授权拒绝、陈旧界面核对、全服务禁止/单方恢复与 HTTP 不重定向已验收，新增7项Rust/7项前端用例并补真实harness禁止/重启旅程。无新真实服务质量证据、多Adapter或跨服务fallback，17 pass/7 partial层级不提升。见 [本轮报告](V2-M3-PROVIDER-CONSENT-TEST-REPORT.md)、ADR0038；M3/M02仍partial。
@@ -42,11 +44,11 @@
 | M01 | 纠正后不再误用 | **pass** | agent_memory ag11 + 物理删除墓碑（ADR 0014 修订） |
 | M02 | 私人记忆不跨创作者 | **partial** | 已有默认隔离及显式授权的 LOCAL 离线作者引用、来源/撤权保护；云 Provider 作者记忆授权、真实 Creator 身份与共享项目中的作者私有记忆隔离尚未实现（ADR0037） |
 | M03 | 区域拒绝不静默跨区 | **pass**（本地执行层） | agent_vision 的真实 AgentEngine + 本地 HTTP 测试：区域拒绝、预算不足、缺提供方均零 HTTP；离线任务不切云；区域/档位为可信部署代码注入，配置文件与设置界面尚未接入 |
-| S01 | LOCAL→SHARED 单权威 | **partial** | 本地写门槛已接入 v1/v2、导入与重连；锁内重读权威，failed/aborted 同版本可重试且保留记录。云权威、上传及真实签名确认尚未实现 |
-| S02 | 撤销后 URL 拒绝 | **partial** | v2_media_links：撤销即拒（区别于过期文案）/伪造拒/跨项目签发拒/项目级批量撤销幂等；新增 cloud/ 真实 HTTP 验证单 grant 撤销/不误伤/无认证拒绝与有效 JPEG 读取；仍无生产身份/对象存储签名/CDN 部署（ADR 0022、0031） |
-| C01 | Reviewer 不能批准 | **pass** | local-domain 权限样例 21 组 + proposals apply 须 can_approve |
-| C02 | 并发提案基线冲突检测 | **pass**（本地领域层） | v2_proposals 的基线漂移拒绝 + v2-proposals.spec.ts 真实后端 GUI 冲突拒绝；审批整体原子并可单组 Undo/Redo |
-| C03 | 断线重连版本一致 | **partial** | 本地重启一致性全套通过；CRDT 实时收敛依赖 M4 |
+| S01 | LOCAL→SHARED 单权威 | **partial** | 本地守卫及实际Rust→NestJS/PostgreSQL Promotion冻结/预览/确认/只读、丢失确认/重启/重试/端点绑定/安全取消已验收；独立副本明确标注。生产部署与目标环境仍待验收（ADR0040） |
+| S02 | 撤销后 URL 拒绝 | **partial** | 真实PG会话/ACL、30秒单次网关票据、读取前后复核、内容SHA、Web实时撤权已验收；本地S3签名测试通过，未接真实R2/生产身份/代理部署，已下载像素不可收回（ADR0040） |
+| C01 | Reviewer 不能批准 | **pass** | 本地领域21组 + PostgreSQL当前Grant/独立审批位/回执重放复查，三Web会话Reviewer/Viewer无审批入口（ADR0040） |
+| C02 | 并发提案基线冲突检测 | **pass**（独立本地PG层） | 两并发提案真实操作/版本/事件/原始命令/回执同事务，一个成功另一个保留过期原文；私有草案修订/部分批准/只读历史，旧桌面领域Undo/Redo保留（ADR0040） |
+| C03 | 断线重连版本一致 | **partial** | PostgreSQL事件/WS认证/重连snapshot/currentACL、进程重启及私人Yjs已本地实测；正式作品不走CRDT。真实网络、多实例规模与生产验收待补（ADR0040） |
 | C04 | 评论锚点重排后仍指原照片 | **pass** | 锚点按 photo_id 持久化（0011），排序变化不影响锚定；照片删除时锚点校验拒新引用 |
 | E01 | 教师不能访问学生私人项目 | **partial** | 组织/席位/角色骨架 + 项目归属校验已测（M6 本轮）；教育隔离的云侧 ACL 依赖 M4 |
 | B01 | webhook 重放不重复结算 | **partial** | v2_promotion_billing：同 event_id 幂等回执零重复行；真实服务商接入待外部（ADR 0022） |

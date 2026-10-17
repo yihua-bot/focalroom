@@ -9,6 +9,7 @@ import { SequenceBoard } from '../components/sequence/SequenceBoard';
 import { SelectionDock } from '../components/sequence/SelectionDock';
 import { EmptyState } from '../components/shared/EmptyState';
 import { Button } from '../components/shared/Button';
+import { SharedReviewLink } from '../components/shared/SharedReviewLink';
 
 export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, local = false, sharing }: {
   project: Project; visible: Photo[]; kept: Photo[]; active?: Photo; busy: boolean;
@@ -24,7 +25,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   const filters: PhotoFilter[] = ['all', 'keep', 'undecided', 'reject'];
   const readOnly = !!sharing && sharing.authority !== 'local';
   return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={() => ui.setPanel('ai')} readOnly={readOnly} />
-    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 桌面缓存只读，请在 Web 继续评片。' : '共享迁移中 · 本地写入已暂停，请在导出窗口继续或显式取消迁移。'}{sharing?.remote?.webUrl && <a href={sharing.remote.webUrl} target="_blank" rel="noreferrer">打开共享评片 ↗</a>}</div>}
+    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 桌面缓存只读，请在 Web 继续评片。' : '共享迁移中 · 本地写入已暂停，请在导出窗口继续或显式取消迁移。'}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
     <div className="history-toolbar" role="group" aria-label="编辑历史">
       <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">撤销</Button>
       <Button size="small" disabled={busy || !project.history?.redoGroupId} onClick={onRedo} title="⌘ / Ctrl Shift Z">重做</Button>

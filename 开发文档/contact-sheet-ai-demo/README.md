@@ -1,5 +1,7 @@
 # FocalRoom
 
+**当前接续：M4/M5 共享协作（2026-10-17）**。按用户要求推进到 M5：新增可运行的 NestJS/PostgreSQL 权威服务、桌面真实迁移向导、Web 登录/邀请/私有预览/批注/草案修订/逐项审批/历史版本、实时 Presence/重连/撤权和受限评论 Task 工具。共享不会授予 AI 上传或作者记忆权限。可在 `between-frames` 运行 `npm run review:shared` 启动独立本地评审；全部证据、测试、失败记录和边界见 [M4/M5 验收报告](docs/V2-M4-M5-SHARED-AUTHORITY-TEST-REPORT.md)、[部署说明](between-frames/ops/shared/README.md) 与 [剩余计划](docs/V2-REMAINING-PLAN.md)。M3 专业质量、M5 真人双人项目和真实生产部署仍待完成，未开展 M6/M7。下方阶段记录保留历史，当前状态以本段及链接报告为准。
+
 产品最终名称为 **FocalRoom**（原 Between Frames / 序间）。品牌更新沿用现有应用标识、内部包名与数据库位置；旧规格和验收报告中的旧名称保留历史含义。
 
 名称、透明图案、favicon 与应用图标已接入，见 [品牌更新记录](docs/FOCALROOM-BRAND-UPDATE.md)。原图直接像素抠图，去除全部文字与白底；180 单测、17 浏览器回归与独立桌面打包通过，用户视觉评审待确认。

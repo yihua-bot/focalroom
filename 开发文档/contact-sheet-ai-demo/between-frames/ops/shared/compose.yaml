@@ -1,0 +1,31 @@
+# 独立项目栈；不引用或修改 openyc 的容器、数据库与网络。
+name: focalroom-shared-review
+services:
+  postgres:
+    image: postgres:16.14-alpine
+    environment:
+      POSTGRES_USER: focalroom
+      POSTGRES_PASSWORD: ${FOCALROOM_DB_PASSWORD:?set an isolated database password}
+      POSTGRES_DB: focalroom
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U focalroom -d focalroom"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  api:
+    build: { context: ../.., dockerfile: ops/shared/Dockerfile.api }
+    environment:
+      FOCALROOM_DATABASE_URL: postgresql://focalroom:${FOCALROOM_DB_PASSWORD}@postgres:5432/focalroom
+      FOCALROOM_WEB_ORIGIN: ${FOCALROOM_WEB_ORIGIN:-http://127.0.0.1:8084}
+      FOCALROOM_PREVIEW_DIRECTORY: /data/previews
+    volumes: [preview-data:/data/previews]
+    depends_on:
+      postgres: { condition: service_healthy }
+  web:
+    build: { context: ../.., dockerfile: ops/shared/Dockerfile.web }
+    ports: ["127.0.0.1:8084:80"]
+    depends_on: [api]
+volumes:
+  pg-data: {}
+  preview-data: {}

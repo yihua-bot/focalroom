@@ -6,6 +6,8 @@
   "actual_ai_calls": 0,
   "flows": [
     "preview-copy-export",
+    "desktop-sharing-form-1440",
+    "desktop-readonly-1280",
     "single-authority-promotion",
     "local-write-denial",
     "commit-response-loss",

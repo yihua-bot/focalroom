@@ -5,6 +5,7 @@ WORKDIR /build
 RUN mkdir -p /usr/local/cargo && \
     printf '[source.crates-io]\nreplace-with = "rsproxy"\n[source.rsproxy]\nregistry = "sparse+https://rsproxy.cn/index/"\n' > /usr/local/cargo/config.toml
 COPY Cargo.toml ./
+COPY static/ ./static/
 COPY src/ ./src/
 RUN cargo build --release
 

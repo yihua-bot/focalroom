@@ -1,3 +1,4 @@
+//! 本地夹具直连回环服务，不经过系统代理转发测试凭据。
 //! M4 垂直切片集成测试：真实 HTTP 验证 S02（撤销即拒）。
 use reqwest::{Client, Response};
 use serde_json::{json, Value};
@@ -51,7 +52,7 @@ async fn register(client: &Client, base: &str, email: &str, name: &str) -> Strin
 #[tokio::test]
 async fn s02_vertical_slice_full_flow() {
     let (base, preview_dir, pool, _guard) = spawn_server().await;
-    let client = Client::new();
+    let client = Client::builder().no_proxy().build().unwrap();
 
     let owner_token = register(&client, &base, "owner@test.dev", "Owner").await;
     let reviewer_token = register(&client, &base, "reviewer@test.dev", "Reviewer").await;
@@ -176,7 +177,7 @@ async fn s02_vertical_slice_full_flow() {
 #[tokio::test]
 async fn auth_rejects_bad_credentials() {
     let (base, _, _, _guard) = spawn_server().await;
-    let client = Client::new();
+    let client = Client::builder().no_proxy().build().unwrap();
     let resp = client
         .post(format!("{base}/auth/register"))
         .json(&json!({"email": "a@b.c", "display_name": "A", "password": "123"}))

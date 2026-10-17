@@ -1,3 +1,4 @@
+//! 本地夹具直连回环服务，不经过系统代理转发测试凭据。
 //! M5 协作全量集成测试：评论/提案/审批/权限/并发冲突/快照恢复/AI ACL。
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -75,7 +76,7 @@ async fn grant(
 #[tokio::test]
 async fn m5_full_collaboration_suite() {
     let (base, pool) = spawn().await;
-    let client = Client::new();
+    let client = Client::builder().no_proxy().build().unwrap();
 
     // 三个用户：owner、editor（可审批）、reviewer（只能评论）。
     let owner = register(&client, &base, "owner@m5.dev").await;
@@ -344,7 +345,7 @@ async fn m5_full_collaboration_suite() {
 #[tokio::test]
 async fn m5_wrong_nonce_rejected() {
     let (base, _) = spawn().await;
-    let client = Client::new();
+    let client = Client::builder().no_proxy().build().unwrap();
     let owner = register(&client, &base, "owner@nonce.dev").await;
     let pid = create_project(&client, &base, &owner).await;
 

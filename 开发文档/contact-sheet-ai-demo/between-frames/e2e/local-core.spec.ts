@@ -159,7 +159,8 @@ test('v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、�
   await expect(ownCard).toHaveCount(0);
   await page.locator('.project-list-tools').getByRole('button', { name: '归档项目', exact: true }).click();
   await ownCard.getByRole('button', { name: '恢复项目', exact: true }).click();
-  await expect(ownCard.getByText('LOCAL PROJECT', { exact: true })).toBeVisible();
+  await expect(ownCard.getByText('PROJECT CACHE', { exact: true })).toBeVisible();
+  await expect(ownCard.getByRole('button', { name: '归档项目', exact: true })).toBeVisible();
   expect(errors).toEqual([]);
   expect(externalRequests).toEqual([]);
 });

@@ -91,6 +91,28 @@ pub async fn status(store: &Store, project: &str) -> Result<Value> {
     }
     Ok(authority)
 }
+pub async fn review_url(store: &Store, project: &str) -> Result<String> {
+    review_link(&status(store, project).await?)
+}
+fn review_link(state: &Value) -> Result<String> {
+    if state["authority"] != "shared" {
+        return Err(AppError::new("AUTHORITY_MISMATCH", "项目尚未完成共享迁移"));
+    }
+    let invalid = || AppError::new("SHARE_BINDING_CHANGED", "共享评片地址与已确认绑定不符");
+    let origin = endpoint(
+        state["remote"]["binding"]["webUrl"]
+            .as_str()
+            .ok_or_else(invalid)?,
+    )?;
+    let project = state["remote"]["projectId"].as_str().ok_or_else(invalid)?;
+    uuid::Uuid::parse_str(project).map_err(|_| invalid())?;
+    let url = format!("{origin}/shared#project={project}");
+    if state["remote"]["webUrl"].as_str() != Some(url.as_str()) {
+        return Err(invalid());
+    }
+    Ok(url)
+}
+
 pub async fn share(store: &Store, request: ShareRequest) -> Result<Value> {
     static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     let _lock = LOCK.lock().await;
@@ -272,4 +294,26 @@ pub async fn share(store: &Store, request: ShareRequest) -> Result<Value> {
     }
     transition(store, &id, "completed", Some(&receipt.to_string())).await?;
     status(store, &request.project_id).await
+}
+
+#[cfg(test)]
+mod review_link_tests {
+    use super::*;
+    #[test]
+    fn browser_link_requires_completed_bound_project_and_safe_origin() {
+        let id = uuid::Uuid::new_v4().to_string();
+        let url = format!("https://review.example/shared#project={id}");
+        let mut state = json!({"authority":"shared","remote":{"binding":{"webUrl":"https://review.example"},"projectId":id,"webUrl":url}});
+        assert_eq!(review_link(&state).unwrap(), url);
+        state["authority"] = json!("local-promoting");
+        assert!(review_link(&state).is_err());
+        state["authority"] = json!("shared");
+        state["remote"]["webUrl"] = json!("https://other.example/shared");
+        assert!(review_link(&state).is_err());
+        state["remote"]["binding"]["webUrl"] = json!("file:///private/secret");
+        assert!(review_link(&state).is_err());
+        state["remote"]["binding"]["webUrl"] = json!("https://review.example");
+        state["remote"]["projectId"] = json!("../foreign?token=secret");
+        assert!(review_link(&state).is_err());
+    }
 }

@@ -1,5 +1,17 @@
 # FocalRoom：接手开发交接说明
 
+## 当前接续：M4/M5 PostgreSQL 共享协作（2026-10-17）
+
+原生续验：系统文件夹导入/共享包导出、真实迁移和只读重启已执行，50表与两张演练源图一致，发现并修复侧栏/列表的LOCAL误标及Tauri原生链接未打开问题。`open_shared_review`仅接projectId，在Rust复核完成态与绑定来源/云UUID后用macOS系统浏览器打开；不接任意URL，不经Shell，不扩大插件权限。其他原生平台显示复制地址提示。最终测试/包SHA/截图以本轮报告的新续验段为准。旧云测试Client已显式no_proxy直连回环夹具，避免系统代理造成502或转发测试凭据；保留原失败日志。
+
+先读 [本轮验收](V2-M4-M5-SHARED-AUTHORITY-TEST-REPORT.md)、[ADR0040](ADR/0040-m4-m5-postgres-shared-authority.md)、`between-frames/apps/api/README.md`、`between-frames/ops/shared/README.md`。本轮按用户要求将可验证工程推进到 M5，M3 的真人/竞品质量门槛保持独立，M6/M7 未开展。正式服务是 `apps/api` NestJS/PostgreSQL，旧 `cloud/` SQLite `/api/v2` 安全封闭；不要将其重开或直接换连接串。保留0001，追加0002，启动只核验不自动迁移。共享命令、版本、原始envelope、事件、回执事务原子，私有草案/修订/部分批准/历史版本与WS重连均有真实本地旅程。
+
+桌面真实迁移保存服务/用户/工作区/清单绑定，不持久化密码/token；不确定保持冻结，已提交不能取消。导出包是独立副本，不是迁移。桌面迁移后只读初始快照，后续版本在Web。私有网关票据短期单次且重查ACL，不能提供绕过撤权的裸桶链接。AI评论Task仅项目评论只读，不等于云模型执行或作者记忆授权。
+
+可运行 `npm run review:shared`：新临时PostgreSQL、Web1430、生成演练账户及8张仓库示例预览；地址/密码由该进程输出，不读用户图库。不要把演练账号用于公网。完整脚本 `bash "scripts/verify-all.sh" --skip-keychain`，覆盖临时PG/S3、三浏览器和真实Rust Promotion；原生构建与Vite测试必须顺序执行，最终包/日志/源码清单见本轮报告。Docker daemon不可用，未构建容器、真实R2或生产部署，不能从配置文件声称已上线。
+
+用户要求本聊天统一收口。工作期间外部HEAD从aa64110推进至24462e0；没有发现可识别的其他活动写进程，未强杀未知进程。本聊天未commit/push/reset；保留外部改动及失败日志，后续按源码SHA核验。待办是M3完整Adapter/授权/质量、生产身份/部署/备份容量、>=5真人双人项目等，详见 [剩余计划](V2-REMAINING-PLAN.md)。以下为历史。
+
 ## 最新接续：M3 同端点模型分工（2026-10-17）
 
 先读 [本轮报告](V2-M3-MODEL-ROLES-TEST-REPORT.md)、[ADR0039](ADR/0039-m3-same-endpoint-model-roles.md) 和 [模型配置](MODEL-CAPABILITIES.md)。实际观察型号与策展型号已分别配置/冻结，能力文件不能串用；图像收件人和缓存/事实检索跟随观察身份，两个角色及能力都绑定任务恢复，累计预算仍是原任务。默认复用主实例，不增加端点或跨服务传输。Prompt m3-openai-9 / Mock2 / vision2，旧 Prompt 已执行任务需重新委托。无新 schema 或依赖。

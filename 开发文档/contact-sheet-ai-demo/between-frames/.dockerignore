@@ -1,0 +1,12 @@
+.git
+**/node_modules
+**/target
+**/target-v1
+**/dist
+test-results
+playwright-report
+*.sqlite*
+*.db
+**/.env*
+**/*credentials*.json
+**/r2-config.json

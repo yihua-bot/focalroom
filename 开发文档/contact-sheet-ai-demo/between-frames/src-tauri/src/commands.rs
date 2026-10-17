@@ -360,6 +360,38 @@ pub async fn get_sharing_status(
     crate::shared_cloud::status(&state.store, &project_id).await
 }
 #[tauri::command]
+pub async fn open_shared_review(state: State<'_, Backend>, project_id: String) -> Result<()> {
+    let url = crate::shared_cloud::review_url(&state.store, &project_id).await?;
+    #[cfg(target_os = "macos")]
+    {
+        tokio::task::spawn_blocking(move || {
+            let status = std::process::Command::new("/usr/bin/open")
+                .arg("--")
+                .arg(url)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map_err(|_| AppError::new("BROWSER_OPEN_FAILED", "无法打开系统浏览器"))?;
+            if status.success() {
+                Ok(())
+            } else {
+                Err(AppError::new("BROWSER_OPEN_FAILED", "无法打开系统浏览器"))
+            }
+        })
+        .await
+        .map_err(|_| AppError::new("BROWSER_OPEN_FAILED", "无法打开系统浏览器"))?
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = url;
+        Err(AppError::new(
+            "UNSUPPORTED_PLATFORM",
+            "请复制评片地址到系统浏览器",
+        ))
+    }
+}
+#[tauri::command]
 pub async fn share_project(
     app: AppHandle,
     state: State<'_, Backend>,

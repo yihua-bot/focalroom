@@ -1,3 +1,6 @@
+> 2026-10-17：正式 v2 共享权威为 `../apps/api` 的 NestJS/PostgreSQL 服务。
+> 本目录 SQLite 的 `/api/v2` 适配草案存在密码与提交边界缺口，现已安全封闭并返回 501/UNSUPPORTED_AUTHORITY；保留源码供比对，不再自动创建 v2 草案表。旧 v1 协议测试不代表正式作品审批完成。不得把实验服务或其 Dockerfile 当作 PostgreSQL 生产服务。
+
 # M4 本地云协议验证切片
 
 本目录已有 axum HTTP 服务，验证注册/登录、项目所有者授权、项目预览读取和撤销拒绝。**只实现 SQLite 本地协议；没有部署到腾讯云，不是生产共享项目权威。** PostgreSQL 不能只换连接串：当前使用 `SqlitePool`、SQLite 时间函数和 schema，需另行实现迁移、事务、集成测试。

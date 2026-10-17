@@ -123,7 +123,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       : <EmptyState title="选择一张照片" hint="点击网格，开始检查画面。" />)
       : ui.panel === 'ai' ? <><AIPanel repository={local ? repository : undefined} project={project} selectedIds={selectedIds} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /><ProposalsPanel project={project} enabled={local} /></> : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
   </aside> : undefined;
-  return <><AppShell inspector={panel} collapsed={!ui.sidebarOpen} nav={<SideNav project={navProject} page={route.page} view={ui.view} local={local}
+  return <><AppShell inspector={panel} collapsed={!ui.sidebarOpen} nav={<SideNav project={navProject} page={route.page} view={ui.view} local={local} authority={sharing.data?.authority}
     onView={view => { if (!navProject) return; if (route.page === 'projects') navigate(navProject.id); ui.setView(view); }}
     onProjects={() => { setArchived(false); navigate(null); }} onMemory={() => { if (navProject) navigate(navProject.id); ui.setPanel('memory'); }} onHelp={() => setDialog({ kind: 'help' })} />}>
     {query.isPending ? <p role="status" className="page-message">正在打开示例项目…</p> : query.isError ? <EmptyState title="项目加载失败" hint={query.error.message} action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />

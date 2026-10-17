@@ -60,6 +60,12 @@ cargo build --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/targe
 if [ "$SKIP_INTEGRATION" = "0" ]; then
   step "真实后端集成 E2E（含 Beta 旅程）"
   CARGO_TARGET_DIR="target-v1" npm run test:integration
+  step "M4/M5 PostgreSQL 与私有存储边界（全新临时 cluster）"
+  npm run test:cloud:pg
+  step "M4/M5 三会话 Web 与真实 Rust Promotion"
+  node "apps/api/test/run.mjs" "apps/api/test/web-journey.mjs"
+  node "apps/api/test/run.mjs" "apps/api/test/native-promotion.mjs"
+  npm run test:web
 fi
 
 printf '\n\033[32m全部通过。\033[0m 性能基线（可选，手动运行）：\n'

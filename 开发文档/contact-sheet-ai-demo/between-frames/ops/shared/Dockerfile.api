@@ -1,0 +1,14 @@
+FROM node:25.8.1-alpine
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY packages/contracts/package.json ./packages/contracts/package.json
+RUN npm ci --omit=dev --workspace @betweenframes/api --workspace @betweenframes/contracts --include-workspace-root=false
+COPY apps/api/src ./apps/api/src
+COPY apps/api/migrations ./apps/api/migrations
+COPY packages/contracts/src ./packages/contracts/src
+RUN mkdir -p /data/previews && chown -R node:node /data
+USER node
+ENV FOCALROOM_API_HOST=0.0.0.0 FOCALROOM_API_PORT=3002
+EXPOSE 3002
+CMD ["node", "apps/api/src/server.ts"]

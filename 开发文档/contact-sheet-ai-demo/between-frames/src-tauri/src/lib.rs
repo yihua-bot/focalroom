@@ -94,6 +94,7 @@ pub fn run() {
             commands::relink_photo,
             commands::export_project,
             commands::get_sharing_status,
+            commands::open_shared_review,
             commands::share_project
         ])
         .run(tauri::generate_context!())

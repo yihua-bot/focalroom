@@ -1,3 +1,4 @@
+//! 本地夹具直连回环服务，不经过系统代理转发测试凭据。
 //! 真实 HTTP、独立临时库和生成 JPEG；不使用用户库、原片或生产凭证。
 use reqwest::{Client, StatusCode};
 use serde_json::{json, Value};
@@ -32,7 +33,7 @@ impl Server {
         });
         Self {
             base,
-            client: Client::new(),
+            client: Client::builder().no_proxy().build().unwrap(),
             pool,
             temp,
             task,
@@ -203,7 +204,7 @@ async fn start_binary(temp: &tempfile::TempDir) -> (tokio::process::Child, Strin
 #[tokio::test]
 async fn first_start_creates_database_and_process_restart_preserves_login_and_project() {
     let temp = tempfile::tempdir().unwrap();
-    let client = Client::new();
+    let client = Client::builder().no_proxy().build().unwrap();
     let (mut child, base) = start_binary(&temp).await;
     assert!(temp.path().join("new.sqlite").is_file());
     assert!(temp.path().join("new-previews").is_dir());
@@ -545,5 +546,64 @@ async fn symlink_preview_cannot_read_a_file_outside_the_preview_directory() {
             .await
             .status(),
         404
+    );
+}
+
+#[tokio::test]
+async fn unreviewed_sqlite_v2_cannot_bypass_password_or_issue_shared_authority() {
+    let server = Server::new().await;
+    let account = server.register("existing-v2@example.com").await;
+    let token = account["token"].as_str().unwrap();
+    let sessions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
+        .fetch_one(&server.pool)
+        .await
+        .unwrap();
+    let login = server
+        .client
+        .post(format!("{}/api/v2/auth/login", server.base))
+        .json(&json!({"email":"existing-v2@example.com","password":"wrong-password"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(login.status(), StatusCode::NOT_IMPLEMENTED);
+    let value: Value = login.json().await.unwrap();
+    assert_eq!(value["error"]["code"], "UNSUPPORTED_AUTHORITY");
+    assert!(value.get("token").is_none());
+    for (method, path) in [
+        ("GET", "/api/v2/workspaces"),
+        ("POST", "/api/v2/promotions"),
+        ("PUT", "/api/v2/projects/project/previews/photo"),
+        ("POST", "/api/v2/projects/project/finalize"),
+        ("POST", "/api/v2/projects/project/abort"),
+    ] {
+        let response = server
+            .client
+            .request(method.parse().unwrap(), format!("{}{path}", server.base))
+            .bearer_auth(token)
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED, "{path}");
+    }
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM sessions")
+            .fetch_one(&server.pool)
+            .await
+            .unwrap(),
+        sessions
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM cloud_projects")
+            .fetch_one(&server.pool)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        std::fs::read_dir(server.temp.path().join("previews"))
+            .unwrap()
+            .count(),
+        0
     );
 }

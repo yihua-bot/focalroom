@@ -3,7 +3,9 @@
   "users": 3,
   "browser_contexts": 3,
   "real_postgres": true,
-  "images": 3,
+  "images": 54,
+  "paging_project": 51,
+  "maximum_grid_nodes": 48,
   "actual_ai_calls": 0,
   "original_uploads": 0,
   "page_errors": [],
@@ -13,11 +15,14 @@
     "preview-copy-import",
     "invitation",
     "photo-anchor",
+    "private-draft-save",
+    "owned-draft-revision",
     "reviewer-proposal",
-    "owner-approval",
+    "partial-owner-approval",
     "immutable-history",
     "Yjs-private-note-reload",
     "Viewer-readonly",
-    "live-revocation"
+    "live-revocation",
+    "51-photo-pagination"
   ]
 }

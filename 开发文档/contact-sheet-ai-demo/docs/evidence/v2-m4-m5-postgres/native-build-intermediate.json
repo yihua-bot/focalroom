@@ -1,0 +1,12 @@
+{
+  "app": "/Users/yihua/Documents/film/\u5f00\u53d1\u6587\u6863/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/FocalRoom Shared Review.app",
+  "identifier": "studio.focalroom.v2sharedreview",
+  "name": "FocalRoom Shared Review",
+  "executable": "/Users/yihua/Documents/film/\u5f00\u53d1\u6587\u6863/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/FocalRoom Shared Review.app/Contents/MacOS/between-frames",
+  "executable_mib": 59.66,
+  "sha256": "8bdc56ec2850528870e48867753bfe1ee074e8cb7cd12b4f6f0b3af7cbe1836f",
+  "icon_sha256": "3f5812cdba6755ca82e55898731fba6d15ae725378c8164d0cfe967dcfd43b5a",
+  "natural_language_weak_linked": true,
+  "bundled_icon_matches_source": true,
+  "build_log": "native-fix-build-native.log"
+}

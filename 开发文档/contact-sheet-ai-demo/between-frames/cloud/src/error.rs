@@ -32,6 +32,13 @@ impl AppError {
     pub(crate) fn validation(message: &str) -> Self {
         Self::new(StatusCode::BAD_REQUEST, "VALIDATION_ERROR", message)
     }
+    pub(crate) fn unsupported(message: &str) -> Self {
+        Self::new(
+            StatusCode::NOT_IMPLEMENTED,
+            "UNSUPPORTED_AUTHORITY",
+            message,
+        )
+    }
     pub(crate) fn internal() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
