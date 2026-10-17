@@ -1,5 +1,5 @@
-import { sendPasswordResetEmail, sendVerificationEmail } from "./email";
-import { listTaskResults, storeTaskResult, summarizeProjectComments } from "./agent-tasks";
+import { sendPasswordResetEmail, sendVerificationEmail } from "./email.ts";
+import { listTaskResults, storeTaskResult, summarizeProjectComments } from "./agent-tasks.ts";
 import { randomBytes, randomUUID, scrypt } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";

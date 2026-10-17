@@ -1,5 +1,7 @@
 # Between Frames · Beta 试用手册
 
+> 本文件保留 2026-10-14 的历史试用说明。当前 FocalRoom 的操作与功能边界请阅读 [详细使用操作说明书](FOCALROOM-USER-MANUAL.md) 或 [浏览器阅读版](FOCALROOM-USER-MANUAL.html)；下文有关原图、记忆、模型与共享的旧限制不代表当前实现。
+
 版本：v1.0 M5 Review（2026-10-14）· 未签名调试构建，供试用与评审，非正式发行版。
 
 ## 一、安装与启动
