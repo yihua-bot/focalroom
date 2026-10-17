@@ -86,6 +86,10 @@ class ApiController {
     }
     if (path === "/workspaces" && req.method === "GET")
       return s.workspaces(headers);
+    if (path === "/auth/forgot-password" && req.method === "POST")
+      return s.forgotPassword(req.body, req.ip ?? "");
+    if (path === "/auth/reset-password" && req.method === "POST")
+      return s.resetPassword(req.body);
     if (path === "/agent/comments" && req.method === "GET")
       return s.agentComments(headers);
     if (path === "/projects" && req.method === "GET")
