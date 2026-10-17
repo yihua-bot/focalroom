@@ -1,4 +1,5 @@
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email.ts";
+import { checkRateLimits } from "./rate-limit.ts";
 import { listTaskResults, storeTaskResult, summarizeProjectComments } from "./agent-tasks.ts";
 import { randomBytes, randomUUID, scrypt } from "node:crypto";
 import type { Pool } from "pg";
@@ -1093,13 +1094,11 @@ export class CloudService {
       ).rows[0];
       if (!user) return { sent: true }; // 同上
       // 每邮箱每小时最多 3 次。
-      const recent = (
-        await tx.query(
-          "SELECT COUNT(*) FROM fr_password_reset_tokens WHERE user_id=$1 AND created_at>now()-interval '1 hour'",
-          [user.id],
-        )
-      ).rows[0].count;
-      assert(Number(recent) < 3, 429, "RATE_LIMITED", "重置请求过于频繁，请稍后再试");
+      // 集中限流：每邮箱每小时 3 次（PostgreSQL 后端）。
+      const { allowed: resetAllowed } = await checkRateLimits(this.pool, [
+        { key: `pwd-reset:${digest(email)}`, limit: 3 },
+      ]);
+      assert(resetAllowed, 429, "RATE_LIMITED", "重置请求过于频繁，请稍后再试");
       const raw = randomBytes(32).toString("hex");
       const tokenDigest = digest(raw);
       await tx.query(
@@ -1148,6 +1147,11 @@ export class CloudService {
         principal.role === "OWNER" || principal.role === "ADMIN",
         403, "PERMISSION_DENIED", "只有所有者或管理员可以触发 AI 汇总",
       );
+      // 集中限流：每项目每分钟 2 次 AI 汇总。
+      const { allowed: aiAllowed } = await checkRateLimits(this.pool, [
+        { key: `agent-summarize:${projectId}`, limit: 2 },
+      ]);
+      assert(aiAllowed, 429, "RATE_LIMITED", "AI 汇总请求过于频繁");
       const comments = (
         await tx.query(
           "SELECT u.display_name AS reviewer, c.body FROM fr_comments c JOIN fr_users u ON u.id=c.author_id WHERE c.project_id=$1 ORDER BY c.created_at LIMIT 50",

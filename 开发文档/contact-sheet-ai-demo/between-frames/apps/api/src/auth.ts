@@ -1,3 +1,4 @@
+import { checkRateLimits } from "./rate-limit.ts";
 import { randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import type { Pool, PoolClient } from "pg";
@@ -35,7 +36,6 @@ export class AuthService {
   readonly origin: string;
   readonly secure: boolean;
   private running = 0;
-  private attempts = new Map<string, { count: number; expires: number }>();
   constructor(pool: Pool, origin: string) {
     this.pool = pool;
     this.origin = origin;
@@ -57,25 +57,12 @@ export class AuthService {
       "VALIDATION_ERROR",
       "账户信息不完整",
     );
-    for (const [key, entry] of this.attempts)
-      if (entry.expires < Date.now()) this.attempts.delete(key);
-    for (const [key, limit] of [
-      [digest(ip), 60],
-      [digest(value.email), 10],
-    ] as const) {
-      const entry = this.attempts.get(key) ?? {
-        count: 0,
-        expires: Date.now() + 60000,
-      };
-      assert(
-        entry.count < limit && this.attempts.size < 4096,
-        429,
-        "RATE_LIMITED",
-        "登录尝试过多，请稍后重试",
-      );
-      entry.count++;
-      this.attempts.set(key, entry);
-    }
+    // 集中限流（PostgreSQL 后端，多实例共享配额）。
+    const { allowed } = await checkRateLimits(this.pool, [
+      { key: `auth:ip:${digest(ip)}`, limit: 60 },
+      { key: `auth:email:${digest(value.email)}`, limit: 10 },
+    ]);
+    assert(allowed, 429, "RATE_LIMITED", "登录尝试过多，请稍后重试");
     assert(this.running < 4, 429, "AUTH_BUSY", "认证繁忙，请稍后重试");
     this.running++;
     try {
