@@ -38,7 +38,7 @@ pub(crate) async fn list_previews(
         return Err(AppError::forbidden("无权访问此项目"));
     }
     let files: Vec<PreviewRow> = sqlx::query_as(
-        "SELECT sha256,width,height,file_size FROM preview_files WHERE project_id=? ORDER BY id",
+        "SELECT sha256,width,height,file_size FROM preview_files WHERE project_id=? AND file_size>0 ORDER BY id",
     )
     .bind(&project_id)
     .fetch_all(&state.pool)
