@@ -1,3 +1,4 @@
+import { useWebI18n } from '../i18n';
 import { sharedSnapshotSchema } from "@betweenframes/contracts";
 import { useEffect, useState } from "react";
 import {
@@ -163,6 +164,7 @@ export function HistoryPanel({
   session: Session;
   revision: number;
 }) {
+  const { fmtDate } = useWebI18n();
   const [viewing, setViewing] = useState<{
     revision: number;
     snapshot: CloudSnapshot["snapshot"];
@@ -217,7 +219,7 @@ export function HistoryPanel({
           >
             查看版本
           </button>
-          <time>{new Date(v.created_at).toLocaleString()}</time>
+          <time>{fmtDate(v.created_at)}</time>
           <small>
             {v.command_id.startsWith("promotion:")
               ? "共享副本建立"
