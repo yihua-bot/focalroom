@@ -6,7 +6,8 @@ import { Button } from '../../components/shared/Button';
 import { EmptyState } from '../../components/shared/EmptyState';
 
 export function ProjectList({ projects, onOpen, onCreate, local = false, archived = false, onArchive, onRestore, onToggleArchive }: {
-  projects: Project[]; onOpen: (id: string) => void; onCreate: () => void; local?: boolean; archived?: boolean;
+  projects: Project[]; onOpen: (id: string) => void; onCreate: () => void;
+  onQuickStart?: () => void; local?: boolean; archived?: boolean;
   onArchive?: (project: Project) => void; onRestore?: (project: Project) => void; onToggleArchive?: () => void;
 }) {
   const [filterTag, setFilterTag] = useState<string | null>(null);

@@ -11,6 +11,7 @@ import { Workspace } from './Workspace';
 import { zh } from './copy';
 import { ProjectList } from '../features/project/ProjectList';
 import { ProjectDialog } from '../features/project/ProjectDialog';
+import { QuickStartModal } from '../features/quick-start/QuickStartModal';
 import { PhotoInspector } from '../components/inspector/PhotoInspector';
 import { CompareModal } from '../components/compare/CompareModal';
 import { AgentStatus } from '../features/ai-editor/AgentStatus';
@@ -27,7 +28,7 @@ import { VersionsDialog } from '../features/project/VersionsDialog';
 import { Lightbox } from '../components/inspector/Lightbox';
 import type { SelectionGesture } from '../domain/selection';
 
-type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
+type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' | 'quickStart' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
 
 export function AppController({ repository }: { repository: ProjectRepository }) {
   const local = isDesktopRepository(repository);
@@ -38,6 +39,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const query = useQuery({ queryKey: ['projects', archived], queryFn: () => repository.list(archived), refetchOnWindowFocus: local ? 'always' : false });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
+  const [pendingGoal, setPendingGoal] = useState<{ goal: string; count: number } | null>(null);
   const [notice, setNotice] = useState('');
   useEffect(() => {
     if (!local) return;
@@ -121,7 +123,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       onRelink={local ? () => { act(async () => (await repository.relink(project.id, active.id)) ?? project); } : undefined}
       onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
       : <EmptyState title="选择一张照片" hint="点击网格，开始检查画面。" />)
-      : ui.panel === 'ai' ? <><AIPanel repository={local ? repository : undefined} project={project} selectedIds={selectedIds} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /><ProposalsPanel project={project} enabled={local} /></> : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
+      : ui.panel === 'ai' ? <><AIPanel repository={local ? repository : undefined} project={project} selectedIds={selectedIds} initialGoal={pendingGoal?.goal} initialCount={pendingGoal?.count} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /><ProposalsPanel project={project} enabled={local} /></> : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
   </aside> : undefined;
   return <><AppShell inspector={panel} collapsed={!ui.sidebarOpen} nav={<SideNav project={navProject} page={route.page} view={ui.view} local={local} authority={sharing.data?.authority}
     onView={view => { if (!navProject) return; if (route.page === 'projects') navigate(navProject.id); ui.setView(view); }}
@@ -136,7 +138,8 @@ export function AppController({ repository }: { repository: ProjectRepository })
   </AppShell>
     {local && project && !(ui.inspectorOpen && ui.panel === 'ai') && <AgentStatus repository={repository} projectId={project.id} onOpen={() => ui.setPanel('ai')} />}
     {notice && <div role="status" className="toast">{notice}</div>}
-    {(dialog?.kind === 'create' || dialog?.kind === 'edit') && <ProjectDialog project={dialog.kind === 'edit' ? project : undefined} busy={mutation.isPending} onClose={() => setDialog(null)} onSave={(title, brief, tags) => {
+    {dialog?.kind === 'quickStart' && local && <QuickStartModal onClose={() => setDialog(null)} onCreate={(title, goal, count) => { setPendingGoal({ goal, count }); mutation.mutate(() => repository.create(title, ''), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); setLastProjectId(created.id); navigate(created.id); } }); }} onImport={() => setTimeout(() => setDialog({ kind: 'import' }), 300)} />}
+      {(dialog?.kind === 'create' || dialog?.kind === 'edit') && <ProjectDialog project={dialog.kind === 'edit' ? project : undefined} busy={mutation.isPending} onClose={() => setDialog(null)} onSave={(title, brief, tags) => {
       if (dialog.kind === 'edit' && project) act(async () => { const updated = await repository.edit(project.id, title, brief); if (tags) await repository.setTags(project.id, tags); return updated; }, local ? '项目已保存到本地' : zh.savedProject, true);
       else mutation.mutate(() => repository.create(title, brief), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); setLastProjectId(created.id); navigate(created.id); } });
     }} />}

@@ -14,13 +14,13 @@ const budgetFields: { key: keyof AgentBudget; label: string; min: number; max: n
  { key: 'maxTotalTokens', label: '累计文本估算上限', min: 128, max: 2000000 }, { key: 'maxOutputTokens', label: '输出估算上限', min: 128, max: 16000 },
  { key: 'maxCloudImages', label: '云端图像上限（张）', min: 0, max: 100 }, { key: 'maxCostMinorUsd', label: '费用上限（美分）', min: 0, max: 100000 },
 ];
-export function AIPanel({ repository, project, selectedIds, onUpdated }: { repository?: DesktopProjectRepository; project: Project; selectedIds: string[]; onUpdated: (project: Project) => void }) {
+export function AIPanel({ repository, project, selectedIds, onUpdated, initialGoal, initialCount }: { repository?: DesktopProjectRepository; project: Project; selectedIds: string[]; onUpdated: (project: Project) => void; initialGoal?: string; initialCount?: number }) {
  const client = useQueryClient();
  const key = ['agent', project.id];
  const query = useQuery({ queryKey: key, queryFn: () => repository!.agent.query(project.id), enabled: Boolean(repository), refetchInterval: repository ? 800 : false, refetchOnWindowFocus: 'always' });
  const [composerOpen, setComposerOpen] = useState(!query.data?.tasks.length);
- const [goal, setGoal] = useState('给出两版更克制的 25 张作品序列');
- const [count, setCount] = useState(25);
+ const [goal, setGoal] = useState(initialGoal ?? '给出两版更克制的 25 张作品序列');
+ const [count, setCount] = useState(initialCount ?? 25);
  const [scopeSelection, setScopeSelection] = useState(false);
  const [budget, setBudget] = useState<AgentBudget>({ ...defaultAgentBudget });
  const [budgetEdited, setBudgetEdited] = useState(false);
