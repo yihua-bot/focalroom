@@ -1,0 +1,15 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.73s
+     Running unittests src/lib.rs (src-tauri/target-v1/debug/deps/between_frames_lib-d739ba835d550501)
+
+running 7 tests
+test agent::semantic::tests::native_chinese_and_english_rank_real_sentence_vectors ... ignored, 需本机已有 Apple 中英文句向量；显式执行，不下载资产
+test agent::semantic::tests::cosine_rejects_invalid_vectors_and_keeps_signed_similarity ... ok
+test agent::semantic::tests::invalid_or_empty_requests_skip_native_work_explicitly ... ok
+test agent::semantic_index::tests::refuses_linked_cache_file_and_directory_without_touching_target ... ok
+test agent::semantic_index::tests::corrupt_or_oversized_cache_is_a_miss_and_invalid_vectors_cannot_replace_file ... ok
+test agent::semantic_index::tests::persists_incrementally_replaces_changed_photo_and_bounds_old_entries ... ok
+test agent::semantic_index::tests::database_project_isolation_and_purge_command_clear_derived_vectors ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 11 filtered out; finished in 0.10s
+

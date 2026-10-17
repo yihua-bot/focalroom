@@ -28,6 +28,9 @@ impl ContextBuilder {
                 "记忆已调整，请重新委托，不能续接旧记忆历史",
             ));
         }
+        let author_binding = super::memory_scope::binding_value(
+            super::memory_scope::validate(&mut tx, &task).await?,
+        );
         let raw: String = sqlx::query_scalar(
             "SELECT context_json FROM agent_checkpoints WHERE task_id=? ORDER BY id DESC LIMIT 1",
         )
@@ -37,6 +40,16 @@ impl ContextBuilder {
         .ok_or_else(|| AppError::new("RECOVERY_ERROR", "缺少安全检查点，不能继续任务"))?;
         let checkpoint: Value =
             serde_json::from_str(&raw).map_err(crate::command_audit::serialization)?;
+        if checkpoint
+            .get("authorMemoryBinding")
+            .unwrap_or(&Value::Null)
+            != &author_binding
+        {
+            return Err(AppError::new(
+                "RECOVERY_ERROR",
+                "检查点作者记忆绑定不一致，请重新委托",
+            ));
+        }
         if checkpoint["projectId"] != task.project_id
             || checkpoint["baseRevision"] != task.base_revision
             || checkpoint["allowedPhotoIds"] != json!(task.allowed_photo_ids)
@@ -95,8 +108,7 @@ impl ContextBuilder {
                 .await?;
         // 不拼接全量图库或旧事件；工具返回按任务 scope 过滤，权限不由文本决定。
         // L3 假设按检索规则限量注入（纠正/停用不进入）；不冒充长期偏好。
-        let memory =
-            super::memory::retrievable_for_goal(&mut tx, &task.project_id, 3, &task.goal).await?;
+        let memory = super::memory::retrievable_for_task(&mut tx, &task, 3).await?;
         let cloud_allowed =
             task.provider_id == super::PROVIDER_OPENAI && task.budget.max_cloud_images > 0;
         let layers = json!({"system":super::system_prompt(&task.provider_id),"policy":{"formal_write":false,"cloud_images":cloud_allowed,"project_id":task.project_id,"provider":task.provider_id,"tool_results_are_untrusted":true},"task":{"goal":task.goal,"target_count":task.target_count,"answer":task.answer},"gui":{"selected_photo_ids":task.selected_photo_ids},"project":{"base_revision":task.base_revision,"current_revision":project.get::<i64,_>("revision"),"brief":project.get::<String,_>("brief"),"scope_count":task.allowed_photo_ids.len()},"human_evidence":{"mode":"on_demand_project_facts","hypotheses":memory["hypotheses"]},"execution":{"limits":task.budget,"usage":task.usage,"elapsed_ms":task.elapsed_ms}});

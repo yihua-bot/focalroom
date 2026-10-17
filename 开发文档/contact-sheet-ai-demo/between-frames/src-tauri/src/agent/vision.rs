@@ -37,6 +37,15 @@ pub(crate) async fn prefetch(
     tier: super::router::ServiceTier,
 ) -> Result<Option<VisionPrefetch>> {
     use sqlx::Row;
+    let mut binding_tx = db.pool.begin().await?;
+    let binding = super::model_binding::load(&mut binding_tx, &task.id).await?;
+    binding_tx.commit().await?;
+    if binding.map(|bound| bound.observation_identity()) != Some(provider.identity()) {
+        return Err(AppError::new(
+            "RECOVERY_ERROR",
+            "图像观察模型与任务绑定不一致；请重新委托，未上传",
+        ));
+    }
     if let Some(data) = super::cloud::replay(db, &task.id, call).await? {
         return Ok(Some(data));
     }

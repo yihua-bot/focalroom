@@ -205,14 +205,14 @@ fn spawn_server(script: Script) -> (String, Arc<Mutex<State>>) {
     (format!("http://{addr}"), state)
 }
 
-async fn grant(db: &Store, project: &Project, mode: &str) -> ConsentView {
+async fn grant(db: &Store, project: &Project, mode: &str, base: &str) -> ConsentView {
     consent::set(
         db,
         consent::SetConsent {
             request_id: domain::id(),
             project_id: project.id.clone(),
             mode: mode.into(),
-            provider: "openai".into(),
+            provider: recipient(base, "test-model"),
             quota: 10,
         },
     )
@@ -227,7 +227,6 @@ async fn zero_cost_and_exhausted_tool_budget_stop_before_upload() {
     for (cost, tools) in [(0, 40), (100, 1), (15, 40)] {
         let temp = tempfile::tempdir().unwrap();
         let (db, p) = setup(temp.path(), 2).await;
-        let consent = grant(&db, &p, "project").await;
         let (base, state) = spawn_server(Script {
             main: vec![
                 "tool:list_photos".into(),
@@ -235,6 +234,8 @@ async fn zero_cost_and_exhausted_tool_budget_stop_before_upload() {
             ],
             vision: VisionReply::Valid,
         });
+        let consent = grant(&db, &p, "project", &base).await;
+
         let task = CommandHandler::new(&db)
             .agent_request(AgentRequest {
                 request_id: domain::id(),
@@ -259,7 +260,7 @@ async fn zero_cost_and_exhausted_tool_budget_stop_before_upload() {
         assert_eq!(view.tasks[0].state, "paused");
         assert_eq!(image_requests(&state.lock().unwrap()), 0);
         assert_eq!(
-            consent::effective_view(&db, &p.id, "openai")
+            consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
                 .await
                 .unwrap()
                 .unwrap()
@@ -277,7 +278,6 @@ async fn task_consent_is_bound_once_and_never_used_as_project_fallback() {
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
     let temp = tempfile::tempdir().unwrap();
     let (db, p) = setup(temp.path(), 2).await;
-    let consent = grant(&db, &p, "task").await;
     let ids: Vec<_> = p.photos.iter().map(|p| p.id.clone()).collect();
     let (base, state) = spawn_server(Script {
         main: vec![
@@ -290,6 +290,8 @@ async fn task_consent_is_bound_once_and_never_used_as_project_fallback() {
         ],
         vision: VisionReply::Valid,
     });
+    let consent = grant(&db, &p, "task", &base).await;
+
     let first = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
     let owner: String = sqlx::query_scalar("SELECT task_id FROM privacy_consents WHERE id=?")
         .bind(consent.id)
@@ -339,7 +341,6 @@ async fn paused_upload_settles_and_replays_after_restart_without_retransmission(
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
     let temp = tempfile::tempdir().unwrap();
     let (db, p) = setup(temp.path(), 2).await;
-    let consent = grant(&db, &p, "project").await;
     let (base, state) = spawn_server(Script {
         main: vec![
             "tool:list_photos".into(),
@@ -348,6 +349,8 @@ async fn paused_upload_settles_and_replays_after_restart_without_retransmission(
         ],
         vision: VisionReply::Delayed,
     });
+    let consent = grant(&db, &p, "project", &base).await;
+
     let task = start_vision_task(
         &db,
         &p,
@@ -436,7 +439,6 @@ async fn invalid_observations_never_enter_cache_and_uploads_remain_charged() {
     ] {
         let temp = tempfile::tempdir().unwrap();
         let (db, p) = setup(temp.path(), 2).await;
-        let consent = grant(&db, &p, "project").await;
         let (base, state) = spawn_server(Script {
             main: vec![
                 "tool:list_photos".into(),
@@ -444,6 +446,8 @@ async fn invalid_observations_never_enter_cache_and_uploads_remain_charged() {
             ],
             vision: VisionReply::InvalidObservation(kind),
         });
+        let consent = grant(&db, &p, "project", &base).await;
+
         let task = start_vision_task(
             &db,
             &p,
@@ -458,7 +462,7 @@ async fn invalid_observations_never_enter_cache_and_uploads_remain_charged() {
         assert_eq!(view.tasks[0].state, "failed", "{kind}");
         assert_eq!(view.tasks[0].usage.cloud_images, 2, "{kind}");
         assert_eq!(
-            consent::effective_view(&db, &p.id, "openai")
+            consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
                 .await
                 .unwrap()
                 .unwrap()
@@ -484,7 +488,6 @@ async fn malformed_vision_response_keeps_upload_reservation_instead_of_free_retr
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
     let temp = tempfile::tempdir().unwrap();
     let (db, p) = setup(temp.path(), 2).await;
-    let consent = grant(&db, &p, "project").await;
     let (base, state) = spawn_server(Script {
         main: vec![
             "tool:list_photos".into(),
@@ -492,6 +495,8 @@ async fn malformed_vision_response_keeps_upload_reservation_instead_of_free_retr
         ],
         vision: VisionReply::InvalidJson,
     });
+    let consent = grant(&db, &p, "project", &base).await;
+
     let task = start_vision_task(
         &db,
         &p,
@@ -506,7 +511,7 @@ async fn malformed_vision_response_keeps_upload_reservation_instead_of_free_retr
     assert_eq!(view.tasks[0].usage.cloud_images, 2);
     assert!(view.tasks[0].usage.cost_minor_usd > 0);
     assert_eq!(
-        consent::effective_view(&db, &p.id, "openai")
+        consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
             .await
             .unwrap()
             .unwrap()
@@ -523,7 +528,6 @@ async fn timed_out_upload_is_charged_and_resume_does_not_send_it_again() {
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
     let temp = tempfile::tempdir().unwrap();
     let (db, p) = setup(temp.path(), 2).await;
-    let consent = grant(&db, &p, "project").await;
     let (base, state) = spawn_server(Script {
         main: vec![
             "tool:list_photos".into(),
@@ -531,6 +535,8 @@ async fn timed_out_upload_is_charged_and_resume_does_not_send_it_again() {
         ],
         vision: VisionReply::Timeout,
     });
+    let consent = grant(&db, &p, "project", &base).await;
+
     let task = CommandHandler::new(&db)
         .agent_request(AgentRequest {
             request_id: domain::id(),
@@ -587,7 +593,6 @@ async fn crashed_in_flight_upload_keeps_reservation_and_cannot_retransmit_on_res
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
     let temp = tempfile::tempdir().unwrap();
     let (db, p) = setup(temp.path(), 2).await;
-    let consent = grant(&db, &p, "project").await;
     let (base, state) = spawn_server(Script {
         main: vec![
             "tool:list_photos".into(),
@@ -595,6 +600,8 @@ async fn crashed_in_flight_upload_keeps_reservation_and_cannot_retransmit_on_res
         ],
         vision: VisionReply::Delayed,
     });
+    let consent = grant(&db, &p, "project", &base).await;
+
     let task = start_vision_task(
         &db,
         &p,
@@ -657,7 +664,6 @@ async fn unexpected_provider_usage_is_visible_and_stops_further_requests() {
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
     let temp = tempfile::tempdir().unwrap();
     let (db, p) = setup(temp.path(), 2).await;
-    let consent = grant(&db, &p, "project").await;
     let (base, state) = spawn_server(Script {
         main: vec![
             "tool:list_photos".into(),
@@ -666,6 +672,8 @@ async fn unexpected_provider_usage_is_visible_and_stops_further_requests() {
         ],
         vision: VisionReply::UnexpectedUsage,
     });
+    let consent = grant(&db, &p, "project", &base).await;
+
     let task = start_vision_task(
         &db,
         &p,
@@ -1221,6 +1229,15 @@ fn engine(db: &Store, base_url: &str) -> AgentEngine {
         }))),
     )
 }
+fn recipient(base: &str, model: &str) -> String {
+    OpenAiProvider::new(OpenAiConfig {
+        base_url: base.into(),
+        model: model.into(),
+        api_key: "test-key-abcd".into(),
+    })
+    .identity()
+    .consent_provider()
+}
 fn configured_provider(config: OpenAiConfig) -> OpenAiProvider {
     let profile = CapabilityProfile::declared(
         &config.base_url,
@@ -1250,6 +1267,673 @@ fn image_requests(state: &State) -> usize {
         .count()
 }
 
+fn role_provider(
+    base: &str,
+    model: &str,
+    key: &str,
+    capabilities: &[Capability],
+) -> Arc<OpenAiProvider> {
+    Arc::new(
+        OpenAiProvider::with_capability_profile(
+            OpenAiConfig {
+                base_url: base.into(),
+                model: model.into(),
+                api_key: key.into(),
+            },
+            CapabilityProfile::declared(base, model, capabilities),
+        )
+        .unwrap(),
+    )
+}
+fn role_engine(db: &Store, base: &str, curator: &str, observer: &str) -> AgentEngine {
+    AgentEngine::with_providers(
+        db.clone(),
+        Arc::new(agent::provider::MockProvider),
+        Some(role_provider(
+            base,
+            curator,
+            "test-key-abcd",
+            &[Capability::ToolCalling, Capability::InstructionFollowing],
+        )),
+    )
+    .with_observation_provider(role_provider(
+        base,
+        observer,
+        "test-key-abcd",
+        &[
+            Capability::Vision,
+            Capability::StructuredOutput,
+            Capability::InstructionFollowing,
+        ],
+    ))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn observation_model_environment_is_optional_and_frozen_until_engine_recreation() {
+    let _guard = ENV_LOCK.lock().await;
+    let variables = [
+        ("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd"),
+        (agent::openai::BASE_URL_ENV, "http://127.0.0.1:9"),
+        (agent::openai::MODEL_ENV, "curator"),
+        (agent::openai::OBSERVATION_MODEL_ENV, "observer"),
+    ];
+    let previous: Vec<_> = variables
+        .iter()
+        .map(|(name, _)| (*name, std::env::var_os(name)))
+        .collect();
+    for (name, value) in variables {
+        unsafe { std::env::set_var(name, value) };
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let (db, _) = setup(temp.path(), 1).await;
+    let frozen = AgentEngine::new(db.clone());
+    let initial = frozen.ai_config();
+    assert_eq!(initial.model_id, "curator");
+    assert_eq!(initial.observation.unwrap().model_id, "observer");
+    unsafe { std::env::set_var(agent::openai::OBSERVATION_MODEL_ENV, "other-observer") };
+    assert_eq!(frozen.ai_config().observation.unwrap().model_id, "observer");
+    let changed = AgentEngine::new(db.clone()).ai_config();
+    assert_eq!(changed.observation.unwrap().model_id, "other-observer");
+    assert_ne!(changed.consent_provider, initial.consent_provider);
+    unsafe { std::env::remove_var(agent::openai::OBSERVATION_MODEL_ENV) };
+    let default = AgentEngine::new(db).ai_config();
+    assert_eq!(default.observation.unwrap().model_id, "curator");
+    for (name, value) in previous {
+        unsafe {
+            if let Some(value) = value {
+                std::env::set_var(name, value)
+            } else {
+                std::env::remove_var(name)
+            }
+        };
+    }
+}
+
+#[tokio::test]
+async fn independent_role_capability_files_are_frozen_and_never_inherit_other_model_profiles() {
+    let _guard = ENV_LOCK.lock().await;
+    let temp = tempfile::tempdir().unwrap();
+    let (db, _) = setup(temp.path(), 1).await;
+    let base = "http://127.0.0.1:9";
+    let curator_path = temp.path().join("curator.json");
+    let observer_path = temp.path().join("observer.json");
+    std::fs::write(
+        &curator_path,
+        serde_json::to_vec(&CapabilityProfile::declared(
+            base,
+            "curator",
+            &[Capability::ToolCalling, Capability::InstructionFollowing],
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        &observer_path,
+        serde_json::to_vec(&CapabilityProfile::declared(
+            base,
+            "observer",
+            &[
+                Capability::Vision,
+                Capability::StructuredOutput,
+                Capability::InstructionFollowing,
+            ],
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let variables = [
+        (
+            "BETWEEN_FRAMES_OPENAI_API_KEY",
+            std::ffi::OsString::from("test-key-abcd"),
+        ),
+        (agent::openai::BASE_URL_ENV, base.into()),
+        (agent::openai::MODEL_ENV, "curator".into()),
+        (agent::openai::OBSERVATION_MODEL_ENV, "observer".into()),
+        (
+            agent::capabilities::PROFILE_PATH_ENV,
+            curator_path.as_os_str().to_owned(),
+        ),
+        (
+            agent::capabilities::OBSERVATION_PROFILE_PATH_ENV,
+            observer_path.as_os_str().to_owned(),
+        ),
+    ];
+    let previous: Vec<_> = variables
+        .iter()
+        .map(|(name, _)| (*name, std::env::var_os(name)))
+        .collect();
+    for (name, value) in variables {
+        unsafe { std::env::set_var(name, value) };
+    }
+    let frozen = AgentEngine::new(db.clone());
+    let config = frozen.ai_config();
+    assert!(config.configuration_error.is_none());
+    assert!(!config.capabilities.contains(&"vision".into()));
+    assert!(
+        config
+            .observation
+            .as_ref()
+            .unwrap()
+            .configuration_error
+            .is_none()
+    );
+    assert!(
+        !config
+            .observation
+            .unwrap()
+            .capabilities
+            .contains(&"tool_calling".into())
+    );
+    unsafe { std::env::remove_var(agent::capabilities::OBSERVATION_PROFILE_PATH_ENV) };
+    let absent = AgentEngine::new(db.clone()).ai_config();
+    assert!(absent.configuration_error.is_none());
+    assert!(absent.observation.unwrap().configuration_error.is_some());
+    unsafe {
+        std::env::set_var(
+            agent::capabilities::OBSERVATION_PROFILE_PATH_ENV,
+            &curator_path,
+        )
+    };
+    assert!(
+        AgentEngine::new(db.clone())
+            .ai_config()
+            .observation
+            .unwrap()
+            .configuration_error
+            .is_some()
+    );
+    std::fs::write(&observer_path, "{}").unwrap();
+    unsafe {
+        std::env::set_var(
+            agent::capabilities::OBSERVATION_PROFILE_PATH_ENV,
+            &observer_path,
+        )
+    };
+    assert!(
+        AgentEngine::new(db.clone())
+            .ai_config()
+            .observation
+            .unwrap()
+            .configuration_error
+            .is_some()
+    );
+    assert!(
+        frozen
+            .ai_config()
+            .observation
+            .unwrap()
+            .configuration_error
+            .is_none()
+    );
+    // 只声明观察能力文件也必须校验，不能在未设置观察型号时静默忽略。
+    unsafe { std::env::remove_var(agent::openai::OBSERVATION_MODEL_ENV) };
+    assert!(
+        AgentEngine::new(db)
+            .ai_config()
+            .observation
+            .unwrap()
+            .configuration_error
+            .is_some()
+    );
+    for (name, value) in previous {
+        unsafe {
+            if let Some(value) = value {
+                std::env::set_var(name, value)
+            } else {
+                std::env::remove_var(name)
+            }
+        };
+    }
+}
+async fn grant_observer(engine: &AgentEngine, project: &Project) -> ConsentView {
+    engine
+        .set_consent(ConsentRequest {
+            request_id: domain::id(),
+            project_id: project.id.clone(),
+            mode: "project".into(),
+            provider: engine.ai_config().consent_provider.unwrap(),
+            quota: 10,
+        })
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn distinct_roles_send_pixels_only_to_observer_and_finish_reviewable_draft() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: [
+            "tool:list_photos",
+            "tool:inspect_from_history",
+            "tool:create_from_history",
+            "tool:finish_from_history",
+        ]
+        .into_iter()
+        .map(|step| format!("metered:{step}"))
+        .collect(),
+        vision: VisionReply::Valid,
+    });
+    let runtime = role_engine(&db, &base, "curator", "observer");
+    let config = runtime.ai_config();
+    assert!(!config.capabilities.contains(&"vision".into()));
+    assert!(config.configuration_error.is_none());
+    assert!(
+        config
+            .observation
+            .as_ref()
+            .unwrap()
+            .configuration_error
+            .is_none()
+    );
+    let consent = grant_observer(&runtime, &project).await;
+    assert_eq!(consent.provider, recipient(&base, "observer"));
+    let task = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
+    runtime.run(&task.id).await.unwrap();
+    let view = agent::projection(&db, &project.id).await.unwrap();
+    assert_eq!(view.tasks[0].state, "review_ready");
+    assert_eq!(view.drafts[0].items.len(), 2);
+    assert_eq!(view.tasks[0].usage.cloud_images, 2);
+    {
+        let requests = state.lock().unwrap();
+        assert_eq!(requests.requests.len(), 5);
+        for request in &requests.requests {
+            assert_eq!(
+                request["model"],
+                if request["text"]["format"].is_object() {
+                    "observer"
+                } else {
+                    "curator"
+                }
+            );
+            if request["model"] == "curator" {
+                assert!(!request.to_string().contains("input_image"));
+            }
+        }
+    }
+    let total_cost: i64 =
+        sqlx::query_scalar("SELECT SUM(cost_minor_usd) FROM model_usage WHERE task_id=?")
+            .bind(&task.id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(total_cost, i64::from(view.tasks[0].usage.cost_minor_usd));
+    let observation_models: Vec<String> =
+        sqlx::query_scalar("SELECT DISTINCT model_id FROM photo_observations")
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(observation_models, vec!["observer"]);
+    let ledger: Vec<String> = sqlx::query_scalar("SELECT body_json FROM agent_steps WHERE task_id=? AND kind IN ('model_attempt','vision_reserved')")
+        .bind(&task.id).fetch_all(&db.pool).await.unwrap();
+    for raw in ledger {
+        let entry: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(
+            entry["modelId"],
+            if entry["modelRole"] == "observation" {
+                "observer"
+            } else {
+                "curator"
+            }
+        );
+        assert!(!raw.contains("test-key-abcd"));
+    }
+    assert_eq!(
+        serde_json::to_value(db.get(&project.id).await.unwrap()).unwrap(),
+        serde_json::to_value(&project).unwrap()
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn observation_roles_refuse_other_endpoints_without_network() {
+    let temp = tempfile::tempdir().unwrap();
+    let (db, _) = setup(temp.path(), 1).await;
+    let configured = role_engine(&db, "http://127.0.0.1:9", "curator", "observer");
+    let other = role_provider(
+        "http://127.0.0.1:10",
+        "observer",
+        "test-key",
+        &[
+            Capability::Vision,
+            Capability::StructuredOutput,
+            Capability::InstructionFollowing,
+        ],
+    );
+    assert_eq!(
+        configured
+            .with_observation_provider(other)
+            .err()
+            .unwrap()
+            .code,
+        "MODEL_ROLE_CONFIG_INVALID"
+    );
+}
+
+#[tokio::test]
+async fn curator_consent_cannot_authorize_observer_explicit_or_implicit_upload() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    for explicit in [true, false] {
+        let temp = tempfile::tempdir().unwrap();
+        let (db, project) = setup(temp.path(), 2).await;
+        let (base, state) = spawn_server(Script {
+            main: ["tool:list_photos", "tool:inspect_from_history", "text"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            vision: VisionReply::Valid,
+        });
+        let runtime = role_engine(&db, &base, "test-model", "observer");
+        let old = grant(&db, &project, "project", &base).await;
+        assert_eq!(
+            runtime
+                .set_consent(ConsentRequest {
+                    request_id: domain::id(),
+                    project_id: project.id.clone(),
+                    mode: "project".into(),
+                    provider: old.provider.clone(),
+                    quota: 10
+                })
+                .await
+                .unwrap_err()
+                .code,
+            "CONSENT_TARGET_CHANGED"
+        );
+        let task = start_vision_task(&db, &project, vec![], 2, explicit.then_some(old.id)).await;
+        let result = runtime.run(&task.id).await;
+        if explicit {
+            assert_eq!(result.unwrap_err().code, "CONSENT_TARGET_CHANGED");
+            assert!(state.lock().unwrap().requests.is_empty());
+        } else {
+            result.unwrap();
+        }
+        assert_eq!(image_requests(&state.lock().unwrap()), 0);
+        let used: i64 = sqlx::query_scalar("SELECT used FROM privacy_consents WHERE id=?")
+            .bind(old.id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        assert_eq!(used, 0);
+    }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn role_cache_and_search_follow_observer_across_new_curators() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: [
+            "tool:list_photos",
+            "tool:inspect_from_history",
+            "text",
+            "tool:list_photos",
+            "tool:inspect_from_history",
+            "text",
+            "tool:search_cache",
+            "text",
+            "tool:list_photos",
+            "tool:inspect_from_history",
+            "text",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        vision: VisionReply::Valid,
+    });
+    let first_engine = role_engine(&db, &base, "curator-a", "observer-a");
+    let consent = grant_observer(&first_engine, &project).await;
+    for curator in ["curator-a", "curator-b"] {
+        let task = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
+        role_engine(&db, &base, curator, "observer-a")
+            .run(&task.id)
+            .await
+            .unwrap();
+    }
+    assert_eq!(image_requests(&state.lock().unwrap()), 1);
+    let search = start_vision_task(&db, &project, vec![], 0, None).await;
+    role_engine(&db, &base, "curator-b", "observer-a")
+        .run(&search.id)
+        .await
+        .unwrap();
+    let raw: String = sqlx::query_scalar(
+        "SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name='search_photos'",
+    )
+    .bind(&search.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let reply: Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(reply["result"]["photos"].as_array().unwrap().len(), 2);
+    assert_eq!(reply["result"]["new_uploads"], 0);
+    let changed = role_engine(&db, &base, "curator-b", "observer-b");
+    let consent = grant_observer(&changed, &project).await;
+    let task = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
+    changed.run(&task.id).await.unwrap();
+    assert_eq!(image_requests(&state.lock().unwrap()), 2);
+    let models: i64 = sqlx::query_scalar("SELECT COUNT(DISTINCT model_id) FROM photo_observations")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(models, 2);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn role_pair_and_profiles_are_immutable_on_reopen_but_keys_may_rotate() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    for change in ["observer", "curator", "capabilities", "key"] {
+        let temp = tempfile::tempdir().unwrap();
+        let (db, project) = setup(temp.path(), 2).await;
+        let (base, state) = spawn_server(Script {
+            main: ["tool:list_photos", "text"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            vision: VisionReply::Valid,
+        });
+        let task = CommandHandler::new(&db)
+            .agent_request(AgentRequest {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                command: TaskCommand::StartTask {
+                    goal: "模型分工恢复".into(),
+                    selected_photo_ids: vec![],
+                    target_count: 2,
+                    budget: Budget {
+                        max_model_turns: 1,
+                        ..Budget::default()
+                    },
+                    consent_id: None,
+                },
+            })
+            .await
+            .unwrap();
+        role_engine(&db, &base, "curator", "observer")
+            .run(&task.id)
+            .await
+            .unwrap();
+        assert_eq!(
+            agent::projection(&db, &project.id).await.unwrap().tasks[0].state,
+            "paused"
+        );
+        let checkpoint: String = sqlx::query_scalar(
+            "SELECT context_json FROM agent_checkpoints WHERE task_id=? ORDER BY id DESC LIMIT 1",
+        )
+        .bind(&task.id)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+        let checkpoint: Value = serde_json::from_str(&checkpoint).unwrap();
+        assert_eq!(
+            checkpoint["modelIdentity"]["observation"]["modelId"],
+            "observer"
+        );
+        assert!(!checkpoint.to_string().contains(&base));
+        assert!(!checkpoint.to_string().contains("test-key"));
+        db.pool.close().await;
+        let db = Store::open(&temp.path().join("projects.sqlite"))
+            .await
+            .unwrap();
+        CommandHandler::new(&db).recover_agents().await.unwrap();
+        CommandHandler::new(&db)
+            .agent_request(AgentRequest {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                command: TaskCommand::ResumeTask {
+                    task_id: task.id.clone(),
+                    budget: Budget::default(),
+                },
+            })
+            .await
+            .unwrap();
+        let key = if change == "key" {
+            "rotated-key"
+        } else {
+            "test-key-abcd"
+        };
+        let primary = role_provider(
+            &base,
+            if change == "curator" {
+                "other-curator"
+            } else {
+                "curator"
+            },
+            key,
+            &[Capability::ToolCalling, Capability::InstructionFollowing],
+        );
+        let mut caps = vec![
+            Capability::Vision,
+            Capability::StructuredOutput,
+            Capability::InstructionFollowing,
+        ];
+        if change == "capabilities" {
+            caps.push(Capability::ToolCalling);
+        }
+        let observer = role_provider(
+            &base,
+            if change == "observer" {
+                "other-observer"
+            } else {
+                "observer"
+            },
+            key,
+            &caps,
+        );
+        let runtime = AgentEngine::with_providers(
+            db.clone(),
+            Arc::new(agent::provider::MockProvider),
+            Some(primary),
+        )
+        .with_observation_provider(observer)
+        .unwrap();
+        let result = runtime.run(&task.id).await;
+        if change == "key" {
+            result.unwrap();
+            assert_eq!(state.lock().unwrap().requests.len(), 2);
+        } else {
+            assert_eq!(result.unwrap_err().code, "RECOVERY_ERROR");
+            assert_eq!(state.lock().unwrap().requests.len(), 1);
+        }
+        assert_eq!(image_requests(&state.lock().unwrap()), 0);
+    }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn role_observer_capabilities_never_fall_back_to_vision_capable_curator() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: ["tool:list_photos", "tool:inspect_from_history", "text"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let primary = Arc::new(configured_provider(OpenAiConfig {
+        base_url: base.clone(),
+        api_key: "test-key-abcd".into(),
+        model: "curator".into(),
+    }));
+    let observer = role_provider(
+        &base,
+        "observer",
+        "test-key-abcd",
+        &[Capability::ToolCalling, Capability::InstructionFollowing],
+    );
+    let runtime = AgentEngine::with_providers(
+        db.clone(),
+        Arc::new(agent::provider::MockProvider),
+        Some(primary),
+    )
+    .with_observation_provider(observer)
+    .unwrap();
+    let request = ConsentRequest {
+        request_id: domain::id(),
+        project_id: project.id.clone(),
+        mode: "project".into(),
+        provider: runtime.ai_config().consent_provider.unwrap(),
+        quota: 10,
+    };
+    assert_eq!(
+        runtime.set_consent(request.clone()).await.unwrap_err().code,
+        "MODEL_CAPABILITY_MISSING"
+    );
+    let consent = consent::set(
+        &db,
+        consent::SetConsent {
+            request_id: request.request_id,
+            project_id: request.project_id,
+            mode: request.mode,
+            provider: request.provider,
+            quota: request.quota,
+        },
+    )
+    .await
+    .unwrap();
+    let task = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
+    assert_eq!(
+        runtime.run(&task.id).await.unwrap_err().code,
+        "MODEL_CAPABILITY_MISSING"
+    );
+    assert_eq!(image_requests(&state.lock().unwrap()), 0);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn distinct_roles_share_original_image_budget_before_observer_http() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: ["tool:list_photos", "tool:inspect_from_history", "text"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let runtime = role_engine(&db, &base, "curator", "observer");
+    let consent = grant_observer(&runtime, &project).await;
+    let task = start_vision_task(&db, &project, vec![], 1, Some(consent.id)).await;
+    runtime.run(&task.id).await.unwrap();
+    let view = agent::projection(&db, &project.id).await.unwrap();
+    assert_eq!(view.tasks[0].state, "paused");
+    assert_eq!(view.tasks[0].usage.cloud_images, 0);
+    assert_eq!(image_requests(&state.lock().unwrap()), 0);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
 #[tokio::test]
 async fn task_binding_survives_restart_rejects_endpoint_or_model_switch_and_allows_key_rotation() {
     let _guard = ENV_LOCK.lock().await;
@@ -1257,11 +1941,12 @@ async fn task_binding_survives_restart_rejects_endpoint_or_model_switch_and_allo
     for change in ["endpoint", "model", "key", "capabilities"] {
         let temp = tempfile::tempdir().unwrap();
         let (db, project) = setup(temp.path(), 2).await;
-        grant(&db, &project, "project").await;
         let (base, state) = spawn_server(Script {
             main: vec!["metered:valid".into(), "text".into()],
             vision: VisionReply::Valid,
         });
+        grant(&db, &project, "project", &base).await;
+
         let first_engine = engine(&db, &base);
         assert_eq!(first_engine.ai_config().base_url, base);
         assert_eq!(first_engine.ai_config().model_id, "test-model");
@@ -1521,8 +2206,6 @@ async fn text_only_profile_cannot_upload_images_even_with_project_consent_or_dir
     ] {
         let temp = tempfile::tempdir().unwrap();
         let (db, project) = setup(temp.path(), 2).await;
-        let consent = grant(&db, &project, "project").await;
-        let task = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
         let (base, state) = spawn_server(Script {
             main: vec![
                 "tool:list_photos".into(),
@@ -1530,6 +2213,20 @@ async fn text_only_profile_cannot_upload_images_even_with_project_consent_or_dir
             ],
             vision: VisionReply::Valid,
         });
+        let consent = consent::set(
+            &db,
+            consent::SetConsent {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                mode: "project".into(),
+                provider: recipient(&base, "limited"),
+                quota: 10,
+            },
+        )
+        .await
+        .unwrap();
+        let task = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
+
         let profile = CapabilityProfile::declared(&base, "limited", &capabilities);
         let provider = Arc::new(
             OpenAiProvider::with_capability_profile(
@@ -1645,7 +2342,6 @@ async fn observation_cache_is_scoped_to_endpoint_even_when_model_alias_matches()
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
     let temp = tempfile::tempdir().unwrap();
     let (db, project) = setup(temp.path(), 2).await;
-    let consent = grant(&db, &project, "project").await;
     let script = || Script {
         main: ["tool:list_photos", "tool:inspect_from_history", "text"]
             .repeat(2)
@@ -1657,6 +2353,7 @@ async fn observation_cache_is_scoped_to_endpoint_even_when_model_alias_matches()
     let (a, state_a) = spawn_server(script());
     let (b, state_b) = spawn_server(script());
     for base in [&a, &b, &b] {
+        let consent = grant(&db, &project, "project", base).await;
         let task = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
         engine(&db, base).run(&task.id).await.unwrap();
     }
@@ -1686,7 +2383,6 @@ async fn cloud_search_reads_only_current_bound_endpoint_facts_without_image_tran
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
     let temp = tempfile::tempdir().unwrap();
     let (db, project) = setup(temp.path(), 2).await;
-    let consent = grant(&db, &project, "project").await;
     let (a, state_a) = spawn_server(Script {
         main: [
             "tool:list_photos",
@@ -1707,6 +2403,7 @@ async fn cloud_search_reads_only_current_bound_endpoint_facts_without_image_tran
             .collect(),
         vision: VisionReply::Valid,
     });
+    let consent = grant(&db, &project, "project", &a).await;
     let first = start_vision_task(&db, &project, vec![], 2, Some(consent.id)).await;
     engine(&db, &a).run(&first.id).await.unwrap();
     for (base, count) in [(&b, 0), (&a, 2)] {
@@ -1790,7 +2487,7 @@ async fn consented_vision_uploads_once_then_cache_hits_without_reupload() {
             request_id: domain::id(),
             project_id: p.id.clone(),
             mode: "project".into(),
-            provider: "openai".into(),
+            provider: recipient(&base, "test-model"),
             quota: 100,
         },
     )
@@ -1818,7 +2515,7 @@ async fn consented_vision_uploads_once_then_cache_hits_without_reupload() {
         .await
         .unwrap();
     assert_eq!(observations, 2);
-    let used = consent::effective_view(&db, &p.id, "openai")
+    let used = consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
         .await
         .unwrap()
         .unwrap()
@@ -1831,7 +2528,7 @@ async fn consented_vision_uploads_once_then_cache_hits_without_reupload() {
     let projection = agent::projection(&db, &p.id).await.unwrap();
     // 投影按创建时间倒序：tasks[0] 是任务二。
     assert_eq!(projection.tasks[0].usage.cloud_images, 0);
-    let used2 = consent::effective_view(&db, &p.id, "openai")
+    let used2 = consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
         .await
         .unwrap()
         .unwrap()
@@ -1851,7 +2548,6 @@ async fn invalid_cached_observations_require_fresh_authorized_upload() {
     ] {
         let temp = tempfile::tempdir().unwrap();
         let (db, p) = setup(temp.path(), 2).await;
-        let consent = grant(&db, &p, "project").await;
         let (base, state) = spawn_server(Script {
             main: ["tool:list_photos", "tool:inspect_from_history", "text"]
                 .repeat(2)
@@ -1860,6 +2556,8 @@ async fn invalid_cached_observations_require_fresh_authorized_upload() {
                 .collect(),
             vision: VisionReply::Valid,
         });
+        let consent = grant(&db, &p, "project", &base).await;
+
         let ids: Vec<_> = p.photos.iter().map(|p| p.id.clone()).collect();
         let first = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
         engine(&db, &base).run(&first.id).await.unwrap();
@@ -1875,7 +2573,7 @@ async fn invalid_cached_observations_require_fresh_authorized_upload() {
         assert_eq!(task.usage.cloud_images, 2);
         assert_eq!(image_requests(&state.lock().unwrap()), 2);
         assert_eq!(
-            consent::effective_view(&db, &p.id, "openai")
+            consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
                 .await
                 .unwrap()
                 .unwrap()
@@ -1920,7 +2618,7 @@ async fn hallucinated_photo_ids_are_dropped_and_quota_charged_for_real_transfer(
             request_id: domain::id(),
             project_id: p.id.clone(),
             mode: "project".into(),
-            provider: "openai".into(),
+            provider: recipient(&base, "test-model"),
             quota: 100,
         },
     )
@@ -1937,7 +2635,7 @@ async fn hallucinated_photo_ids_are_dropped_and_quota_charged_for_real_transfer(
         .await
         .unwrap();
     assert_eq!(observations, 0);
-    let used = consent::effective_view(&db, &p.id, "openai")
+    let used = consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
         .await
         .unwrap()
         .unwrap()
@@ -1966,7 +2664,7 @@ async fn cloud_image_budget_cap_pauses_task_before_any_upload() {
             request_id: domain::id(),
             project_id: p.id.clone(),
             mode: "project".into(),
-            provider: "openai".into(),
+            provider: recipient(&base, "test-model"),
             quota: 100,
         },
     )
@@ -2082,4 +2780,456 @@ async fn runtime_router_keeps_offline_task_local_when_cloud_adapter_is_available
     assert_eq!(task.usage.cost_minor_usd, 0);
     assert_eq!(task.provider_id, "mock");
     unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+// 供应商收件人授权：仅本地 HTTP、临时库和生成图，不使用真实服务。
+fn consent_request(project: &Project, provider: String, mode: &str) -> ConsentRequest {
+    ConsentRequest {
+        request_id: domain::id(),
+        project_id: project.id.clone(),
+        mode: mode.into(),
+        provider,
+        quota: if mode == "deny" { 0 } else { 10 },
+    }
+}
+#[tokio::test]
+async fn consent_isolated_by_endpoint_and_model_before_any_request_with_wrong_explicit_grant() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let script = || Script {
+        main: ["tool:list_photos", "tool:inspect_from_history", "text"]
+            .repeat(2)
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        vision: VisionReply::Valid,
+    };
+    let (a, state_a) = spawn_server(script());
+    let (b, state_b) = spawn_server(script());
+    let grant_a = engine(&db, &a)
+        .set_consent(consent_request(
+            &project,
+            recipient(&a, "test-model"),
+            "project",
+        ))
+        .await
+        .unwrap();
+    let wrong = start_vision_task(&db, &project, vec![], 2, Some(grant_a.id)).await;
+    assert_eq!(
+        engine(&db, &b).run(&wrong.id).await.unwrap_err().code,
+        "CONSENT_TARGET_CHANGED"
+    );
+    assert!(
+        state_b.lock().unwrap().requests.is_empty(),
+        "错误显式授权在所有模型请求前拒绝"
+    );
+    let missing = start_vision_task(&db, &project, vec![], 2, None).await;
+    engine(&db, &b).run(&missing.id).await.unwrap();
+    assert_eq!(
+        image_requests(&state_b.lock().unwrap()),
+        0,
+        "B 不继承 A 的项目授权"
+    );
+    let grant_b = engine(&db, &b)
+        .set_consent(consent_request(
+            &project,
+            recipient(&b, "test-model"),
+            "project",
+        ))
+        .await
+        .unwrap();
+    let valid = start_vision_task(&db, &project, vec![], 2, Some(grant_b.id)).await;
+    engine(&db, &b).run(&valid.id).await.unwrap();
+    assert_eq!(image_requests(&state_b.lock().unwrap()), 1);
+    assert_eq!(
+        consent::effective_view(&db, &project.id, &recipient(&a, "test-model"))
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        grant_a.id,
+        "另一个明确授权不会覆盖已有收件人"
+    );
+    let next = start_vision_task(&db, &project, vec![], 2, Some(grant_b.id)).await;
+    let other_model = AgentEngine::with_providers(
+        db.clone(),
+        Arc::new(agent::provider::MockProvider),
+        Some(Arc::new(configured_provider(OpenAiConfig {
+            base_url: b.clone(),
+            model: "other-model".into(),
+            api_key: "test-key-abcd".into(),
+        }))),
+    );
+    let before = state_b.lock().unwrap().requests.len();
+    assert_eq!(
+        other_model.run(&next.id).await.unwrap_err().code,
+        "CONSENT_TARGET_CHANGED"
+    );
+    assert_eq!(state_b.lock().unwrap().requests.len(), before);
+    engine(&db, &b)
+        .set_consent(consent_request(&project, "openai".into(), "deny"))
+        .await
+        .unwrap();
+    for base in [&a, &b] {
+        assert_eq!(
+            consent::effective_view(&db, &project.id, &recipient(base, "test-model"))
+                .await
+                .unwrap()
+                .unwrap()
+                .mode,
+            "deny"
+        );
+    }
+    let denied = start_vision_task(&db, &project, vec![], 2, None).await;
+    engine(&db, &a).run(&denied.id).await.unwrap();
+    assert_eq!(image_requests(&state_a.lock().unwrap()), 0);
+    // 重新明确批准 A，不会复活 B 被全局撤回的授权。
+    engine(&db, &a)
+        .set_consent(consent_request(
+            &project,
+            recipient(&a, "test-model"),
+            "project",
+        ))
+        .await
+        .unwrap();
+    assert!(
+        consent::effective_view(&db, &project.id, &recipient(&b, "test-model"))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn stale_recipient_ui_cannot_grant_and_deny_works_without_a_usable_provider() {
+    let _guard = ENV_LOCK.lock().await;
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 1).await;
+    let (a, state_a) = spawn_server(Script {
+        main: vec![],
+        vision: VisionReply::Valid,
+    });
+    let (b, state_b) = spawn_server(Script {
+        main: vec![],
+        vision: VisionReply::Valid,
+    });
+    let displayed = engine(&db, &a).ai_config().consent_provider.unwrap();
+    assert_eq!(
+        engine(&db, &b)
+            .set_consent(consent_request(&project, displayed, "task"))
+            .await
+            .unwrap_err()
+            .code,
+        "CONSENT_TARGET_CHANGED"
+    );
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM privacy_consents")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    assert!(state_a.lock().unwrap().requests.is_empty());
+    assert!(state_b.lock().unwrap().requests.is_empty());
+    let unavailable =
+        AgentEngine::with_providers(db.clone(), Arc::new(agent::provider::MockProvider), None);
+    unavailable
+        .set_consent(consent_request(&project, "openai".into(), "deny"))
+        .await
+        .unwrap();
+    assert_eq!(
+        consent::effective_view(&db, &project.id, &recipient(&b, "test-model"))
+            .await
+            .unwrap()
+            .unwrap()
+            .mode,
+        "deny"
+    );
+    let invalid = AgentEngine::with_providers(
+        db.clone(),
+        Arc::new(agent::provider::MockProvider),
+        Some(Arc::new(OpenAiProvider::new(OpenAiConfig {
+            base_url: b.clone(),
+            model: "unknown".into(),
+            api_key: "test-key-abcd".into(),
+        }))),
+    );
+    assert!(
+        invalid
+            .set_consent(consent_request(
+                &project,
+                invalid.ai_config().consent_provider.unwrap(),
+                "project"
+            ))
+            .await
+            .is_err()
+    );
+    invalid
+        .set_consent(consent_request(&project, "openai".into(), "deny"))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn recipient_identity_preserves_key_rotation_and_is_specific_to_destination_and_model() {
+    let base = "https://service.example.invalid/v1";
+    let make = |base: &str, model: &str, key: &str| {
+        OpenAiProvider::new(OpenAiConfig {
+            base_url: base.into(),
+            model: model.into(),
+            api_key: key.into(),
+        })
+    };
+    let primary = make(base, "model-a", "private-key-a")
+        .identity()
+        .consent_provider();
+    assert!(consent::is_recipient(&primary));
+    assert_eq!(
+        primary,
+        make(&format!("{base}/"), "model-a", "rotated-key")
+            .identity()
+            .consent_provider()
+    );
+    assert_ne!(
+        primary,
+        make(base, "model-b", "private-key-a")
+            .identity()
+            .consent_provider()
+    );
+    assert_ne!(
+        primary,
+        make(
+            "https://other.example.invalid/v1",
+            "model-a",
+            "private-key-a"
+        )
+        .identity()
+        .consent_provider()
+    );
+    assert!(!primary.contains("private-key"));
+    assert!(!primary.contains("service.example"));
+    for invalid in [
+        "openai",
+        "mock",
+        "openai@abc",
+        "openai@../../file",
+        "openai@",
+    ] {
+        assert!(!consent::is_recipient(invalid));
+    }
+}
+
+#[tokio::test]
+async fn legacy_unbound_consent_is_not_upgraded_or_used_by_new_tasks() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: ["tool:list_photos", "tool:inspect_from_history", "text"]
+            .repeat(2)
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let legacy=sqlx::query("INSERT INTO privacy_consents(project_id,mode,provider,quota,used,granted_at) VALUES(?,'project','openai',10,0,'legacy')")
+        .bind(&project.id).execute(&db.pool).await.unwrap().last_insert_rowid();
+    assert!(
+        consent::effective_view(&db, &project.id, &recipient(&base, "test-model"))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let rejected = CommandHandler::new(&db)
+        .agent_request(AgentRequest {
+            request_id: domain::id(),
+            project_id: project.id.clone(),
+            command: TaskCommand::StartTask {
+                goal: "旧授权不能绑定新任务".into(),
+                selected_photo_ids: vec![],
+                target_count: 2,
+                budget: Budget {
+                    max_cloud_images: 2,
+                    ..Budget::default()
+                },
+                consent_id: Some(legacy),
+            },
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(rejected.code, "PERMISSION_DENIED");
+    let task = start_vision_task(&db, &project, vec![], 2, None).await;
+    engine(&db, &base).run(&task.id).await.unwrap();
+    assert_eq!(image_requests(&state.lock().unwrap()), 0);
+    let raw: String = sqlx::query_scalar("SELECT provider FROM privacy_consents WHERE id=?")
+        .bind(legacy)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(raw, "openai", "不能回填猜测旧授权的服务身份");
+    engine(&db, &base)
+        .set_consent(consent_request(
+            &project,
+            recipient(&base, "test-model"),
+            "project",
+        ))
+        .await
+        .unwrap();
+    let fresh = start_vision_task(&db, &project, vec![], 2, None).await;
+    engine(&db, &base).run(&fresh.id).await.unwrap();
+    assert_eq!(image_requests(&state.lock().unwrap()), 1);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn recipient_receipt_replay_conflicts_and_replacement_failure_are_atomic() {
+    let _guard = ENV_LOCK.lock().await;
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 1).await;
+    let (a, _) = spawn_server(Script {
+        main: vec![],
+        vision: VisionReply::Valid,
+    });
+    let (b, _) = spawn_server(Script {
+        main: vec![],
+        vision: VisionReply::Valid,
+    });
+    let request = consent_request(&project, recipient(&a, "test-model"), "project");
+    let first = engine(&db, &a).set_consent(request.clone()).await.unwrap();
+    assert_eq!(
+        engine(&db, &a)
+            .set_consent(request.clone())
+            .await
+            .unwrap()
+            .id,
+        first.id
+    );
+    assert_eq!(
+        engine(&db, &b)
+            .set_consent(ConsentRequest {
+                provider: recipient(&b, "test-model"),
+                ..request
+            })
+            .await
+            .unwrap_err()
+            .code,
+        "IDEMPOTENCY_CONFLICT"
+    );
+    sqlx::query("CREATE TRIGGER fail_consent BEFORE INSERT ON privacy_consents BEGIN SELECT RAISE(ABORT,'test fault'); END").execute(&db.pool).await.unwrap();
+    assert!(
+        engine(&db, &a)
+            .set_consent(consent_request(
+                &project,
+                recipient(&a, "test-model"),
+                "project"
+            ))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        consent::effective_view(&db, &project.id, &recipient(&a, "test-model"))
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        first.id
+    );
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM consent_receipts")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+async fn archived_project_and_generic_positive_consents_cannot_be_created() {
+    let _guard = ENV_LOCK.lock().await;
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 1).await;
+    for provider in ["openai", "mock", "openai@short"] {
+        assert!(
+            consent::set(
+                &db,
+                consent::SetConsent {
+                    request_id: domain::id(),
+                    project_id: project.id.clone(),
+                    provider: provider.into(),
+                    mode: "project".into(),
+                    quota: 10
+                }
+            )
+            .await
+            .is_err()
+        );
+    }
+    sqlx::query("UPDATE projects SET deleted_at='test' WHERE id=?")
+        .bind(&project.id)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        consent::set(
+            &db,
+            consent::SetConsent {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                provider: recipient("https://service.example.invalid", "m"),
+                mode: "project".into(),
+                quota: 10
+            }
+        )
+        .await
+        .unwrap_err()
+        .code,
+        "PERMISSION_DENIED"
+    );
+}
+
+#[tokio::test]
+async fn http_redirect_does_not_forward_preview_or_authorization_to_another_service() {
+    let _guard = ENV_LOCK.lock().await;
+    let (destination, destination_state) = spawn_server(Script {
+        main: vec![],
+        vision: VisionReply::Valid,
+    });
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let received = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let body = read_body(&mut stream).unwrap();
+        let reply = format!(
+            "HTTP/1.1 307 Temporary Redirect\r\nLocation: {destination}/responses\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        stream.write_all(reply.as_bytes()).unwrap();
+        serde_json::from_str::<Value>(&body).unwrap()
+    });
+    let provider = configured_provider(OpenAiConfig {
+        base_url: base,
+        model: "test-model".into(),
+        api_key: "test-key-abcd".into(),
+    });
+    let error = provider
+        .observe(
+            "仅测试重定向",
+            "local fixture",
+            &[("test-photo".into(), "dGVzdA==".into())],
+            128,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "MODEL_UNAVAILABLE");
+    assert!(error.message.contains("307"));
+    assert!(!error.retriable);
+    let original = received.join().unwrap();
+    assert!(
+        original
+            .to_string()
+            .contains("data:image/jpeg;base64,dGVzdA==")
+    );
+    assert!(
+        destination_state.lock().unwrap().requests.is_empty(),
+        "未授权目的端点不能收到任何请求"
+    );
 }

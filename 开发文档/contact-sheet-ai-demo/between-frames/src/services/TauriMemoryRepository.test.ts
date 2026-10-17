@@ -28,3 +28,19 @@ it('搜索传递关键词，拒绝缺失排除状态的投影及身份错误的�
   ipc.mockResolvedValue({ ok: true, requestId: 'wrong', data: { requestId: 'wrong', changed: true, memoryRevision: 1 }, error: null });
   await expect(repo.request('p1', { type: 'ConfirmHypothesis', hypothesisId: 1 })).rejects.toThrow('身份不匹配');
 });
+
+it('旧投影保守默认隔离，拒绝混入可编辑列表的其他项目假设', async () => {
+ const repo = new TauriMemoryRepository();
+ ipc.mockResolvedValue({ evidence: [], hypotheses: [], notice: 'n' });
+ expect(await repo.query('p1')).toMatchObject({ crossProjectEnabled: false, authorHypotheses: [] });
+ const h = { id: 1, projectId: 'other', scope: 'project_local', statement: '留白', evidenceIds: [1], counterexampleIds: [],
+  status: 'confirmed', confidence: 'tentative', userCorrection: null, disabled: false, createdAt: 'n', updatedAt: 'n' };
+ ipc.mockResolvedValue({ evidence: [], hypotheses: [h], notice: 'n' });
+ await expect(repo.query('p1')).rejects.toThrow('范围不匹配');
+ ipc.mockResolvedValue({ evidence: [], hypotheses: [], notice: 'n', crossProjectEnabled: true, authorHypotheses: [{ ...h, scope: 'cross_project' }] });
+ expect((await repo.query('p1')).authorHypotheses).toHaveLength(1);
+ ipc.mockResolvedValue({ evidence: [], hypotheses: [], notice: 'n', crossProjectEnabled: false, authorHypotheses: [{ ...h, scope: 'cross_project' }] });
+ await expect(repo.query('p1')).rejects.toThrow('范围不匹配');
+ ipc.mockResolvedValue({ evidence: [], hypotheses: [], notice: 'n', crossProjectEnabled: true, authorHypotheses: [{ ...h, scope: 'cross_project', status: 'unconfirmed' }] });
+ await expect(repo.query('p1')).rejects.toThrow('范围不匹配');
+});

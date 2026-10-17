@@ -1,0 +1,219 @@
+import { randomBytes, randomUUID } from 'node:crypto';
+import type { Pool } from 'pg';
+import { z } from 'zod';
+import { promotionSchema } from '@betweenframes/contracts';
+import { AuthorityService, type Scope } from './authority.ts';
+import { AuthService, type Headers } from './auth.ts';
+import { digest, transaction } from './database.ts';
+import { assert } from './errors.ts';
+import { sanitizePreview, type PreviewStore } from './storage.ts';
+const inviteInput = z.strictObject({ email: z.email().max(254).transform(s => s.toLowerCase()), role: z.enum(['ADMIN', 'EDITOR', 'REVIEWER', 'VIEWER']), project_id: z.string().min(1).max(160).optional() });
+export class CloudService {
+  readonly pool: Pool; readonly auth: AuthService; readonly authority: AuthorityService; readonly store: PreviewStore;
+  constructor(pool: Pool, origin: string, store: PreviewStore) { this.pool = pool; this.auth = new AuthService(pool, origin); this.authority = new AuthorityService(pool, this.auth); this.store = store; }
+  async workspaces(headers: Headers) {
+    const user = await this.auth.authenticate(headers, false);
+    return (await this.pool.query('SELECT w.*,m.role FROM fr_workspaces w JOIN fr_memberships m ON m.workspace_id=w.id WHERE m.user_id=$1 ORDER BY w.id', [user.id])).rows;
+  }
+  async projects(headers: Headers) {
+    const user = await this.auth.authenticate(headers, false);
+    return (await this.pool.query("SELECT DISTINCT p.id,p.workspace_id,p.title,p.revision,p.state FROM fr_projects p LEFT JOIN fr_memberships m ON m.workspace_id=p.workspace_id AND m.user_id=$1 LEFT JOIN fr_grants g ON g.project_id=p.id AND g.user_id=$1 AND g.active WHERE (p.owner_id=$1 OR m.role IN ('OWNER','ADMIN') OR g.user_id=$1) AND p.state IN ('STAGING','SHARED') AND (p.state='SHARED' OR p.owner_id=$1) ORDER BY p.id", [user.id])).rows;
+  }
+  async invite(headers: Headers, workspaceId: string, input: unknown) {
+    const value = inviteInput.parse(input);
+    return transaction(this.pool, async tx => {
+      const user = await this.auth.authenticate(headers, true, tx);
+      const workspace = (await tx.query('SELECT * FROM fr_workspaces WHERE id=$1 FOR UPDATE', [workspaceId])).rows[0]; assert(workspace, 404, 'NOT_FOUND', '工作区不存在');
+      const member = (await tx.query('SELECT role FROM fr_memberships WHERE workspace_id=$1 AND user_id=$2', [workspaceId, user.id])).rows[0];
+      if (value.project_id) {
+        const project = (await tx.query('SELECT * FROM fr_projects WHERE id=$1 AND workspace_id=$2 AND state=\'SHARED\' FOR UPDATE', [value.project_id, workspaceId])).rows[0];
+        assert(project && (project.owner_id === user.id || ['OWNER', 'ADMIN'].includes(member?.role)) && value.role !== 'ADMIN', 403, 'PERMISSION_DENIED', '无权发送项目邀请');
+      } else assert(['OWNER', 'ADMIN'].includes(member?.role), 403, 'PERMISSION_DENIED', '只有工作区管理员可邀请成员');
+      const token = randomBytes(32).toString('hex'), id = randomUUID();
+      await tx.query("INSERT INTO fr_invitations(id,workspace_id,project_id,email,role,digest,expires_at,invited_by) VALUES($1,$2,$3,$4,$5,$6,now()+interval '7 days',$7)", [id, workspaceId, value.project_id ?? null, value.email, value.role, digest(token), user.id]);
+      return { id, invite_url: `${this.auth.origin}/shared#invite=${token}`, expires_in: 604800, delivery: 'MANUAL_LINK' };
+    });
+  }
+  async acceptInvite(headers: Headers, input: unknown) {
+    const { token } = z.strictObject({ token: z.string().regex(/^[a-f0-9]{64}$/) }).parse(input);
+    return transaction(this.pool, async tx => {
+      const user = await this.auth.authenticate(headers, true, tx);
+      const pre = (await tx.query('SELECT workspace_id FROM fr_invitations WHERE digest=$1', [digest(token)])).rows[0]; assert(pre, 404, 'NOT_FOUND', '邀请不存在');
+      await tx.query('SELECT id FROM fr_workspaces WHERE id=$1 FOR UPDATE', [pre.workspace_id]);
+      const invite = (await tx.query("SELECT * FROM fr_invitations WHERE digest=$1 AND state='PENDING' AND expires_at>now() FOR UPDATE", [digest(token)])).rows[0];
+      assert(invite && invite.email === user.email, 403, 'INVITE_INVALID', '邀请已使用、过期、撤销或与登录邮箱不匹配');
+      if (invite.project_id) {
+        const project = (await tx.query('SELECT id,owner_id FROM fr_projects WHERE id=$1 FOR UPDATE', [invite.project_id])).rows[0];
+        assert(project.owner_id !== user.id, 400, 'VALIDATION_ERROR', '项目所有者无需接受自己的邀请');
+        await tx.query('INSERT INTO fr_grants(project_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT(project_id,user_id) DO UPDATE SET role=excluded.role,active=true,can_approve=false,can_edit_formal=false', [invite.project_id, user.id, invite.role]);
+      } else {
+        const existing = (await tx.query('SELECT role FROM fr_memberships WHERE workspace_id=$1 AND user_id=$2', [invite.workspace_id, user.id])).rows[0];
+        assert(existing?.role !== 'OWNER', 400, 'VALIDATION_ERROR', '不能替换工作区所有者');
+        await tx.query('INSERT INTO fr_memberships VALUES($1,$2,$3) ON CONFLICT(workspace_id,user_id) DO UPDATE SET role=excluded.role', [invite.workspace_id, user.id, invite.role]);
+      }
+      await tx.query("UPDATE fr_invitations SET state='ACCEPTED',accepted_by=$2 WHERE id=$1", [invite.id, user.id]);
+      return { project_id: invite.project_id, workspace_id: invite.workspace_id, role: invite.role };
+    });
+  }
+  async revokeInvite(headers: Headers, workspaceId: string, id: string) {
+    return transaction(this.pool, async tx => {
+      const user = await this.auth.authenticate(headers, true, tx);
+      await tx.query('SELECT id FROM fr_workspaces WHERE id=$1 FOR UPDATE', [workspaceId]);
+      const invite = (await tx.query('SELECT * FROM fr_invitations WHERE id=$1 AND workspace_id=$2 FOR UPDATE', [id, workspaceId])).rows[0];
+      assert(invite, 404, 'NOT_FOUND', '邀请不存在');
+      const role = (await tx.query('SELECT role FROM fr_memberships WHERE workspace_id=$1 AND user_id=$2', [workspaceId, user.id])).rows[0]?.role;
+      assert(invite.invited_by === user.id || ['OWNER', 'ADMIN'].includes(role), 403, 'PERMISSION_DENIED', '无权撤销邀请');
+      assert(invite.state !== 'ACCEPTED', 409, 'INVITE_ACCEPTED', '邀请已接受，请在项目权限中撤销访问');
+      await tx.query("UPDATE fr_invitations SET state='REVOKED' WHERE id=$1", [id]); return { revoked: true };
+    });
+  }
+  async promote(headers: Headers, input: unknown) {
+    const value = promotionSchema.parse(input), hash = digest(JSON.stringify(value));
+    return transaction(this.pool, async tx => {
+      const user = await this.auth.authenticate(headers, true, tx);
+      await tx.query('SELECT id FROM fr_workspaces WHERE id=$1 FOR SHARE', [value.workspace_id]);
+      const role = (await tx.query('SELECT role FROM fr_memberships WHERE workspace_id=$1 AND user_id=$2', [value.workspace_id, user.id])).rows[0]?.role;
+      assert(['OWNER', 'ADMIN', 'EDITOR'].includes(role), 403, 'PERMISSION_DENIED', '无权向此工作区发布项目');
+      // 同一作者的迁移键用 advisory lock 串行化；重试不创建第二权威项目。
+      await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`${user.id}:${value.promotion_id}`]);
+      const old = (await tx.query('SELECT id,state,manifest_digest FROM fr_projects WHERE owner_id=$1 AND promotion_key=$2', [user.id, value.promotion_id])).rows[0];
+      if (old) { assert(old.manifest_digest === hash, 409, 'IDEMPOTENCY_CONFLICT', '迁移键已绑定其他快照'); return { project_id: old.id, state: old.state, manifest_digest: hash }; }
+      const id = randomUUID();
+      await tx.query("INSERT INTO fr_projects(id,workspace_id,owner_id,title,state,revision,snapshot,promotion_key,manifest_digest,initial_revision) VALUES($1,$2,$3,$4,'STAGING',$5,$6,$7,$8,$5)", [id, value.workspace_id, user.id, value.title, value.from_revision, JSON.stringify(value.snapshot), value.promotion_id, hash]);
+      return { project_id: id, state: 'STAGING', manifest_digest: hash };
+    });
+  }
+  async upload(headers: Headers, id: string, photoId: string, bytes: Buffer) {
+    return this.authority.scope(headers, id, true, async ({ tx, user, project }) => {
+      assert(project.owner_id === user.id && project.state === 'STAGING', 403, 'PERMISSION_DENIED', '只能向自己迁移中的项目上传预览');
+      assert(project.snapshot.photos.some(p => p.id === photoId), 400, 'MEDIA_POLICY', '照片未包含在已授权清单');
+      const preview = await sanitizePreview(bytes);
+      const old = (await tx.query('SELECT content_sha256 FROM fr_previews WHERE project_id=$1 AND photo_id=$2', [id, photoId])).rows[0];
+      assert(!old || old.content_sha256 === preview.sha, 409, 'MEDIA_CONFLICT', '照片已绑定不同预览');
+      await this.store.put(preview.key, preview.data);
+      await tx.query('INSERT INTO fr_previews VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING', [id, photoId, preview.key, preview.sha, preview.width, preview.height, preview.data.length]);
+      return { photo_id: photoId, sha256: preview.sha, width: preview.width, height: preview.height, gps_stripped: true };
+    });
+  }
+  async finalize(headers: Headers, id: string, input: unknown) {
+    const { manifest_digest } = z.strictObject({ manifest_digest: z.string().regex(/^[a-f0-9]{64}$/) }).parse(input);
+    return this.authority.scope(headers, id, true, async ({ tx, user, project }) => {
+      assert(project.owner_id === user.id, 403, 'PERMISSION_DENIED', '只有迁移发起者可完成共享');
+      assert(project.state !== 'ABORTED', 409, 'PROMOTION_ABORTED', '迁移已显式取消，不能提交');
+      const row = (await tx.query('SELECT manifest_digest,promotion_key,initial_revision FROM fr_projects WHERE id=$1', [id])).rows[0];
+      assert(row.manifest_digest === manifest_digest, 409, 'MANIFEST_MISMATCH', '快照校验值不匹配');
+      const uploaded = Number((await tx.query('SELECT count(*) FROM fr_previews WHERE project_id=$1', [id])).rows[0].count);
+      assert(uploaded === project.snapshot.photos.length, 409, 'MEDIA_INCOMPLETE', '预览尚未全部上传，可安全重试');
+      if (project.state === 'STAGING') {
+        await tx.query("UPDATE fr_projects SET state='SHARED' WHERE id=$1", [id]);
+        await tx.query('INSERT INTO fr_versions(project_id,revision,snapshot,actor_id,command_id) VALUES($1,$2,$3,$4,$5)', [id, project.revision, JSON.stringify(project.snapshot), user.id, `promotion:${row.promotion_key}`]);
+        await tx.query("INSERT INTO fr_events(project_id,actor_id,kind,revision,detail) VALUES($1,$2,'PromotionCommitted',$3,$4)", [id, user.id, project.revision, JSON.stringify({ manifest_digest })]);
+      }
+      return { project_id: id, workspace_id: project.workspace_id, authority: 'CLOUD', promotion_id: row.promotion_key, from_revision: row.initial_revision, manifest_digest };
+    });
+  }
+  async snapshot(headers: Headers, id: string) {
+    return this.authority.scope(headers, id, false, async ({ tx, project, principal }) => {
+      const comments = (await tx.query('SELECT c.*,u.display_name AS reviewer FROM fr_comments c JOIN fr_users u ON u.id=c.author_id WHERE project_id=$1 ORDER BY c.created_at,c.id LIMIT 1000', [id])).rows;
+      const proposals = (await tx.query('SELECT p.*,u.display_name AS author FROM fr_proposals p JOIN fr_users u ON u.id=p.author_id WHERE project_id=$1 ORDER BY p.id LIMIT 1000', [id])).rows;
+      const previews = (await tx.query('SELECT photo_id,width,height,content_sha256 FROM fr_previews WHERE project_id=$1 ORDER BY photo_id', [id])).rows;
+      const grants = ['OWNER', 'ADMIN'].includes(principal.role) ? (await tx.query('SELECT g.*,u.email FROM fr_grants g JOIN fr_users u ON u.id=g.user_id WHERE project_id=$1', [id])).rows : [];
+      const cursor = (await tx.query('SELECT coalesce(max(id),0)::text AS cursor FROM fr_events WHERE project_id=$1', [id])).rows[0].cursor;
+      return { project_id: id, workspace_id: project.workspace_id, title: project.title, state: project.state, revision: project.revision, snapshot: project.snapshot, principal, comments, proposals, previews, grants, cursor };
+    });
+  }
+  async abort(headers: Headers, id: string, input: unknown) {
+    const { manifest_digest } = z.strictObject({ manifest_digest: z.string().regex(/^[a-f0-9]{64}$/) }).parse(input);
+    return this.authority.scope(headers, id, true, async ({ tx, user, project }) => {
+      const row = (await tx.query('SELECT manifest_digest FROM fr_projects WHERE id=$1', [id])).rows[0];
+      assert(project.owner_id === user.id && row.manifest_digest === manifest_digest, 403, 'PERMISSION_DENIED', '迁移身份不匹配');
+      assert(project.state !== 'SHARED', 409, 'AUTHORITY_MISMATCH', '云端已提交，不能恢复本地写入；请恢复迁移确认');
+      await tx.query("UPDATE fr_projects SET state='ABORTED' WHERE id=$1", [id]); return { aborted: true, manifest_digest };
+    });
+  }
+  async grants(headers: Headers, id: string, target: string, input?: unknown) {
+    return this.authority.scope(headers, id, true, async ({ tx, principal }) => {
+      assert(['OWNER', 'ADMIN'].includes(principal.role), 403, 'PERMISSION_DENIED', '只有所有者或管理员可修改项目权限');
+      const existing = (await tx.query('SELECT * FROM fr_grants WHERE project_id=$1 AND user_id=$2', [id, target])).rows[0]; assert(existing, 404, 'NOT_FOUND', '项目授权不存在');
+      if (input) {
+        const value = z.strictObject({ role: z.enum(['EDITOR', 'REVIEWER', 'VIEWER']), can_approve: z.boolean(), can_edit_formal: z.boolean() }).parse(input);
+        assert(value.role === 'EDITOR' || (!value.can_approve && !value.can_edit_formal), 400, 'VALIDATION_ERROR', '只有编辑可获得正式编辑或审批权限');
+        await tx.query('UPDATE fr_grants SET role=$3,can_approve=$4,can_edit_formal=$5,active=true WHERE project_id=$1 AND user_id=$2', [id, target, value.role, value.can_approve, value.can_edit_formal]);
+      } else await tx.query('UPDATE fr_grants SET active=false WHERE project_id=$1 AND user_id=$2', [id, target]);
+      return { updated: true };
+    });
+  }
+  async ticket(headers: Headers, id: string, photoId?: string) {
+    return this.authority.scope(headers, id, true, async ({ tx, user, project }) => {
+      assert(project.state === 'SHARED', 409, 'AUTHORITY_MISMATCH', '迁移尚未完成');
+      if (photoId) assert(project.snapshot.photos.some(p => p.id === photoId), 404, 'NOT_FOUND', '照片不存在');
+      const token = randomBytes(32).toString('hex');
+      await tx.query("DELETE FROM fr_tickets WHERE expires_at<now()");
+      await tx.query("INSERT INTO fr_tickets VALUES($1,$2,$3,$4,$5,now()+interval '30 seconds')", [digest(token), user.session, id, photoId ?? null, photoId ? 'PREVIEW' : 'WS']);
+      return { token, expires_in: 30, url: photoId ? `/api/v2/media/${token}` : undefined };
+    });
+  }
+  async useTicket(token: string, purpose: 'WS' | 'PREVIEW') {
+    assert(/^[a-f0-9]{64}$/.test(token), 401, 'TICKET_INVALID', '访问票据无效');
+    return transaction(this.pool, async tx => {
+      const row = (await tx.query("DELETE FROM fr_tickets WHERE digest=$1 AND purpose=$2 AND expires_at>now() RETURNING *", [digest(token), purpose])).rows[0]; assert(row, 401, 'TICKET_INVALID', '访问票据已使用或过期');
+      const user = await this.identityForSession(row.session_digest, tx);
+      const project = (await tx.query('SELECT * FROM fr_projects WHERE id=$1 AND state=\'SHARED\'', [row.project_id])).rows[0]; assert(project, 404, 'NOT_FOUND', '项目不存在');
+      await this.authority.principal(tx, user, project);
+      return { user, project, photoId: row.photo_id as string | null };
+    });
+  }
+  async identityForSession(session: string, tx = this.pool as Pick<Pool, 'query'>) {
+    const row = (await tx.query('SELECT u.id,u.email,u.display_name AS name,s.csrf,s.digest AS session FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s', [session])).rows[0]; assert(row, 401, 'AUTH_REVOKED', '会话已失效'); return row;
+  }
+  async media(token: string) {
+    const { user, project, photoId } = await this.useTicket(token, 'PREVIEW');
+    const preview = (await this.pool.query('SELECT * FROM fr_previews WHERE project_id=$1 AND photo_id=$2', [project.id, photoId])).rows[0]; assert(preview, 404, 'NOT_FOUND', '预览不存在');
+    const bytes = await this.store.get(preview.object_key); assert(digest(bytes) === preview.content_sha256, 500, 'MEDIA_INTEGRITY', '预览完整性检查失败');
+    // IO 后再验当前 session/ACL；票据不绕过撤权。
+    const live = await this.identityForSession(user.session); await this.authority.principal(this.pool, live, project);
+    return bytes;
+  }
+  async reply(headers: Headers, id: string, thread: string, input: unknown) {
+    const { body } = z.strictObject({ body: z.string().trim().min(1).max(5000) }).parse(input);
+    return this.authority.scope(headers, id, true, async ({ tx, user, principal }) => {
+      assert(principal.role !== 'VIEWER', 403, 'PERMISSION_DENIED', '只读角色不能评论');
+      const parent = (await tx.query('SELECT id,anchor,parent_id FROM fr_comments WHERE id=$1 AND project_id=$2', [thread, id])).rows[0]; assert(parent && !parent.parent_id, 400, 'VALIDATION_ERROR', '回复必须属于本项目的根评论');
+      const cid = randomUUID(); await tx.query('INSERT INTO fr_comments(id,project_id,author_id,body,anchor,parent_id) VALUES($1,$2,$3,$4,$5,$6)', [cid, id, user.id, body, JSON.stringify(parent.anchor), thread]);
+      await this.event({ tx, user } as Scope, id, 'comment.reply', { comment_id: cid }); return { id: cid };
+    });
+  }
+  async event(scope: Pick<Scope, 'tx' | 'user'>, id: string, kind: string, detail: unknown) {
+    await scope.tx.query('INSERT INTO fr_events(project_id,actor_id,kind,revision,detail) SELECT id,$2,$3,revision,$4 FROM fr_projects WHERE id=$1', [id, scope.user.id, kind, JSON.stringify(detail)]);
+  }
+  async aiComments(headers: Headers, id: string) {
+    // 这是本地授权取材端点，不做云模型调用；共享授权绝不兼作图像或作者记忆授权。
+    return this.authority.scope(headers, id, false, async ({ tx }) => ({ comments: (await tx.query("SELECT c.id,c.author_id,u.display_name AS reviewer,c.body,c.anchor,c.parent_id FROM fr_comments c JOIN fr_users u ON u.id=c.author_id WHERE c.project_id=$1 AND c.state<>'RESOLVED' ORDER BY c.created_at LIMIT 100", [id])).rows, provenance: 'HUMAN_PROJECT_COMMENTS', grants_model_upload: false, creates_author_memory: false }));
+  }
+  async issueAgentScope(headers: Headers, id: string) {
+    return this.authority.scope(headers, id, true, async ({ tx, user, project }) => {
+      assert(project.state === 'SHARED', 409, 'AUTHORITY_MISMATCH', '迁移尚未完成');
+      const token = randomBytes(32).toString('hex'), scopeId = randomUUID();
+      await tx.query("INSERT INTO fr_agent_scopes(id,digest,project_id,session_digest,issued_by,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '5 minutes')", [scopeId, digest(token), id, user.session, user.id]);
+      return { id: scopeId, task_token: token, expires_in: 300, scope: ['project.comments.read'], permits_model_upload: false };
+    });
+  }
+  async revokeAgentScope(headers: Headers, id: string, scopeId: string) {
+    return this.authority.scope(headers, id, true, async ({ tx, user, principal }) => {
+      const result = await tx.query('UPDATE fr_agent_scopes SET revoked=true WHERE id=$1 AND project_id=$2 AND (issued_by=$3 OR $4)', [scopeId, id, user.id, ['OWNER', 'ADMIN'].includes(principal.role)]);
+      assert(result.rowCount, 403, 'PERMISSION_DENIED', '无权撤销此任务授权'); return { revoked: true };
+    });
+  }
+  async agentComments(headers: Headers) {
+    const token = headers.authorization?.match(/^Task ([a-f0-9]{64})$/)?.[1]; assert(token, 401, 'UNAUTHORIZED', '需要短期任务身份');
+    return transaction(this.pool, async tx => {
+      const scope = (await tx.query('SELECT * FROM fr_agent_scopes WHERE digest=$1 AND NOT revoked AND expires_at>now() FOR SHARE', [digest(token)])).rows[0]; assert(scope, 401, 'AUTH_REVOKED', '任务身份已过期或撤销');
+      const user = await this.identityForSession(scope.session_digest, tx);
+      const project = (await tx.query("SELECT * FROM fr_projects WHERE id=$1 AND state='SHARED' FOR SHARE", [scope.project_id])).rows[0]; assert(project, 403, 'PERMISSION_DENIED', '项目不可访问');
+      await this.authority.principal(tx, user, project);
+      const comments = (await tx.query("SELECT c.id,c.author_id,u.display_name AS reviewer,c.body,c.anchor,c.parent_id FROM fr_comments c JOIN fr_users u ON u.id=c.author_id WHERE c.project_id=$1 AND c.state<>'RESOLVED' ORDER BY c.created_at LIMIT 100", [project.id])).rows;
+      await tx.query("INSERT INTO fr_acl_audit(user_id,project_id,action,allowed) VALUES($1,$2,'agent.comments.read',true)", [user.id, project.id]);
+      return { task_scope_id: scope.id, project_id: project.id, comments, provenance: 'HUMAN_PROJECT_COMMENTS', permits_model_upload: false, creates_author_memory: false };
+    });
+  }
+}

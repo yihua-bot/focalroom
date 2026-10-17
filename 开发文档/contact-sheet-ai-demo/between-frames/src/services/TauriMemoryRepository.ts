@@ -13,11 +13,17 @@ const hypothesis = z.object({
  status: z.enum(['unconfirmed', 'confirmed', 'corrected', 'retired']), confidence: z.enum(['tentative', 'moderate']),
  userCorrection: z.string().nullable(), disabled: z.boolean(), createdAt: z.string(), updatedAt: z.string(),
 });
-const projection = z.object({ evidence: z.array(evidence), hypotheses: z.array(hypothesis), notice: z.string() });
+const projection = z.object({ evidence: z.array(evidence), hypotheses: z.array(hypothesis), notice: z.string(), crossProjectEnabled: z.boolean().default(false), authorHypotheses: z.array(hypothesis).default([]), authorMemoryNotice: z.string().default('') });
 
 const reply = z.object({ ok: z.boolean(), requestId: z.string(), data: z.object({ requestId: z.string(), changed: z.boolean(), memoryRevision: z.number().int().nonnegative() }).nullable(), error: z.object({ code: z.string(), message: z.string(), retryable: z.boolean() }).nullable() });
 export class TauriMemoryRepository implements MemoryRepository {
- async query(projectId: string, query = '') { return projection.parse(await invoke('get_memory_projection', { projectId, query })); }
+ async query(projectId: string, query = '') {
+  const parsed = projection.parse(await invoke('get_memory_projection', { projectId, query }));
+  if (parsed.evidence.some(e => e.projectId !== projectId) || parsed.hypotheses.some(h => h.projectId !== projectId || h.scope !== 'project_local')
+    || parsed.authorHypotheses.some(h => h.projectId === projectId || h.scope !== 'cross_project' || h.status !== 'confirmed' || h.disabled || !h.evidenceIds.length)
+    || (!parsed.crossProjectEnabled && parsed.authorHypotheses.length)) throw new Error('记忆投影范围不匹配');
+  return parsed;
+ }
  async request(projectId: string, command: MemoryCommand) {
   const request = { requestId: crypto.randomUUID(), projectId, command };
   let raw: unknown;

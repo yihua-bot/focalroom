@@ -1,0 +1,7 @@
+{
+  "changed": [
+    "src/features/ai-editor/AIPanel.test.tsx",
+    "src/features/ai-editor/AIPanel.tsx"
+  ],
+  "reason": "离线说明、取消入口及复用 info-card 样式；Rust 生产代码不变"
+}

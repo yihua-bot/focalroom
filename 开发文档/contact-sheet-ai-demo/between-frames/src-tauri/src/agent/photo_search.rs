@@ -1,6 +1,6 @@
-//! 分层检索的本地切片：人工元数据 + 已有缓存可观察事实；不读像素、不触发模型。
+//! 分层检索：人工元数据与缓存事实；本机句向量可复用，不读像素、不发网络请求。
 use super::{
-    model_binding, semantic,
+    model_binding, semantic, semantic_index,
     types::{Task, ToolCall},
     vision,
 };
@@ -20,6 +20,9 @@ pub(crate) struct SemanticPrefetch {
     call_fingerprint: String,
     scores: HashMap<String, f64>,
     report: semantic::SemanticReport,
+    index_path: Option<std::path::PathBuf>,
+    profile: Option<semantic_index::Profile>,
+    pending: Vec<semantic_index::Entry>,
 }
 
 /// 在写事务前计算本地向量；写事务重新读取并核对观察内容摘要，不采信过期快照。
@@ -57,6 +60,7 @@ pub(crate) async fn prepare(
     let rows = cache_rows(&mut tx, &task).await?;
     let mut documents = Vec::new();
     let mut keys = Vec::new();
+    let mut photos = Vec::new();
     for row in rows.iter().take(SCAN_LIMIT) {
         let Some(value) = parse_observation(row) else {
             continue;
@@ -66,10 +70,33 @@ pub(crate) async fn prepare(
             continue;
         }
         keys.push(document_key(row, &value));
+        photos.push(crate::command_audit::fingerprint(&json!(
+            row.get::<String, _>("photo_id")
+        )));
         documents.push(facts.join("\n"));
     }
     tx.commit().await?;
-    let ranking = semantic::rank(query, documents, remaining_ms).await;
+    let index_path = semantic_index::path(db, &task.project_id);
+    let ranking = semantic::rank_cached(
+        query,
+        documents,
+        remaining_ms,
+        index_path.clone(),
+        keys.clone(),
+    )
+    .await;
+    let pending = keys
+        .iter()
+        .zip(photos)
+        .zip(ranking.vectors)
+        .filter_map(|((key, photo), vector)| {
+            vector.map(|vector| semantic_index::Entry {
+                key: key.clone(),
+                photo,
+                vector,
+            })
+        })
+        .collect();
     Ok(Some(SemanticPrefetch {
         task_id: task_id.into(),
         call_fingerprint: crate::command_audit::fingerprint(&serde_json::to_value(call).unwrap()),
@@ -79,6 +106,9 @@ pub(crate) async fn prepare(
             .filter_map(|(key, score)| score.map(|score| (key, score)))
             .collect(),
         report: ranking.report,
+        index_path,
+        profile: ranking.profile,
+        pending,
     }))
 }
 
@@ -97,7 +127,7 @@ fn semantic_facts(value: &Value) -> Vec<&str> {
 
 fn document_key(row: &SqliteRow, value: &Value) -> String {
     crate::command_audit::fingerprint(
-        &json!({"id":row.get::<i64,_>("id"),"photo":row.get::<String,_>("photo_id"),"model":row.get::<String,_>("model_id"),"version":row.get::<String,_>("prompt_version"),"kind":row.get::<String,_>("kind"),"value":value}),
+        &json!({"id":row.get::<i64,_>("id"),"photo":row.get::<String,_>("photo_id"),"hash":row.get::<String,_>("photo_hash"),"model":row.get::<String,_>("model_id"),"version":row.get::<String,_>("prompt_version"),"kind":row.get::<String,_>("kind"),"value":value}),
     )
 }
 
@@ -125,11 +155,11 @@ async fn cache_rows(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<Vec
             "云任务缺少模型身份，不能猜测缓存来源；请重新委托",
         ));
     }
-    let model = identity.as_ref().map(|id| id.model_id.as_str());
+    let model = identity.as_ref().map(|id| id.observation_model_id());
     let version = identity.as_ref().map(|id| id.cache_version());
     // 仅取 scope 内每照片最新记录，正文有界；不展开全部历史 JSON。
     Ok(sqlx::query(r#"
-        SELECT o.id,o.photo_id,o.model_id,o.prompt_version,o.kind,
+        SELECT o.id,o.photo_id,o.photo_hash,o.model_id,o.prompt_version,o.kind,
             CASE WHEN length(CAST(o.observation_json AS BLOB))<=? THEN o.observation_json END AS payload
         FROM photo_observations o
         JOIN (
@@ -169,6 +199,7 @@ pub(crate) async fn search(
     let mut valid = 0;
     let mut truncated = false;
     let mut revalidated = 0;
+    let mut valid_keys = std::collections::HashSet::new();
     if query != "rating:4" {
         let rows = cache_rows(tx, task).await?;
         truncated = rows.len() > SCAN_LIMIT;
@@ -193,6 +224,9 @@ pub(crate) async fn search(
                 .and_then(|data| data.scores.get(&document_key(row, &value)))
                 .copied();
             revalidated += usize::from(score.is_some());
+            if score.is_some() {
+                valid_keys.insert(document_key(row, &value));
+            }
             let semantic_only = facts.is_empty();
             if semantic_only && score.is_none() {
                 continue;
@@ -267,6 +301,30 @@ pub(crate) async fn search(
     photos.truncate(limit);
     let mut result = json!({"photos":photos,"remaining":total.saturating_sub(limit),"mode":"local_metadata_and_cached_facts","new_uploads":0,"cache_coverage":{"examined":scanned,"valid":valid,"scan_limit":SCAN_LIMIT,"limited":truncated},"notice":"本地关键词匹配；缓存事实是模型观察，可能有误，不是人工偏好证据。未命中不代表照片未包含该内容；未重新读图，未观察全图库。"});
     if call.name == "search_photos_semantic" {
+        // 真实工具调用在 CommandHandler 写事务内；只持久化本次重新校验通过的向量。
+        // 缓存写失败不改变有效检索结果，也不触碰正式状态或掩盖成已持久化。
+        let mut index_write = "not_written";
+        let mut index_entries = 0;
+        if let Some(data) = semantic
+            && let (Some(path), Some(profile)) = (&data.index_path, &data.profile)
+        {
+            let entries: Vec<_> = data
+                .pending
+                .iter()
+                .filter(|entry| valid_keys.contains(&entry.key))
+                .cloned()
+                .collect();
+            if !entries.is_empty() {
+                let written = entries.len();
+                match semantic_index::publish(path, profile.clone(), entries) {
+                    Ok(_) => {
+                        index_write = "stored";
+                        index_entries = written;
+                    }
+                    Err(_) => index_write = "unavailable",
+                }
+            }
+        }
         result["mode"] = json!(if revalidated > 0 {
             "local_hybrid_sentence_embeddings"
         } else {
@@ -279,6 +337,8 @@ pub(crate) async fn search(
         )
         .unwrap();
         result["semantic_retrieval"]["revalidated"] = json!(revalidated);
+        result["semantic_retrieval"]["index_write"] = json!(index_write);
+        result["semantic_retrieval"]["index_entries"] = json!(index_entries);
         result["semantic_retrieval"]["discarded_prepared"] =
             json!(semantic.map_or(0, |data| data.report.embedded.saturating_sub(revalidated)));
         result["semantic_facts_per_photo_limit"] = json!(2);
@@ -348,6 +408,17 @@ mod tests {
             ),
             scores: HashMap::from([(document_key(&rows[0], &value), 0.9)]),
             report: semantic::SemanticReport::skipped("test_fixture", 1),
+            index_path: semantic_index::path(&db, &task.project_id),
+            profile: Some(semantic_index::Profile {
+                language: 1,
+                revision: 1,
+                dimensions: 2,
+            }),
+            pending: vec![semantic_index::Entry {
+                key: document_key(&rows[0], &value),
+                photo: crate::command_audit::fingerprint(&json!(photo)),
+                vector: vec![1.0, 0.5],
+            }],
         };
         prepared.report.embedded = 1;
         let photos = || vec![json!({"photo_id":photo,"name":"fixture.png","note":""})];
@@ -364,6 +435,8 @@ mod tests {
         .unwrap();
         assert_eq!(found["photos"][0]["photo_id"], *photo);
         assert_eq!(found["semantic_retrieval"]["revalidated"], 1);
+        assert_eq!(found["semantic_retrieval"]["index_write"], "stored");
+        semantic_index::clear(&db, &task.project_id).unwrap();
         let mut other_call = call.clone();
         other_call.call_id = "different-call".into();
         assert_eq!(
@@ -416,6 +489,13 @@ mod tests {
         .unwrap();
         assert_eq!(stale["photos"], json!([]));
         assert_eq!(stale["semantic_retrieval"]["discarded_prepared"], 1);
+        assert!(
+            semantic_index::load(prepared.index_path.as_deref())
+                .0
+                .entries
+                .is_empty(),
+            "清空后的索引不能由过期预取重新写回"
+        );
         sqlx::query("DELETE FROM photo_observations")
             .execute(&mut *tx)
             .await

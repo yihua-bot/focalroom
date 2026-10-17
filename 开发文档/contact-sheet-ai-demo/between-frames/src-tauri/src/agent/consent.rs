@@ -9,7 +9,20 @@ pub(crate) async fn authorize(
     task: &super::types::Task,
     count: i64,
 ) -> Result<Option<i64>> {
-    let provider = task.provider_id.as_str();
+    let Some(identity) = super::model_binding::load(tx, &task.id).await? else {
+        return Ok(None);
+    };
+    if identity.provider_id != task.provider_id {
+        return Ok(None);
+    }
+    let recipient = identity.consent_provider();
+    let provider = recipient.as_str();
+    if latest(tx, &task.project_id, super::PROVIDER_OPENAI, Some("deny"))
+        .await?
+        .is_some()
+    {
+        return Ok(None);
+    }
     if latest(tx, &task.project_id, provider, Some("deny"))
         .await?
         .is_some()
@@ -113,7 +126,8 @@ pub struct SetConsent {
 }
 pub async fn set(db: &crate::db::Store, r: SetConsent) -> Result<super::types::ConsentView> {
     if !matches!(r.mode.as_str(), "task" | "project" | "deny")
-        || !matches!(r.provider.as_str(), "openai" | "mock")
+        || !(is_recipient(&r.provider)
+            || (r.mode == "deny" && r.provider == super::PROVIDER_OPENAI))
         || r.quota < 0
         || r.quota > 10000
         || r.request_id.is_empty()
@@ -121,13 +135,15 @@ pub async fn set(db: &crate::db::Store, r: SetConsent) -> Result<super::types::C
     {
         return Err(AppError::new("VALIDATION_ERROR", "授权参数不合法"));
     }
-    if r.mode != "deny" && r.provider == "mock" {
-        return Err(AppError::new(
-            "VALIDATION_ERROR",
-            "Mock 不上传图像，无需授权",
-        ));
-    }
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let active: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM projects WHERE id=? AND deleted_at IS NULL")
+            .bind(&r.project_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if active != 1 {
+        return Err(AppError::new("PERMISSION_DENIED", "项目不可访问"));
+    }
     let existing: Option<i64> =
         sqlx::query_scalar("SELECT consent_id FROM consent_receipts WHERE request_id=?")
             .bind(&r.request_id)
@@ -148,15 +164,12 @@ pub async fn set(db: &crate::db::Store, r: SetConsent) -> Result<super::types::C
         tx.commit().await?;
         return Ok(view);
     }
-    // 同项目同 provider 旧授权自动失效；deny 撤回已有授权。
-    sqlx::query(
-        "UPDATE privacy_consents SET revoked_at=? WHERE project_id=? AND provider=? AND revoked_at IS NULL",
-    )
-    .bind(crate::domain::timestamp())
-    .bind(&r.project_id)
-    .bind(&r.provider)
-    .execute(&mut *tx)
-    .await?;
+    // 全局禁止会撤回所有收件人；重新明确授权只解除全局禁止和本收件人的旧授权。
+    // 其他服务此前被撤回的授权不会复活；旧通用 openai 授权从不升级。
+    sqlx::query("UPDATE privacy_consents SET revoked_at=? WHERE project_id=? AND revoked_at IS NULL AND (provider=? OR provider='openai' OR (? AND provider LIKE 'openai@%'))")
+        .bind(crate::domain::timestamp()).bind(&r.project_id).bind(&r.provider)
+        .bind(r.mode == "deny" && r.provider == super::PROVIDER_OPENAI)
+        .execute(&mut *tx).await?;
     sqlx::query("INSERT INTO privacy_consents(project_id,task_id,mode,provider,quota,used,granted_at) VALUES(?,NULL,?,?,?,0,?)")
         .bind(&r.project_id)
         .bind(&r.mode)
@@ -198,7 +211,14 @@ pub async fn effective_view(
     provider: &str,
 ) -> Result<Option<super::types::ConsentView>> {
     let mut tx = db.pool.begin().await?;
-    let row = latest(&mut tx, project, provider, None).await?;
+    let deny = latest(&mut tx, project, super::PROVIDER_OPENAI, Some("deny")).await?;
+    let row = if deny.is_some() {
+        deny
+    } else if is_recipient(provider) {
+        latest(&mut tx, project, provider, None).await?
+    } else {
+        None
+    };
     let result = row
         .map(|row| super::types::ConsentView {
             id: row.get("id"),
@@ -213,4 +233,35 @@ pub async fn effective_view(
         .filter(|view| view.revoked_at.is_none());
     tx.commit().await?;
     Ok(result)
+}
+
+pub fn is_recipient(provider: &str) -> bool {
+    provider.strip_prefix("openai@").is_some_and(|digest| {
+        digest.len() == 64
+            && digest
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    })
+}
+/// 请求中的收件人必须与当前不可变实例一致，旧授权/其他端点不可用于上传。
+pub(crate) async fn ensure_task_recipient(
+    tx: &mut Transaction<'_, Sqlite>,
+    task: &super::types::Task,
+    identity: &super::model_binding::ModelIdentity,
+) -> Result<()> {
+    if let Some(id) = task.consent_id {
+        let row = by_id(tx, id).await?.ok_or_else(target_changed)?;
+        if row.get::<String, _>("project_id") != task.project_id
+            || row.get::<String, _>("provider") != identity.consent_provider()
+        {
+            return Err(target_changed());
+        }
+    }
+    Ok(())
+}
+pub(crate) fn target_changed() -> AppError {
+    AppError::new(
+        "CONSENT_TARGET_CHANGED",
+        "图像授权对应的服务或模型已变化，请刷新服务信息并重新授权；未上传",
+    )
 }

@@ -1,0 +1,32 @@
+{
+  "source_sha256": "91c84b24305a32ad2f3beaf80fc985ab97ab5e4ff887cfef027c5623802aa414",
+  "master_sha256": "6f78e666faa81bed6c1bb5c5b2615317bc1f06f3a02a5a87de9ed845f0c8709b",
+  "size": [
+    480,
+    480
+  ],
+  "mode": "RGBA",
+  "components": 9,
+  "alpha_min": 0,
+  "alpha_max": 255,
+  "transparent_pixels": 159276,
+  "partial_alpha_pixels": 5477,
+  "icons": {
+    "icon.png": "564ee1ca2c9cb076eb8944fc1d0cd97c61c43e0e697fcf00854387cfdf7f28ab",
+    "Square30x30Logo.png": "a4f0808b047f1bdf9efd8bbbd5890dd698faede5c4674aeb33198dc5b21795f8",
+    "Square150x150Logo.png": "942e014877c6b9f05e4a827bdb2ead407facf7f8c2c4d159df1c197adc06677b",
+    "icon.icns": "3f5812cdba6755ca82e55898731fba6d15ae725378c8164d0cfe967dcfd43b5a",
+    "StoreLogo.png": "27872cb766192c7d6d9d0af1a521e112406c3b36df19e33b24683688b556b434",
+    "Square107x107Logo.png": "ab4a2c1d0b722d54b974301e7be72efd9530e08d6b73b3ba05785d2d6b03523b",
+    "Square89x89Logo.png": "faa1e76c5f18c6749996f8742fcc99c2246a97252dca6cbf3507b1f89a947fdf",
+    "Square310x310Logo.png": "656d87ad9ee72953aa4ee27af4b77eb8038a23cc88cb89197fcc56507ccc50c3",
+    "icon.ico": "7a47264f6fe7597e0dc4f31d300f4fa00e77e2d252f1a93885ea56b8b8e0b8d0",
+    "Square142x142Logo.png": "cee17a8c0e651d090ded415f1ce77f78e16734326c881930d2432bca27cec211",
+    "128x128.png": "76857505defaceda92be09c040b93eca86e4fbf7a3857a5404dba9a0eb97ae28",
+    "Square284x284Logo.png": "cb3ad232ec5380bfe3b107e5ec6b22e2853d2f73fbab4611cb29182b8d9a6fb8",
+    "32x32.png": "146fcfb417a8d0b22f5c101a43e04258e11500a38bc70d250ae87cb2e4fce569",
+    "Square44x44Logo.png": "01efc4faf7685d321fcd4bffe56e528fa9f9f3808b5f6f06aebf6a81376c39f6",
+    "Square71x71Logo.png": "c37cd88afd5d5537f7355b2f0b91b4f795da4f580f89c45403bd8568f1de64d0",
+    "128x128@2x.png": "1e5aeaad5cfc3d4f2a843ac16c244cd0aceec4379c5b5afe9b720488050a6003"
+  }
+}

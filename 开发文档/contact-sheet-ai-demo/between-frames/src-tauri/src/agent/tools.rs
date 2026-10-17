@@ -135,13 +135,13 @@ pub(crate) async fn execute(
             Ok(json!({"threads": listing["threads"], "notice": listing["notice"]}))
         }
         "retrieve_preferences" => {
-            if a["scope"] != "project_local" {
-                return Err(AppError::new(
-                    "PERMISSION_DENIED",
-                    "跨项目记忆未开放；仅项目内证据支持的偏好可检索",
-                ));
-            }
             let limit = a["limit"].as_u64().unwrap_or(5).min(10) as usize;
+            if a["scope"] == "global_confirmed" {
+                let memory = super::memory::retrievable_author(tx, task, limit).await?;
+                return Ok(
+                    json!({"hypotheses":memory["hypotheses"],"human_facts":[],"mode":memory["mode"],"notice":memory["notice"]}),
+                );
+            }
             let memory =
                 super::memory::retrievable_for_goal(tx, &task.project_id, limit, &task.goal)
                     .await?;

@@ -31,6 +31,17 @@ impl Harness {
         let revision = args["expectedRevision"].as_i64().unwrap_or(0);
         let photo = args["photoId"].as_str().unwrap_or("");
         let value = match command {
+            "get_sharing_status" => {
+                between_frames_lib::shared_cloud::status(&self.store, id).await?
+            }
+            "share_project" => {
+                between_frames_lib::shared_cloud::share(
+                    &self.store,
+                    serde_json::from_value(args["request"].clone())
+                        .map_err(|_| AppError::new("INVALID_INPUT", "共享参数不合法"))?,
+                )
+                .await?
+            }
             "get_agent_projection" => {
                 json!(between_frames_lib::agent::projection(&self.store, id).await?)
             }
@@ -147,7 +158,7 @@ impl Harness {
                     between_frames_lib::agent::consent::effective_view(
                         &self.store,
                         id,
-                        between_frames_lib::agent::PROVIDER_OPENAI,
+                        config["consentProvider"].as_str().unwrap_or("openai"),
                     )
                     .await?,
                 )
@@ -158,19 +169,7 @@ impl Harness {
                 let request: between_frames_lib::agent::types::ConsentRequest =
                     serde_json::from_value(args["request"].clone())
                         .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
-                json!(
-                    between_frames_lib::agent::consent::set(
-                        &self.store,
-                        between_frames_lib::agent::consent::SetConsent {
-                            request_id: request.request_id,
-                            project_id: request.project_id,
-                            mode: request.mode,
-                            provider: request.provider,
-                            quota: request.quota,
-                        },
-                    )
-                    .await?
-                )
+                json!(self.agent.set_consent(request).await?)
             }
             "agent_request" => {
                 let request: between_frames_lib::agent::types::AgentRequest =

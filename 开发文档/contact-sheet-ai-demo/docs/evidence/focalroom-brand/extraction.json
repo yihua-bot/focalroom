@@ -1,0 +1,17 @@
+{
+  "source_sha256": "91c84b24305a32ad2f3beaf80fc985ab97ab5e4ff887cfef027c5623802aa414",
+  "output_sha256": "6f78e666faa81bed6c1bb5c5b2615317bc1f06f3a02a5a87de9ed845f0c8709b",
+  "size": [
+    480,
+    480
+  ],
+  "mode": "RGBA",
+  "components": 9,
+  "artwork_size": [
+    398,
+    384
+  ],
+  "opaque_source_pixels_preserved": true,
+  "reproducible": true,
+  "public_asset": "public/focalroom-mark.png"
+}

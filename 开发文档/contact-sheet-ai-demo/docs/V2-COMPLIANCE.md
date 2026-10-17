@@ -1,5 +1,17 @@
 # v2.0 规格符合性总账（24 验收场景映射）
 
+**2026-10-17 M3 同端点模型分工**：两个型号的观察/策展执行、独立能力/费率、观察收件人、角色冻结恢复及缓存/检索已在本地验收，新增9项Rust/3项前端；190桌面Rust+13本地云、183单测、23项E2E、独立界面与打包通过。真实成本优势/摄影质量、自动选模、跨服务Adapter/fallback和真人门槛仍开，17 pass/7 partial层级不提升。见 [本轮报告](V2-M3-MODEL-ROLES-TEST-REPORT.md)、ADR0039；M3仍partial。
+
+**2026-10-17 M3 图像收件人授权**：实际端点/型号隔离、旧授权拒绝、陈旧界面核对、全服务禁止/单方恢复与 HTTP 不重定向已验收，新增7项Rust/7项前端用例并补真实harness禁止/重启旅程。无新真实服务质量证据、多Adapter或跨服务fallback，17 pass/7 partial层级不提升。见 [本轮报告](V2-M3-PROVIDER-CONSENT-TEST-REPORT.md)、ADR0038；M3/M02仍partial。
+
+
+**2026-10-17 M3 本地作者记忆**：显式授权的 LOCAL 离线跨项目引用已接上下文与工具，来源只读/已确认/有效/相关且有支持/反例溯源；撤权、来源变更、ABA、回放和检查点重验已回归。云模型和共享项目不参与，仍没有多 Creator 身份权威；M02 保持 partial，17 pass/7 partial 的层级不提升。见 [本轮报告](V2-M3-AUTHOR-MEMORY-TEST-REPORT.md)、ADR0037。以下旧“只实现项目内”描述以本段及表内新记录为准。
+
+
+**2026-10-17 M3增量索引**：已有缓存事实的真实Apple句向量已可持久化/跨连接重开复用并只重新生成变化候选；文件/模型/来源/范围校验、清空联动和迟到预取拒绝有回归。仅有界平面索引，不扩大成全图库视觉索引或高质量策展结论；未增加真人/竞品样本、云生产验证或场景pass数量。M3及17 pass/7 partial层级保持；见 [本轮报告](V2-M3-PERSISTENT-INDEX-TEST-REPORT.md)、ADR0036。下文“不持久化”是历史边界，当前文件是可清空的私密派生缓存。
+
+**2026-10-17 M3 本地语义检索增量**：search_photos_semantic 对任务范围内已有事实做真实 Apple 中英文句向量排序；有来源、快照重验、取消/重放、不可用回退，精确原生测试已执行。无新图像上传/真人质量样本或迁移，持久化/增量语义索引和完整多供应商授权执行仍待完成。新增的本地云协作端点已进入13项云测试，Viewer只读越权已复现修复；生产部署/Postgres/WS/真实Web两端未在本轮核验，提交标题不改变验收状态。来源层级和17 pass/7 partial的总账定义不提升；见 [本轮报告](V2-M3-LOCAL-SEMANTIC-TEST-REPORT.md)、ADR0035及源码摘要。下文“无API代码/未部署”保留历史，不当作当前线上核对结论。
+
 **2026-10-16 M3 能力配置增量**：精确模型能力配置、组合门槛、直接 Adapter 检查、能力变更恢复拒绝与 UI 授权边界已验收；151 桌面 Rust +11 云、169 Vitest、16 预览/6 后端通过，debug 构建通过。DeepSeek 无图回归 review_ready，13,907实际token/3美分估算；无新真实照片/真人质量样本。不把官方文档/协议冒烟/部署声明当专业质量或驻留保证，完整多 Adapter/供应商授权 fallback、语义索引及 M3 整体仍 partial，总账层级不变。见 [本轮报告](V2-M3-CAPABILITIES-TEST-REPORT.md)、ADR 0034。
 
 **2026-10-16 M3 路由/检索增量**：实际实例身份/端点缓存隔离、恢复前配置核对、可观察事实检索带来源已验证；144 桌面 Rust + 11 云、164 Vitest、16 预览/6 后端全通过。DeepSeek 新 Prompt 纯文件名任务 review_ready（13,792实际token、3美分估算、0图片），未改正式项目。M03 保持本地执行层范围，不以 unknown 驻留/静态协议声明冒充能力或区域实测；M3 质量、多 Adapter、语义向量索引仍 partial。见 [本轮报告](V2-M3-ROUTING-SEARCH-TEST-REPORT.md)。
@@ -25,10 +37,10 @@
 | A04 | Agent 无权改正式版本 | **pass** | v2_bridge（Agent principal 纯函数层拒）+ v2_proposals（Agent 仅可 create） |
 | A05 | 取消/恢复不重复草案 | **pass** | ag07（回执重放）+ ag09（检查点） |
 | A06 | 同请求重试幂等 | **pass** | v2_bridge + v2_proposals：create/submit/apply/comment 重启重放、冲突指纹拒绝；业务/回执同事务，回执落库故障全部回滚 |
-| P01 | 无同意不发送预览图 | **pass** | agent_vision ag04（零外发断言）+ consent 三态配额 |
+| P01 | 无同意不发送预览图 | **pass** | agent_vision ag04（零外发断言）+ consent 三态配额 + 实际收件人/旧授权/重定向拒绝（ADR0038） |
 | P02 | 对抗文本不升权 | **pass** | ag13（注入指令不可信）+ 白名单 schema |
 | M01 | 纠正后不再误用 | **pass** | agent_memory ag11 + 物理删除墓碑（ADR 0014 修订） |
-| M02 | 私人记忆不跨创作者 | **partial** | 仅实现项目内记忆与跨项目拒绝；Creator 身份、共享项目中的作者私有记忆隔离尚未实现 |
+| M02 | 私人记忆不跨创作者 | **partial** | 已有默认隔离及显式授权的 LOCAL 离线作者引用、来源/撤权保护；云 Provider 作者记忆授权、真实 Creator 身份与共享项目中的作者私有记忆隔离尚未实现（ADR0037） |
 | M03 | 区域拒绝不静默跨区 | **pass**（本地执行层） | agent_vision 的真实 AgentEngine + 本地 HTTP 测试：区域拒绝、预算不足、缺提供方均零 HTTP；离线任务不切云；区域/档位为可信部署代码注入，配置文件与设置界面尚未接入 |
 | S01 | LOCAL→SHARED 单权威 | **partial** | 本地写门槛已接入 v1/v2、导入与重连；锁内重读权威，failed/aborted 同版本可重试且保留记录。云权威、上传及真实签名确认尚未实现 |
 | S02 | 撤销后 URL 拒绝 | **partial** | v2_media_links：撤销即拒（区别于过期文案）/伪造拒/跨项目签发拒/项目级批量撤销幂等；新增 cloud/ 真实 HTTP 验证单 grant 撤销/不误伤/无认证拒绝与有效 JPEG 读取；仍无生产身份/对象存储签名/CDN 部署（ADR 0022、0031） |

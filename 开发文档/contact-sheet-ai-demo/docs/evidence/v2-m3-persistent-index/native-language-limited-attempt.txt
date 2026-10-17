@@ -1,0 +1,23 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.34s
+     Running tests/photo_search.rs (src-tauri/target-v1/debug/deps/photo_search-29f72b76a5da82b1)
+
+running 1 test
+semantic tool accepted: {"cache_hits":0,"candidates":3,"dimensions":640,"discarded_prepared":0,"embedded":3,"generated":3,"index_entries":3,"index_read":"miss","index_write":"stored","language":"zh-Hans","limited":false,"provider":"apple_nl_sentence","quality":"unmeasured","revalidated":3,"revision":1,"status":"available"}
+incremental index accepted: {"cache_hits":2,"candidates":3,"dimensions":640,"discarded_prepared":0,"embedded":3,"generated":1,"index_entries":3,"index_read":"loaded","index_write":"stored","language":"zh-Hans","limited":false,"provider":"apple_nl_sentence","quality":"unmeasured","revalidated":3,"revision":1,"status":"available"}
+
+thread 'semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_scope' (10951685) panicked at tests/photo_search.rs:386:9:
+assertion `left == right` failed
+  left: Number(0)
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_scope ... FAILED
+
+failures:
+
+failures:
+    semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_scope
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 2.12s
+
+error: test failed, to rerun pass `--test photo_search`

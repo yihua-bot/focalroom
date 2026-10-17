@@ -28,6 +28,8 @@ async fn v2_baseline_backup_health_rejects_symlink_root() {
 }
 fn config() -> AiConfig {
     AiConfig {
+        observation: None,
+        consent_provider: None,
         provider_id: "openai".into(),
         model_id: "private-model".into(),
         ready: true,

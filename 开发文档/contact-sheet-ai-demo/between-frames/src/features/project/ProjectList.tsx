@@ -12,7 +12,7 @@ export function ProjectList({ projects, onOpen, onCreate, local = false, archive
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const allTags = [...new Set(projects.flatMap(project => project.tags ?? []))].sort();
   const visible = filterTag ? projects.filter(project => project.tags?.includes(filterTag)) : projects;
-  return <section className="project-list"><span className="eyebrow">YOUR PROJECTS / 序间</span><div className="heading">
+  return <section className="project-list"><span className="eyebrow">YOUR PROJECTS / FOCALROOM</span><div className="heading">
     <div><h1>{zh.projectListTitle}</h1><p>{zh.projectListHint}</p></div><Button variant="primary" onClick={onCreate}><Plus size={15} />{zh.newProject}</Button></div>
     {allTags.length > 0 && <div className="tag-filter" aria-label="按标签筛选">{['全部', ...allTags].map(tag => <button key={tag} aria-pressed={filterTag === (tag === '全部' ? null : tag)} onClick={() => setFilterTag(tag === '全部' ? null : tag)}>{tag}</button>)}</div>}
     <div className="project-list-tools"><p className="preview-banner">{local ? '本地项目 · 自动保存 · 原图只读' : zh.preview}</p>{local && <Button size="small" onClick={onToggleArchive}>{archived ? '返回项目' : '归档项目'}</Button>}</div>

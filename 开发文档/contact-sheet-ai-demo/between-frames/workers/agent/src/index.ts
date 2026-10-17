@@ -5,3 +5,5 @@ export function dispatchAgentProposal(input: unknown, principal: Extract<Princip
   return dispatch(input, principal, project, 'CLOUD');
 }
 export const workerStatus = { implemented: false, milestone: 'M2/M3', message: '云 Agent 尚未运行；既有本地 Runtime 保留' } as const;
+
+export { readScopedComments } from './comments.ts';

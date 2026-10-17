@@ -1,11 +1,15 @@
-//! 作者级跨项目记忆授权（M3）：显式开启后，同一本地作者的项目间共享偏好记忆检索。
-//! 默认关闭（M02 隐私保守）；开启也不等于跨创作者——本桌面应用当前只有一位本地作者。
+//! 本地作者记忆：授权经 CommandHandler 审计；任务绑定不可变来源摘要。
+//! 当前桌面仅一个本地作者；不向云模型或共享项目开放此授权。
+use super::{store, types::Task};
 use crate::{
+    command_audit::fingerprint,
     db::Store,
-    domain::{self, Result},
+    domain::{self, AppError, Result},
 };
+use betweenframes_local_domain::LocalState;
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
+use serde_json::{Value, json};
+use sqlx::{Sqlite, Transaction};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -13,78 +17,134 @@ pub struct MemoryScopeSettings {
     pub cross_project_enabled: bool,
     pub updated_at: String,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct Binding {
+    version: u32,
+    pub cross_project: bool,
+    fingerprint: String,
+}
 
-/// 读取跨项目设置；无记录时返回保守默认（关闭）。
-pub async fn get_settings(store: &Store, user_id: &str) -> Result<MemoryScopeSettings> {
-    let row = sqlx::query(
-        "SELECT cross_project_enabled,updated_at FROM memory_scope_settings WHERE user_id=?",
+async fn grant_epoch(tx: &mut Transaction<'_, Sqlite>) -> Result<i64> {
+    Ok(sqlx::query_scalar("SELECT COUNT(*) FROM memory_commands WHERE changed=1 AND json_extract(command_json,'$.type')='SetCrossProjectMemory'")
+        .fetch_one(&mut **tx).await?)
+}
+pub(crate) async fn settings(tx: &mut Transaction<'_, Sqlite>) -> Result<MemoryScopeSettings> {
+    let raw: Option<(i64, String)> = sqlx::query_as(
+        "SELECT cross_project_enabled,updated_at FROM memory_scope_settings WHERE user_id='local'",
     )
-    .bind(user_id)
-    .fetch_optional(&store.pool)
+    .fetch_optional(&mut **tx)
     .await?;
-    Ok(match row {
-        Some(row) => MemoryScopeSettings {
-            cross_project_enabled: row.get::<i64, _>("cross_project_enabled") == 1,
-            updated_at: row.get("updated_at"),
-        },
-        None => MemoryScopeSettings {
-            cross_project_enabled: false,
-            updated_at: String::new(),
-        },
+    // 历史直接写入的 true 不能作为授权；最后一次有效审计必须明确开启。
+    let approved: Option<bool> = sqlx::query_scalar("SELECT json_extract(command_json,'$.enabled') FROM memory_commands WHERE changed=1 AND json_extract(command_json,'$.type')='SetCrossProjectMemory' ORDER BY rowid DESC LIMIT 1")
+        .fetch_optional(&mut **tx).await?;
+    Ok(MemoryScopeSettings {
+        cross_project_enabled: raw.as_ref().is_some_and(|r| r.0 == 1) && approved == Some(true),
+        updated_at: raw.map(|r| r.1).unwrap_or_default(),
     })
 }
-
-/// 设置跨项目授权；幂等。
-pub async fn set_cross_project(
-    store: &Store,
-    user_id: &str,
-    enabled: bool,
-) -> Result<MemoryScopeSettings> {
-    let now = domain::timestamp();
-    sqlx::query(
-        "INSERT INTO memory_scope_settings(user_id,cross_project_enabled,updated_at) VALUES(?,?,?) \
-         ON CONFLICT(user_id) DO UPDATE SET cross_project_enabled=excluded.cross_project_enabled, updated_at=excluded.updated_at",
-    )
-    .bind(user_id)
-    .bind(if enabled { 1 } else { 0 })
-    .bind(&now)
-    .execute(&store.pool)
-    .await?;
-    get_settings(store, user_id).await
-}
-
-/// 快捷判断（供检索路径内联调用）。
-pub async fn cross_project_enabled(store: &Store) -> bool {
-    get_settings(store, "local")
-        .await
-        .map(|s| s.cross_project_enabled)
-        .unwrap_or(false)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn default_is_isolated_and_setting_is_idempotent() {
-        let temp = tempfile::tempdir().unwrap();
-        let store = Store::open(&temp.path().join("m.sqlite")).await.unwrap();
-        // 默认关闭。
-        assert!(
-            !get_settings(&store, "local")
-                .await
-                .unwrap()
-                .cross_project_enabled
-        );
-        // 开启。
-        let enabled = set_cross_project(&store, "local", true).await.unwrap();
-        assert!(enabled.cross_project_enabled);
-        assert!(cross_project_enabled(&store).await);
-        // 幂等重复。
-        let again = set_cross_project(&store, "local", true).await.unwrap();
-        assert!(again.cross_project_enabled);
-        // 关闭恢复。
-        set_cross_project(&store, "local", false).await.unwrap();
-        assert!(!cross_project_enabled(&store).await);
+pub async fn get_settings(db: &Store, user_id: &str) -> Result<MemoryScopeSettings> {
+    if user_id != "local" {
+        return Ok(MemoryScopeSettings {
+            cross_project_enabled: false,
+            updated_at: String::new(),
+        });
     }
+    let mut tx = db.pool.begin().await?;
+    settings(&mut tx).await
+}
+pub(crate) async fn set_enabled(tx: &mut Transaction<'_, Sqlite>, enabled: bool) -> Result<bool> {
+    let current = settings(tx).await?;
+    let raw: i64 = sqlx::query_scalar("SELECT COALESCE((SELECT cross_project_enabled FROM memory_scope_settings WHERE user_id='local'),0)")
+        .fetch_one(&mut **tx).await?;
+    let changed = (raw != 0) != enabled || (enabled && !current.cross_project_enabled);
+    if changed {
+        sqlx::query("INSERT INTO memory_scope_settings(user_id,cross_project_enabled,updated_at) VALUES('local',?,?) ON CONFLICT(user_id) DO UPDATE SET cross_project_enabled=excluded.cross_project_enabled,updated_at=excluded.updated_at")
+            .bind(enabled).bind(domain::timestamp()).execute(&mut **tx).await?;
+    }
+    Ok(changed)
+}
+pub(crate) async fn sources(tx: &mut Transaction<'_, Sqlite>, target: &str) -> Result<Vec<String>> {
+    if super::promotion::local_state(tx, target).await? != LocalState::LOCAL {
+        return Ok(vec![]);
+    }
+    let ids: Vec<String> = sqlx::query_scalar("SELECT p.id FROM projects p WHERE p.id<>? AND p.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM v2_promotions v WHERE v.project_id=p.id AND v.state IN('pending','uploading','verifying','completed')) ORDER BY p.id LIMIT 101")
+        .bind(target).fetch_all(&mut **tx).await?;
+    if ids.len() > 100 {
+        return Err(AppError::new(
+            "MEMORY_SCOPE_LIMIT",
+            "本地来源项目超过 100 个；请关闭跨项目记忆后重新委托",
+        ));
+    }
+    Ok(ids)
+}
+async fn snapshot(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<Binding> {
+    let grant = settings(tx).await?;
+    let target_local =
+        super::promotion::local_state(tx, &task.project_id).await? == LocalState::LOCAL;
+    let cross =
+        grant.cross_project_enabled && task.provider_id == super::PROVIDER_ID && target_local;
+    let mut dependencies = vec![];
+    if cross {
+        for id in sources(tx, &task.project_id).await? {
+            let evidence: i64 = sqlx::query_scalar(
+                "SELECT COALESCE(MAX(id),0) FROM preference_evidence WHERE project_id=?",
+            )
+            .bind(&id)
+            .fetch_one(&mut **tx)
+            .await?;
+            let revision = super::memory_control::revision(tx, &id).await?;
+            dependencies.push(json!([id, evidence, revision]));
+        }
+    }
+    Ok(Binding {
+        version: 1,
+        cross_project: cross,
+        fingerprint: fingerprint(
+            &json!({"grant":grant,"epoch":grant_epoch(tx).await?,"targetLocal":target_local,"provider":task.provider_id,"sources":dependencies}),
+        ),
+    })
+}
+pub(crate) async fn load(tx: &mut Transaction<'_, Sqlite>, id: &str) -> Result<Option<Binding>> {
+    let raw: Option<String> = sqlx::query_scalar("SELECT body_json FROM agent_steps WHERE task_id=? AND kind='author_memory_binding' ORDER BY id LIMIT 1")
+        .bind(id).fetch_optional(&mut **tx).await?;
+    raw.map(|r| serde_json::from_str(&r).map_err(crate::command_audit::serialization))
+        .transpose()
+}
+pub(crate) async fn bind(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<()> {
+    let binding = snapshot(tx, task).await?;
+    store::step(
+        tx,
+        &task.id,
+        "author_memory_binding",
+        serde_json::to_value(binding).unwrap(),
+        "绑定本地作者记忆授权和来源版本；不含证据正文",
+    )
+    .await
+}
+pub(crate) async fn validate(
+    tx: &mut Transaction<'_, Sqlite>,
+    task: &Task,
+) -> Result<Option<Binding>> {
+    let bound = load(tx, &task.id).await?;
+    let valid = match &bound {
+        Some(binding) => *binding == snapshot(tx, task).await?,
+        // 旧任务仅在从未开启过授权时保留项目内恢复能力。
+        None => !settings(tx).await?.cross_project_enabled && grant_epoch(tx).await? == 0,
+    };
+    if !valid {
+        return Err(AppError::new(
+            "MEMORY_SCOPE_CHANGED",
+            "作者记忆授权或来源已变化，请基于当前记忆重新委托",
+        ));
+    }
+    Ok(bound)
+}
+pub(crate) fn binding_value(binding: Option<Binding>) -> Value {
+    serde_json::to_value(binding).unwrap()
+}
+pub(crate) async fn may_use_author(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<bool> {
+    Ok(task.provider_id == super::PROVIDER_ID
+        && settings(tx).await?.cross_project_enabled
+        && super::promotion::local_state(tx, &task.project_id).await? == LocalState::LOCAL)
 }

@@ -19,6 +19,9 @@ pub struct MemoryRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub enum MemoryCommand {
+    SetCrossProjectMemory {
+        enabled: bool,
+    },
     SetEvidenceExcluded {
         evidence_id: i64,
         excluded: bool,
@@ -111,6 +114,9 @@ pub(crate) async fn execute(db: &Store, request: MemoryRequest) -> Result<Memory
     }
     memory::materialize(&mut tx, &request.project_id).await?;
     let changed = match &request.command {
+        MemoryCommand::SetCrossProjectMemory { enabled } => {
+            super::memory_scope::set_enabled(&mut tx, *enabled).await?
+        }
         MemoryCommand::DeleteHypothesis { hypothesis_id } => {
             let old = memory::row_view(&mut tx, *hypothesis_id).await?;
             if old.project_id != request.project_id {
@@ -190,6 +196,9 @@ pub(crate) async fn execute(db: &Store, request: MemoryRequest) -> Result<Memory
             true
         }
         MemoryCommand::PurgeObservationCache {} => {
+            // 与观察删除共用数据库写锁，防止旧检索在清空之后重新发布向量。
+            // 文件先清空：后续事务失败只会损失可重建缓存，不会恢复旧派生数据。
+            super::semantic_index::clear(db, &request.project_id)?;
             let removed = sqlx::query("DELETE FROM photo_observations WHERE photo_id IN (SELECT id FROM photos WHERE project_id=?)")
                 .bind(&request.project_id)
                 .execute(&mut *tx)
@@ -309,7 +318,9 @@ pub(crate) async fn execute(db: &Store, request: MemoryRequest) -> Result<Memory
         .await?;
     if changed {
         memory::materialize(&mut tx, &request.project_id).await?;
-        let ids:Vec<String>=sqlx::query_scalar("SELECT id FROM agent_tasks WHERE project_id=? AND state IN('queued','planning','running')").bind(&request.project_id).fetch_all(&mut *tx).await?;
+        let global = matches!(request.command, MemoryCommand::SetCrossProjectMemory { .. });
+        let ids: Vec<String> = sqlx::query_scalar("SELECT t.id FROM agent_tasks t WHERE t.state IN('queued','planning','running') AND (? OR t.project_id=? OR EXISTS(SELECT 1 FROM agent_steps s WHERE s.task_id=t.id AND s.kind='author_memory_binding' AND json_extract(s.body_json,'$.crossProject')=1))")
+            .bind(global).bind(&request.project_id).fetch_all(&mut *tx).await?;
         for id in ids {
             let mut task = store::load(&mut tx, &id).await?;
             store::settle_waiting(&mut tx, &mut task, "记忆变更前结算模型等待").await?;

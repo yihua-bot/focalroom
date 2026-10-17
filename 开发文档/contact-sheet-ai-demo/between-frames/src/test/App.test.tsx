@@ -34,7 +34,7 @@ describe('工作台交互', () => {
   });
   it('浏览器 Mock 入口不启动桌面任务，保留集合不变', async () => {
     const { repository, user } = await open();
-    await user.click(screen.getByRole('button', { name: 'Agent · 本地 Mock' }));
+    await user.click(screen.getByRole('button', { name: '摄影编辑 Agent' }));
     expect(screen.getByText('验证受控工具闭环。AI 不直接修改正式选片；云端图像仅在明确授权后上传。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '开始本地 Mock 任务' })).toBeDisabled();
     expect((await repository.get('sample-project')).sequence).toEqual([]);

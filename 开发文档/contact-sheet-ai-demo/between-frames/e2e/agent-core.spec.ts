@@ -39,7 +39,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  await page.goto('/#/project/' + project.id);
  await expect(page.getByRole('heading', { name: 'M2 · 草案与人工决定' })).toBeVisible();
  await page.screenshot({ path: resolve(screenshots, 'workspace.png') });
- await page.getByRole('button', { name: 'Agent · 本地 Mock', exact: true }).click();
+ await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
  await page.getByRole('textbox', { name: 'Agent 编辑目标' }).fill('给两版 25 张序列');
  await page.locator('.agent-form summary').click();
  await page.getByRole('spinbutton', { name: '模型轮次上限' }).fill('2');
@@ -48,7 +48,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  await expect(page.locator('.agent-task > strong')).toBeInViewport();
  await page.screenshot({ path: resolve(screenshots, 'paused.png') });
  await page.reload();
- await page.getByRole('button', { name: 'Agent · 本地 Mock', exact: true }).click();
+ await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
  await page.getByRole('button', { name: '按已保存预算恢复（2 轮 / 40 工具）' }).click();
  await expect(page.locator('.agent-task > strong')).toHaveText('已暂停');
  expect((await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0].usage.modelTurns).toBe(2);
@@ -67,7 +67,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  // 在任务完成后人工保留一张未在候选中的照片，两个草案必须过期。
  project = await rpc<Project>('update_photo_decision', { projectId: project.id, expectedRevision: project.revision, photoId: project.photos[199].id, status: 'keep' });
  await page.reload();
- await page.getByRole('button', { name: 'Agent · 本地 Mock', exact: true }).click();
+ await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
  await expect(page.locator('.agent-task > strong')).toHaveText('原任务基线过期');
  await page.getByRole('button', { name: '查看草案差异' }).first().click();
  const dialog = page.getByRole('dialog');
@@ -119,4 +119,26 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  const task = (await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0];
  await rpc('agent_request', { request: { requestId: crypto.randomUUID(), projectId: project.id, command: { type: 'CancelTask', taskId: task.id } } });
  expect((await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0].state).toBe('cancelled');
+ // 当前没有云服务也能主动管理/禁止全部服务的图像授权，重启后保留。
+ const beforeDeny = await rpc<AgentProjection>('get_agent_projection', { projectId: project.id });
+ await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
+ await page.locator('.ai-config > summary').click();
+ await page.getByRole('button', { name: '管理图像授权' }).click();
+ const consentDialog = page.getByRole('dialog', { name: '云端图像授权' });
+ await expect(consentDialog.getByRole('button', { name: /^仅本次任务/ })).toBeDisabled();
+ await expect(consentDialog.getByRole('button', { name: /^本项目/ })).toBeDisabled();
+ await expect(consentDialog).toContainText('服务地址：未配置');
+ await mkdir(resolve('../docs/evidence/v2-m3-provider-consent'), { recursive: true });
+ await consentDialog.scrollIntoViewIfNeeded();
+ await page.screenshot({ path: resolve('../docs/evidence/v2-m3-provider-consent/offline-revoke-ui.png') });
+ await consentDialog.getByRole('button', { name: '禁止云端图像' }).click();
+ await expect(consentDialog).toHaveCount(0);
+ await expect.poll(async () => (await rpc<{consent: {mode: string} | null}>('get_ai_config', {projectId: project.id})).consent?.mode).toBe('deny');
+ await rpc('test_restart');
+ expect((await rpc<{consent: {mode: string} | null}>('get_ai_config', {projectId: project.id})).consent?.mode).toBe('deny');
+ expect(await rpc<Project>('get_project', {projectId: project.id})).toEqual(before);
+ expect(await rpc<AgentProjection>('get_agent_projection', {projectId: project.id})).toEqual(beforeDeny);
+ expect(await rpc<string[][]>('test_fixture_checksums')).toEqual(beforeHash);
+ expect(errors).toEqual([]); expect(outside).toEqual([]);
+
 });

@@ -1,0 +1,96 @@
+{
+  "date": "2026-10-17",
+  "head": "aa64110cf2ac634b92cdd650203be7fa4bf91898",
+  "milestone": "M3 partial; bounded persistent document-vector index delivered",
+  "desktop_rust": {
+    "passed": 165,
+    "default_ignored": 13,
+    "keychain_filtered": 1
+  },
+  "cloud_rust_passed": 13,
+  "vitest_passed": 169,
+  "preview_e2e_passed": 16,
+  "isolated_backend_e2e_passed": 6,
+  "first_verify_all_exit_code": 1,
+  "first_backend_e2e": {
+    "passed": 5,
+    "failed": 1,
+    "reason": "Full-page Vite reload during concurrent native build reset AI panel; trace records second Vite connection"
+  },
+  "isolated_backend_exit_code": 0,
+  "explicit_native_lib_passed": 2,
+  "explicit_native_agent_tool_passed": 1,
+  "strengthened_stale_prefetch_unit_passed": 1,
+  "explicit_native_added_new_test_count": 1,
+  "actual_languages": {
+    "zh-Hans": {
+      "dimensions": 640,
+      "revision": 1
+    },
+    "en": {
+      "dimensions": 512,
+      "revision": 1
+    }
+  },
+  "document_counts": {
+    "cold": {
+      "generated": 3,
+      "cache_hits": 0
+    },
+    "reopened_scoped": {
+      "generated": 0,
+      "cache_hits": 1
+    },
+    "single_changed": {
+      "generated": 1,
+      "cache_hits": 2
+    }
+  },
+  "native_debug_build_passed": true,
+  "natural_language_weak_load": true,
+  "native_app_launched": false,
+  "source_files_final_matched": 253,
+  "source_change_during_full_run": "Only cfg(test) in photo_search.rs was strengthened; rerun exact unit passed; production logic unchanged",
+  "starting_screenshots_verified": 90,
+  "test_screenshots_restored": [
+    "../docs/screenshots/v2-review-fixes/proposal-applied.png",
+    "../docs/screenshots/v2-review-fixes/proposal-conflict.png",
+    "../docs/screenshots/m4-memory-controls/confirmed-counterexample.png",
+    "../docs/screenshots/m4-memory-controls/restored-search.png",
+    "../docs/screenshots/m0/empty.png",
+    "../docs/screenshots/m0/workspace.png",
+    "../docs/screenshots/m0/mobile.png",
+    "../docs/screenshots/v1-m1/versions.png",
+    "../docs/screenshots/v1-m1/workspace-1280.png",
+    "../docs/screenshots/v1-m1/sequence.png",
+    "../docs/screenshots/v1-m1/workspace.png",
+    "../docs/screenshots/v1-m1/compare.png",
+    "../docs/screenshots/v1-m1/workspace-1920.png",
+    "../docs/screenshots/m5-storage-diagnostics/view-and-copy.png",
+    "../docs/screenshots/v1-m0/preview-1280.png",
+    "../docs/screenshots/v1-m2/drafts.png",
+    "../docs/screenshots/v1-m2/sequence.png",
+    "../docs/screenshots/v1-m2/partial-approved.png",
+    "../docs/screenshots/v1-m2/restarted.png",
+    "../docs/screenshots/v1-m2/stale.png",
+    "../docs/screenshots/v1-m2/workspace.png",
+    "../docs/screenshots/v1-m2/paused.png",
+    "../docs/screenshots/v1-m5/journey-memory.png",
+    "../docs/screenshots/v1-m5/journey-applied.png",
+    "../docs/screenshots/v1-m5/journey-drafts.png"
+  ],
+  "index_limit": {
+    "entries_per_project": 500,
+    "file_bytes": 8388608,
+    "profiles_per_project": 1
+  },
+  "new_dependencies": false,
+  "new_schema_migrations": false,
+  "user_database_opened": false,
+  "external_model_requests": 0,
+  "new_real_photo_uploads": 0,
+  "human_reviews_added": 0,
+  "production_operations": false,
+  "git_commit_or_push_by_this_session": false,
+  "quality": "unmeasured"
+}

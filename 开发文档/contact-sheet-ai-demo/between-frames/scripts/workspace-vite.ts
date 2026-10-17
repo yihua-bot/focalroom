@@ -7,7 +7,7 @@ export function workspaceConfig(directory: string, port: number) {
   const root = resolve(directory);
   const repository = resolve(root, '../..');
   return defineConfig({
-    root, plugins: [react(), tailwindcss()],
+    root, publicDir: resolve(repository, 'public'), plugins: [react(), tailwindcss()],
     resolve: { dedupe: ['react', 'react-dom', '@tanstack/react-query'] },
     server: { host: '127.0.0.1', port, strictPort: true, fs: { allow: [repository, resolve(repository, '../assets')] } },
     build: { outDir: resolve(root, 'dist'), emptyOutDir: true },

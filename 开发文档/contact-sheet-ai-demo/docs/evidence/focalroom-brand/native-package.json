@@ -1,0 +1,11 @@
+{
+  "CFBundleName": "FocalRoom Review",
+  "CFBundleDisplayName": "FocalRoom Review",
+  "CFBundleIdentifier": "studio.betweenframes.m1reviewfixes",
+  "CFBundleIconFile": "icon.icns",
+  "CFBundleVersion": "0.1.0",
+  "app_path": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/FocalRoom Review.app",
+  "app_bytes": 62007752,
+  "icon_sha256": "3f5812cdba6755ca82e55898731fba6d15ae725378c8164d0cfe967dcfd43b5a",
+  "launched": false
+}

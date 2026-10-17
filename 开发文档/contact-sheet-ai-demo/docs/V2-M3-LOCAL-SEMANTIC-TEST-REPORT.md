@@ -12,9 +12,17 @@
 
 云侧回归发现并修复：新协作模块的私有错误类型导出和四个未 await 的广播 future 导致严格 Clippy 失败；Viewer 可以创建评论。新增 Viewer 写评论的测试先实际失败（200 而非 403），修复统一动作权限后通过，并检查零评论写入以及提案/审批/resolve 拒绝。原测试把实际 Viewer 称作 Reviewer，现区分两种角色；拒绝结果进入 ACL 审计。广播函数本身仍是占位，不能据 await 修复宣称实时协作已完成。
 
+完整后端旅程还复现了诊断测试的旧固定值：预期17个迁移、实际18个（此前作者记忆改动已新增0018）。改为严格核对仓库迁移文件数量，仍要求所有声明迁移实际应用，不使用 `>=17` 放松判断；未修改任何迁移或用户库。
+
 ## 自动化与原生验收
 
 完整结果、命令和源码摘要归档在 `evidence/v2-m3-local-semantic/`。最终计数以该目录的原始日志与 summary.json 为准。
+
+**最终全量脚本 exit=0**：160 项桌面 Rust、13 项云 Rust/HTTP、169 项 Vitest（21文件）、16 项预览 E2E、6 项真实后端 E2E，以及契约、类型、Lint、fmt、严格 Clippy 全部通过。额外精确执行的原生向量单测和 Agent 语义工具测试各1项通过。默认12项 ignored，其中这两项另行执行；钥匙串写删1项 filtered，不把 skipped 计 pass。失败前后的原始日志均归档。
+
+独立 debug 应用构建通过（58.06MiB，`studio.betweenframes.m1reviewfixes`）；`otool` 确认 `LC_LOAD_WEAK_DYLIB` 加载 NaturalLanguage，二进制摘要见 [构建元数据](evidence/v2-m3-local-semantic/build-metadata.json)。仅构建，没有启动应用或升级用户库。最终18个源码文件摘要一致；90张起始历史截图全部复核一致，恢复了25个被本轮测试改写的文件。
+
+额外计划的 DeepSeek Prompt7 纯文件名复验**未执行**：既有凭据图片识别失败，测试子进程尚未创建、0请求/0图片/无新增服务费用。未尝试其他服务或猜测密钥，未将旧 Prompt6 的实测算作本轮通过；Prompt7真实提供方兼容性仍待可用凭据补验，本地 HTTP 协议回归已通过。原始结果见 [未执行记录](evidence/v2-m3-local-semantic/deepseek-not-executed.txt)。
 
 | 检查 | 验收范围 |
 |---|---|
@@ -26,11 +34,20 @@
 
 钥匙串写删测试不执行。系统模型相关的两个测试默认 ignored，本轮以精确名称显式执行；其他 ignored 测试没有批量开启。原生构建不能替代系统选择器、长时间 UI、签名/公证或跨平台验收。
 
+精确复现（在 `between-frames/` 执行）：
+
+```sh
+bash "scripts/verify-all.sh" --skip-keychain
+BETWEEN_FRAMES_OPENAI_API_KEY="" cargo test --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --lib agent::semantic::tests::native_chinese_and_english_rank_real_sentence_vectors -- --ignored --exact --nocapture
+BETWEEN_FRAMES_OPENAI_API_KEY="" cargo test --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --test photo_search semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_scope -- --ignored --exact --nocapture
+BETWEEN_FRAMES_OPENAI_API_KEY="" CARGO_TARGET_DIR="target-v1" npm run tauri -- build --debug --config "src-tauri/tauri.m1-review-fixes.conf.json" --bundles app
+```
+
 ## 兼容、来源和状态
 
 Prompt 变为 `m3-openai-7`，旧云检查点须重新委托。视觉 Prompt 和端点命名空间缓存键保持不变。无新依赖、数据库迁移、线上 DDL、部署、SSH、提交或推送；原用户数据库未打开。测试生成的历史截图在最终验收后按本轮开始时的备份字节恢复。
 
-共享检出目录在本轮被其他进程推进到 `c3814a0`，其标题声称生产部署，但实际 diff 包含本轮尚未验收完的 M3 源码；标题不是部署证据。另有 `provider_fallback.rs`/mod 注册在验收期间出现，保留其内容，不能将其计入本轮已验证的供应商授权回退。最终报告按源码 SHA-256 与测试产物界定结果，不按提交标题推断状态。
+共享检出目录在本轮被其他进程先推进到 `c3814a0`，后到 `aa64110`；前者标题声称生产部署，但实际 diff 包含本轮尚未验收完的 M3 源码；后者也包含本轮未完成的测试/报告和截图。标题不是部署或验收证据。`provider_fallback.rs`/mod 注册和云页面在验收期间出现；已保留业务内容，仅修该辅助模块的格式与两个未使用导入，解除流水线阻塞，其配置/决策单测随全量执行，不计完整授权与执行回退。最终报告按源码 SHA-256 与测试产物界定结果，不按提交标题推断状态。
 
 当前仓库已包含作者跨项目设置/投影和 M5 HTTP 评论/提案/快照端点，本地云 13 项测试覆盖已有切片；旧文档中的“无 API 代码”是历史。生产部署、本项目 Postgres 权威、真实 Web 审稿和双端同步本轮未核验，不能沿用旧“绝无部署”或新“已全部上线”的断言。
 

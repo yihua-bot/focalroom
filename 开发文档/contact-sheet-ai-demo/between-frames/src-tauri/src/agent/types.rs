@@ -270,6 +270,8 @@ pub struct ConsentView {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiConfig {
+    pub observation: Option<ObservationModelConfig>,
+    pub consent_provider: Option<String>,
     pub provider_id: String,
     pub model_id: String,
     pub ready: bool,
@@ -277,6 +279,14 @@ pub struct AiConfig {
     pub key_source: Option<String>,
     pub base_url: String,
     pub prompt_version: String,
+    pub capabilities: Vec<String>,
+    pub capability_source: Option<String>,
+    pub configuration_error: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObservationModelConfig {
+    pub model_id: String,
     pub capabilities: Vec<String>,
     pub capability_source: Option<String>,
     pub configuration_error: Option<String>,

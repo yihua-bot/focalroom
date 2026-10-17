@@ -1,0 +1,13 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.24s
+     Running unittests src/lib.rs (src-tauri/target-v1/debug/deps/between_frames_lib-d739ba835d550501)
+
+running 2 tests
+local sentence embeddings: {"status":"available","provider":"apple_nl_sentence","language":"zh-Hans","revision":1,"dimensions":640,"candidates":3,"embedded":3,"limited":false,"quality":"unmeasured","cache_hits":0,"generated":3,"index_read":"unavailable"}
+local sentence embeddings: {"status":"available","provider":"apple_nl_sentence","language":"en","revision":1,"dimensions":512,"candidates":3,"embedded":3,"limited":false,"quality":"unmeasured","cache_hits":0,"generated":3,"index_read":"unavailable"}
+test agent::semantic::tests::native_chinese_and_english_rank_real_sentence_vectors ... ok
+real local index: cold generated=1; warm hits=1/generated=0; language/revision/dimensions mismatches rebuilt
+test agent::semantic::tests::native_reuses_vectors_only_for_current_language_revision_and_dimensions ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 2.23s
+

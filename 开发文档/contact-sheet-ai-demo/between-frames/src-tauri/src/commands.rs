@@ -329,7 +329,7 @@ pub async fn export_project(
                 let Some(parent) = app
                     .dialog()
                     .file()
-                    .set_title("选择侧车导出的父文件夹（将在其中新建文件夹）")
+                    .set_title("选择导出的父文件夹（将在其中新建文件夹）")
                     .blocking_pick_folder()
                 else {
                     return Ok(None);
@@ -338,7 +338,8 @@ pub async fn export_project(
                     .into_path()
                     .map_err(|error| AppError::new("INVALID_PATH", error.to_string()))?
                     .join(format!(
-                        "between-frames-sidecar-{}-{}",
+                        "focalroom-{}-{}-{}",
+                        format,
                         snapshot.id,
                         crate::domain::id()
                     ))
@@ -349,6 +350,29 @@ pub async fn export_project(
     })
     .await
     .map_err(|error| AppError::new("BACKGROUND", error.to_string()))?
+}
+
+#[tauri::command]
+pub async fn get_sharing_status(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<serde_json::Value> {
+    crate::shared_cloud::status(&state.store, &project_id).await
+}
+#[tauri::command]
+pub async fn share_project(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    request: crate::shared_cloud::ShareRequest,
+) -> Result<serde_json::Value> {
+    let id = request.project_id.clone();
+    let result = crate::shared_cloud::share(&state.store, request).await;
+    // 成功/失败均刷新：超时也可能已经冻结了项目，前端不能继续显示可写状态。
+    let _ = app.emit(
+        crate::commands_generated::PROJECT_CHANGED_EVENT,
+        serde_json::json!({"projectId":id}),
+    );
+    result
 }
 
 #[tauri::command]
@@ -369,7 +393,7 @@ pub async fn get_ai_config(
         crate::agent::consent::effective_view(
             &state.store,
             &project_id,
-            crate::agent::PROVIDER_OPENAI,
+            config["consentProvider"].as_str().unwrap_or("openai"),
         )
         .await?,
     )
@@ -381,17 +405,7 @@ pub async fn set_privacy_consent(
     state: State<'_, Backend>,
     request: crate::agent::types::ConsentRequest,
 ) -> Result<crate::agent::types::ConsentView> {
-    crate::agent::consent::set(
-        &state.store,
-        crate::agent::consent::SetConsent {
-            request_id: request.request_id,
-            project_id: request.project_id,
-            mode: request.mode,
-            provider: request.provider,
-            quota: request.quota,
-        },
-    )
-    .await
+    state.agent.set_consent(request).await
 }
 #[tauri::command]
 pub fn store_api_key(key: String) -> Result<serde_json::Value> {

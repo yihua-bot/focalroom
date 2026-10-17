@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "users": 3,
+  "browser_contexts": 3,
+  "real_postgres": true,
+  "images": 3,
+  "actual_ai_calls": 0,
+  "original_uploads": 0,
+  "page_errors": [],
+  "remote_origins": [],
+  "flows": [
+    "login",
+    "preview-copy-import",
+    "invitation",
+    "photo-anchor",
+    "reviewer-proposal",
+    "owner-approval",
+    "immutable-history",
+    "Yjs-private-note-reload",
+    "Viewer-readonly",
+    "live-revocation"
+  ]
+}

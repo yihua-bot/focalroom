@@ -1,0 +1,14 @@
+{
+  "initialVerifyExitCode": 1,
+  "initialFailure": "memory-controls used synchronous checkbox.check against persisted controlled state",
+  "finalChanges": [
+    "e2e/memory-controls.spec.ts"
+  ],
+  "productionSourceChangedAfterFullChecks": false,
+  "keychainRoundtripExecuted": false,
+  "realProviderExecuted": false,
+  "nativeSemanticIgnoredTestsExecuted": false,
+  "userDatabaseOpened": false,
+  "originalPhotosUploaded": 0,
+  "productionDeploymentPerformed": false
+}

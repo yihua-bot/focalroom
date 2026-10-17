@@ -2,6 +2,7 @@
 #import <NaturalLanguage/NaturalLanguage.h>
 #include <stdint.h>
 #include <time.h>
+#include <string.h>
 
 typedef struct {
     uint32_t dimension;
@@ -20,7 +21,9 @@ static double monotonicSeconds(void) {
 // 输入由 Rust 校验；输出每行固定 1024 个 float，成功掩码只标记实际生成的向量。
 void bf_sentence_embeddings(const char *const *texts, size_t count,
                             float *vectors, uint8_t *available,
-                            uint32_t budgetMs, BfEmbeddingInfo *info) {
+                            uint32_t budgetMs, BfEmbeddingInfo *info,
+                            const float *cachedVectors, const uint8_t *cachedAvailable,
+                            const BfEmbeddingInfo *cachedInfo, uint8_t *reused) {
     *info = (BfEmbeddingInfo){0};
     if (!texts || !vectors || !available || count == 0 || count > 501 || budgetMs == 0) return;
     @autoreleasepool {
@@ -49,6 +52,16 @@ void bf_sentence_embeddings(const char *const *texts, size_t count,
                 info->status = 1;
                 for (size_t index = 0; index < count; index++) {
                     if (monotonicSeconds() >= deadline) { info->status = 2; break; }
+                    // 查询每次重新计算；文档只复用同语言、revision、维数且已校验来源的缓存。
+                    if (index > 0 && cachedAvailable[index] == 1 &&
+                        cachedInfo->language == info->language && cachedInfo->revision == info->revision &&
+                        cachedInfo->dimension == info->dimension) {
+                        memcpy(vectors + index * 1024, cachedVectors + index * 1024, info->dimension * sizeof(float));
+                        available[index] = 1;
+                        reused[index] = 1;
+                        info->processed++;
+                        continue;
+                    }
                     NSString *text = [NSString stringWithUTF8String:texts[index]];
                     NLLanguage documentLanguage = [NLLanguageRecognizer dominantLanguageForString:text];
                     BOOL sameLanguage = [documentLanguage isEqualToString:language] ||

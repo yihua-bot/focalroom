@@ -1,0 +1,24 @@
+{
+  "desktopRust": {
+    "passed": 174,
+    "failed": 0,
+    "ignored": 13,
+    "filtered": 1
+  },
+  "cloudRust": {
+    "passed": 13,
+    "failed": 0
+  },
+  "vitestPassed": 173,
+  "previewE2ePassed": 16,
+  "finalIntegrationPassed": 6,
+  "initialIntegrationFailed": 1,
+  "contractsPassed": true,
+  "typecheckPassed": true,
+  "lintPassed": true,
+  "rustFmtPassed": true,
+  "strictClippyPassed": true,
+  "initialVerifyExitCode": 1,
+  "finalIntegrationExitCode": 0,
+  "finalLintExitCode": 0
+}

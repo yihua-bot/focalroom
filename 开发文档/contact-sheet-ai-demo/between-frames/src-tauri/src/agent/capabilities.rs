@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, io::Read, path::Path};
 
 pub const PROFILE_PATH_ENV: &str = "BETWEEN_FRAMES_AI_CAPABILITY_PROFILE";
+pub const OBSERVATION_PROFILE_PATH_ENV: &str = "BETWEEN_FRAMES_AI_OBSERVATION_CAPABILITY_PROFILE";
 const MAX_PROFILE_BYTES: u64 = 16 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -88,7 +89,21 @@ pub(crate) struct ResolvedProfile {
     pub source: &'static str,
 }
 pub(crate) fn resolve(endpoint: &str, model: &str) -> Result<ResolvedProfile> {
-    if let Some(path) = std::env::var_os(PROFILE_PATH_ENV) {
+    resolve_configured(endpoint, model, std::env::var_os(PROFILE_PATH_ENV))
+}
+pub(crate) fn resolve_observation(endpoint: &str, model: &str) -> Result<ResolvedProfile> {
+    resolve_configured(
+        endpoint,
+        model,
+        std::env::var_os(OBSERVATION_PROFILE_PATH_ENV),
+    )
+}
+fn resolve_configured(
+    endpoint: &str,
+    model: &str,
+    path: Option<std::ffi::OsString>,
+) -> Result<ResolvedProfile> {
+    if let Some(path) = path {
         return Ok(ResolvedProfile {
             // 显式配置无效时不回退内置配置；实例冻结此结果，运行中不重读文件。
             profile: CapabilityProfile::from_file(Path::new(&path), endpoint, model)?,

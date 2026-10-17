@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-17",
+  "head": "aa64110cf2ac634b92cdd650203be7fa4bf91898",
+  "verify_all_exit_code": 0,
+  "desktop_rust": {
+    "passed": 160,
+    "default_ignored": 12,
+    "keychain_filtered": 1
+  },
+  "cloud_rust_passed": 13,
+  "vitest_passed": 169,
+  "preview_e2e_passed": 16,
+  "backend_e2e_passed": 6,
+  "native_embeddings_explicit_passed": 1,
+  "native_agent_tool_explicit_passed": 1,
+  "macos_languages": {
+    "zh-Hans": {
+      "revision": 1,
+      "dimensions": 640
+    },
+    "en": {
+      "revision": 1,
+      "dimensions": 512
+    }
+  },
+  "native_debug_build_passed": true,
+  "natural_language_weak_load": true,
+  "source_files_matched": 18,
+  "historical_screenshots_verified": 90,
+  "historical_screenshots_restored": [
+    "../docs/screenshots/v2-review-fixes/proposal-applied.png",
+    "../docs/screenshots/v2-review-fixes/proposal-conflict.png",
+    "../docs/screenshots/m4-memory-controls/confirmed-counterexample.png",
+    "../docs/screenshots/m4-memory-controls/restored-search.png",
+    "../docs/screenshots/m0/empty.png",
+    "../docs/screenshots/m0/workspace.png",
+    "../docs/screenshots/m0/mobile.png",
+    "../docs/screenshots/v1-m1/versions.png",
+    "../docs/screenshots/v1-m1/workspace-1280.png",
+    "../docs/screenshots/v1-m1/sequence.png",
+    "../docs/screenshots/v1-m1/workspace.png",
+    "../docs/screenshots/v1-m1/compare.png",
+    "../docs/screenshots/v1-m1/workspace-1920.png",
+    "../docs/screenshots/m5-storage-diagnostics/view-and-copy.png",
+    "../docs/screenshots/v1-m0/preview-1280.png",
+    "../docs/screenshots/v1-m2/drafts.png",
+    "../docs/screenshots/v1-m2/sequence.png",
+    "../docs/screenshots/v1-m2/partial-approved.png",
+    "../docs/screenshots/v1-m2/restarted.png",
+    "../docs/screenshots/v1-m2/stale.png",
+    "../docs/screenshots/v1-m2/workspace.png",
+    "../docs/screenshots/v1-m2/paused.png",
+    "../docs/screenshots/v1-m5/journey-memory.png",
+    "../docs/screenshots/v1-m5/journey-applied.png",
+    "../docs/screenshots/v1-m5/journey-drafts.png"
+  ],
+  "real_deepseek_regression": {
+    "executed": false,
+    "requests": 0,
+    "reason": "Original credential image recognition failed before creating test subprocess"
+  },
+  "new_real_photos_uploaded": 0,
+  "production_operations": false,
+  "user_database_opened": false,
+  "m3_status": "partial",
+  "quality": "unmeasured",
+  "human_reviews_added": 0
+}

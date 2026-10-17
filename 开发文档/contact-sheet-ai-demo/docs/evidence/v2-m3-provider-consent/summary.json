@@ -1,0 +1,34 @@
+{
+  "desktopRust": {
+    "passed": 181,
+    "failed": 0,
+    "ignored": 13,
+    "filtered": 1
+  },
+  "cloudRust": {
+    "passed": 13,
+    "failed": 0
+  },
+  "vitestPassed": 180,
+  "previewPassed": 16,
+  "initialIntegrationPassed": 6,
+  "verifyAllExitCode": 0,
+  "contractsPassed": true,
+  "typecheckPassed": true,
+  "lintPassed": true,
+  "fmtPassed": true,
+  "strictClippyPassed": true,
+  "sourceFiles": 243,
+  "realProviderRequests": 0,
+  "userDatabaseOpened": false,
+  "newMigrations": 0,
+  "nativeSemanticIgnoredTestsExecuted": false,
+  "keychainRoundtripExecuted": false,
+  "finalFrontendAndE2eExitCode": 0,
+  "finalIntegrationPassed": 6,
+  "finalPreviewPassed": 16,
+  "finalVitestPassed": 180,
+  "visualQaChecked": true,
+  "nativeBuildExitCode": 0,
+  "nativeAppLaunched": false
+}

@@ -73,7 +73,14 @@ pub(crate) async fn reserve(
         .await?
         .ok_or_else(|| AppError::new("PERMISSION_DENIED", "图像授权已撤回或配额不足；未上传"))?;
     consent::reserve_usage(&mut tx, &mut t, consent, images, cost).await?;
-    store::step(&mut tx, task, "vision_reserved", json!({"callId":call.call_id,"fingerprint":fingerprint(&serde_json::to_value(call).unwrap()),"status":"reserved","images":images,"cost":cost,"round":t.usage.model_turns,"rateCard":rate,"effectiveCostLimitMinorUsd":t.budget.max_cost_minor_usd.min(cost_limit)}), "视觉请求预算已预留；中断时不自动重传").await?;
+    let identity = super::model_binding::load(&mut tx, task).await?;
+    let recipient = identity
+        .as_ref()
+        .map(|identity| identity.consent_provider());
+    let model = identity
+        .as_ref()
+        .map(|identity| identity.observation_model_id());
+    store::step(&mut tx, task, "vision_reserved", json!({"modelRole":"observation","modelId":model,"recipientId":recipient,"callId":call.call_id,"fingerprint":fingerprint(&serde_json::to_value(call).unwrap()),"status":"reserved","images":images,"cost":cost,"round":t.usage.model_turns,"rateCard":rate,"effectiveCostLimitMinorUsd":t.budget.max_cost_minor_usd.min(cost_limit)}), "视觉请求预算已预留；中断时不自动重传").await?;
     store::checkpoint(&mut tx, &t).await?;
     tx.commit().await?;
     Ok((

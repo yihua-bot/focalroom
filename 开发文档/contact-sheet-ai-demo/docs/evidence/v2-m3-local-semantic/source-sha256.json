@@ -1,0 +1,20 @@
+{
+  "src-tauri/build.rs": "c82e8c1a88fc88f68f6f6be55c64a879b1d24f9aea1cc96ccad02c025bb1e74a",
+  "src-tauri/native/sentence_embeddings.m": "882d3e887b07acb1bf57be2a03035dd5b5cb3ce85865dee715282fce29458952",
+  "src-tauri/src/agent/execution.rs": "cf6ced36756fa278f758b73cb698096b523be499d0876c5a6b8e305f93c1bd78",
+  "src-tauri/src/agent/mod.rs": "da6d6d8e177110102c686962c5932acb5f9a249756547cc4d59707ad43155a47",
+  "src-tauri/src/agent/semantic.rs": "33c94679289d19381617509fcaa889d6838a8576f28dd5af6f7bfd0815c5cd6d",
+  "src-tauri/src/agent/photo_search.rs": "e38efe14425ff73b88d6b2b41aafcd10b0b21075b50c8365fa566b7ca5edf908",
+  "src-tauri/src/agent/tools.rs": "37eb515ee32fb125c6868b7d09be5bea5a397fd247ea5e7e172cce4acfdefd98",
+  "src-tauri/tests/photo_search.rs": "d4d884a2a81d1bfba2236db78ef436f13723a23e41a7bef9bd5a32f618b90f79",
+  "prompts/agent-system-m3.md": "9c40f533d2724d4b6c37de2685a74222c6a2467a217d14064c1c01d649cfab98",
+  "contracts/agent-tool-contracts.json": "44db7add77ccbe142c3a0c18a6caad161fe8ab7460668c26da79e02544219578",
+  "scripts/generate-command-contracts.mjs": "71ca815800018ad1d6ddfe138dc0746ab19ce08a142632b61de8ada248e007b3",
+  "cloud/src/collab.rs": "0e38768d88aab7eefca1b2917a89f6a345cd71fcb0dbadeaa989f472fda60482",
+  "cloud/src/handlers.rs": "5cac248d8a98963f15a8a4e2538a070e7f3682722904db184e5857a9ccb9dc85",
+  "cloud/src/lib.rs": "bf949adbba0ea3c05a7ffe6d828361be400da2517b7b734f5aca5925f5f8e21f",
+  "cloud/static/index.html": "c2bf982ecac0c18c6f35bd9cd462e3e429bac55ec621bf8f25210384a73425ff",
+  "cloud/tests/m5_collab.rs": "ca46201e1b9674383e161bedd71d114bd88175c87495ff5154a9f34ae577c45a",
+  "src-tauri/src/agent/provider_fallback.rs": "f9eb3144d8b3429548a7ef0aba32edead384deaa60e3871f93f6213d590eb33b",
+  "e2e/diagnostics.spec.ts": "14e39254965840dac1eabc6277864e51941aede950c9d6cd08c271fc5d7e8c55"
+}

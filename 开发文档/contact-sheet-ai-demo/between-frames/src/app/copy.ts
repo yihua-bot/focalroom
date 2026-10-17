@@ -3,7 +3,7 @@ export const zh = {
   workspace: '选片工作台', sequence: '作品序列', memory: '审美记忆', projects: '项目列表',
   tagline: '从照片，到作品。 / 让每一次选择都有来处。',
   preview: '浏览器示例 · 内存数据 · 刷新后重置',
-  import: '导入照片', ai: 'Agent · 本地 Mock',
+  import: '导入照片', ai: '摄影编辑 Agent',
   importPending: '真实照片导入将在 M1 接入。目前使用 28 张示例照片验收布局和交互。',
   aiPending: 'AI 服务尚未开放。没有模型调用、模拟推理或照片上传。',
   keep: '保留作品', reject: '淘汰作品', undecided: '恢复待定',

@@ -29,6 +29,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "tiff"] }
 sha2 = "0.10"
 hmac = "0.12"
+libc = "0.2"
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 base64 = "0.22"

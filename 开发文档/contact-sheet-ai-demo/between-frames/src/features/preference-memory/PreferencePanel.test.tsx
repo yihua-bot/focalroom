@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi, type Mock } from 'vitest';
@@ -135,4 +135,46 @@ describe('v1 收尾评审：已纠正假设的删除入口', () => {
     expect(screen.queryByRole('button', { name: '纠正此假设' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '停用检索' })).not.toBeInTheDocument();
   });
+});
+
+
+it('作者记忆开启需要确认，取消不发命令，关闭无需再次确认', async () => {
+  const repository = makeRepository();
+  const consent = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  mount(repository);
+  const user = userEvent.setup();
+  await screen.findByText(hypothesis.statement);
+  const toggle = screen.getByRole('checkbox', { name: '允许离线 Agent 引用其他本地项目记忆' });
+  expect(toggle).not.toBeChecked();
+  await user.click(toggle);
+  expect(repository.memory.request).not.toHaveBeenCalled();
+  consent.mockReturnValue(true);
+  repository.memory.query.mockResolvedValue({ ...projection, crossProjectEnabled: true, authorHypotheses: [] });
+  await user.click(toggle);
+  await waitFor(() => expect(toggle).toBeChecked());
+  expect(repository.memory.request).toHaveBeenLastCalledWith('p1', { type: 'SetCrossProjectMemory', enabled: true });
+  repository.memory.query.mockResolvedValue(projection);
+  await user.click(toggle);
+  await waitFor(() => expect(toggle).not.toBeChecked());
+  expect(repository.memory.request).toHaveBeenLastCalledWith('p1', { type: 'SetCrossProjectMemory', enabled: false });
+  expect(consent).toHaveBeenCalledTimes(2);
+  consent.mockRestore();
+});
+it('其他项目假设只读，来源链接独立于当前证据和编辑卡', async () => {
+  const repository = makeRepository();
+  repository.memory.query.mockResolvedValue({ ...projection, crossProjectEnabled: true,
+    authorHypotheses: [{ ...hypothesis, id: 19, projectId: 'source-project', scope: 'cross_project', status: 'confirmed' }] });
+  mount(repository);
+  const section = await screen.findByRole('region', { name: '其他本地项目的已确认线索' });
+  expect(within(section).getByRole('link')).toHaveAttribute('href', '#/project/source-project');
+  expect(within(section).queryByRole('button')).not.toBeInTheDocument();
+  expect(within(section).queryByText('查看证据')).not.toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: '确认此假设' })).toHaveLength(1);
+});
+it('查询失败不允许用默认值覆盖作者授权', async () => {
+  const repository = makeRepository();
+  repository.memory.query.mockRejectedValue(new Error('本地存储不可读'));
+  mount(repository);
+  await screen.findByRole('alert');
+  expect(screen.getByRole('checkbox', { name: '允许离线 Agent 引用其他本地项目记忆' })).toBeDisabled();
 });

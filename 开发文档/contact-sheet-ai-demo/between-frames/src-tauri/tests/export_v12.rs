@@ -54,6 +54,7 @@ async fn print_reference_html_has_cover_pages_and_plates() {
     let bytes = export::render_with_options(&project, "print", false).unwrap();
     let html = String::from_utf8(bytes).unwrap();
     assert!(html.contains("印刷参考"));
+    assert!(html.contains("FocalRoom · 印刷参考"));
     assert!(html.contains("克制的日常"));
     assert!(html.contains("@page"));
     assert!(html.contains("data:image/jpeg;base64,"));

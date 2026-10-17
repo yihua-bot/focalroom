@@ -91,6 +91,7 @@ export interface ImportJob {
 export interface ExportReceipt { path: string; sha256: string; bytes: number }
 
 export interface DesktopProjectRepository extends ProjectRepository, DraftRepository {
+  sharing?: import('./sharing').SharingRepository;
   memory: import('./memory').MemoryRepository;
   diagnostics: import('./diagnostics').DiagnosticsRepository;
   readonly mode: 'desktop';
@@ -102,5 +103,5 @@ export interface DesktopProjectRepository extends ProjectRepository, DraftReposi
   cancelImport(jobId: string): Promise<void>;
   retryImport(jobId: string): Promise<string>;
   relink(id: string, photoId: string): Promise<Project | null>;
-  export(id: string, format: 'json' | 'csv' | 'html' | 'print' | 'sidecar', includePaths?: boolean): Promise<ExportReceipt | null>;
+  export(id: string, format: 'json' | 'csv' | 'html' | 'print' | 'sidecar' | 'shared', includePaths?: boolean): Promise<ExportReceipt | null>;
 }

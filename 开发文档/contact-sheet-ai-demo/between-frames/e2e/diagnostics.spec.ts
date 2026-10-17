@@ -1,6 +1,6 @@
 // M5 诊断使用桌面同一 Rust 投影，不依赖真实模型或钥匙串写删。
 import { test, expect } from '@playwright/test';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Diagnostics } from '../src/domain/diagnostics';
 
@@ -34,7 +34,7 @@ test('M5 本地诊断：真实统计、查看后复制、刷新及正式状态�
   const before = await rpc('get_project', { projectId: project.id });
   const hashes = await rpc('test_fixture_checksums');
   await page.goto('/#/project/' + project.id);
-  await page.getByRole('button', { name: 'Agent · 本地 Mock', exact: true }).click();
+  await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
   await page.getByText('模型与密钥 · 诊断', { exact: true }).click();
   await page.getByRole('button', { name: '查看本地存储与诊断' }).click();
   const dialog = page.getByRole('dialog', { name: '本地存储与诊断' });
@@ -46,7 +46,9 @@ test('M5 本地诊断：真实统计、查看后复制、刷新及正式状态�
   expect(shown.storage.database.bytes).toBeGreaterThan(0);
   expect(shown.storage.complete).toBe(true);
   expect(shown.provider.providerId).toBe('mock');
-  expect(shown.migrationsApplied).toBe(17);
+  // 与仓库声明的迁移逐一对应，新增迁移后仍要求全部实际应用。
+  const migrations = (await readdir(resolve('src-tauri/migrations'))).filter(name => /^\d{4}_.+\.sql$/u.test(name));
+  expect(shown.migrationsApplied).toBe(migrations.length);
   expect(shown.database.projects).toBeGreaterThanOrEqual(1);
   expect(JSON.stringify(shown)).not.toMatch(/私密|originalPath|apiKeyTail|baseUrl|\/Users\//);
   await dialog.getByRole('button', { name: '复制诊断信息' }).click();

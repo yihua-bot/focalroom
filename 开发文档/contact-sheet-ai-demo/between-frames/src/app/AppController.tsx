@@ -53,6 +53,8 @@ export function AppController({ repository }: { repository: ProjectRepository })
   }, [repository, local, client]);
   const projects = query.data ?? [];
   const project = projects.find(item => item.id === route.projectId);
+  const sharing = useQuery({ queryKey: ['sharing', project?.id], enabled: !!(local && repository.sharing && project), queryFn: () => local && repository.sharing && project ? repository.sharing.status(project.id) : Promise.resolve(null), refetchOnWindowFocus: true });
+  const readOnly = !!sharing.data && sharing.data.authority !== 'local';
   const [lastProjectId, setLastProjectId] = useState('sample-project');
   const navProject = project ?? projects.find(item => item.id === lastProjectId);
   const mutation = useMutation({ mutationFn: (task: () => Promise<Project>) => task(), onSuccess: updated => {
@@ -65,7 +67,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
     client.setQueryData<Project[]>(['projects', false], previous => previous?.some(item => item.id === updated.id)
       ? previous.map(item => item.id === updated.id ? updated : item) : [...(previous ?? []), updated]);
   }, onError: error => { setNotice(`操作失败：${error.message}`); void client.invalidateQueries({ queryKey: ['projects'] }); } });
-  const refresh = useCallback(() => { void client.invalidateQueries({ queryKey: ['projects'] }); }, [client]);
+  const refresh = useCallback(() => { void client.invalidateQueries({ queryKey: ['projects'] }); void client.invalidateQueries({ queryKey: ['sharing'] }); }, [client]);
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 4000); return () => window.clearTimeout(timer); }, [notice]);
   const openProject = (id: string) => { ui.reset(); ui.select(projects.find(item => item.id === id)?.photos[0]?.id ?? null); setLastProjectId(id); navigate(id); };
   const terms = ui.search.normalize('NFKC').toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
@@ -78,6 +80,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const select = (id: string, gesture?: SelectionGesture) => ui.selectRange(id, navigable.map(photo => photo.id), gesture);
   const act = (task: () => Promise<Project>, success?: string, close = false, onDone?: () => void) => {
     if (mutation.isPending) return;
+    if (readOnly) { setNotice('共享迁移中的项目暂停本地编辑；完成后请在 Web 评片中修改正式作品。'); return; }
     mutation.mutate(task, { onSuccess: () => { if (success) setNotice(success); if (close) setDialog(null); onDone?.(); } });
   };
   const decide = (id: string, status: PhotoStatus) => { if (project) act(() => repository.decide(project.id, id, status)); };
@@ -110,7 +113,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector">
     <span className="eyebrow">THE EDITOR / WORKING NOTES</span><h2 className="editor-title">{zh.editorTitle}</h2><p className="editor-hint">{zh.editorHint}</p>
     <div className="right-tabs" aria-label="检查器面板">{(['photo', 'ai', 'memory'] as const).map(key => <button key={key} className={ui.panel === key ? 'active' : ''} aria-pressed={ui.panel === key} onClick={() => ui.setPanel(key)}>{key === 'photo' ? '照片检查' : key === 'ai' ? 'AI 建议' : zh.memory}</button>)}</div>
-    {ui.panel === 'photo' ? (active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending} onDecide={decide}
+    {ui.panel === 'photo' ? (active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending || readOnly} onDecide={decide}
       onRate={(id, rating) => act(() => repository.rate(project.id, [id], rating))}
       onBookMark={local && project ? (id, mark) => act(() => repository.setBookMark(project.id, id, mark), mark === 'spread' ? '已设为跨页大图' : mark === 'full' ? '已设为整页图' : '已清除册页标记') : undefined}
       draft={drafts[active.id]} onDraft={note => setDrafts(previous => ({ ...previous, [active.id]: note }))}
@@ -127,7 +130,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       : route.page === 'projects' ? <ProjectList projects={projects} onOpen={openProject} onCreate={() => { setArchived(false); setDialog({ kind: 'create' }); }} local={local} archived={archived}
         onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })}
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />
-      : project ? <Workspace project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending} local={local} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
+      : project ? <Workspace project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending || readOnly} local={local} sharing={sharing.data ?? undefined} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
         onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
         : <EmptyState title={local ? '项目未找到' : '项目不在本次预览中'} hint={local ? '项目可能已归档，请返回项目列表查看。' : '内存项目在刷新后重置，请返回项目列表。'} action={<Button onClick={() => navigate(null)}>{zh.projects}</Button>} />}
   </AppShell>
@@ -141,7 +144,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
     {dialog?.kind === 'versions' && project && <VersionsDialog project={project} busy={mutation.isPending} onClose={() => setDialog(null)}
       onSave={label => act(() => repository.saveVersion(project.id, label), '当前作品版本已保存')}
       onRestore={versionId => act(() => repository.restoreVersion(project.id, versionId), '版本已恢复，可撤销此操作', true)} />}
-    {dialog?.kind === 'export' && <ExportDialog repository={local ? repository : undefined} projectId={project?.id} onClose={() => setDialog(null)} />}
+    {dialog?.kind === 'export' && <ExportDialog repository={local ? repository : undefined} projectId={project?.id} revision={project?.revision} onChanged={refresh} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'import' && (local && project ? <ImportDialog repository={repository} projectId={project.id} onClose={() => { setDialog(null); refresh(); }} onChanged={refresh} />
       : <Modal title={zh.import} description="浏览器只提供示例预览，请在 Tauri 桌面版导入真实照片。" onClose={() => setDialog(null)}><div className="dialog-actions"><Button onClick={() => setDialog(null)}>继续体验示例项目</Button></div></Modal>)}
     {dialog?.kind === 'archive' && local && <Modal title="确认归档项目" description={`“${dialog.project.title}”将移至归档列表，可随时恢复。原图、备注和决策日志全部保留。`} onClose={() => setDialog(null)}>

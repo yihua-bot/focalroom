@@ -15,6 +15,8 @@ pub mod importer;
 pub mod keychain;
 pub mod photo_inspection;
 mod resource_commands;
+pub mod shared_cloud;
+pub mod shared_export;
 pub mod v2_bridge;
 use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -90,8 +92,10 @@ pub fn run() {
             commands::cancel_import,
             commands::retry_import,
             commands::relink_photo,
-            commands::export_project
+            commands::export_project,
+            commands::get_sharing_status,
+            commands::share_project
         ])
         .run(tauri::generate_context!())
-        .expect("无法启动序间桌面应用");
+        .expect("无法启动 FocalRoom 桌面应用");
 }

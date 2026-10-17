@@ -74,11 +74,10 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
         }
         if let Some(id) = consent_id {
             let owner: Option<i64> = sqlx::query_scalar(
-                "SELECT id FROM privacy_consents WHERE id=? AND project_id=? AND provider=? AND revoked_at IS NULL AND (mode='project' OR (mode='task' AND task_id IS NULL AND used=0))",
+                "SELECT id FROM privacy_consents WHERE id=? AND project_id=? AND provider LIKE 'openai@%' AND revoked_at IS NULL AND (mode='project' OR (mode='task' AND task_id IS NULL AND used=0))",
             )
             .bind(id)
             .bind(&r.project_id)
-            .bind(&provider_id)
             .fetch_optional(&mut *tx)
             .await?;
             if owner.is_none() {
@@ -156,6 +155,7 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
         .bind(domain::timestamp())
         .execute(&mut *tx)
         .await?;
+        super::memory_scope::bind(&mut tx, &t).await?;
         t
     };
     if matches!(
@@ -167,6 +167,14 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
             "REVISION_CONFLICT",
             "记忆已调整，请基于当前记忆重新委托",
         ));
+    }
+    if matches!(
+        r.command,
+        TaskCommand::ResumeTask { .. } | TaskCommand::SubmitFeedback { .. }
+    ) {
+        super::memory_scope::validate(&mut tx, &task)
+            .await
+            .map_err(|e| AppError::new("REVISION_CONFLICT", &e.message))?;
     }
     if matches!(
         r.command,

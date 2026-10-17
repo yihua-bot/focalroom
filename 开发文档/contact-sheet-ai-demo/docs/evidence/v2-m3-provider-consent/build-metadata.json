@@ -1,0 +1,9 @@
+{
+  "app": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames M1 Review Fixes.app",
+  "identifier": "studio.betweenframes.m1reviewfixes",
+  "binary_sha256": "489ed8e391790c63b9a909f0c252185139022dacd72d2e43d7e30da667861fb4",
+  "natural_language_weak_load": true,
+  "built": true,
+  "launched": false,
+  "bundleMiB": 58.59
+}

@@ -7,6 +7,7 @@ use std::{future::Future, pin::Pin};
 pub const KEY_ENV: &str = "BETWEEN_FRAMES_OPENAI_API_KEY";
 pub const BASE_URL_ENV: &str = "BETWEEN_FRAMES_AI_BASE_URL";
 pub const MODEL_ENV: &str = "BETWEEN_FRAMES_AI_MODEL";
+pub const OBSERVATION_MODEL_ENV: &str = "BETWEEN_FRAMES_AI_OBSERVATION_MODEL";
 pub const DEFAULT_MODEL: &str = "gpt-4o-mini";
 pub const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 /// 保守费用上界估算（非账单）：每张上传图 1 美分、每千文本 token 1 美分。
@@ -75,6 +76,7 @@ impl OpenAiProvider {
     fn build(config: OpenAiConfig, profile: Result<super::capabilities::ResolvedProfile>) -> Self {
         Self {
             client: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
                 .timeout(std::time::Duration::from_secs(120))
                 .build()
                 .expect("reqwest client"),
@@ -110,9 +112,24 @@ impl OpenAiProvider {
         self.profile.as_ref().ok().map(|profile| profile.source)
     }
     pub fn configuration_error(&self) -> Option<String> {
-        self.require_capabilities(super::router::TaskType::AgentOrchestrate)
+        self.configuration_error_for(super::router::TaskType::AgentOrchestrate)
+    }
+    pub fn configuration_error_for(&self, task: super::router::TaskType) -> Option<String> {
+        self.require_capabilities(task)
             .err()
             .map(|error| error.message)
+    }
+    /// 可信配置选定观察型号，保持同一端点和凭据；能力独立解析并冻结。
+    pub fn for_observation_model(&self, model: String) -> Self {
+        let profile = super::capabilities::resolve_observation(&self.base_url, &model);
+        Self::build(
+            OpenAiConfig {
+                base_url: self.base_url.clone(),
+                api_key: self.api_key.clone(),
+                model,
+            },
+            profile,
+        )
     }
     fn require_capabilities(&self, task: super::router::TaskType) -> Result<()> {
         let required = super::router::required_capabilities(task);
@@ -128,6 +145,7 @@ impl OpenAiProvider {
     }
     pub fn identity(&self) -> super::model_binding::ModelIdentity {
         super::model_binding::ModelIdentity {
+            observation: None,
             provider_id: super::PROVIDER_OPENAI.into(),
             model_id: self.model.clone(),
             endpoint_sha256: super::capabilities::endpoint_sha256(&self.base_url),

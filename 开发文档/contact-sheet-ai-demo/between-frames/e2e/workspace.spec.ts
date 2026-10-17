@@ -35,6 +35,15 @@ test('工作台与检查器截图，完整构图、密度切换和面板收起',
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await ready(page);
+  await expect(page).toHaveTitle('FocalRoom');
+  const logo = page.getByRole('img', { name: 'FocalRoom 标志' });
+  await expect(logo).toBeVisible();
+  await expect.poll(() => logo.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(480);
+  const favicon = await page.locator('link[rel="icon"]').getAttribute('href');
+  expect((await page.request.get(favicon!)).headers()['content-type']).toContain('image/png');
+  await page.getByRole('button', { name: '收起导航' }).click();
+  await expect(logo).toBeVisible();
+  await page.getByRole('button', { name: '展开导航' }).click();
   await keep(page, 1);
   await keep(page, 3);
   await keep(page, 5);
@@ -177,7 +186,7 @@ test('AI、导入和导出边界明示；没有外部请求', async ({ page }) =
   const external: string[] = [];
   page.on('request', request => { if (!request.url().startsWith('http://localhost:1420')) external.push(request.url()); });
   await ready(page);
-  await page.getByRole('button', { name: 'Agent · 本地 Mock' }).click();
+  await page.getByRole('button', { name: '摄影编辑 Agent' }).click();
   await expect(page.getByRole('button', { name: '开始本地 Mock 任务' })).toBeDisabled();
   await page.getByRole('button', { name: '导出 ↗' }).click();
   await expect(page.getByRole('button', { name: '项目 JSON' })).toBeDisabled();

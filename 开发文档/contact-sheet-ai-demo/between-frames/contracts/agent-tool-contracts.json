@@ -205,7 +205,7 @@
   },
   {
    "name": "retrieve_preferences",
-   "description": "M2 仅返回限量项目人工事实，不生成偏好假设；global_confirmed 暂不可用。",
+   "description": "project_local 返回项目人工事实和证据假设；global_confirmed 仅供明确授权的离线任务检索其他 LOCAL 项目已确认假设，带来源与证据引用；云模型拒绝。",
    "strict": true,
    "access": "read",
    "parameters": {

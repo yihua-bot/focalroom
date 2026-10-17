@@ -1,7 +1,9 @@
 {
   "name": "@betweenframes/web",
   "dependencies": {
-    "@betweenframes/ui": "0.0.0"
+    "@betweenframes/contracts": "^0.0.0",
+    "@betweenframes/ui": "0.0.0",
+    "yjs": "^13.6.33"
   },
   "scripts": {
     "dev": "vite",

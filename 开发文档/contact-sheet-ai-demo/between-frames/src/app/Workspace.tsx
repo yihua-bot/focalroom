@@ -10,7 +10,7 @@ import { SelectionDock } from '../components/sequence/SelectionDock';
 import { EmptyState } from '../components/shared/EmptyState';
 import { Button } from '../components/shared/Button';
 
-export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, local = false }: {
+export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, local = false, sharing }: {
   project: Project; visible: Photo[]; kept: Photo[]; active?: Photo; busy: boolean;
   selectedIds: string[]; onSelect: (id: string, gesture?: SelectionGesture) => void;
   onBatchDecide: (status: PhotoStatus) => void; onBatchRate: (rating: number) => void;
@@ -18,15 +18,18 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   onDecide: (id: string, status: PhotoStatus) => void; onReorder: (ids: string[]) => void; onEnlarge: (photo: Photo) => void;
   onUndo: () => void; onRedo: () => void; onVersions: () => void;
   local?: boolean;
+  sharing?: import('../domain/sharing').SharingStatus;
 }) {
   const ui = useUIStore();
   const filters: PhotoFilter[] = ['all', 'keep', 'undecided', 'reject'];
-  return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={() => ui.setPanel('ai')} />
+  const readOnly = !!sharing && sharing.authority !== 'local';
+  return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={() => ui.setPanel('ai')} readOnly={readOnly} />
+    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 桌面缓存只读，请在 Web 继续评片。' : '共享迁移中 · 本地写入已暂停，请在导出窗口继续或显式取消迁移。'}{sharing?.remote?.webUrl && <a href={sharing.remote.webUrl} target="_blank" rel="noreferrer">打开共享评片 ↗</a>}</div>}
     <div className="history-toolbar" role="group" aria-label="编辑历史">
       <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">撤销</Button>
       <Button size="small" disabled={busy || !project.history?.redoGroupId} onClick={onRedo} title="⌘ / Ctrl Shift Z">重做</Button>
       <Button size="small" disabled={busy} onClick={onVersions}>作品版本{project.versions?.length ? ` · ${project.versions.length}` : ''}</Button>
-      <span className="micro">{project.history?.undoCount ?? 0} 次可撤销编辑 · {local ? '本地保存' : '内存预览'}</span>
+      <span className="micro">{project.history?.undoCount ?? 0} 次可撤销编辑 · {readOnly ? '本地只读快照' : local ? '本地保存' : '内存预览'}</span>
     </div>
     <div className="toolbar"><div className="filter-tabs" aria-label="照片筛选">{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter && ui.view === 'grid'}
       className={ui.filter === filter && ui.view === 'grid' ? 'active' : ''} onClick={() => ui.setFilter(filter)}>{zh.filters[filter]}<span className="count">{filter === 'all' ? project.photos.length : project.photos.filter(photo => photo.status === filter).length}</span></button>)}</div>
@@ -42,7 +45,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
     </div>
     <div className="canvas-area"><div className="workspace-scroll"><div className="canvas-label"><span>{ui.view === 'grid' ? 'CONTACT SHEET' : 'SEQUENCE BOARD'}</span>
       <span>{ui.view === 'grid' ? `${visible.length} FRAMES · 完整构图 · K / X 快捷操作` : `${kept.length} 张 · 拖动把手排序 · ↑ / ↓ 移动`}</span></div>
-      <div className="preview-banner">{local ? '本地项目 · 所有已保存的判断和顺序将在重启后保留' : zh.preview}</div>
+      <div className="preview-banner">{readOnly ? '当前显示迁移时的本地快照，云端后续改动请在共享评片中查看。' : local ? '本地项目 · 所有已保存的判断和顺序将在重启后保留' : zh.preview}</div>
       {ui.view === 'grid' ? (visible.length ? <ContactSheetGrid photos={visible} activeId={active?.id ?? null} selectedIds={selectedIds} dense={ui.dense} busy={busy} onSelect={onSelect} onDecide={onDecide} onEnlarge={onEnlarge} />
         : <EmptyState title={project.photos.length ? zh.emptyFilter : zh.emptyTitle} hint={project.photos.length ? '换一个筛选，继续观看。' : local ? '导入照片或文件夹，开始你的第一次选片。原图保留在原目录。' : zh.emptyHint}
           action={<Button onClick={project.photos.length ? () => { ui.setFilter('all'); ui.setSearch(''); } : onImport}>{project.photos.length ? zh.allPhotos : local ? zh.import : `${zh.import} · 桌面版`}</Button>} />)

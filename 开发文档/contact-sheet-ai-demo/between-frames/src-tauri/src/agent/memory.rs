@@ -38,6 +38,9 @@ pub struct MemoryProjection {
     pub evidence: Vec<EvidenceView>,
     pub hypotheses: Vec<HypothesisView>,
     pub notice: String,
+    pub cross_project_enabled: bool,
+    pub author_hypotheses: Vec<HypothesisView>,
+    pub author_memory_notice: String,
 }
 
 /// 从人工 GUI 命令记录 L2 证据。Undo/Redo、版本、项目设置不是偏好行为，不记录。
@@ -245,31 +248,6 @@ async fn load_evidence(
     })
     .collect())
 }
-async fn load_hypotheses_cross(tx: &mut Transaction<'_, Sqlite>) -> Result<Vec<HypothesisView>> {
-    // 跨项目模式：同一本地作者的全部活跃假设（M3 作者级授权）。
-    Ok(sqlx::query(
-        "SELECT * FROM preference_hypotheses WHERE status NOT IN('retired') AND disabled_for_retrieval=0 ORDER BY id DESC",
-    )
-    .fetch_all(&mut **tx)
-    .await?
-    .iter()
-    .map(|r| HypothesisView {
-        id: r.get("id"),
-        project_id: r.get("project_id"),
-        scope: r.get("scope"),
-        statement: r.get("statement"),
-        evidence_ids: parse_ids(r.get("evidence_ids_json")),
-        counterexample_ids: parse_ids(r.get("counterexample_ids_json")),
-        status: r.get("status"),
-        confidence: r.get("confidence"),
-        user_correction: r.get("user_correction"),
-        disabled: false,
-        created_at: r.get("created_at"),
-        updated_at: r.get("updated_at"),
-    })
-    .collect())
-}
-
 async fn load_hypotheses(
     tx: &mut Transaction<'_, Sqlite>,
     project: &str,
@@ -320,8 +298,6 @@ pub async fn projection_for_query(
     if query.chars().count() > 400 {
         return Err(AppError::new("VALIDATION_ERROR", "检索词过长"));
     }
-    // 在事务外读取设置（连接隔离：事务内开新连接可能看不到未提交状态）。
-    let cross = super::memory_scope::cross_project_enabled(db).await;
     let mut tx = db.pool.begin().await?;
     let exists: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM projects WHERE id=? AND deleted_at IS NULL")
@@ -331,23 +307,24 @@ pub async fn projection_for_query(
     if exists == 0 {
         return Err(AppError::new("NOT_FOUND", "项目不存在"));
     }
-    if cross {
-        // 跨项目：物化全部项目的假设进 FTS 索引（作者级授权已开启）。
-        let projects: Vec<String> =
-            sqlx::query_scalar("SELECT id FROM projects WHERE deleted_at IS NULL")
-                .fetch_all(&mut *tx)
-                .await?;
-        for pid in &projects {
-            materialize(&mut tx, pid).await?;
+    materialize(&mut tx, project).await?;
+    let matches = super::memory_search::ranks(&mut tx, project, query).await?;
+    let mut hypotheses = load_hypotheses(&mut tx, project).await?;
+    let cross = super::memory_scope::settings(&mut tx)
+        .await?
+        .cross_project_enabled;
+    let mut author_notice = "明确开启后，离线 Agent 可引用其他本地项目已确认的相关假设；共享/迁移中项目与云模型不参与。当前桌面按单一本地作者处理。".to_owned();
+    let author_hypotheses = if cross {
+        match author_hypotheses(&mut tx, project, query, 10).await {
+            Ok(items) => items,
+            Err(error) if error.code == "MEMORY_SCOPE_LIMIT" => {
+                author_notice = error.message;
+                vec![]
+            }
+            Err(error) => return Err(error),
         }
     } else {
-        materialize(&mut tx, project).await?;
-    }
-    let matches = super::memory_search::ranks_scoped(&mut tx, project, query, cross).await?;
-    let mut hypotheses = if cross {
-        load_hypotheses_cross(&mut tx).await?
-    } else {
-        load_hypotheses(&mut tx, project).await?
+        vec![]
     };
     if !query.trim().is_empty() {
         hypotheses.retain(|h| matches.contains_key(&h.id));
@@ -355,6 +332,9 @@ pub async fn projection_for_query(
     let result = MemoryProjection {
         evidence: load_evidence(&mut tx, project).await?,
         hypotheses,
+        cross_project_enabled: cross,
+        author_hypotheses,
+        author_memory_notice: author_notice,
         notice: "假设为项目内关键词规则推断，可确认、纠正或移除。排除证据只停止参与学习；原始人工记录、任务历史与备份仍保留。".into(),
     };
     tx.commit().await?;
@@ -412,25 +392,132 @@ pub async fn retrievable_for_goal(
     let mut seen = std::collections::HashSet::new();
     usable.retain(|h| seen.insert(statement_key(&h.statement)));
     usable.truncate(limit);
-    let summaries: Vec<Value> = usable
-        .iter()
-        .map(|h| {
-            json!({
-                "statement": h.statement,
-                "scope": h.scope,
-                "status": h.status,
-                "confidence": h.confidence,
-                "evidence_ids": h.evidence_ids,
-                "counterexample_ids": h.counterexample_ids,
-                "user_correction": h.user_correction,
-            })
-        })
-        .collect();
+    let summaries: Vec<Value> = usable.iter().map(summary).collect();
     Ok(json!({
         "hypotheses": summaries,
         "mode": "evidence_backed",
         "notice": "假设附带人工证据 ID，可被用户纠正；纠正后不再进入检索",
     }))
+}
+
+fn summary(h: &HypothesisView) -> Value {
+    json!({
+        "memory_id":h.id, "source_project_id":h.project_id,
+        "statement":h.statement, "scope":h.scope, "status":h.status,
+        "confidence":h.confidence, "evidence_ids":h.evidence_ids,
+        "counterexample_ids":h.counterexample_ids, "user_correction":h.user_correction,
+        "evidence_refs":h.evidence_ids.iter().map(|id| json!({"project_id":h.project_id,"evidence_id":id})).collect::<Vec<_>>(),
+        "counterexample_refs":h.counterexample_ids.iter().map(|id| json!({"project_id":h.project_id,"evidence_id":id})).collect::<Vec<_>>(),
+    })
+}
+/// 只返回已确认、有有效证据且与目标相关的作者线索；不暴露来源照片或备注正文。
+async fn author_hypotheses(
+    tx: &mut Transaction<'_, Sqlite>,
+    target: &str,
+    goal: &str,
+    limit: usize,
+) -> Result<Vec<HypothesisView>> {
+    if !super::memory_scope::settings(tx)
+        .await?
+        .cross_project_enabled
+    {
+        return Ok(vec![]);
+    }
+    let sources = super::memory_scope::sources(tx, target).await?;
+    let mut blocked = std::collections::HashSet::new();
+    let mut candidates = vec![];
+    for project in std::iter::once(target).chain(sources.iter().map(String::as_str)) {
+        materialize(tx, project).await?;
+        let relevance = super::memory_search::ranks(tx, project, goal).await?;
+        for h in load_hypotheses(tx, project).await? {
+            let key = super::memory_search::keyword(&h.statement).to_owned();
+            if h.disabled || ["corrected", "retired"].contains(&h.status.as_str()) {
+                blocked.insert(key);
+            } else if project != target
+                && h.status == "confirmed"
+                && !h.evidence_ids.is_empty()
+                && (goal.trim().is_empty() || relevance.contains_key(&h.id))
+            {
+                let rank = *relevance.get(&h.id).unwrap_or(&0.0);
+                candidates.push((h, rank));
+            }
+        }
+        let tombstones: Vec<String> = sqlx::query_scalar(
+            "SELECT ref_key FROM memory_tombstones WHERE project_id=? AND kind='hypothesis'",
+        )
+        .bind(project)
+        .fetch_all(&mut **tx)
+        .await?;
+        blocked.extend(
+            tombstones
+                .iter()
+                .map(|s| super::memory_search::keyword(s).to_owned()),
+        );
+    }
+    candidates.sort_by(|(a, ra), (b, rb)| {
+        ra.total_cmp(rb)
+            .then(b.evidence_ids.len().cmp(&a.evidence_ids.len()))
+            .then(b.id.cmp(&a.id))
+    });
+    let mut seen = std::collections::HashSet::new();
+    let result: Vec<_> = candidates
+        .into_iter()
+        .map(|(mut h, _)| {
+            h.scope = "cross_project".into();
+            h
+        })
+        .filter(|h| {
+            let key = super::memory_search::keyword(&h.statement).to_owned();
+            !blocked.contains(&key) && seen.insert(key)
+        })
+        .take(limit.min(10))
+        .collect();
+    // 来源内陈述保持原样，来源项目 ID 决定其解释范围。
+    Ok(result)
+}
+pub async fn retrievable_author(
+    tx: &mut Transaction<'_, Sqlite>,
+    task: &super::types::Task,
+    limit: usize,
+) -> Result<Value> {
+    if !super::memory_scope::may_use_author(tx, task).await? {
+        return Err(AppError::new(
+            "PERMISSION_DENIED",
+            "跨项目记忆仅供明确授权的本地离线任务使用",
+        ));
+    }
+    let items = author_hypotheses(tx, &task.project_id, &task.goal, limit).await?;
+    Ok(
+        json!({"hypotheses":items.iter().map(summary).collect::<Vec<_>>(),"mode":"confirmed_local_author","notice":"其他本地项目的已确认假设，不代表永久偏好；引用必须带来源项目和证据 ID，不能作为照片操作权限"}),
+    )
+}
+pub async fn retrievable_for_task(
+    tx: &mut Transaction<'_, Sqlite>,
+    task: &super::types::Task,
+    limit: usize,
+) -> Result<Value> {
+    let limit = limit.min(10);
+    let mut memory = retrievable_for_goal(tx, &task.project_id, limit, &task.goal).await?;
+    if super::memory_scope::may_use_author(tx, task).await? {
+        let author = retrievable_author(tx, task, limit).await?;
+        let local = memory["hypotheses"].as_array_mut().unwrap();
+        let mut seen: std::collections::HashSet<String> = local
+            .iter()
+            .filter_map(|h| h["statement"].as_str())
+            .map(|s| super::memory_search::keyword(s).to_owned())
+            .collect();
+        for h in author["hypotheses"].as_array().unwrap() {
+            if local.len() == limit {
+                break;
+            }
+            if seen
+                .insert(super::memory_search::keyword(h["statement"].as_str().unwrap()).to_owned())
+            {
+                local.push(h.clone());
+            }
+        }
+    }
+    Ok(memory)
 }
 
 pub struct HypothesisCorrection {

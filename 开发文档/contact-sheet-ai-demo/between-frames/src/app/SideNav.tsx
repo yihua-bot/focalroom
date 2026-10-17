@@ -9,8 +9,8 @@ export function SideNav({ project, page, view, onView, onProjects, onMemory, onH
   local?: boolean;
 }) {
   const ui = useUIStore();
-  return <aside className="sidebar"><div className="logo"><div className="logo-symbol">B</div><div>
-    <div className="brand">BETWEEN</div><div className="brand-sub">FRAMES · STUDIO</div></div></div>
+  return <aside className="sidebar"><div className="logo"><img className="logo-symbol" src="/focalroom-mark.png" alt="FocalRoom 标志" /><div>
+    <div className="brand">FocalRoom</div><div className="brand-sub">PHOTO STUDIO</div></div></div>
     <button className="nav-fold" onClick={ui.toggleSidebar} aria-label={ui.sidebarOpen ? '收起导航' : '展开导航'}>{ui.sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}</button>
     <div className="group-label">WORKSPACE</div><nav aria-label="主导航">
       <button className={`nav ${page === 'workspace' && view === 'grid' ? 'current' : ''}`} aria-label={zh.workspace} onClick={() => onView('grid')} disabled={!project}><Grid2X2 size={17} /><span>{zh.workspace}</span></button>
@@ -21,6 +21,6 @@ export function SideNav({ project, page, view, onView, onProjects, onMemory, onH
     {project && <button className="project-link" onClick={() => onView('grid')}><strong>{project.title}</strong>
       <small>{project.photos.length} 张图像 · {project.sequence.length} 张入选<br />{local ? '本地项目' : project.id === 'sample-project' ? '示例项目' : '预览项目'}</small></button>}
     <div className="sidebar-bottom"><button className="help-link" onClick={onHelp}><Keyboard size={14} />{zh.help}</button>
-      <span className="dot" />{local ? '本地保存 · 原图只读' : zh.preview}<br />{local ? '完全离线选片 · 无云端上传' : '仅本地 UI 预览 · 无云端上传'}</div>
+      <span className="dot" />{local ? '本地保存 · 原图只读' : zh.preview}<br />{local ? '离线选片 · 图像上传需授权' : '仅本地 UI 预览 · 无云端上传'}</div>
   </aside>;
 }

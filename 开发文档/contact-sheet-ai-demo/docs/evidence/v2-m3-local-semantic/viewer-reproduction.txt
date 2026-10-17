@@ -1,0 +1,24 @@
+   Compiling bf-cloud v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/cloud)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.50s
+     Running tests/m5_collab.rs (cloud/target/debug/deps/m5_collab-68df30b5d1910b53)
+
+running 1 test
+test m5_full_collaboration_suite ... FAILED
+
+failures:
+
+---- m5_full_collaboration_suite stdout ----
+
+thread 'm5_full_collaboration_suite' (10887065) panicked at tests/m5_collab.rs:101:5:
+assertion `left == right` failed: Viewer 必须只读，不能写评论
+  left: 200
+ right: 403
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    m5_full_collaboration_suite
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.37s
+
+error: test failed, to rerun pass `--test m5_collab`

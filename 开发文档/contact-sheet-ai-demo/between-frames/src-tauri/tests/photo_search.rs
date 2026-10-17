@@ -250,7 +250,7 @@ async fn semantic_tool_excludes_out_of_scope_and_invalid_cached_inputs_before_em
 #[ignore = "需本机已有 Apple 中英文句向量；只用合成观察，不下载、不上传"]
 async fn semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_scope() {
     let temp = tempfile::tempdir().unwrap();
-    let (db, project) = setup(temp.path(), 3).await;
+    let (mut db, project) = setup(temp.path(), 3).await;
     use sha2::{Digest, Sha256};
     let hashes = || {
         (0..3)
@@ -312,6 +312,9 @@ async fn semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_sc
         assert_eq!(result["semantic_retrieval"]["language"], language);
         assert_eq!(result["semantic_retrieval"]["embedded"], 3);
         assert_eq!(result["semantic_retrieval"]["revalidated"], 3);
+        assert_eq!(result["semantic_retrieval"]["generated"], 3);
+        assert_eq!(result["semantic_retrieval"]["cache_hits"], 0);
+        assert_eq!(result["semantic_retrieval"]["index_write"], "stored");
         assert_eq!(result["photos"][0]["photo_id"], project.photos[0].id);
         assert_eq!(
             result["photos"][0]["match_sources"],
@@ -342,6 +345,9 @@ async fn semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_sc
                 .tool_calls,
             1
         );
+        // 关闭原连接，以新 Store 重新打开同一临时数据库；缓存来自文件而非进程内 map。
+        db.pool.close().await;
+        db = Store::open(&temp.path().join("test.sqlite")).await.unwrap();
         let (scoped, _) = run_search(
             &db,
             &project,
@@ -357,12 +363,86 @@ async fn semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_sc
             "最接近仍仅是范围内候选，不保证相关"
         );
         assert_eq!(scoped["result"]["semantic_retrieval"]["embedded"], 1);
+        assert_eq!(scoped["result"]["semantic_retrieval"]["cache_hits"], 1);
+        assert_eq!(scoped["result"]["semantic_retrieval"]["generated"], 0);
+        assert_eq!(
+            scoped["result"]["semantic_retrieval"]["index_entries"], 1,
+            "只报告本次授权范围内发布数量"
+        );
+        // 只更新一张的可观察事实，其他两张复用；旧同照片版本在发布时被替换。
+        cache(
+            &db,
+            &project.photos[0].id,
+            observation(
+                &project.photos[0].id,
+                if language == "en" {
+                    "A cyclist is riding a bicycle along a city street."
+                } else {
+                    "街道上一名男子正在骑自行车"
+                },
+            ),
+        )
+        .await;
+        let (incremental, _) = run_search(
+            &db,
+            &project,
+            query,
+            vec![],
+            3,
+            "search_photos_semantic",
+            false,
+        )
+        .await;
+        eprintln!(
+            "incremental index result: {}",
+            incremental["result"]["semantic_retrieval"]
+        );
+        assert_eq!(incremental["result"]["semantic_retrieval"]["cache_hits"], 2);
+        assert_eq!(incremental["result"]["semantic_retrieval"]["generated"], 1);
+        assert_eq!(
+            incremental["result"]["semantic_retrieval"]["index_entries"],
+            3
+        );
+        use agent::memory_control::{MemoryCommand, MemoryRequest};
+        CommandHandler::new(&db)
+            .execute_memory(MemoryRequest {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                command: MemoryCommand::PurgeObservationCache {},
+            })
+            .await
+            .unwrap();
+        let cache_files: Vec<_> = std::fs::read_dir(temp.path().join("cache"))
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with("semantic-v1-"))
+            .collect();
+        assert_eq!(cache_files.len(), 1);
+        let bytes = std::fs::read(cache_files[0].path()).unwrap();
+        let saved: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(saved["data"]["entries"], json!([]));
+        assert!(!String::from_utf8(bytes).unwrap().contains(facts[0]));
+        let (purged, _) = run_search(
+            &db,
+            &project,
+            query,
+            vec![],
+            3,
+            "search_photos_semantic",
+            false,
+        )
+        .await;
+        assert_eq!(purged["result"]["photos"], json!([]));
         assert_eq!(result["new_uploads"], 0);
         assert!(
             !result.to_string().contains("直接批准"),
             "主观 interpretation 不进入向量文本或返回证据"
         );
         eprintln!("semantic tool accepted: {}", result["semantic_retrieval"]);
+        eprintln!(
+            "incremental index accepted: {}",
+            incremental["result"]["semantic_retrieval"]
+        );
     }
     assert_eq!(hashes(), before_hashes);
     assert_eq!(

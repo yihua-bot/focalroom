@@ -21,10 +21,10 @@ pub mod pricing;
 pub mod promotion;
 pub mod proposals;
 pub mod provider;
-pub mod provider_fallback;
 pub mod router;
 pub mod runtime;
 mod semantic;
+mod semantic_index;
 pub(crate) mod store;
 mod tools;
 pub mod types;
@@ -44,7 +44,9 @@ impl CommandHandler<'_> {
         if task.state != "running" {
             return Err(crate::domain::AppError::new("CANCELLED", "任务已停止"));
         }
-        if model_binding::ensure(&mut tx, &task, identity).await? {
+        let newly_bound = model_binding::ensure(&mut tx, &task, identity).await?;
+        consent::ensure_task_recipient(&mut tx, &task, identity).await?;
+        if newly_bound {
             store::checkpoint(&mut tx, &task).await?;
         }
         tx.commit().await?;
@@ -123,13 +125,13 @@ pub async fn projection(db: &crate::db::Store, project: &str) -> Result<AgentPro
     store::projection(db, project).await
 }
 
-pub const PROMPT_VERSION: &str = "m2-mock-1";
+pub const PROMPT_VERSION: &str = "m2-mock-2";
 pub const PROVIDER_ID: &str = "mock";
 pub const MODEL_ID: &str = "metadata-mock-1";
 pub const PROVIDER_OPENAI: &str = "openai";
 pub fn prompt_version(provider: &str) -> &'static str {
     if provider == PROVIDER_OPENAI {
-        "m3-openai-7"
+        "m3-openai-9"
     } else {
         PROMPT_VERSION
     }

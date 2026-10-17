@@ -1,6 +1,7 @@
 import { TauriDiagnosticsRepository } from './TauriDiagnosticsRepository';
 import { TauriAgentRepository } from './TauriAgentRepository';
 import { TauriMemoryRepository } from './TauriMemoryRepository';
+import { TauriSharingRepository } from './TauriSharingRepository';
 import type { SelectionDraft } from '../domain/agent';
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { z } from 'zod';
@@ -28,6 +29,7 @@ async function command<T>(name: string, args?: Record<string, unknown>): Promise
 }
 
 export class TauriRepository implements DesktopProjectRepository {
+  readonly sharing = new TauriSharingRepository();
   readonly mode = 'desktop' as const;
   readonly agent = new TauriAgentRepository();
   async setTags(projectId: string, tags: string[]) {
@@ -143,7 +145,7 @@ export class TauriRepository implements DesktopProjectRepository {
   async cancelImport(jobId: string) { await command('cancel_import', { jobId }); }
   async retryImport(jobId: string) { return command<string>('retry_import', { jobId }); }
   async relink(id: string, photoId: string) { const project = await command('relink_photo', { projectId: id, expectedRevision: this.revision(id), photoId }); return project ? this.map(project) : null; }
-  async export(id: string, format: 'json' | 'csv' | 'html' | 'print' | 'sidecar', includePaths = false) {
+  async export(id: string, format: 'json' | 'csv' | 'html' | 'print' | 'sidecar' | 'shared', includePaths = false) {
     return z.object({ path: z.string(), sha256: z.string(), bytes: z.number() }).nullable().parse(await command('export_project', { projectId: id, format, includePaths }));
   }
 }

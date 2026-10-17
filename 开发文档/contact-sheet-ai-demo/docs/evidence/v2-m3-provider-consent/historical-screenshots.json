@@ -1,0 +1,31 @@
+{
+  "count": 90,
+  "allMatchTurnStart": true,
+  "restored": [
+    "v2-review-fixes/proposal-applied.png",
+    "v2-review-fixes/proposal-conflict.png",
+    "m4-memory-controls/confirmed-counterexample.png",
+    "m4-memory-controls/restored-search.png",
+    "m0/empty.png",
+    "m0/workspace.png",
+    "m0/mobile.png",
+    "v1-m1/versions.png",
+    "v1-m1/workspace-1280.png",
+    "v1-m1/sequence.png",
+    "v1-m1/workspace.png",
+    "v1-m1/compare.png",
+    "v1-m1/workspace-1920.png",
+    "m5-storage-diagnostics/view-and-copy.png",
+    "v1-m0/preview-1280.png",
+    "v1-m2/drafts.png",
+    "v1-m2/sequence.png",
+    "v1-m2/partial-approved.png",
+    "v1-m2/restarted.png",
+    "v1-m2/stale.png",
+    "v1-m2/workspace.png",
+    "v1-m2/paused.png",
+    "v1-m5/journey-memory.png",
+    "v1-m5/journey-applied.png",
+    "v1-m5/journey-drafts.png"
+  ]
+}

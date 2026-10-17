@@ -15,8 +15,55 @@ pub struct ModelIdentity {
     pub endpoint_sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capability_profile_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observation: Option<ObservationIdentity>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ObservationIdentity {
+    pub model_id: String,
+    pub capability_profile_sha256: Option<String>,
 }
 impl ModelIdentity {
+    /// 本切片只允许同一适配器、同一服务端点分工，不授权跨服务传输。
+    pub fn with_observation(mut self, observation: &Self) -> Result<Self> {
+        if self.provider_id != observation.provider_id
+            || self.endpoint_sha256 != observation.endpoint_sha256
+            || observation.observation.is_some()
+        {
+            return Err(AppError::new(
+                "MODEL_ROLE_CONFIG_INVALID",
+                "图像观察与策展必须使用同一服务端点；未发送数据",
+            ));
+        }
+        self.observation = (self != *observation).then(|| ObservationIdentity {
+            model_id: observation.model_id.clone(),
+            capability_profile_sha256: observation.capability_profile_sha256.clone(),
+        });
+        Ok(self)
+    }
+    pub fn observation_identity(&self) -> Self {
+        let mut identity = self.clone();
+        if let Some(observation) = identity.observation.take() {
+            identity.model_id = observation.model_id;
+            identity.capability_profile_sha256 = observation.capability_profile_sha256;
+        }
+        identity
+    }
+    pub fn observation_model_id(&self) -> &str {
+        self.observation
+            .as_ref()
+            .map_or(self.model_id.as_str(), |model| model.model_id.as_str())
+    }
+    pub fn consent_provider(&self) -> String {
+        format!(
+            "openai@{}",
+            crate::command_audit::fingerprint(&serde_json::json!({
+                "version":1,"adapter":self.provider_id,"endpoint":self.endpoint_sha256,"model":self.observation_model_id()
+            }))
+        )
+    }
+
     pub fn cache_version(&self) -> String {
         format!(
             "{}@{}",

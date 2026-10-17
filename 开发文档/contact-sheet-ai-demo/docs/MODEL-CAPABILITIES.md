@@ -34,11 +34,21 @@
 
 ## 执行与恢复
 
-- 工具编排要求 `tool_calling` + `instruction_following`；观察/策展要求 `vision` + `structured_output` + `instruction_following`；记忆结构化请求要求 `structured_output` + `instruction_following`。有图像输入时还要求 `vision`。
+### 同一服务的模型分工（ADR0039）
+
+主循环的型号与能力文件仍由 BETWEEN_FRAMES_AI_MODEL / BETWEEN_FRAMES_AI_CAPABILITY_PROFILE 指定。可另设 BETWEEN_FRAMES_AI_OBSERVATION_MODEL，并通过 BETWEEN_FRAMES_AI_OBSERVATION_CAPABILITY_PROFILE 为该精确型号声明观察能力。两个角色共用 Base URL 与密钥来源；不同端点的实例注入会以 MODEL_ROLE_CONFIG_INVALID 拒绝。变量来自可信部署，不由模型输出或任务指定。
+
+不设置观察配置时复用主实例。设置不同观察型号时，观察角色只读取自己的能力文件或其精确内置配置，不能继承主角色文件。只设置观察能力文件时按主型号独立校验；显式无效文件不回退默认能力。文件格式、16KiB 上限、端点摘要、允许能力和冻结规则同上，modelId 填实际观察型号。
+
+主循环使用 AgentOrchestrate 做基于观察事实的策展，要求 tool_calling + instruction_following；观察角色要求 vision + structured_output + instruction_following。直接带图像的 Curation 路由规则仍不变。AiConfig.observation 显示观察型号、能力、来源和错误；授权卡显示该型号，主模型无需声称已看到像素。观察配置错误时可以保持零图像编辑；不自动切换到主模型上传。
+
+任务冻结两角色的型号/能力摘要；恢复拒绝换配置。新任务的图像授权与缓存按实际观察型号隔离，单独更换策展型号不改变图像收件人。两类请求使用各自费率并累计到同一个任务预算；费用仍为估算。Prompt 为 m3-openai-9，视觉缓存仍 m3-vision-2。分工不代表成本或摄影质量通过。
+
+- 工具编排/基于观察事实的策展要求 `tool_calling` + `instruction_following`；观察及直接图像策展路由要求 `vision` + `structured_output` + `instruction_following`；记忆结构化请求要求 `structured_output` + `instruction_following`。有图像输入时还要求 `vision`。
 - Router、模型请求与视觉 Adapter 直接入口均检查能力。未满足时不发该请求；视觉预算不会赋予视觉能力，Pro 档也不会。尚未发出的图片不扣上传配额。
 - 配置错误会显示在委托面板；纯文本配置仍可发起不上传照片的编辑委托。开启图像预算时提示归零或联系部署方，不能先授权再失败。授权卡打开后配置失效，会阻止继续授权；“禁止云端图像”始终保留。没有 API Key 的本地 Mock 沿用原流程。
 - 实例创建时冻结配置，运行中不重读文件；修改后需重启应用。同样的端点、模型、能力集合允许轮换密钥；有效能力改变后旧任务必须新建委托。旧绑定缺少能力摘要也拒绝续跑，不补猜、不重写旧记录。
 - 任务绑定追加 `capabilityProfileSha256`，不存密钥、配置文件路径或配置正文。源照片 hash/模型/端点/视觉 Prompt 的既有缓存键保持不变；能力变化要求新委托，但不会清除同源同端点已经取得的本地观察。缓存复用不是新的上传授权。
 - `AiConfig.ready` 仍表示存在已配置的真实 Provider。调用方还必须检查 `configurationError` 和 `capabilities`；配置失败不能当成本地 Mock，旧前端/后端组合缺字段会拒绝解析。
 
-当前只有一个已配置的 Responses Provider，错误重试仍在原提供方内进行。未实现跨供应商自动 fallback；本配置也不能代替新的供应商条款/图片传输授权。项目级 consent 目前仍绑定适配器，首次执行身份绑定不能补足创建时的供应商证明，后续多 Adapter 必须另行实现。
+当前使用同一端点的 Responses Adapter，可配置策展与观察两个型号，错误重试仍在原角色/型号内进行。未实现跨供应商自动 fallback；本配置也不能代替新的供应商条款/图片传输授权。项目级图像 consent 已按实际观察端点摘要/型号绑定，创建时校验界面与冻结实例收件人，旧通用授权需重新明确同意；详见 ADR0038/0039。多 Adapter、跨服务文本/图像授权及实际 fallback 仍须另行实现。更换观察端点/型号后重新授权；轮换同一服务密钥不改变收件人。

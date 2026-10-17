@@ -126,6 +126,8 @@ pub(crate) async fn protocol(
 }
 pub(crate) async fn checkpoint(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<()> {
     let history = protocol(tx, &task.id).await?;
+    let author_binding =
+        super::memory_scope::binding_value(super::memory_scope::load(tx, &task.id).await?);
     let identity = super::model_binding::load(tx, &task.id).await?;
     let model = identity
         .as_ref()
@@ -140,7 +142,7 @@ pub(crate) async fn checkpoint(tx: &mut Transaction<'_, Sqlite>, task: &Task) ->
             .bind(&task.id)
             .fetch_all(&mut **tx)
             .await?;
-    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"memoryRevision":task.memory_revision,"providerId":task.provider_id,"modelId":model,"modelIdentity":identity,"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"authorMemoryBinding":author_binding,"memoryRevision":task.memory_revision,"providerId":task.provider_id,"modelId":model,"modelIdentity":identity,"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
     Ok(())
 }
 pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection> {

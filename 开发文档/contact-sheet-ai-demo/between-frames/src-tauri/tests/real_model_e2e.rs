@@ -504,7 +504,9 @@ async fn run_lumix_authorized(creative: bool) {
             request_id: domain::id(),
             project_id: project.id.clone(),
             mode: "task".into(),
-            provider: agent::PROVIDER_OPENAI.into(),
+            provider: agent::openai::OpenAiProvider::new(require_real_config())
+                .identity()
+                .consent_provider(),
             quota,
         },
     )

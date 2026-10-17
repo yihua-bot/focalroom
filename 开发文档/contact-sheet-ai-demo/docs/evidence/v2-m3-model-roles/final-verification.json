@@ -1,0 +1,19 @@
+{
+  "desktopRust": 190,
+  "cloudRust": 13,
+  "vitest": 183,
+  "previewE2E": 16,
+  "backendE2E": 6,
+  "webE2E": 1,
+  "nativeApp": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/FocalRoom Review.app",
+  "nativeBytes": 62066584,
+  "bundleIdentifier": "studio.betweenframes.m1reviewfixes",
+  "iconSha256": "3f5812cdba6755ca82e55898731fba6d15ae725378c8164d0cfe967dcfd43b5a",
+  "naturalLanguageWeakLinked": true,
+  "sourceFilesVerified": 252,
+  "originalScreenshotsVerified": 90,
+  "screenshotsRestored": 29,
+  "nativeLaunched": false,
+  "professionalQuality": "unmeasured",
+  "realProviderRequests": 0
+}

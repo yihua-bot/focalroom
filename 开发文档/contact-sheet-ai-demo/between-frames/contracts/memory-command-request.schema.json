@@ -176,6 +176,22 @@
           "required": [
             "type"
           ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "SetCrossProjectMemory"
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "enabled"
+          ]
         }
       ]
     }

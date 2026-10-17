@@ -1,0 +1,3 @@
+入口标签更新后的第一次前端复验：182 passed / 1 failed。
+src/test/App.test.tsx:37 仍按旧标签 Agent · 本地 Mock 查询入口。
+已同步为 摄影编辑 Agent，不改变“浏览器预览不启动任务”的断言。

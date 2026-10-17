@@ -11,6 +11,8 @@ const projection = z.object({
 const reply = z.object({ ok: z.boolean(), data: z.object({ taskId: z.string() }).nullable(), error: z.object({ code: z.string(), message: z.string(), retryable: z.boolean() }).nullable(), revision: z.number().nullable(), requestId: z.string() });
 const consentView = z.object({ id: z.number().int(), projectId: z.string(), mode: z.enum(['task', 'project', 'deny']), provider: z.string(), quota: z.number().int(), used: z.number().int(), grantedAt: z.string(), revokedAt: z.string().nullable() });
 const aiConfigSchema = z.object({
+ observation: z.object({ modelId: z.string(), capabilities: z.array(z.enum(['vision', 'tool_calling', 'structured_output', 'instruction_following'])), capabilitySource: z.enum(['official_documentation', 'local_protocol_smoke', 'operator_declaration']).nullable(), configurationError: z.string().nullable() }).nullable(),
+ consentProvider: z.string().regex(/^openai@[a-f0-9]{64}$/).nullable(),
  providerId: z.string(), modelId: z.string(), ready: z.boolean(), apiKeyTail: z.string().nullable(), keySource: z.string().nullable(), baseUrl: z.string(), promptVersion: z.string(),
  capabilities: z.array(z.enum(['vision', 'tool_calling', 'structured_output', 'instruction_following'])), capabilitySource: z.enum(['official_documentation', 'local_protocol_smoke', 'operator_declaration']).nullable(), configurationError: z.string().nullable(),
  consent: consentView.nullable(),
@@ -32,7 +34,14 @@ export class TauriAgentRepository implements AgentRepository {
   try { const second = await listen(DRAFT_UPDATED_EVENT, event => handler(event.payload)); return () => { first(); second(); }; } catch (error) { first(); throw error; }
  }
  async aiConfig(projectId: string) { return aiConfigSchema.parse(await invoke('get_ai_config', { projectId })); }
- async setConsent(projectId: string, mode: 'task' | 'project' | 'deny', quota: number) {
-  return consentView.parse(await invoke('set_privacy_consent', { request: { requestId: crypto.randomUUID(), projectId, mode, provider: 'openai', quota } }));
+ async setConsent(projectId: string, mode: 'task' | 'project' | 'deny', quota: number, recipient?: string | null) {
+  if (mode !== 'deny' && !/^openai@[a-f0-9]{64}$/.test(recipient ?? '')) throw new Error('服务授权标识缺失，请刷新模型配置');
+  const request = { requestId: crypto.randomUUID(), projectId, mode, provider: mode === 'deny' ? 'openai' : recipient!, quota };
+  let raw: unknown;
+  try { raw = await invoke('set_privacy_consent', { request }); }
+  catch (error) { if (typeof error === 'object' && error && 'code' in error) throw Object.assign(new Error('message' in error ? String(error.message) : '授权失败'), { code: error.code }); raw = await invoke('set_privacy_consent', { request }); }
+  const receipt = consentView.parse(raw);
+  if (receipt.projectId !== projectId || receipt.provider !== request.provider || receipt.mode !== mode || receipt.quota !== quota) throw new Error('授权回执身份不匹配');
+  return receipt;
  }
 }

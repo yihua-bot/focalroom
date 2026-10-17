@@ -1,0 +1,10 @@
+{
+  "app": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames M1 Review Fixes.app",
+  "identifier": "studio.betweenframes.m1reviewfixes",
+  "binary": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/Between Frames M1 Review Fixes.app/Contents/MacOS/between-frames",
+  "binary_sha256": "d89d27dc15285d081aa96fe4691ddc1aa932713d8e06452623ccfbb9e674e9be",
+  "natural_language_weak_load": true,
+  "built": true,
+  "launched": false,
+  "developer_id_or_notarization_validated": false
+}

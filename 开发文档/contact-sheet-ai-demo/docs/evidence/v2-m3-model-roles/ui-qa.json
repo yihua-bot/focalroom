@@ -1,0 +1,43 @@
+{
+  "synthetic": true,
+  "root": "/private/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-role-ui-gHN4Uf",
+  "config": {
+    "apiKeyTail": "only",
+    "baseUrl": "http://127.0.0.1:9",
+    "capabilities": [
+      "tool_calling",
+      "instruction_following"
+    ],
+    "capabilitySource": "operator_declaration",
+    "configurationError": null,
+    "consent": null,
+    "consentProvider": "openai@3e6dfb9a923f3f0d0e78c97a33a737ed377232daa6e706a83802589814df9def",
+    "keySource": "env",
+    "modelId": "curator-ui",
+    "observation": {
+      "capabilities": [
+        "vision",
+        "structured_output",
+        "instruction_following"
+      ],
+      "capabilitySource": "operator_declaration",
+      "configurationError": null,
+      "modelId": "observer-ui"
+    },
+    "promptVersion": "m3-openai-9",
+    "providerId": "openai",
+    "ready": true
+  },
+  "photos": 200,
+  "screenshots": [
+    "roles-consent-1440.png",
+    "roles-consent-1280.png"
+  ],
+  "tasks": 0,
+  "modelRequests": 0,
+  "grantAndDeny": true,
+  "formalProjectUnchanged": true,
+  "fixtureHashesUnchanged": true,
+  "remote": [],
+  "errors": []
+}

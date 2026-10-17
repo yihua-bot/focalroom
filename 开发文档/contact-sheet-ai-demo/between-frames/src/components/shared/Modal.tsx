@@ -12,7 +12,7 @@ export function Modal({ title, description, children, onClose, wide = false, ini
   return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}>
     <Dialog.Portal><Dialog.Overlay className="modal-overlay" />
       <Dialog.Content className={`modal ${wide ? 'modal-wide' : ''}`} onOpenAutoFocus={event => { if (initialFocusRef?.current) { event.preventDefault(); initialFocusRef.current.focus(); } }} onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus?.isConnected) returnFocus.focus(); }}>
-        <div className="modal-head"><div><span className="eyebrow">BETWEEN FRAMES / STUDIO</span>
+        <div className="modal-head"><div><span className="eyebrow">FOCALROOM / STUDIO</span>
           <Dialog.Title>{title}</Dialog.Title></div>
           <Dialog.Close className="icon-button" aria-label={zh.close}><X size={20} /></Dialog.Close></div>
         <Dialog.Description className="muted">{description}</Dialog.Description>

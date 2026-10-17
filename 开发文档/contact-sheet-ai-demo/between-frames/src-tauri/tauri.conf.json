@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Between Frames",
+  "productName": "FocalRoom",
   "version": "0.1.0",
   "identifier": "studio.betweenframes.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "序间 · BETWEEN FRAMES",
+        "title": "FocalRoom",
         "width": 1440,
         "height": 960,
         "minWidth": 960,

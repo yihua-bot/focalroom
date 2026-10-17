@@ -104,6 +104,12 @@ pub(crate) async fn outcome(
         )
         .await?;
     }
+    if let Err(error) = super::memory_scope::validate(&mut tx, &t).await {
+        store::transition(&mut tx, &mut t, "paused", &error.message).await?;
+        store::checkpoint(&mut tx, &t).await?;
+        tx.commit().await?;
+        return Err(error);
+    }
     if i64::from(settled_output) > sent_output_limit
         || t.usage.cost_minor_usd > t.budget.max_cost_minor_usd.min(cost_limit)
         || t.elapsed_ms >= u64::from(t.budget.max_duration_seconds) * 1000
@@ -158,6 +164,7 @@ pub(crate) async fn tool(
     let preparation_ms = preparation_started.elapsed().as_millis() as u64;
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, id).await?;
+    super::memory_scope::validate(&mut tx, &t).await?;
     // 身份和 task scope 在回放前检查，指纹不允许同 call ID 更换参数。
     if call.call_id.is_empty() || call.call_id.len() > 160 {
         return Err(AppError::new("VALIDATION_ERROR", "call_id 不合法"));
@@ -185,6 +192,7 @@ pub(crate) async fn tool(
     if t.state != "running" {
         return Err(AppError::new("CANCELLED", "任务已停止"));
     }
+    super::memory_scope::validate(&mut tx, &t).await?;
     if t.usage.tool_calls >= t.budget.max_tool_calls
         || t.elapsed_ms.saturating_add(preparation_ms)
             >= u64::from(t.budget.max_duration_seconds) * 1000
@@ -317,6 +325,7 @@ pub(crate) async fn final_outcome(db: &Store, id: &str, outcome: ModelOutcome) -
     if t.state != "running" {
         return Err(AppError::new("CANCELLED", "任务已停止"));
     }
+    super::memory_scope::validate(&mut tx, &t).await?;
     match outcome {
         ModelOutcome::NeedsInput { question } => {
             if question.is_empty() || question.chars().count() > 2000 {
@@ -362,6 +371,7 @@ pub(crate) async fn attempt(
     if t.state != "running" {
         return Err(AppError::new("CANCELLED", "任务已停止"));
     }
+    super::memory_scope::validate(&mut tx, &t).await?;
     if !(128..=t.budget.max_output_tokens).contains(&output_limit) {
         return Err(AppError::new(
             "VALIDATION_ERROR",
@@ -383,7 +393,8 @@ pub(crate) async fn attempt(
         .bind(i64::from(reserved))
         .execute(&mut *tx)
         .await?;
-    store::step(&mut tx,id,"model_attempt",json!({"round":t.usage.model_turns,"startedAt":crate::domain::timestamp(),"promptVersion":super::prompt_version(&t.provider_id),"providerId":t.provider_id,"maxOutputTokens":output_limit,"reservedCostMinorUsd":reserved,"rateCard":rate}),"发起一轮模型请求").await?;
+    let binding = super::model_binding::load(&mut tx, id).await?;
+    store::step(&mut tx,id,"model_attempt",json!({"modelRole":if t.provider_id == super::PROVIDER_OPENAI { "curation" } else { "mock" },"modelId":binding.map(|identity| identity.model_id),"round":t.usage.model_turns,"startedAt":crate::domain::timestamp(),"promptVersion":super::prompt_version(&t.provider_id),"providerId":t.provider_id,"maxOutputTokens":output_limit,"reservedCostMinorUsd":reserved,"rateCard":rate}),"发起一轮模型请求").await?;
     store::save(&mut tx, &t).await?;
     tx.commit().await?;
     Ok(())

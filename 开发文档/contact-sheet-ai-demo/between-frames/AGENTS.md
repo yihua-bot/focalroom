@@ -1,4 +1,18 @@
-# AGENTS.md · Between Frames 工程导航
+# AGENTS.md · FocalRoom 工程导航
+
+当前接续（2026-10-17，M3 同端点模型分工）：先读 ../docs/V2-M3-MODEL-ROLES-TEST-REPORT.md、ADR0039 和 MODEL-CAPABILITIES.md。新增可信观察型号/独立能力文件，默认复用主模型；两角色只允许相同端点/Adapter。主循环 AgentOrchestrate（策展）与 VisionObserve 分工，各自能力/费率，统一预算；不能把观察失败改交主模型。ModelIdentity.observation 可选、单模型省略，两个型号/有效能力都绑定检查点；consentProvider 与缓存/检索按实际观察型号。只换策展型号的新任务可沿用未变的观察授权；旧任务改任一角色须新委托。Prompt9/Mock2/vision2，无新迁移/依赖。190桌面Rust+13本地云、183Vitest/16预览+6后端+1Web、类型/Lint/fmt/严格Clippy、双角色独立浏览器及59.19MiB debug包通过；最后UI改名后完整前端/E2E复验。252源摘要/90起始PNG一致。没有真实Provider/用户照片/用户库/部署/Git操作。M3仍partial：真实成本/质量、自动选模/全图库观察、完整多Adapter授权fallback、云作者记忆和Creator身份未完成。旧 provider_fallback 的配置key不算用户同意。下文为先前切片。
+
+品牌接续（2026-10-17）：产品最终名称 FocalRoom；先读 ../docs/FOCALROOM-BRAND-UPDATE.md。正式图案 public/focalroom-mark.png 由用户明确允许的 Python 原图抠图提取，只含图案/真实透明；不要改用三次图像工具生成结果。根/Desktop/Web 共用根 publicDir，避免相对路径 favicon 在工作区 dev 下回退 HTML。包名、环境变量、Tauri identifier、数据与钥匙串标识保持旧名兼容；旧需求包/历史报告不批量改名。180 单测/16预览+1Web、类型/Lint/三入口构建、独立 FocalRoom Review.app 打包与图标摘要通过；5项Rust导出回归在名称更新时通过。没有启动原生窗口/用户库；90起始PNG已恢复。M3仍partial，以下阶段记录仍有效。
+
+当前接续（2026-10-17，M3 实际服务图像授权）：先读 ../docs/V2-M3-PROVIDER-CONSENT-TEST-REPORT.md、ADR0038。AiConfig.consentProvider 来自冻结实例，正向 ConsentRequest.provider 必须为当前 openai@收件人摘要（adapter/端点/型号）；旧 openai 正向授权不生效/不回填，openai 仅用于本项目全服务 deny。原生/harness 共用 AgentEngine.set_consent，禁止从当前环境临时猜收件人；runtime 绑定模型时在任何 HTTP 前验证显式授权，隐式项目授权只读当前绑定收件人。复用现有 TEXT 列，无新迁移。新管理/取消入口不委托，委托授权后两种模式都用明确 consentId；无服务也可禁止。客户端禁自动重定向；预留 recipientId 不含密钥/明文地址。181桌面Rust+13云/180Vitest/16预览/6后端、严格检查、58.59MiB debug 构建通过；截图QA后前端及E2E复验通过，243摘要/90起始PNG一致。Prompt8/Mock2及缓存版本不变，未打开用户库/调用真实Provider/部署/提交。M3仍partial；provider_fallback 的备用key配置不是用户同意，不能当授权执行链路。作者记忆云授权、真实Creator、多Adapter/模型分工/完整fallback与质量门槛仍待做。下文为历史。
+
+
+当前接续（2026-10-17，M3 本地作者记忆）：先读 ../docs/V2-M3-AUTHOR-MEMORY-TEST-REPORT.md、ADR0037。SetCrossProjectMemory 经 MemoryRequest/CommandHandler 审计；默认关闭，旧直接 true 不算同意。仅 mock 离线任务引用其他活跃 LOCAL 项目已确认/有效/相关假设，附来源及支持/反例引用；云模型和共享/迁移中项目排除。author_hypotheses 独立只读，当前可编辑投影不混入来源记录。任务初次委托绑定不可变授权epoch/来源摘要；上下文、请求前、计量后、回放前及恢复重验，来源/授权变化须新委托，不能重绑旧历史。最多100来源，超限可关闭。Prompt m3-openai-8 / m2-mock-2，vision/index缓存配置不变；174桌面Rust+13云/173Vitest/16预览/6后端及debug构建通过，首轮E2E同步断言失败记录保留。无新迁移/依赖、真实Provider请求、用户库或部署/Git操作。M3/M02仍partial：云Provider专属授权、真实Creator隔离、模型分工与质量门槛待做；默认Mock仍是元数据策略。下文为历史。
+
+
+当前接续（2026-10-17，M3 增量向量索引）：先读 ../docs/V2-M3-PERSISTENT-INDEX-TEST-REPORT.md、ADR0036。已有缓存事实向量可在本机跨连接重开复用，按数据库/项目、完整观察/来源/源hash及当前Apple模型language/revision/dimensions校验；scope重验后在写事务内发布。每项目500条/8MiB的有界平面文件，checksum/原子替换/Unix0600，缓存非权威；cache_hits/generated仅指文档，查询每次推断。清空视觉观察缓存同时清空活跃索引，失败回滚，过期预取不能重写；磁盘旧派生数据/临时残留/历史不是安全擦除。Prompt仍m3-openai-7/vision-2，无新依赖或迁移。不是全图库视觉索引、ANN或多模型策展，M3仍partial。真实语言识别可能误判导致limited；质量不冒充完成。默认/显式原生测试与最终源码摘要见报告；未启动用户库/外发/部署/Git操作，下文为历史。
+
+当前接续（2026-10-17，M3 本地语义检索）：先读 ../docs/V2-M3-LOCAL-SEMANTIC-TEST-REPORT.md、ADR 0035。search_photos_semantic 使用真实 Apple 本地中英文句向量，只读 scope 内已有缓存事实，保留字面工具；瞬时向量不落盘、不读像素/上传、不写偏好证据。写事务前计算，事务内按完整观察摘要/任务/调用重新校验；Prompt m3-openai-7，视觉缓存不变。中文640/英文512维 revision1 实测通过，不等于摄影质量或持久化增量索引完成。现有云切片补 Viewer 动作权限、await/可见性回归；云生产状态须另核验，提交标题不当证据。并发出现的供应商回退辅助模块不是本轮已验收的执行/授权链路；本轮不迁移用户库、不部署、不提交。最终全量计数/源摘要以本轮报告及 evidence 为准。M3、M4/M5 整体仍 partial；下文为历史。
 
 当前接续（2026-10-16，M3 模型能力配置）：先读 ../docs/V2-M3-CAPABILITIES-TEST-REPORT.md、MODEL-CAPABILITIES.md、ADR 0034。未知端点/型号默认拒绝；内置精确目录与 16KiB 部署 JSON 声明分来源，不能声明驻留/质量/授权/embedding。组合能力规则用于 Router 和 Adapter；配置摘要绑定任务，变化或旧绑定缺摘要须新委托，key 可轮换；实例冻结，改文件须重启。Prompt 仍 m3-openai-6，缓存键沿用 ADR 0033。委托/授权能力门槛已接 UI，配置失效仍可禁止图像。151 桌面 Rust +11 云、169 Vitest、16 预览/6 后端全通过，独立 debug 构建通过；DeepSeek 无图回归 review_ready，3轮/4工具/13,907实际token/3美分估算。M3 仍 partial，未实现跨供应商 fallback 或语义索引。无新迁移、线上部署或 LUMIX 外发；旧记录保留。
 
@@ -33,7 +47,7 @@ src-tauri/src/
   agent/                  Agent 域：runtime(引擎) provider/openai vision consent memory tools policy context lifecycle
   edit_commands.rs        GUI 命令执行（apply_gui）
   command_handler.rs      唯一命令通道（幂等回执、历史、证据挂钩）
-src-tauri/migrations/     0001–0017（改 schema 只能新增迁移，禁止改历史文件）
+src-tauri/migrations/     0001–0018（改 schema 只能新增迁移，禁止改历史文件）
 src-tauri/tests/          集成测试：agent_runtime / agent_vision / agent_memory / command_history / local_core / keychain / perf_baseline
 contracts/                机器契约（改后必须跑 contracts:check；GUI 命令 DTO 从契约生成，勿手改生成物）
 prompts/                  版本化提示词（agent-system-m2/m3、vision-observe-m3）
@@ -77,6 +91,8 @@ bash scripts/verify-all.sh --skip-keychain     # 跳过钥匙串写删回环，�
 
 ## 已知的坑
 
+- **原生打包与Vite界面验收必须顺序运行**：打包产生前端index.html会引起开发页整页刷新，AI面板重置导致提案E2E假失败；ADR0036报告保留实际trace。不要用点击重试/放大超时掩盖；结束构建后隔离重跑套件。
+
 - **integration E2E 用 target-v1 的 harness**：改了 Rust 后必须 `--target-dir target-v1` 重建 `m1-harness`（verify-all.sh 已内置），否则旧二进制以 `unknown field` 报错。
 - **同一 run 的集成 spec 共享一个 harness**：全局计数断言用下界（见 beta-journey.spec）。
 - **命令回执快照的 revision 落后一步**：测试里要权威 revision 就重新 `db.get`。
@@ -86,7 +102,7 @@ bash scripts/verify-all.sh --skip-keychain     # 跳过钥匙串写删回环，�
 - M5 get_diagnostics 由 diagnostics::collect 统一桌面/harness；前端经 TauriDiagnosticsRepository 白名单解析后展示/复制。存储为逻辑文件大小，可不完整；不是清理入口。见 ADR 0013。
 - 回执保存历史业务快照 + eventCursor（ADR 0028），重放仅补当时事件；不得用当前 snapshot_tx 替换整个回执。兼容旧完整与无游标瘦回执，不修改旧记录/触发器。增长基准按实际成功次数与回执行增量核对，逻辑大小为 page_count×page_size，WAL 单列。
 - 原图检视：TIFF/HEIC 保留直通边界；CR2 内嵌 JPEG 支持子集见 ADR 0029，其他 RAW 验证并复用导入派生缓存，不读取旧全局临时检视缓存。HEIC/CR2 样本测试默认显式 ignored，具备样本后单独执行，缺样本不能返回成功。原生修复补验使用新标识 studio.betweenframes.m1reviewfixes，禁止启动旧用户库。
-- M4 记忆控制经 execute_memory/MemoryRequest；变更暂停执行任务并要求新委托，不推进正式 revision。0009 的 FTS5 是可重建索引，原证据与备份仍保留；跨项目关闭。见 ADR 0012。
+- M4 记忆控制经 execute_memory/MemoryRequest；变更暂停执行任务并要求新委托，不推进正式 revision。0009 的 FTS5 是可重建索引，原证据与备份仍保留；跨项目默认关闭，仅按 ADR0037 显式授权 LOCAL 离线任务引用。见 ADR 0012/0037。
 - 云端请求预留/结算复用 agent_steps：未知结果保留预算、恢复不重传；单次 consent 必须绑定 task_id。见 ADR 0011。
 
 ## 修改向导
