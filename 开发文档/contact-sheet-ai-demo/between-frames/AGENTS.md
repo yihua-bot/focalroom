@@ -1,5 +1,7 @@
 # AGENTS.md · FocalRoom 工程导航
 
+当前接续（2026-10-18，M4 验证码/业务镜像）：先读 ../docs/V2-M4-OTP-DEPLOYMENT-FIX-TEST-REPORT.md 与部署方案。验证码复用 fr_sessions/独立CSRF/HttpOnly Cookie；新增0012（旧0009_magic_login仍未登记，禁止盲跑SQL目录），新用户同时创建OWNER工作区。crypto.randomInt、事务邮箱锁/单次消费、五次失败、持久配额与邮件失败回滚；四语MagicLogin有显式提交/重发/错误。实际Docker UID1000从0600文件/0700目录构建导入、迁移/应用角色、正常CMD、Nginx200/鉴权401及无邮件503通过；首次祖先目录EACCES已修。52PG全套+重叠GET专项4、237前端、Lint/类型/两入口构建、浏览器模拟邮件登录/刷新/批注/退出通过。无真实邮件/模型/生产更改/本聊天commit或push；只读SSH认证拒绝。0012后旧镜像可能因严格schema校验拒启，部署须先核对远端版本/角色/备份并获明确批准，不使用compose down或全局prune排障。
+
 当前接续（2026-10-18，界面文案清理）：先读 ../docs/UI-COPY-CLEANUP.md。按用户要求移除开发自述、重复说明卡和工程术语；任务设置/步骤、用量和格式说明折叠，演示标记、授权和操作后果保留。四语词条同步，Modal 描述可选且无空 aria 引用。196 前端测试、Lint、类型/Desktop/Web 构建、四语一致性及浏览器验收通过；E2E 选择器已同步但本轮未执行 E2E/Rust/原生打包。未部署、未执行 commit/push；期间外部 fa0d2b7 包含部分先行编辑，未回退。M0–M5 状态不变。
 
 当前接续（2026-10-18，M4 备份/空目标恢复）：先读 ../docs/V2-M4-BACKUP-RESTORE-TEST-REPORT.md、ADR0042和ops/shared/README.md。Bash薄入口共用Python3.11标准库模块，绝对Compose/项目/容器/挂载绑定；备份停API、PG custom+磁盘预览校验，异常恢复原运行集合；恢复默认只验证，须独立空项目+显式重复确认，不支持覆盖/--clean，成功/失败都不自动启动目标API。9项归档故障边界、6类真实Docker/PG演练、22表全部行摘要/2预览对象/UID1000只读读取与30PG业务回归、类型/Lint通过。Docker现已可用；实测已有postgres镜像16.13，不能冒充部署草案16.14。API容器是启停哨兵夹具，不是Nest业务镜像；首轮stdin故障已修并保留证据。只停止新建随机测试栈，卷/临时数据保留，无拉镜像/用户库/原照片/腾讯云/提交推送。下一步仍有最小权限角色、真实业务镜像/邮件/TLS/R2/生产灾备/容量/云授权Worker与真人门槛；M3/M4/M5保持partial。
