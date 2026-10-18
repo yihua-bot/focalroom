@@ -113,7 +113,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       if (from >= 0 && to >= 0 && to < kept.length) reorder(arrayMove(kept.map(photo => photo.id), from, to));
     } });
   const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector">
-    <span className="eyebrow">THE EDITOR / WORKING NOTES</span><h2 className="editor-title">{zh.editorTitle}</h2><p className="editor-hint">{zh.editorHint}</p>
+    <h2 className="editor-title">{zh.editorTitle}</h2>
     <div className="right-tabs" aria-label="检查器面板">{(['photo', 'ai', 'memory'] as const).map(key => <button key={key} className={ui.panel === key ? 'active' : ''} aria-pressed={ui.panel === key} onClick={() => ui.setPanel(key)}>{key === 'photo' ? '照片检查' : key === 'ai' ? 'AI 建议' : zh.memory}</button>)}</div>
     {ui.panel === 'photo' ? (active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending || readOnly} onDecide={decide}
       onRate={(id, rating) => act(() => repository.rate(project.id, [id], rating))}
@@ -149,7 +149,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       onRestore={versionId => act(() => repository.restoreVersion(project.id, versionId), '版本已恢复，可撤销此操作', true)} />}
     {dialog?.kind === 'export' && <ExportDialog repository={local ? repository : undefined} projectId={project?.id} revision={project?.revision} onChanged={refresh} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'import' && (local && project ? <ImportDialog repository={repository} projectId={project.id} onClose={() => { setDialog(null); refresh(); }} onChanged={refresh} />
-      : <Modal title={zh.import} description="浏览器只提供示例预览，请在 Tauri 桌面版导入真实照片。" onClose={() => setDialog(null)}><div className="dialog-actions"><Button onClick={() => setDialog(null)}>继续体验示例项目</Button></div></Modal>)}
+      : <Modal title={zh.import} description="请在桌面版导入照片。" onClose={() => setDialog(null)}><div className="dialog-actions"><Button onClick={() => setDialog(null)}>继续体验示例项目</Button></div></Modal>)}
     {dialog?.kind === 'archive' && local && <Modal title="确认归档项目" description={`“${dialog.project.title}”将移至归档列表，可随时恢复。原图、备注和决策日志全部保留。`} onClose={() => setDialog(null)}>
       <div className="dialog-actions"><Button onClick={() => setDialog(null)}>取消</Button><Button variant="primary" onClick={() => {
         void repository.archive(dialog.project.id).then(() => { setDialog(null); refresh(); }).catch(error => setNotice(`归档失败：${String(error)}`));

@@ -20,10 +20,9 @@ export function DraftReview({ draft, project, repository, onClose, onUpdated }: 
   catch (error) { setError(error instanceof Error ? error.message : String(error)); }
   finally { setBusy(false); }
  };
- return <Modal title={draft.title} description="本地 Mock 草案。先比较，再明确采纳；所有正式改变作为一组编辑，可撤销。" onClose={onClose} wide>
+ return <Modal title={draft.title} onClose={onClose} wide>
   <p>{draft.summary}</p>
-  <div className="draft-diff" role="status"><strong>{stale ? '基线已过期 · 采纳已禁用' : '基线一致'}</strong><p>基线 {draft.baseRevision} → 当前 {project.revision}；全量替换将加入 {added} 张、移出 {removed} 张、移动 {moved} 张。</p>
-   <p>局部采纳只改变所选条目；其他人工状态与未选照片的相对顺序保留。未保存备注不受草案影响。</p></div>
+  <div className="draft-diff" role="status">{stale && <strong>项目已更新，请重新比较</strong>}<p>替换序列：加入 {added} 张 · 移出 {removed} 张 · 调整 {moved} 张顺序</p></div>
   {stale && draft.state === 'pending' && <Button disabled={busy} onClick={() => { void run(() => repository.rebaseDraft(project.id, draft)); }}>基于当前版本重新比较</Button>}
   <div className="draft-select-tools"><Button size="small" disabled={busy} onClick={() => setSelected(draft.items.map(item => item.photo_id))}>全选草案项</Button><Button size="small" disabled={busy} onClick={() => setSelected([])}>清除选择</Button><span>已选 {selected.length} / {draft.items.length}</span></div>
   <ol className="draft-items">{draft.items.map((item, index) => {

@@ -1,13 +1,12 @@
 import { DiagnosticsDialog } from '../diagnostics/DiagnosticsDialog';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Sparkles } from 'lucide-react';
 import type { DesktopProjectRepository, Project } from '../../domain/models';
 import { defaultAgentBudget, type AgentBudget, type TaskCommand, type TaskState } from '../../domain/agent';
 import { Button } from '../../components/shared/Button';
 import { DraftReview } from './DraftReview';
 
-export const taskLabels: Record<TaskState, string> = { queued: '排队中', planning: '准备上下文', running: '执行中', needs_input: '等待答复', review_ready: '待审核', completed: '已完成', paused: '已暂停', stale: '原任务基线过期', failed: '失败', cancelled: '已取消', interrupted: '已中断 · 可恢复' };
+export const taskLabels: Record<TaskState, string> = { queued: '排队中', planning: '准备中', running: '执行中', needs_input: '等待答复', review_ready: '待审核', completed: '已完成', paused: '已暂停', stale: '项目已更新', failed: '失败', cancelled: '已取消', interrupted: '已中断' };
 const budgetFields: { key: keyof AgentBudget; label: string; min: number; max: number }[] = [
  { key: 'maxModelTurns', label: '模型轮次上限', min: 1, max: 200 }, { key: 'maxToolCalls', label: '工具调用上限', min: 1, max: 1000 },
  { key: 'maxDurationSeconds', label: '执行秒数上限', min: 1, max: 7200 }, { key: 'maxContextTokens', label: '单轮文本估算上限', min: 128, max: 256000 },
@@ -35,7 +34,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  const config = configQuery.data;
  const observation = config?.observation;
  const observationModel = observation?.modelId ?? config?.modelId;
- const providerLabel = config ? (config.ready ? `真实模型 ${config.modelId}${config.apiKeyTail ? ` ···${config.apiKeyTail}` : ''}（密钥：${config.keySource === 'keychain' ? '钥匙串' : config.keySource === 'env' ? '环境变量' : '部署配置'}）` : '本地 Mock（未配置 API Key）') : '';
+ const providerLabel = config ? (config.ready ? `${config.modelId}${config.apiKeyTail ? ` ···${config.apiKeyTail}` : ''}` : '演示模式 · 不分析照片') : '';
  const [apiKey, setApiKey] = useState('');
  const [configBusy, setConfigBusy] = useState(false);
  const [configNote, setConfigNote] = useState('');
@@ -105,13 +104,14 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  };
  const drafts = query.data?.drafts.filter(draft => !task || draft.taskId === task.id) ?? [];
  const draft = query.data?.drafts.find(item => item.id === draftId);
- return <section className="ai-panel agent-panel"><Sparkles size={27} strokeWidth={1} /><h3>摄影编辑{config ? (config.ready ? ' · 真实模型' : ' · 本地 Mock') : ''}</h3><p className="micro">{providerLabel && `提供方：${providerLabel}。`}验证受控工具闭环。AI 不直接修改正式选片；云端图像仅在明确授权后上传。</p>
-  {config?.ready && observation && observation.modelId !== config.modelId && <p className="micro">模型分工：{config.modelId} 负责策展，{observation.modelId} 负责图像观察；使用同一服务，策展依据观察事实。成本优势与摄影质量尚未评测。</p>}
-  {!repository && <p className="info-card">浏览器为内存 UI 预览。本地 Mock 任务和草案审批请在桌面版运行。</p>}
+ return <section className="ai-panel agent-panel"><h3>编辑建议</h3>{providerLabel && <p className="micro">{providerLabel}</p>}
+  
+  {!repository && <p className="info-card">请在桌面版使用编辑建议。</p>}
   {configurationError && <p role="alert">{configurationError}</p>}
   {configQuery.isError && <p role="alert">模型配置读取失败，请刷新后重试。</p>}
-  {repository && <details className="ai-config"><summary>模型与密钥 · 诊断</summary>
-   <p className="micro">{providerLabel}。密钥存入 macOS 钥匙串，不写入数据库或日志；也可用环境变量 BETWEEN_FRAMES_OPENAI_API_KEY。</p>
+  {repository && <details className="ai-config"><summary>模型设置</summary>
+   <p className="micro">密钥保存在系统钥匙串。</p>
+   {config?.ready && observation && observation.modelId !== config.modelId && <p className="micro">选片模型：{config.modelId} · 图像模型：{observation.modelId}</p>}
    <div className="agent-task-actions">
     <input type="password" aria-label="API Key（存入钥匙串）" placeholder="sk-..." disabled={configBusy} value={apiKey} maxLength={4096} onChange={event => setApiKey(event.target.value)} />
     <Button size="small" disabled={configBusy || !apiKey.trim()} onClick={() => { void saveKey(); }}>存入钥匙串</Button>
@@ -121,13 +121,13 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
    </div>
    {configNote && <p className="micro" role="status">{configNote}</p>}
   </details>}
-  <Button size="small" disabled={busy} onClick={() => { if (!composerOpen && task) { setBudget(task.budget); setBudgetEdited(false); } setComposerOpen(open => !open); }}>{composerOpen ? '收起委托与预算' : '编辑委托与预算'}</Button>
+  <Button size="small" disabled={busy} onClick={() => { if (!composerOpen && task) { setBudget(task.budget); setBudgetEdited(false); } setComposerOpen(open => !open); }}>{composerOpen ? '收起任务设置' : '任务设置'}</Button>
   {composerOpen && <form className="agent-form" onSubmit={event => { event.preventDefault(); startFlow(); }}>
    <label>编辑目标<textarea aria-label="Agent 编辑目标" disabled={busy} required maxLength={4000} value={goal} onChange={event => setGoal(event.target.value)} /></label>
    <label>目标照片数<input aria-label="Agent 目标照片数" disabled={busy} type="number" min={1} max={100} required value={count} onChange={event => setCount(Number(event.target.value))} /></label>
    <label className="agent-scope"><input type="checkbox" disabled={busy} checked={scopeSelection} onChange={event => setScopeSelection(event.target.checked)} />限制到当前选区（{selectedIds.length} 张；无选区则为项目）</label>
-   <details><summary>任务预算 · 后端执行</summary><div className="agent-budget">{budgetFields.map(field => <label key={field.key}>{field.label}<input type="number" aria-label={field.label} disabled={busy} min={field.min} max={field.max} required value={budget[field.key]} onChange={event => { setBudgetEdited(true); setBudget(previous => ({ ...previous, [field.key]: Number(event.target.value) })); }} /></label>)}</div><p>Mock 费用 $0、云端图像 0；文本为保守估算。恢复时使用上面明确设置的预算。</p></details>
-   <Button type="submit" variant="primary" disabled={!repository || configurationBlocked || busy || running || !project.photos.length}>{visionWanted ? '开始视觉任务' : config?.ready ? '开始编辑任务（不上传照片）' : '开始本地 Mock 任务'}</Button>
+   <details><summary>任务预算</summary><div className="agent-budget">{budgetFields.map(field => <label key={field.key}>{field.label}<input type="number" aria-label={field.label} disabled={busy} min={field.min} max={field.max} required value={budget[field.key]} onChange={event => { setBudgetEdited(true); setBudget(previous => ({ ...previous, [field.key]: Number(event.target.value) })); }} /></label>)}</div><p className="micro">费用为估算值。</p></details>
+   <Button type="submit" variant="primary" disabled={!repository || configurationBlocked || busy || running || !project.photos.length}>{visionWanted ? '开始视觉任务' : config?.ready ? '开始编辑任务（不上传照片）' : '运行示例任务'}</Button>
    {consentPrompt && <div className="info-card consent-card" role="dialog" aria-label="云端图像授权">
     <strong>云端图像授权</strong>
     <p className="micro" style={{ overflowWrap: 'anywhere' }}>服务地址：{config?.ready ? config.baseUrl : '未配置'} · 型号：{config?.ready ? observationModel : '无'}</p>
@@ -153,9 +153,9 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
     {['review_ready','stale'].includes(task.state) && <Button disabled={busy} size="small" onClick={() => { void request({ type: 'CloseTask', taskId: task.id }); }}>结束审核</Button>}
    </div>
    {task.state === 'needs_input' && <form onSubmit={event => { event.preventDefault(); void request({ type: 'SubmitFeedback', taskId: task.id, answer: answer.trim() }); }}><label>{task.question}<input aria-label="人工答复" required maxLength={2000} value={answer} onChange={event => setAnswer(event.target.value)} /></label><Button type="submit" disabled={busy}>提交答复</Button></form>}
-   <details open><summary>已执行步骤（{task.steps.length}）</summary><ol className="agent-steps">{task.steps.slice(-12).map(step => <li key={step.id}>{step.summary}</li>)}</ol></details>
+   <details><summary>已执行步骤（{task.steps.length}）</summary><ol className="agent-steps">{task.steps.slice(-12).map(step => <li key={step.id}>{step.summary}</li>)}</ol></details>
   </section>}
-  <div className="agent-drafts">{drafts.map(draft => <article key={draft.id}><strong>{draft.title}</strong><p>{draft.items.length} 项 · {draft.state === 'applied' ? '已采纳' : draft.state === 'discarded' ? '已丢弃' : draft.stale ? '基线过期' : '待审核'}</p><Button size="small" disabled={task && ['queued','planning','running'].includes(task.state)} onClick={() => setDraftId(draft.id)}>查看草案差异</Button></article>)}</div>
+  <div className="agent-drafts">{drafts.map(draft => <article key={draft.id}><strong>{draft.title}</strong><p>{draft.items.length} 项 · {draft.state === 'applied' ? '已采纳' : draft.state === 'discarded' ? '已丢弃' : draft.stale ? '需要重新比较' : '待审核'}</p><Button size="small" disabled={task && ['queued','planning','running'].includes(task.state)} onClick={() => setDraftId(draft.id)}>查看草案差异</Button></article>)}</div>
   {diagnosticsOpen && repository && <DiagnosticsDialog repository={repository.diagnostics} onClose={() => setDiagnosticsOpen(false)} />}
   {draft && repository && <DraftReview key={draft.id + ':' + draft.revision} draft={draft} project={project} repository={repository} onClose={() => setDraftId(null)} onUpdated={updated => { onUpdated(updated); void query.refetch(); }} />}
  </section>;

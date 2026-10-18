@@ -13,6 +13,17 @@
     "Segoe UI",
     sans-serif;
 }
+.fr-account-access { padding: 60px 20px; display: flex; justify-content: center; }
+.fr-account-access .fr-login { width: min(100%, 480px); }
+.fr-account-access h1 { font-size: 28px; line-height: 1.4; margin: 8px 0; }
+.fr-account-verification { max-width: 1440px; margin: 16px auto 0; padding: 0 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 13px; }
+.fr-account-verification span { max-width: 600px; color: var(--fr-muted); }
+@media(max-width: 640px) {
+  .fr-account-access { padding: 30px 12px; }
+  .fr-account-access h1 { font-size: 24px; }
+  .fr-shared .fr-top { height: auto; min-height: 74px; padding: 14px 15px; flex-wrap: wrap; gap: 12px; }
+  .fr-top-right { width: 100%; flex-wrap: wrap; justify-content: space-between; }
+}
 .fr-shared * {
   box-sizing: border-box;
 }

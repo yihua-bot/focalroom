@@ -1,0 +1,12 @@
+{
+  "name": "focalroom-website",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-locales.mjs",
+    "test": "node --test scripts/test-language.mjs",
+    "check": "node scripts/check.mjs",
+    "dev": "python3 -m http.server 1441 --bind 127.0.0.1 --directory dist"
+  }
+}

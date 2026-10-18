@@ -12,6 +12,7 @@ import { Pool } from "pg";
 import { pathToFileURL } from "node:url";
 import { z, ZodError } from "zod";
 import { CloudService } from "./service.ts";
+import type { AccountEmailDelivery } from "./account-recovery.ts";
 import { ApiError, assert } from "./errors.ts";
 import {
   LocalPreviewStore,
@@ -87,13 +88,13 @@ class ApiController {
     if (path === "/workspaces" && req.method === "GET")
       return s.workspaces(headers);
     if (path === "/auth/verify-email" && req.method === "POST")
-      return s.verifyEmail(req.body);
+      return s.accounts.verifyEmail(req.body);
     if (path === "/auth/resend-verification" && req.method === "POST")
-      return s.resendVerification(headers);
+      return s.accounts.resendVerification(headers);
     if (path === "/auth/forgot-password" && req.method === "POST")
-      return s.forgotPassword(req.body, req.ip ?? "");
+      return s.accounts.forgotPassword(req.body, req.ip ?? "");
     if (path === "/auth/reset-password" && req.method === "POST")
-      return s.resetPassword(req.body);
+      return s.accounts.resetPassword(req.body);
     if (path === "/agent/comments" && req.method === "GET")
       return s.agentComments(headers);
     if (path === "/projects" && req.method === "GET")
@@ -212,9 +213,10 @@ export async function createApi(options: {
   pool: Pool;
   store: PreviewStore;
   origin: string;
+  email?: AccountEmailDelivery;
 }) {
   await assertSchema(options.pool);
-  const service = new CloudService(options.pool, options.origin, options.store);
+  const service = new CloudService(options.pool, options.origin, options.store, options.email);
   Module({
     controllers: [ApiController],
     providers: [{ provide: CloudService, useValue: service }],

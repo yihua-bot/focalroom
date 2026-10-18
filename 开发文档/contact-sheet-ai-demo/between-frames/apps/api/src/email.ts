@@ -12,7 +12,7 @@ export async function sendPasswordResetEmail(
     console.warn("[email] FOCALROOM_RESEND_API_KEY 未配置，邮件不发送");
     return false;
   }
-  const resetUrl = `${webOrigin}/reset-password?token=${resetToken}`;
+  const resetUrl = accountEmailUrl(webOrigin, "reset-password", resetToken);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -47,7 +47,7 @@ export async function sendVerificationEmail(
     console.warn("[email] FOCALROOM_RESEND_API_KEY 未配置，验证邮件不发送");
     return false;
   }
-  const verifyUrl = `${webOrigin}/verify-email?token=${verifyToken}`;
+  const verifyUrl = accountEmailUrl(webOrigin, "verify-email", verifyToken);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -70,4 +70,13 @@ export async function sendVerificationEmail(
     signal: AbortSignal.timeout(10_000),
   });
   return response.ok;
+}
+
+export function accountEmailUrl(origin: string, kind: "reset-password" | "verify-email", token: string) {
+  const url = new URL("/shared", origin);
+  if (!/^[a-f0-9]{64}$/.test(token) || url.username || url.password ||
+      (url.protocol !== "https:" && !(url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname))))
+    throw new Error("账户邮件需要可信 HTTPS 或本地回环地址");
+  url.hash = new URLSearchParams({ [kind]: token }).toString();
+  return url.href;
 }

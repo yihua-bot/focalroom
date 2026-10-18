@@ -1,0 +1,22 @@
+{
+  "base_head": "7dd4ae86a2923f9359510cfc281eefd5e52ced57",
+  "postgres_tests": {
+    "pass": 30,
+    "fail": 0
+  },
+  "frontend_tests": {
+    "pass": 196,
+    "fail": 0
+  },
+  "contracts": "pass",
+  "typecheck": "pass",
+  "lint": "pass",
+  "desktop_web_build": "pass_with_existing_chunk_warnings",
+  "legacy_migrations_0001_through_0007": "unchanged",
+  "production_changes": false,
+  "actual_model_calls": 0,
+  "actual_email_calls": 0,
+  "source_files": 29,
+  "review_environment": "isolated temporary PostgreSQL, generated accounts and sample photos",
+  "native_tauri_rebuilt": false
+}

@@ -27,7 +27,7 @@ export function ProjectDialog({ project, onClose, onSave, busy }: { project?: Pr
       if (!brief.trim()) setBrief(template.brief);
     }
   };
-  return <Modal title={project ? zh.editIntent : zh.newProject} description="写下作品名称与创作意图，作为每次判断的背景。" onClose={onClose}>
+  return <Modal title={project ? zh.editIntent : zh.newProject} onClose={onClose}>
     {project && <><label htmlFor="project-tags">标签（用、分隔，最多 12 个）</label><input id="project-tags" className="text-input" maxLength={340} value={tags} placeholder="例如：家庭、2026、胶片" onChange={event => setTags(event.target.value)} /></>}
     <form onSubmit={event => { event.preventDefault(); if (title.trim()) onSave(title.trim(), brief.trim(), tags.split(/、|,/).map(tag => tag.trim()).filter(Boolean)); }}>
       {!project && <fieldset className="template-picker"><legend>从模板开始（可选）</legend>

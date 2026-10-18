@@ -1,10 +1,11 @@
 import { checkRateLimits } from "./rate-limit.ts";
-import { randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { digest, transaction } from "./database.ts";
 import { assert, ApiError } from "./errors.ts";
+import { derivePassword, hashPassword, validPassword } from "./password.ts";
 export type Identity = {
   id: string;
   email: string;
@@ -21,16 +22,6 @@ const account = z.strictObject({
   password: z.string().min(8).max(1024),
   display_name: z.string().trim().min(1).max(200).optional(),
 });
-const hash = (password: string, salt: string) =>
-  new Promise<Buffer>((resolve, reject) =>
-    scrypt(
-      password,
-      salt,
-      32,
-      { N: 32768, r: 8, p: 1, maxmem: 67108864 },
-      (error, key) => (error ? reject(error) : resolve(key)),
-    ),
-  );
 export class AuthService {
   readonly pool: Pool;
   readonly origin: string;
@@ -51,7 +42,7 @@ export class AuthService {
     );
     const value = parsed.data;
     assert(
-      Buffer.byteLength(value.password) <= 1024 &&
+      validPassword(value.password) &&
         (!registering || value.display_name),
       400,
       "VALIDATION_ERROR",
@@ -66,10 +57,9 @@ export class AuthService {
     assert(this.running < 4, 429, "AUTH_BUSY", "认证繁忙，请稍后重试");
     this.running++;
     try {
-      const salt = randomBytes(16).toString("hex");
       let user: { id: string; email: string; display_name: string };
       if (registering) {
-        const passwordHash = `scrypt-v1$${salt}$${(await hash(value.password, salt)).toString("hex")}`;
+        const passwordHash = await hashPassword(value.password);
         user = {
           id: randomUUID(),
           email: value.email,
@@ -98,7 +88,7 @@ export class AuthService {
           )
         ).rows[0];
         const parts: string[] = row?.password_hash.split("$") ?? [];
-        const actual = await hash(
+        const actual = await derivePassword(
           value.password,
           parts[1] ?? "focalroom-dummy-password",
         );

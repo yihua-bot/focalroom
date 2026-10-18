@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
+import { zh } from '../../app/copy';
 
 /** 从自然语言描述提取项目参数（本地规则，不调 AI）。 */
 export function parseGoal(text: string): { title: string; count: number; goal: string } {
@@ -41,39 +42,37 @@ export function QuickStartModal({ onClose, onCreate, onImport }: {
     onImport();
   };
 
-  return <Modal title="快速开始" description="描述你想做的项目，我会帮你设置好一切" onClose={() => { onClose(); setStep('describe'); }} initialFocusRef={undefined}>
+  return <Modal title={zh["quickstart.title"]} onClose={() => { onClose(); setStep('describe'); }} initialFocusRef={undefined}>
     {step === 'describe' && <>
       <div className="form-group">
-        <label htmlFor="quick-start-input">告诉我你想做什么</label>
+        <label htmlFor="quick-start-input">{zh["quickstart.input.label"]}</label>
         <textarea
           id="quick-start-input"
           rows={4}
-          placeholder="例：我要制作一本关于夏日家庭生活的摄影小书，从照片中选出 20 张，突出自然互动与时间感..."
+          placeholder={zh["quickstart.placeholder"]}
           value={text}
           onChange={e => setText(e.target.value)}
           autoFocus
         />
       </div>
       {parsed && <div className="quick-start-preview">
-        <p><strong>项目名称：</strong>{parsed.title}</p>
-        <p><strong>目标张数：</strong>{parsed.count} 张</p>
-        <p><strong>AI 目标：</strong>{parsed.goal.slice(0, 100)}{parsed.goal.length > 100 ? '…' : ''}</p>
+        <p><strong>{zh["quickstart.preview.title"]}：</strong>{parsed.title}</p>
+        <p><strong>{zh["quickstart.preview.count"]}：</strong>{parsed.count} 张</p>
+        <p><strong>{zh["quickstart.preview.goal"]}：</strong>{parsed.goal.slice(0, 100)}{parsed.goal.length > 100 ? '…' : ''}</p>
       </div>}
       <div className="dialog-actions">
-        <Button variant="primary" disabled={!parsed} onClick={start}>下一步</Button>
+        <Button variant="primary" disabled={!parsed} onClick={start}>{zh["quickstart.next"]}</Button>
       </div>
     </>}
     {step === 'confirm' && parsed && <>
-      <p>我理解你的需求如下：</p>
       <div className="quick-start-preview">
-        <p><strong>📝 项目：</strong>「{parsed.title}」</p>
-        <p><strong>🎯 选出：</strong>{parsed.count} 张</p>
-        <p><strong>🤖 AI 目标：</strong>{parsed.goal}</p>
+        <p><strong>{zh["quickstart.preview.title"]}：</strong>「{parsed.title}」</p>
+        <p><strong>{zh["quickstart.preview.count"]}：</strong>{parsed.count} 张</p>
+        <p><strong>{zh["quickstart.preview.goal"]}：</strong>{parsed.goal}</p>
       </div>
-      <p className="micro">创建后我会打开导入窗口，你选择照片文件夹。导入完成后打开「AI 建议」面板，目标已预填，点开始即可。</p>
       <div className="dialog-actions">
-        <Button onClick={() => setStep('describe')}>← 修改描述</Button>
-        <Button variant="primary" onClick={create}>创建项目并导入照片 →</Button>
+        <Button onClick={() => setStep('describe')}>{zh["quickstart.back"]}</Button>
+        <Button variant="primary" onClick={create}>{zh["quickstart.confirm"]}</Button>
       </div>
     </>}
   </Modal>;

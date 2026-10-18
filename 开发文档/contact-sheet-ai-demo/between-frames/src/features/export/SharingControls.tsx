@@ -71,15 +71,13 @@ export function SharingControls({
   };
   return (
     <section className="info-card sharing-controls">
-      <span className="eyebrow">SHARED PROJECT</span>
-      <h3>将当前项目迁移为共享项目</h3>
+      <h3>共享项目</h3>
       <p>
-        继续后暂停本地写入，上传派生预览并将正式作品交由云端保存。完成后桌面缓存只读，请在
-        Web 继续评片；不会上传原图或个人记忆。
+        迁移期间暂停编辑；完成后请在 Web 继续评片，桌面只读。原图和个人记忆留在本机。
       </p>
       {status?.authority === "shared" ? (
         <p role="status">
-          已由云端持有写入权威。
+          已迁移至共享评片。
           {status.remote?.webUrl && (
             <SharedReviewLink projectId={projectId} url={status.remote.webUrl} />
           )}
@@ -89,7 +87,7 @@ export function SharingControls({
           <p>
             状态：
             {status?.authority === "local-promoting"
-              ? "迁移中，本地已冻结；请用原服务与账户恢复。超时不会自动解除冻结。"
+              ? "迁移未完成，请使用原服务和账户继续。"
               : "本地项目"}
           </p>
           <div className="sharing-fields">

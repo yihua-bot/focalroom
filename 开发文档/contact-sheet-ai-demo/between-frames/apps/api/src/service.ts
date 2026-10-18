@@ -1,7 +1,6 @@
-import { sendPasswordResetEmail, sendVerificationEmail } from "./email.ts";
-import { checkRateLimits } from "./rate-limit.ts";
-import { listTaskResults, storeTaskResult, summarizeProjectComments } from "./agent-tasks.ts";
-import { randomBytes, randomUUID, scrypt } from "node:crypto";
+import { AccountRecoveryService, type AccountEmailDelivery } from "./account-recovery.ts";
+import { listTaskResults } from "./agent-tasks.ts";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { promotionSchema } from "@betweenframes/contracts";
@@ -12,7 +11,7 @@ import {
 } from "./authority.ts";
 import { AuthService, type Headers } from "./auth.ts";
 import { digest, transaction } from "./database.ts";
-import { assert } from "./errors.ts";
+import { assert, ApiError } from "./errors.ts";
 import { sanitizePreview, type PreviewStore } from "./storage.ts";
 const inviteInput = z.strictObject({
   email: z
@@ -27,11 +26,13 @@ export class CloudService {
   readonly auth: AuthService;
   readonly authority: AuthorityService;
   readonly store: PreviewStore;
-  constructor(pool: Pool, origin: string, store: PreviewStore) {
+  readonly accounts: AccountRecoveryService;
+  constructor(pool: Pool, origin: string, store: PreviewStore, email?: AccountEmailDelivery) {
     this.pool = pool;
     this.auth = new AuthService(pool, origin);
     this.authority = new AuthorityService(pool, this.auth);
     this.store = store;
+    this.accounts = new AccountRecoveryService(pool, this.auth, origin, email);
   }
   async workspaces(headers: Headers) {
     const user = await this.auth.authenticate(headers, false);
@@ -1044,97 +1045,6 @@ export class CloudService {
     });
   }
 
-  async verifyEmail(input: unknown) {
-    const token = String((input as Record<string, unknown>)?.token ?? "");
-    assert(token.length === 64, 400, "VALIDATION_ERROR", "验证令牌不合法");
-    return transaction(this.pool, async (tx) => {
-      const row = (
-        await tx.query(
-          "SELECT * FROM fr_email_verify_tokens WHERE digest=$1 AND used_at IS NULL AND expires_at>now() FOR UPDATE",
-          [digest(token)],
-        )
-      ).rows[0];
-      assert(row, 400, "VALIDATION_ERROR", "令牌无效或已过期");
-      await tx.query("UPDATE fr_users SET email_verified_at=now() WHERE id=$1", [row.user_id]);
-      await tx.query("UPDATE fr_email_verify_tokens SET used_at=now() WHERE digest=$1", [digest(token)]);
-      return { verified: true };
-    });
-  }
-
-  async resendVerification(headers: Headers) {
-    return transaction(this.pool, async (tx) => {
-      const user = await this.auth.authenticate(headers, true, tx);
-      const already = (
-        await tx.query("SELECT email_verified_at FROM fr_users WHERE id=$1", [user.id])
-      ).rows[0];
-      if (already?.email_verified_at) return { already_verified: true };
-      const recent = (
-        await tx.query(
-          "SELECT COUNT(*) FROM fr_email_verify_tokens WHERE user_id=$1 AND created_at>now()-interval '10 minutes'",
-          [user.id],
-        )
-      ).rows[0].count;
-      assert(Number(recent) < 3, 429, "RATE_LIMITED", "重发过于频繁，请 10 分钟后再试");
-      const raw = randomBytes(32).toString("hex");
-      await tx.query(
-        "INSERT INTO fr_email_verify_tokens(digest,user_id,expires_at) VALUES($1,$2,now()+interval '48 hours')",
-        [digest(raw), user.id],
-      );
-      await sendVerificationEmail(user.email, raw, process.env.FOCALROOM_WEB_ORIGIN ?? "http://127.0.0.1:8084");
-      return { sent: true };
-    });
-  }
-
-  async forgotPassword(input: unknown, ip: string) {
-    const email = String((input as Record<string, unknown>)?.email ?? "");
-    if (!email.includes("@")) return { sent: true }; // 不暴露邮箱是否存在
-    return transaction(this.pool, async (tx) => {
-      const user = (
-        await tx.query("SELECT id, email FROM fr_users WHERE email=$1", [email])
-      ).rows[0];
-      if (!user) return { sent: true }; // 同上
-      // 每邮箱每小时最多 3 次。
-      // 集中限流：每邮箱每小时 3 次（PostgreSQL 后端）。
-      const { allowed: resetAllowed } = await checkRateLimits(this.pool, [
-        { key: `pwd-reset:${digest(email)}`, limit: 3 },
-      ]);
-      assert(resetAllowed, 429, "RATE_LIMITED", "重置请求过于频繁，请稍后再试");
-      const raw = randomBytes(32).toString("hex");
-      const tokenDigest = digest(raw);
-      await tx.query(
-        "INSERT INTO fr_password_reset_tokens(digest,user_id,expires_at,ip) VALUES($1,$2,now()+interval '30 minutes',$3)",
-        [tokenDigest, user.id, ip],
-      );
-      await sendPasswordResetEmail(email, raw, process.env.FOCALROOM_WEB_ORIGIN ?? "http://127.0.0.1:8084");
-      return { sent: true };
-    });
-  }
-
-  async resetPassword(input: unknown) {
-    const token = String((input as Record<string, unknown>)?.token ?? "");
-    const password = String((input as Record<string, unknown>)?.password ?? "");
-    assert(token.length === 64, 400, "VALIDATION_ERROR", "重置令牌不合法");
-    assert(password.length >= 8, 400, "VALIDATION_ERROR", "密码至少 8 位");
-    return transaction(this.pool, async (tx) => {
-      const row = (
-        await tx.query(
-          "SELECT * FROM fr_password_reset_tokens WHERE digest=$1 AND used_at IS NULL AND expires_at>now() FOR UPDATE",
-          [digest(token)],
-        )
-      ).rows[0];
-      assert(row, 400, "VALIDATION_ERROR", "令牌无效或已过期");
-      const salt = randomBytes(16).toString("hex");
-      const derived = await new Promise<Buffer>((resolve, reject) =>
-        scrypt(password, salt, 32, (err, buf) => (err ? reject(err) : resolve(buf))));
-      const passwordHash = `scrypt-v1$${salt}$${derived.toString("hex")}`;
-      await tx.query("UPDATE fr_users SET password_hash=$1 WHERE id=$2", [passwordHash, row.user_id]);
-      await tx.query("UPDATE fr_password_reset_tokens SET used_at=now() WHERE digest=$1", [digest(token)]);
-      // 作废该用户所有会话。
-      await tx.query("UPDATE fr_sessions SET expires_at=now() WHERE user_id=$1", [row.user_id]);
-      return { reset: true };
-    });
-  }
-
   async agentSummarize(headers: Headers, projectId: string) {
     return transaction(this.pool, async (tx) => {
       const project = (
@@ -1147,27 +1057,9 @@ export class CloudService {
         principal.role === "OWNER" || principal.role === "ADMIN",
         403, "PERMISSION_DENIED", "只有所有者或管理员可以触发 AI 汇总",
       );
-      // 集中限流：每项目每分钟 2 次 AI 汇总。
-      const { allowed: aiAllowed } = await checkRateLimits(this.pool, [
-        { key: `agent-summarize:${projectId}`, limit: 2 },
-      ]);
-      assert(aiAllowed, 429, "RATE_LIMITED", "AI 汇总请求过于频繁");
-      const comments = (
-        await tx.query(
-          "SELECT u.display_name AS reviewer, c.body FROM fr_comments c JOIN fr_users u ON u.id=c.author_id WHERE c.project_id=$1 ORDER BY c.created_at LIMIT 50",
-          [projectId],
-        )
-      ).rows;
-      if (comments.length === 0) {
-        return { summary: "", comment_count: 0, message: "没有评论可汇总" };
-      }
-      await tx.query(
-        "INSERT INTO fr_acl_audit(user_id,project_id,action,allowed) VALUES($1,$2,'agent.summarize',true)",
-        [user.id, projectId],
-      );
-      const result = await summarizeProjectComments(this.pool, projectId, comments);
-      const taskId = await storeTaskResult(this.pool, projectId, user.id, result);
-      return { task_id: taskId, ...result };
+      // 项目/管理员权限不是向模型发送评论的授权；配置 Key 也不是同意。
+      // 云端专属授权与可恢复 Worker 尚未接入前，在任何网络请求前拒绝。
+      throw new ApiError(403, "MODEL_CONSENT_REQUIRED", "云评论汇总尚未接入独立模型发送授权，当前不可执行");
     });
   }
 

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FocalRoom — 摄影师的智能选片工作台</title>
+<meta name="description" content="本地优先的摄影编辑工作台。AI 辅助选片、偏好记忆、多人协作审稿。">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB',sans-serif}
+:root{--bg:#0a0a0f;--card:#131320;--border:#262640;--text:#e8e8f0;--text2:#8888a0;--accent:#6c5ce7;--accent2:#a29bfe;--grad:linear-gradient(135deg,#6c5ce7,#fd79a8)}
+body{background:var(--bg);color:var(--text);overflow-x:hidden}
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;position:relative}
+.hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:800px;height:600px;background:radial-gradient(ellipse,rgba(108,92,231,.15),transparent 70%);pointer-events:none}
+.logo{font-size:1rem;color:var(--accent2);letter-spacing:.3em;margin-bottom:2rem;font-weight:600}
+h1{font-size:clamp(2.5rem,6vw,4.5rem);line-height:1.15;margin-bottom:1.5rem;font-weight:700;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.tagline{font-size:clamp(1rem,2.5vw,1.4rem);color:var(--text2);max-width:600px;margin:0 auto 3rem;line-height:1.6}
+.cta{display:inline-block;background:var(--grad);color:#fff;padding:1rem 2.5rem;border-radius:12px;font-size:1.1rem;font-weight:600;text-decoration:none;transition:transform .2s,box-shadow .2s}
+.cta:hover{transform:translateY(-2px);box-shadow:0 10px 40px rgba(108,92,231,.4)}
+.cta-secondary{display:inline-block;margin-left:1rem;padding:1rem 2rem;border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:1rem;text-decoration:none;transition:border-color .2s}
+.cta-secondary:hover{border-color:var(--accent)}
+.section{max-width:1100px;margin:0 auto;padding:5rem 2rem}
+.section h2{font-size:2rem;margin-bottom:3rem;text-align:center}
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}
+.feature{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem;transition:transform .2s,border-color .2s}
+.feature:hover{transform:translateY(-4px);border-color:var(--accent)}
+.feature .icon{font-size:2.5rem;margin-bottom:1rem}
+.feature h3{font-size:1.2rem;margin-bottom:.75rem;color:var(--accent2)}
+.feature p{color:var(--text2);line-height:1.6;font-size:.95rem}
+.footer{text-align:center;padding:3rem 2rem;border-top:1px solid var(--border);color:var(--text2);font-size:.9rem}
+.footer a{color:var(--accent2);text-decoration:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.hero > *{animation:fadeUp .6s ease-out}
+.hero > *:nth-child(2){animation-delay:.1s}
+.hero > *:nth-child(3){animation-delay:.2s}
+.hero > *:nth-child(4){animation-delay:.3s}
+</style>
+</head>
+<body>
+<section class="hero">
+  <div class="logo">📸 FOCALROOM</div>
+  <h1>从照片，到作品。<br>让每一次选择都有来处。</h1>
+  <p class="tagline">本地优先的摄影编辑工作台。AI 辅助选片、偏好记忆、多人协作审稿——你的照片永远在你手里。</p>
+  <div>
+    <a href="https://team.focroom.cc" class="cta">开始使用 →</a>
+    <a href="#features" class="cta-secondary">了解更多</a>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <h2>为摄影师而设计</h2>
+  <div class="features">
+    <div class="feature">
+      <div class="icon">🖥️</div>
+      <h3>本地优先</h3>
+      <p>照片不上传、不离开你的电脑。所有处理在你的 Mac 上完成——导入、选片、编辑、导出，完全离线可用。</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🤖</div>
+      <h3>AI 辅助选片</h3>
+      <p>告诉 Agent 你的创作目标，它帮你从 500 张照片中筛选出最佳 20 张，生成草案供你审阅。最终选择权在你。</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🧠</div>
+      <h3>偏好记忆</h3>
+      <p>系统学习你的选片理由和审美偏好，越用越懂你。纠正过的假设不会复活，你的判断始终被尊重。</p>
+    </div>
+    <div class="feature">
+      <div class="icon">👥</div>
+      <h3>多人协作</h3>
+      <p>一键把项目分享给团队或客户。对方用浏览器打开就能评图、评论、审批提案——无需安装任何软件。</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🔒</div>
+      <h3>隐私至上</h3>
+      <p>原图永不离开你的电脑。云端只保存你主动分享的 1400px 预览。AI 分析需要你明确授权，随时可撤销。</p>
+    </div>
+    <div class="feature">
+      <div class="icon">⚡</div>
+      <h3>专业性能</h3>
+      <p>Rust 引擎驱动，500 张照片导入流畅运行。原生 macOS 体验，支持 Retina 显示和快捷键操作。</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>工作流程</h2>
+  <div class="features">
+    <div class="feature">
+      <div class="icon">1️⃣</div>
+      <h3>导入</h3>
+      <p>选择照片文件夹，系统自动生成缩略图和预览。支持 JPEG、PNG、TIFF、HEIC、RAW。</p>
+    </div>
+    <div class="feature">
+      <div class="icon">2️⃣</div>
+      <h3>选片</h3>
+      <p>用快捷键快速标记保留/淘汰，或委托 AI Agent 按你的目标生成选片草案。</p>
+    </div>
+    <div class="feature">
+      <div class="icon">3️⃣</div>
+      <h3>排序</h3>
+      <p>拖拽排列作品序列，系统记住你的节奏感和叙事顺序。</p>
+    </div>
+    <div class="feature">
+      <div class="icon">4️⃣</div>
+      <h3>分享</h3>
+      <p>生成分享链接，客户用浏览器审稿、评论、批准提案。撤销授权即刻生效。</p>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <p>FocalRoom · 本地优先的摄影工作台</p>
+  <p style="margin-top:.5rem"><a href="https://team.focroom.cc">team.focroom.cc</a> · © 2026 FocalRoom</p>
+</footer>
+</body>
+</html>

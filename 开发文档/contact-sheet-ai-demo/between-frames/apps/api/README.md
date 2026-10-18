@@ -4,6 +4,12 @@
 
 ## 本地验证
 
+2026-10-18 账户恢复增量见 `../../../docs/V2-M4-ACCOUNT-RECOVERY-TEST-REPORT.md`（从应用根目录为 `../docs/`）。当前显式迁移登记 0001/0002/0006/0008；0003–0005 未登记草案的 UUID 外键与基座 text 不兼容，0007 为管理员角色模板，禁止按文件名批量执行。新 0008 只在隔离库验收，生产手工状态需先核对。
+
+`POST /auth/forgot-password` 的 `sent:true` 只表示统一受理，避免泄露账户存在与否，不代表已投递。`POST /auth/reset-password` 成功后旧会话和所有未用恢复令牌失效。已登录账户用 `POST /auth/resend-verification` 请求邮件，未配置或交付失败明确报 EMAIL_UNAVAILABLE；`POST /auth/verify-email` 明确消费一次性令牌。新链接为 `/shared#reset-password=...` / `/shared#verify-email=...`，Web 打开后清理URL且不自动提交。生产须配置真实 HTTPS Origin、Resend Key 和已验证发件域；缺失时不能声称邮件已发送。
+
+当前云评论汇总在真正发送授权/预算/撤权链路接入前返回 MODEL_CONSENT_REQUIRED。服务端 Key、项目管理员和只读 Task 身份都不是模型发送同意。下方初版“仍未实现”的措辞以本段和最新报告为准。
+
 应用根目录：
 
 ```bash

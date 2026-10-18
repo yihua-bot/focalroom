@@ -1,65 +1,44 @@
-/**
- * M4 集中限流：PostgreSQL 后端原子窗口计数（替代进程内存，多实例部署共享配额）。
- * 每次 checkRateLimit 原子递增并返回是否在配额内；过期窗口惰性清理。
- */
+/** PostgreSQL 原子固定窗口配额；多实例使用数据库时钟，不依赖各进程时钟。 */
 import type { Pool } from "pg";
 
+type Queryable = Pick<Pool, "query">;
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
   resetAt: Date;
 }
 
-/**
- * 原子限流检查：key 为唯一标识（如 digest(ip) 或 digest(email)）。
- * limitPerMinute 为每分钟最大次数；window 自动按分钟对齐。
- */
 export async function checkRateLimit(
-  pool: Pool,
+  pool: Queryable,
   key: string,
-  limitPerMinute: number,
+  limit: number,
+  windowMs = 60_000,
 ): Promise<RateLimitResult> {
-  const now = new Date();
-  // 按分钟对齐窗口。
-  const windowStart = new Date(Math.floor(now.getTime() / 60_000) * 60_000);
-  const resetAt = new Date(windowStart.getTime() + 60_000);
-
-  // 原子 upsert：不存在则插入 count=1，存在则 count+1。
+  if (!key || !Number.isSafeInteger(limit) || limit < 1 || limit > 1_000_000 ||
+      !Number.isSafeInteger(windowMs) || windowMs < 1000 || windowMs > 86_400_000)
+    throw new Error("无效限流策略");
   const result = await pool.query(
     `INSERT INTO fr_rate_limits (key, window_start, count)
-     VALUES ($1, $2, 1)
+     VALUES ($1, to_timestamp(floor(extract(epoch FROM clock_timestamp()) * 1000 / $2) * $2 / 1000), 1)
      ON CONFLICT (key, window_start)
-     DO UPDATE SET count = fr_rate_limits.count + 1
-     RETURNING count`,
-    [key, windowStart],
+     DO UPDATE SET count = LEAST(fr_rate_limits.count + 1, $3 + 1)
+     RETURNING count, window_start + ($2 * interval '1 millisecond') AS reset_at`,
+    // 窗口长度隔离配额，部署调整策略时不混用其他窗口。
+    [`${windowMs}:${key}`, windowMs, limit],
   );
-
-  const count = result.rows[0]?.count ?? 1;
-  const allowed = count <= limitPerMinute;
-
-  // 惰性清理 5 分钟前的过期行（每次调用 ~1% 概率触发）。
-  if (Math.random() < 0.01) {
-    await pool.query(
-      "DELETE FROM fr_rate_limits WHERE window_start < now() - interval '5 minutes'"
-    ).catch(() => {});
-  }
-
-  return { allowed, remaining: Math.max(0, limitPerMinute - count), resetAt };
+  const { count, reset_at: resetAt } = result.rows[0];
+  // 最长窗口为一天；不能在五分钟后清掉仍有效的小时配额。
+  if (Math.random() < 0.01)
+    await pool.query("DELETE FROM fr_rate_limits WHERE window_start < now() - interval '2 days'").catch(() => {});
+  return { allowed: count <= limit, remaining: Math.max(0, limit - count), resetAt };
 }
 
-/**
- * 批量限流检查（原子）：全部通过才返回 allowed=true。
- */
+/** 各配额计数分别原子递增；拒绝尝试同样计数，不宣称整个批次是单一事务。 */
 export async function checkRateLimits(
-  pool: Pool,
-  checks: Array<{ key: string; limit: number }>,
+  pool: Queryable,
+  checks: Array<{ key: string; limit: number; windowMs?: number }>,
 ): Promise<{ allowed: boolean; violations: string[] }> {
-  const results = await Promise.all(
-    checks.map(c => checkRateLimit(pool, c.key, c.limit))
-  );
-  const violations = checks
-    .map((c, i) => ({ key: c.key, allowed: results[i].allowed }))
-    .filter(r => !r.allowed)
-    .map(r => r.key);
+  const results = await Promise.all(checks.map(c => checkRateLimit(pool, c.key, c.limit, c.windowMs)));
+  const violations = checks.filter((_, i) => !results[i].allowed).map(c => c.key);
   return { allowed: violations.length === 0, violations };
 }

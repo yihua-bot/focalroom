@@ -25,12 +25,12 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   const filters: PhotoFilter[] = ['all', 'keep', 'undecided', 'reject'];
   const readOnly = !!sharing && sharing.authority !== 'local';
   return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={() => ui.setPanel('ai')} readOnly={readOnly} />
-    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 桌面缓存只读，请在 Web 继续评片。' : '共享迁移中 · 本地写入已暂停，请在导出窗口继续或显式取消迁移。'}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
+    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 桌面只读，请在 Web 继续评片。' : '迁移未完成 · 编辑已暂停，请在导出窗口继续或取消迁移。'}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
     <div className="history-toolbar" role="group" aria-label="编辑历史">
       <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">撤销</Button>
       <Button size="small" disabled={busy || !project.history?.redoGroupId} onClick={onRedo} title="⌘ / Ctrl Shift Z">重做</Button>
       <Button size="small" disabled={busy} onClick={onVersions}>作品版本{project.versions?.length ? ` · ${project.versions.length}` : ''}</Button>
-      <span className="micro">{project.history?.undoCount ?? 0} 次可撤销编辑 · {readOnly ? '本地只读快照' : local ? '本地保存' : '内存预览'}</span>
+      <span className="micro">{project.history?.undoCount ?? 0} 次可撤销编辑</span>
     </div>
     <div className="toolbar"><div className="filter-tabs" aria-label="照片筛选">{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter && ui.view === 'grid'}
       className={ui.filter === filter && ui.view === 'grid' ? 'active' : ''} onClick={() => ui.setFilter(filter)}>{String(zh['filters.' + filter] ?? filter)}<span className="count">{filter === 'all' ? project.photos.length : project.photos.filter(photo => photo.status === filter).length}</span></button>)}</div>
@@ -45,10 +45,10 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
         <Button size="small" variant="quiet" onClick={ui.clearSelection}>清除选区</Button></div>}
     </div>
     <div className="canvas-area"><div className="workspace-scroll"><div className="canvas-label"><span>{ui.view === 'grid' ? 'CONTACT SHEET' : 'SEQUENCE BOARD'}</span>
-      <span>{ui.view === 'grid' ? `${visible.length} FRAMES · 完整构图 · K / X 快捷操作` : `${kept.length} 张 · 拖动把手排序 · ↑ / ↓ 移动`}</span></div>
-      <div className="preview-banner">{readOnly ? '当前显示迁移时的本地快照，云端后续改动请在共享评片中查看。' : local ? '本地项目 · 所有已保存的判断和顺序将在重启后保留' : zh.preview}</div>
+      <span>{ui.view === 'grid' ? `${visible.length} 张` : `${kept.length} 张`}</span></div>
+      {!local && <div className="preview-banner">{zh.preview}</div>}
       {ui.view === 'grid' ? (visible.length ? <ContactSheetGrid photos={visible} activeId={active?.id ?? null} selectedIds={selectedIds} dense={ui.dense} busy={busy} onSelect={onSelect} onDecide={onDecide} onEnlarge={onEnlarge} />
-        : <EmptyState title={project.photos.length ? zh.emptyFilter : zh.emptyTitle} hint={project.photos.length ? '换一个筛选，继续观看。' : local ? '导入照片或文件夹，开始你的第一次选片。原图保留在原目录。' : zh.emptyHint}
+        : <EmptyState title={project.photos.length ? zh.emptyFilter : zh.emptyTitle} hint={project.photos.length ? '更改筛选条件。' : local ? '导入照片或文件夹。' : zh.emptyHint}
           action={<Button onClick={project.photos.length ? () => { ui.setFilter('all'); ui.setSearch(''); } : onImport}>{project.photos.length ? zh.allPhotos : local ? zh.import : `${zh.import} · 桌面版`}</Button>} />)
         : (kept.length ? <SequenceBoard photos={kept} activeId={active?.id ?? null} busy={busy} onSelect={ui.select} onReorder={onReorder} />
           : <EmptyState title={zh.emptySequence} hint={zh.sequenceHint} action={<Button onClick={() => ui.setFilter('all')}>{zh.toWorkspace}</Button>} />)}

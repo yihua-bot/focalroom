@@ -1,0 +1,20 @@
+{
+  "archive_tests": 9,
+  "docker_scenarios": 6,
+  "pg_api_regression": 30,
+  "typecheck": "pass",
+  "lint": "pass",
+  "shell_python_syntax": "pass",
+  "table_fingerprints": 22,
+  "preview_objects": 2,
+  "nonroot_read": "pass",
+  "fixture_projects_stopped": {
+    "fr-backup-source-032f263fa0": [],
+    "fr-backup-target-032f263fa0": [],
+    "fr-backup-failed-032f263fa0": []
+  },
+  "production_changes": false,
+  "actual_nestjs_container_tested": false,
+  "volumes_retained": true,
+  "source_files": 14
+}

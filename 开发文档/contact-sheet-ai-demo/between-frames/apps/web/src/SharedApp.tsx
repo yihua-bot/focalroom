@@ -7,6 +7,8 @@ import {
 } from "./shared-api";
 import { ProjectHome } from "./shared/ProjectHome";
 import { ProjectReview } from "./shared/ProjectReview";
+import { AccountRecovery, readAccountLink, VerificationRequest } from "./shared/AccountRecovery";
+import { useWebI18n, WebLanguageSwitcher } from "./i18n";
 import "./shared.css";
 function Brand() {
   return (
@@ -19,6 +21,7 @@ function Brand() {
   );
 }
 export default function SharedApp() {
+  const [accountLink, setAccountLink] = useState(() => readAccountLink(new URL(location.href)));
   const [session, setSession] = useState<Session | null>(null),
     [ready, setReady] = useState(false),
     [route, setRoute] = useState(() => location.hash),
@@ -30,7 +33,16 @@ export default function SharedApp() {
     setRoute(hash);
   };
   useEffect(() => {
-    const syncRoute = () => setRoute(location.hash);
+    const syncRoute = (event: Event) => {
+      // 邮件页会 replaceState 清理令牌；hashchange 须读取事件目标，
+      // 避免紧随 popstate 的事件误把刚打开的邮件页关闭。
+      const url = new URL(event instanceof HashChangeEvent ? event.newURL : location.href);
+      setRoute(url.hash);
+      const link = readAccountLink(url);
+      if (link) setAccountLink(link);
+      // 清理后的空地址不丢弃内存中的令牌；通过明确的返回按钮退出。
+      else if (url.hash) setAccountLink(null);
+    };
     window.addEventListener("hashchange", syncRoute);
     window.addEventListener("popstate", syncRoute);
     return () => {
@@ -57,6 +69,7 @@ export default function SharedApp() {
     try {
       await request("/auth/logout", session, "POST");
       setSession(null);
+      setAccountLink(null);
       openProject(null);
     } catch (error) {
       setError(message(error));
@@ -68,6 +81,7 @@ export default function SharedApp() {
         <Brand />
         <span className="fr-label">共享评片</span>
         <div className="fr-top-right">
+          <WebLanguageSwitcher />
           {session ? (
             <>
               <span>{session.name}</span>
@@ -83,7 +97,13 @@ export default function SharedApp() {
           {error}
         </div>
       )}
-      {!ready ? (
+      {accountLink ? (
+        <AccountRecovery key={`${accountLink.mode}:${accountLink.token}`} link={accountLink} onBack={resetCompleted => {
+          if (resetCompleted) setSession(null);
+          setAccountLink(null);
+          openProject(null);
+        }} />
+      ) : !ready ? (
         <p className="fr-loading">正在连接工作区…</p>
       ) : !session ? (
         <Login onLogin={setSession} />
@@ -95,12 +115,14 @@ export default function SharedApp() {
           onBack={() => openProject(null)}
         />
       ) : (
-        <ProjectHome key={route} session={session} onOpen={openProject} />
+        <><VerificationRequest session={session} /><ProjectHome key={route} session={session} onOpen={openProject} /></>
       )}
     </div>
   );
 }
 function Login({ onLogin }: { onLogin: (session: Session) => void }) {
+  const { t } = useWebI18n();
+  const [recovering, setRecovering] = useState(false);
   const [register, setRegister] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -125,6 +147,7 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
       setBusy(false);
     }
   };
+  if (recovering) return <AccountRecovery onBack={() => setRecovering(false)} />;
   return (
     <main className="fr-welcome">
       <section>
@@ -188,6 +211,7 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
         >
           {register ? "已有账户，去登录" : "首次使用，创建账户"}
         </button>
+        {!register && <button type="button" className="fr-text" disabled={busy} onClick={() => setRecovering(true)}>{t("web.forgotPassword")}</button>}
       </form>
     </main>
   );

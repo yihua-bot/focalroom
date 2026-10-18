@@ -193,3 +193,10 @@ test('M4 append-only migration upgrades 0001 without rewriting legacy receipts',
     await assert.rejects(legacy.query("INSERT INTO fr_commands(project_id,command_id,actor_id,idempotency_key,payload_digest,reply) VALUES('p','new','u','new','hash','{}')"), /requires envelope/); assert.equal((await legacy.query("SELECT sha256 FROM fr_migrations WHERE version='0001'")).rows[0].sha256, digest(sql));
   } finally { await legacy.end(); }
 });
+test('M4 project authority does not authorize cloud model transmission', async () => {
+  const before = (await pool.query('SELECT count(*) FROM fr_agent_task_results')).rows[0].count;
+  const result = await call(`/projects/${project}/agent-tasks/summarize`, 'POST', owner.token, {}, 403);
+  assert.equal(result.error.code, 'MODEL_CONSENT_REQUIRED');
+  await call(`/projects/${project}/agent-tasks/summarize`, 'POST', outsider.token, {}, 403);
+  assert.equal((await pool.query('SELECT count(*) FROM fr_agent_task_results')).rows[0].count, before);
+});

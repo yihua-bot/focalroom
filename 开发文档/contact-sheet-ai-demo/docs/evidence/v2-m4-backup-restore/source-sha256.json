@@ -1,0 +1,16 @@
+{
+  "between-frames/package.json": "d6584dc28ece15bee70e9583349aca4f385f3f00b0e36692c8824cce3c8f476f",
+  "between-frames/AGENTS.md": "b75b1974d4f83326476c3f6470a7a6a4ac9599521475169e52869868add2265f",
+  "between-frames/ops/shared/test_backup_restore.py": "e71d70cea890ff3179dc12ebe2d3265752fd6d2fc81a62f4eb7c05d42a06d9c4",
+  "between-frames/ops/shared/test_docker_backup_restore.py": "498218401595aefdb9cca645d42cd0e894e9519d950acb60ebd77af676a7e8ba",
+  "between-frames/ops/shared/backup_restore.py": "66ca68d2e52a0756a0fd4d5df4e714a36ea0b8556fac5373e2b74ca1610ad065",
+  "between-frames/ops/shared/.gitignore": "862263fa1f46c20f0d1e4dac5ffcc75abd55c08211b2c3864c5f8764b9d87793",
+  "between-frames/ops/shared/backup.sh": "63d323be1fdd33b2f8b514552c35908a877f27651477fe597f83ac564c036b10",
+  "between-frames/ops/shared/restore.sh": "b18353d9dff63ed7ccafaf66fbb5a5290fc639d5a5c6eb1b23555e82b77e8590",
+  "between-frames/ops/shared/README.md": "58f5bc02f8cb6ba196cb2725b68435ef8ddd060466fadc9e8833e9e8ce4ca024",
+  "docs/TEST-REPORT.md": "0d1f1e89e32c7198b9797d6ef296d47372e60b934a393fd4e6609260b675429a",
+  "docs/V2-COMPLIANCE.md": "dc79217595399c047f045b3eff68dad28b3f9e256e0e409d1a353fed8f2fafdc",
+  "docs/V2-REMAINING-PLAN.md": "97afd50c124b5cbd69311ed4f6c1c175cdc2fc573537e86809a997593e8da0ea",
+  "docs/V2-M4-BACKUP-RESTORE-TEST-REPORT.md": "6b7ee9487b1a7f350799e39858af88411f1ecb8fbe9648e0087ffefe51b15b81",
+  "docs/ADR/0042-m4-isolated-backup-restore.md": "9c7f903ef3db821927ee8f8ebb36c180bdb2056616a0e562cbeb376672bf483c"
+}

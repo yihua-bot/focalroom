@@ -22,7 +22,14 @@ export async function transaction<T>(
 }
 async function migrations() {
   return Promise.all(
-    ["0001_shared_authority.sql", "0002_audit_envelopes.sql"].map(
+    [
+      "0001_shared_authority.sql",
+      "0002_audit_envelopes.sql",
+      "0006_rate_limits.sql",
+      // 0003–0005 的未登记草案使用 UUID 外键，与 0001 的 text 主键不兼容；
+      // 0007 是管理员角色模板。保留原文件，以新增迁移落实兼容结构。
+      "0008_account_services.sql",
+    ].map(
       async (name) => {
         const sql = await readFile(
           new URL("../migrations/" + name, import.meta.url),
