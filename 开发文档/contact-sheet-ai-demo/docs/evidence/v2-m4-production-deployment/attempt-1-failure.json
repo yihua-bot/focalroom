@@ -1,0 +1,8 @@
+{
+  "phase": "backup",
+  "error_kind": "AttributeError",
+  "production_schema_or_runtime_changes": false,
+  "resolution": "portable chunked SHA256; preserve initial attempt; new backup-verified directory",
+  "server_python": "3.10.12",
+  "cause": "hashlib.file_digest is unavailable on Python 3.10; portable chunked SHA256 substituted"
+}

@@ -1,0 +1,6 @@
+2026-10-18 read-only SSH preflight
+Target: root@1.13.251.21
+BatchMode=yes; StrictHostKeyChecking=yes; ConnectTimeout=10
+Result: Permission denied (publickey,password). Exit 255.
+Remote script did not execute; no remote data obtained or changed.
+Local ssh-agent reports no identities.

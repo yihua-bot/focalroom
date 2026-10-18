@@ -1,0 +1,23 @@
+{
+  "apps/api/src/auth.ts": "cd294e5284d970a45105c14b8d3eeb2a1f81b61bc62a4337ce923a482a90e65a",
+  "apps/api/src/magic-login.ts": "5150fdfffe6a7952e14b1259fdd6e41f1b819ddc3db1cfd08415f10680b73a19",
+  "apps/api/src/email.ts": "320be0868af30fd33d0521b8cd7e3223e38a371efce5cbc9288ac183e6dd70f2",
+  "apps/api/src/service.ts": "3d67a9c250715c415ac3517cf9ec1d09a0da451baeb70f0c22d96c81737fb67c",
+  "apps/api/src/server.ts": "7ecb312269fd0a808e8d6f870b4be0242db30c7683dc504569dbd5b70f06964c",
+  "apps/api/src/database.ts": "086b3b62bb5813a98404dcb478bd25d08da2c99369148213087ffae5f32a07cf",
+  "apps/api/migrations/0012_magic_login.sql": "fa724d7c1010de876dc3ae6cecc543aadf3c9015350627f90e80d7dac9335191",
+  "apps/api/test/magic-login.mjs": "23b18e36a9b0849e32e38ba96257c01f5bd802cbdd05c42c6a9a8057865c520a",
+  "apps/api/test/agent_worker.mjs": "d1ca2581899a09f274c15b09f890dfa95bfd6dd26232d6e3ec0d1e23b2ea596f",
+  "apps/api/test/account-security.mjs": "7fa821a2f38ebb9d63e9a88b1a0c841480c9323e501419f0b404b055c57ab40c",
+  "apps/api/test/min_privilege.mjs": "c857c8adc952ccf0488789c32259a7ac0f2c33040f6b5b10f70f7b5857a609b2",
+  "apps/api/test/run.mjs": "772f08ee6e3e88f09e828ee6a8395caff53e56d4a3844a949c38e3dbd5d103f3",
+  "apps/api/tools/review-local.mjs": "2e1429b76c90f020b0a67ecda7038e3deeb4283408f48b2fd3ec3097362fdf84",
+  "apps/web/index.html": "f313d1600e208e4f68da2b4b5f4deefb35bd608452b8fe094817471d710814f5",
+  "apps/web/src/SharedApp.tsx": "80b4bc32e55ebc5db220ba239ee215fdc27997be17b5fa58e109cb8f33811e9f",
+  "apps/web/src/shared/MagicLogin.tsx": "cfb2990a81fc98dbb7406118d0317ed7a15692305150954653e3a5f9acb9ca74",
+  "apps/web/src/shared/MagicLogin.test.tsx": "b1e38e839795f9ba6aaf8950189adb64d98974f6182fca29761257cfa1733613",
+  "ops/shared/Dockerfile.api": "e6da2cc0a9f272dfd04fa2c1cd128b37c6996ee79314710d39912ef100f944fc",
+  "ops/shared/Dockerfile.web": "b23a000ba4efa6fa64235edc3a5f25f124577e9149bccdd502eaa8b73c412924",
+  "ops/shared/compose.yaml": "022d3a4f826c88a4b96139c5502d3a6bf691af3c479369009917c8fa15effccd",
+  "ops/shared/environment.example": "618337f3d21df32caf88173fa72400904959ab28f79c789724c68f5b8b82bef0"
+}

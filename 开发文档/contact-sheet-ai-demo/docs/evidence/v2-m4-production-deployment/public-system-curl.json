@@ -1,0 +1,14 @@
+{
+  "/": {
+    "status": 200,
+    "content_type": "text/html",
+    "tls_validation": "enabled, system curl",
+    "title": "FocalRoom — 团队协作审稿"
+  },
+  "/api/v2/auth/me": {
+    "status": 401,
+    "content_type": "application/json; charset=utf-8",
+    "tls_validation": "enabled, system curl",
+    "error_code": "UNAUTHORIZED"
+  }
+}

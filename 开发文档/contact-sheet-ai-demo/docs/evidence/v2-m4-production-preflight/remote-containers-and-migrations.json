@@ -1,0 +1,151 @@
+{
+  "architecture": "x86_64",
+  "root_exists": true,
+  "files": {
+    "ops/shared/Dockerfile.api": {
+      "sha256": "8e12244bd0e3c1cb0f4471450630cf51d74ff10512d67ff1dd1d40c734c9a28a",
+      "mode": "0o644"
+    },
+    "ops/shared/Dockerfile.web": {
+      "sha256": "182752d818390e759596e460ba044f0aef32b0e3856d9432ebfbb445964b5307",
+      "mode": "0o644"
+    },
+    "ops/shared/compose.yaml": {
+      "sha256": "7d0ab8f486bda6f44c6173d64f01b0b270c15c6c6221a8e081f7d557f982e3fb",
+      "mode": "0o644"
+    },
+    "apps/api/src/server.ts": {
+      "sha256": "4887283ff38168c4754ee30e75f3fa2264b2774e9d99c050fb6882839f65f6d0",
+      "mode": "0o644"
+    },
+    "apps/api/src/service.ts": {
+      "sha256": "da3f2a5604e354ae150b8143c62a527e95589bb9b3a194d5b3de29020faf8401",
+      "mode": "0o644"
+    },
+    "apps/api/src/auth.ts": {
+      "sha256": "b4c666419b8ca421dcad67b3cf9da731f06471ff0c3810028f5b8a61cb517814",
+      "mode": "0o644"
+    },
+    "apps/api/src/database.ts": {
+      "sha256": "bbe5f38c78a487df8e2aface9e833360a82857b3f822069a60de9a3e93285d1f",
+      "mode": "0o644"
+    },
+    "apps/api/src/email.ts": {
+      "sha256": "f67f9aae9700ad7e0b793df79d0ce5495b1e4b64e48a0b29c94618dcd1fcd2e6",
+      "mode": "0o644"
+    },
+    "apps/api/src/rate-limit.ts": {
+      "sha256": "6a43d0dbb98ebd103206f39c7abbf0cd6f5bf3cd245b6f0849e612a3baaa3a47",
+      "mode": "0o644"
+    },
+    "apps/api/src/magic-login.ts": {
+      "sha256": "aa241f9e9f380ee535dc69cbdca427e8671a5f07f96a76a8f95f7f2f2bee67c8",
+      "mode": "0o644"
+    },
+    "apps/api/migrations/0012_magic_login.sql": {
+      "missing": true
+    },
+    "apps/web/index.html": {
+      "sha256": "f313d1600e208e4f68da2b4b5f4deefb35bd608452b8fe094817471d710814f5",
+      "mode": "0o644"
+    },
+    "apps/web/src/SharedApp.tsx": {
+      "sha256": "245e6cb30050003d057d0ba28f85547373149c1192f574763d3e066a948a1a65",
+      "mode": "0o644"
+    }
+  },
+  "containers": [
+    {
+      "name": "/focalroom-shared-review-api-1",
+      "service": "api",
+      "image_ref": "focalroom-shared-review-api",
+      "image_id": "sha256:acc93b7f086fc8b6c9b64ef0bf2c342f433f69c541763ce6ddc7adb35dc3a1c6",
+      "status": "exited",
+      "exit_code": 1,
+      "restart_count": 0,
+      "compose_files": "/opt/focalroom/ops/shared/compose.yaml",
+      "compose_workdir": "/opt/focalroom/ops/shared",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "focalroom-shared-review_preview-data",
+          "destination": "/data/previews"
+        }
+      ],
+      "ports": {},
+      "origin": "https://focroom.cc",
+      "mail_key_present": false,
+      "migrator_url_present": true,
+      "log_signals": {
+        "EACCES": true,
+        "ENOENT": false,
+        "ERR_MODULE_NOT_FOUND": false,
+        "schema mismatch": false,
+        "数据库版本不匹配": false,
+        "API listening": false
+      },
+      "log_error_paths": [
+        "/app/apps/api/migrations/0006_rate_limits.sql",
+        "/app/apps/api/src/database.ts",
+        "/app/apps/api/src/server.ts"
+      ]
+    },
+    {
+      "name": "/focalroom-shared-review-web-1",
+      "service": "web",
+      "image_ref": "focalroom-shared-review-web",
+      "image_id": "sha256:b2c5dd710749a75d86b8aa77464a70caaff25acd4bf84a43d31e9c5c2876c8aa",
+      "status": "running",
+      "exit_code": 0,
+      "restart_count": 0,
+      "compose_files": "/opt/focalroom/ops/shared/compose.yaml",
+      "compose_workdir": "/opt/focalroom/ops/shared",
+      "mounts": [],
+      "ports": {
+        "80/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "8084"
+          }
+        ]
+      }
+    },
+    {
+      "name": "/focalroom-shared-review-postgres-1",
+      "service": "postgres",
+      "image_ref": "postgres:16.14-alpine",
+      "image_id": "sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+      "status": "running",
+      "exit_code": 0,
+      "restart_count": 0,
+      "compose_files": "/opt/focalroom/ops/shared/compose.yaml",
+      "compose_workdir": "/opt/focalroom/ops/shared",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "focalroom-shared-review_pg-data",
+          "destination": "/var/lib/postgresql/data"
+        },
+        {
+          "type": "bind",
+          "name": null,
+          "destination": "/docker-entrypoint-initdb.d"
+        }
+      ],
+      "ports": {
+        "5432/tcp": null
+      },
+      "readonly_db_metadata_exit": 0,
+      "readonly_db_metadata": [
+        "BEGIN",
+        "pg_version|PostgreSQL 16.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+        "migration|0001|bee9cec8bb2b90dbe20538fbb7de84acd8f5aae4d33810dc1e61bcbb2b4b5d04",
+        "migration|0002|613949828f2508cb097bdf45a7f80505ef5296fd11d33642fab2caaf5620e7ae",
+        "role|focalroom|t|t|t",
+        "role|focalroom_app|f|f|f",
+        "COMMIT"
+      ]
+    }
+  ],
+  "source_title": "FocalRoom — 团队协作审稿"
+}

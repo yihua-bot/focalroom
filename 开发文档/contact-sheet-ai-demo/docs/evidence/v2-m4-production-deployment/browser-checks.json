@@ -1,0 +1,12 @@
+{
+  "url": "https://team.focroom.cc/",
+  "before": "Cloudflare 502",
+  "after": "FocalRoom — 团队协作审稿; login form visible",
+  "api_probe": "/api/v2/auth/me shows UNAUTHORIZED JSON",
+  "authenticated_login": false,
+  "reason": "mail intentionally disabled",
+  "screenshots": [
+    "public-before-502.png",
+    "public-login-ready.png"
+  ]
+}

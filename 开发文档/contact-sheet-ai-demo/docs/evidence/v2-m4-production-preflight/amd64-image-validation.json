@@ -1,0 +1,29 @@
+{
+  "images": {
+    "focalroom-release-api:otp-20261018-amd64": {
+      "id": "sha256:dbf00eca3ba2b9329fb822757b9cba37294835f4d4b962e7ed1439ec726f57d5",
+      "architecture": "amd64",
+      "size_bytes": 97586372
+    },
+    "focalroom-release-web:otp-20261018-amd64": {
+      "id": "sha256:5cc4b4dbed8dc64bc427c097e870e70a96cc13ddd26134054a2944b3e11b2933",
+      "architecture": "amd64",
+      "size_bytes": 26293802
+    }
+  },
+  "production_changes": false,
+  "tests": {
+    "api_nonroot_import_and_source_hashes": true,
+    "web_new_title": true
+  },
+  "source_hashes": {
+    "apps/api/src/server.ts": "7ecb312269fd0a808e8d6f870b4be0242db30c7683dc504569dbd5b70f06964c",
+    "apps/api/src/service.ts": "3d67a9c250715c415ac3517cf9ec1d09a0da451baeb70f0c22d96c81737fb67c",
+    "apps/api/src/auth.ts": "cd294e5284d970a45105c14b8d3eeb2a1f81b61bc62a4337ce923a482a90e65a",
+    "apps/api/src/database.ts": "086b3b62bb5813a98404dcb478bd25d08da2c99369148213087ffae5f32a07cf",
+    "apps/api/src/email.ts": "320be0868af30fd33d0521b8cd7e3223e38a371efce5cbc9288ac183e6dd70f2",
+    "apps/api/src/rate-limit.ts": "6a43d0dbb98ebd103206f39c7abbf0cd6f5bf3cd245b6f0849e612a3baaa3a47",
+    "apps/api/src/magic-login.ts": "5150fdfffe6a7952e14b1259fdd6e41f1b819ddc3db1cfd08415f10680b73a19",
+    "apps/api/migrations/0012_magic_login.sql": "fa724d7c1010de876dc3ae6cecc543aadf3c9015350627f90e80d7dac9335191"
+  }
+}

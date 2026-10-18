@@ -1,0 +1,11 @@
+# 待批准的生产覆盖文件；配合既有 Compose，不能单独使用。
+# 服务器执行时显式 --env-file /opt/focalroom/.env，启动禁止自动 build/pull。
+services:
+  api:
+    image: focalroom-release-api:otp-20261018-amd64
+    environment:
+      FOCALROOM_WEB_ORIGIN: https://team.focroom.cc
+      FOCALROOM_RESEND_API_KEY: ${FOCALROOM_RESEND_API_KEY:-}
+      FOCALROOM_EMAIL_FROM: ${FOCALROOM_EMAIL_FROM:-FocalRoom <noreply@focroom.cc>}
+  web:
+    image: focalroom-release-web:otp-20261018-amd64

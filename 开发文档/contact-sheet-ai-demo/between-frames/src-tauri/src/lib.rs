@@ -15,6 +15,10 @@ pub mod importer;
 pub mod keychain;
 pub mod photo_inspection;
 mod resource_commands;
+pub mod login_guard;
+pub use login_guard::LoginGuard;
+/// 全局登录门卫（单实例——同一时刻只有一个登录会话）。
+pub static LOGIN_GUARD: std::sync::OnceLock<tokio::sync::Mutex<LoginGuard>> = std::sync::OnceLock::new();
 pub mod shared_cloud;
 pub mod shared_export;
 pub mod v2_bridge;
@@ -96,6 +100,8 @@ pub fn run() {
             commands::export_project,
             commands::get_sharing_status,
             commands::open_shared_review,
+            commands::cloud_login_open,
+            commands::cloud_login_callback,
             commands::share_project
         ])
         .run(tauri::generate_context!())

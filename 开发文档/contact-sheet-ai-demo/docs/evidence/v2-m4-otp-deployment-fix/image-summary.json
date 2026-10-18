@@ -1,0 +1,26 @@
+{
+  "prefix": "fr-otp-90d35c38",
+  "source_mode_input": "0600 files/0700 directories",
+  "image_uid": 1000,
+  "source_hashes": {
+    "apps/api/src/server.ts": "7ecb312269fd0a808e8d6f870b4be0242db30c7683dc504569dbd5b70f06964c",
+    "apps/api/src/service.ts": "3d67a9c250715c415ac3517cf9ec1d09a0da451baeb70f0c22d96c81737fb67c",
+    "apps/api/src/auth.ts": "cd294e5284d970a45105c14b8d3eeb2a1f81b61bc62a4337ce923a482a90e65a",
+    "apps/api/src/database.ts": "086b3b62bb5813a98404dcb478bd25d08da2c99369148213087ffae5f32a07cf",
+    "apps/api/src/email.ts": "320be0868af30fd33d0521b8cd7e3223e38a371efce5cbc9288ac183e6dd70f2",
+    "apps/api/src/rate-limit.ts": "6a43d0dbb98ebd103206f39c7abbf0cd6f5bf3cd245b6f0849e612a3baaa3a47",
+    "apps/api/src/magic-login.ts": "5150fdfffe6a7952e14b1259fdd6e41f1b819ddc3db1cfd08415f10680b73a19",
+    "apps/api/migrations/0012_magic_login.sql": "fa724d7c1010de876dc3ae6cecc543aadf3c9015350627f90e80d7dac9335191"
+  },
+  "api_image": "focalroom-local-api:otp-1f01d18d40",
+  "web_image": "focalroom-local-web:otp-4227a89214",
+  "postgres_version": "PostgreSQL 16.13 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+  "normal_api_cmd": true,
+  "least_privilege_app": true,
+  "no_mail_status": 503,
+  "web_status": 200,
+  "proxy_auth_status": 401,
+  "production_changes": false,
+  "real_email_or_model_calls": 0,
+  "volumes_retained": true
+}

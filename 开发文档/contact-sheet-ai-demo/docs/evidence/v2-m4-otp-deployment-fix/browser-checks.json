@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-18",
+  "environment": "127.0.0.1:1432, isolated generated fixture",
+  "real_mail_or_model_calls": 0,
+  "checks": {
+    "delivery_failure_stays_on_email": true,
+    "explicit_otp_login": true,
+    "reload_retains_session": true,
+    "project_eight_photos": true,
+    "comment_write_with_csrf": true,
+    "readonly_agent_panel_no_csrf_error": true,
+    "logout_returns_to_login": true
+  },
+  "screenshot": "browser-project-comment.png"
+}

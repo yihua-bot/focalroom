@@ -638,3 +638,24 @@ pub async fn import_quality_score(
     .await?;
     Ok(serde_json::json!({"ok": true}))
 }
+
+#[tauri::command]
+pub async fn cloud_login_open(
+    _state: State<'_, Backend>,
+    base_url: String,
+) -> Result<String> {
+    let url = crate::LOGIN_GUARD.get_or_init(|| tokio::sync::Mutex::new(crate::login_guard::LoginGuard::new())).lock().await.issue(&base_url);
+    crate::login_guard::open_browser(&url).await?;
+    Ok(url)
+}
+
+#[tauri::command]
+pub async fn cloud_login_callback(
+    _state: State<'_, Backend>,
+    token: String,
+    state: String,
+) -> Result<bool> {
+    let guard_token = crate::LOGIN_GUARD.get_or_init(|| tokio::sync::Mutex::new(crate::login_guard::LoginGuard::new())).lock().await.validate(&token, &state)?;
+    // TODO: 存储 token 到钥匙串或本地设置
+    Ok(true)
+}

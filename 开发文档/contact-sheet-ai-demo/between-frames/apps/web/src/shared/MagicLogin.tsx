@@ -37,6 +37,18 @@ export function MagicLogin({ onLogin }: { onLogin: (session: Session) => void })
       const result = await request<{ user: { id: string; email: string; name: string }; csrf: string }>(
         "/auth/magic/verify", null, "POST", { email, code });
       onLogin(sessionSchema.parse({ ...result.user, csrf: result.csrf }));
+      // 桌面端借道登录：URL 带 desktop=1 时，登录成功后经 focalroom:// 深链回传
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('desktop') === '1') {
+        const stateEcho = params.get('state') ?? '';
+        const banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.96);font-size:15px;color:#e8e8f0;text-align:center;padding:24px;';
+        banner.textContent = '登录成功，正在返回 FocalRoom 桌面端…';
+        document.body.appendChild(banner);
+        setTimeout(() => {
+          window.location.href = 'focalroom://callback?token=' + encodeURIComponent(result.csrf) + '&state=' + encodeURIComponent(stateEcho);
+        }, 600);
+      }
     });
   };
   if (recovering) return <AccountRecovery onBack={() => setRecovering(false)} />;

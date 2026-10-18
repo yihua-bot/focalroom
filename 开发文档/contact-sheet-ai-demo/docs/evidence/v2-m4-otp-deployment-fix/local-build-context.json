@@ -1,0 +1,1 @@
+{"context": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-api-build-ac5_j5fj", "api_image": "focalroom-local-api:otp-1f01d18d40", "web_context": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-web-build-o1kz9k_e", "web_image": "focalroom-local-web:otp-4227a89214", "smoke_prefix": "fr-otp-90d35c38"}

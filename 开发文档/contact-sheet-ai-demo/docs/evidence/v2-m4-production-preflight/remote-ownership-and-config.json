@@ -1,0 +1,51 @@
+{
+  "FOCALROOM_DB_PASSWORD_present_in_file": true,
+  "FOCALROOM_APP_PASSWORD_present_in_file": true,
+  "FOCALROOM_MIGRATOR_PASSWORD_present_in_file": true,
+  "FOCALROOM_RESEND_API_KEY_present_in_file": false,
+  "FOCALROOM_AGENT_MODEL_KEY_present_in_file": false,
+  "env_file_mode": "0o644",
+  "FOCALROOM_DATABASE_URL_target": {
+    "user": "focalroom_app",
+    "host": "postgres",
+    "database": "focalroom"
+  },
+  "FOCALROOM_MIGRATOR_DATABASE_URL_target": {
+    "user": "focalroom_migrator",
+    "host": "postgres",
+    "database": "focalroom"
+  },
+  "schema_metadata_exit": 0,
+  "schema_metadata": [
+    "BEGIN",
+    "schema|public|pg_database_owner",
+    "object|r|fr_acl_audit|focalroom",
+    "object|S|fr_acl_audit_id_seq|focalroom",
+    "object|r|fr_agent_scopes|focalroom",
+    "object|r|fr_commands|focalroom",
+    "object|r|fr_comments|focalroom",
+    "object|r|fr_drafts|focalroom",
+    "object|r|fr_events|focalroom",
+    "object|S|fr_events_id_seq|focalroom",
+    "object|r|fr_grants|focalroom",
+    "object|r|fr_invitations|focalroom",
+    "object|r|fr_memberships|focalroom",
+    "object|r|fr_migrations|focalroom",
+    "object|r|fr_previews|focalroom",
+    "object|r|fr_projects|focalroom",
+    "object|r|fr_proposals|focalroom",
+    "object|r|fr_sessions|focalroom",
+    "object|r|fr_tickets|focalroom",
+    "object|r|fr_users|focalroom",
+    "object|r|fr_versions|focalroom",
+    "object|r|fr_workspaces|focalroom",
+    "function|fr_immutable()|focalroom",
+    "function|fr_require_envelope()|focalroom",
+    "row_count_users|0",
+    "row_count_projects|0",
+    "extension|plpgsql",
+    "COMMIT"
+  ],
+  "running_web_title": "FocalRoom · Web 工作台预览",
+  "disk_free_bytes": 2348494848
+}

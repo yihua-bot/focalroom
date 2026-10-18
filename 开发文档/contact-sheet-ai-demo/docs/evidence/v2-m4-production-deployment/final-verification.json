@@ -1,0 +1,196 @@
+{
+  "journal": {
+    "approved": true,
+    "phase": "complete",
+    "production_changes": [
+      "created migrator and transferred scoped FocalRoom ownership",
+      "set exact team origin, env mode0600 and fixed image override",
+      "applied six registered migrations",
+      "recreated only API and Web"
+    ],
+    "checks": {
+      "backup_custom_dump_readable": true,
+      "preview_backup_unchanged": true,
+      "fixed_image_ids_and_nonroot_import": true,
+      "local_html_title_200": true,
+      "local_logo_png_200": true,
+      "local_api_anonymous_401": true,
+      "local_no_mail_503": true,
+      "pg_container_retained": true,
+      "previews_unchanged": true,
+      "no_real_mail_or_model_calls": true
+    },
+    "resumed_after_python_hash_compatibility_fix": true,
+    "before": {
+      "containers": {
+        "api": {
+          "id": "ec2d0e2e80308b5b8b87d9321e5eabd950377008b57dff91e22fd75b7fd4d460",
+          "image": "sha256:acc93b7f086fc8b6c9b64ef0bf2c342f433f69c541763ce6ddc7adb35dc3a1c6",
+          "status": "exited"
+        },
+        "web": {
+          "id": "69f792ab9b5e987736f2b622a9d61423e9a5d03235077dabdb76fc4d3dbffb8d",
+          "image": "sha256:b2c5dd710749a75d86b8aa77464a70caaff25acd4bf84a43d31e9c5c2876c8aa",
+          "status": "running"
+        },
+        "postgres": {
+          "id": "ab12c1db8f92a8595aba50fff31d8ab3375317a56642f6752b29542b9c946eec",
+          "image": "sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+          "status": "running"
+        }
+      },
+      "migration_sha": {
+        "0001": "bee9cec8bb2b90dbe20538fbb7de84acd8f5aae4d33810dc1e61bcbb2b4b5d04",
+        "0002": "613949828f2508cb097bdf45a7f80505ef5296fd11d33642fab2caaf5620e7ae"
+      },
+      "tables": [
+        "fr_acl_audit",
+        "fr_agent_scopes",
+        "fr_commands",
+        "fr_comments",
+        "fr_drafts",
+        "fr_events",
+        "fr_grants",
+        "fr_invitations",
+        "fr_memberships",
+        "fr_migrations",
+        "fr_previews",
+        "fr_projects",
+        "fr_proposals",
+        "fr_sessions",
+        "fr_tickets",
+        "fr_users",
+        "fr_versions",
+        "fr_workspaces"
+      ],
+      "preview_files": 0,
+      "preview_bytes": 0
+    },
+    "backup_directory": "/opt/focalroom/releases/otp-20261018-amd64/backup-verified",
+    "migration_versions": [
+      "0001",
+      "0002",
+      "0006",
+      "0008",
+      "0009",
+      "0010",
+      "0011",
+      "0012"
+    ],
+    "after": {
+      "containers": {
+        "api": {
+          "id": "0c4336faafece79082741b115cafef0f6fcbbc1646230954360acb9fe1d1a488",
+          "image": "sha256:dbf00eca3ba2b9329fb822757b9cba37294835f4d4b962e7ed1439ec726f57d5",
+          "status": "running"
+        },
+        "web": {
+          "id": "fb44311683d0ee940a6a7558f315f346cdb1b36b50d0fe3453134f79122c688c",
+          "image": "sha256:5cc4b4dbed8dc64bc427c097e870e70a96cc13ddd26134054a2944b3e11b2933",
+          "status": "running"
+        },
+        "postgres": {
+          "id": "ab12c1db8f92a8595aba50fff31d8ab3375317a56642f6752b29542b9c946eec",
+          "image": "sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+          "status": "running"
+        }
+      },
+      "env_mode": "0o600",
+      "disk_free_bytes": 2061029376,
+      "users": 0,
+      "projects": 0
+    }
+  },
+  "first_attempt": {
+    "approved": true,
+    "phase": "backup",
+    "production_changes": [],
+    "checks": {},
+    "before": {
+      "containers": {
+        "api": {
+          "id": "ec2d0e2e80308b5b8b87d9321e5eabd950377008b57dff91e22fd75b7fd4d460",
+          "image": "sha256:acc93b7f086fc8b6c9b64ef0bf2c342f433f69c541763ce6ddc7adb35dc3a1c6",
+          "status": "exited"
+        },
+        "web": {
+          "id": "69f792ab9b5e987736f2b622a9d61423e9a5d03235077dabdb76fc4d3dbffb8d",
+          "image": "sha256:b2c5dd710749a75d86b8aa77464a70caaff25acd4bf84a43d31e9c5c2876c8aa",
+          "status": "running"
+        },
+        "postgres": {
+          "id": "ab12c1db8f92a8595aba50fff31d8ab3375317a56642f6752b29542b9c946eec",
+          "image": "sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+          "status": "running"
+        }
+      },
+      "migration_sha": {
+        "0001": "bee9cec8bb2b90dbe20538fbb7de84acd8f5aae4d33810dc1e61bcbb2b4b5d04",
+        "0002": "613949828f2508cb097bdf45a7f80505ef5296fd11d33642fab2caaf5620e7ae"
+      },
+      "tables": [
+        "fr_acl_audit",
+        "fr_agent_scopes",
+        "fr_commands",
+        "fr_comments",
+        "fr_drafts",
+        "fr_events",
+        "fr_grants",
+        "fr_invitations",
+        "fr_memberships",
+        "fr_migrations",
+        "fr_previews",
+        "fr_projects",
+        "fr_proposals",
+        "fr_sessions",
+        "fr_tickets",
+        "fr_users",
+        "fr_versions",
+        "fr_workspaces"
+      ],
+      "preview_files": 0,
+      "preview_bytes": 0
+    },
+    "failure": {
+      "phase": "backup",
+      "kind": "AttributeError"
+    }
+  },
+  "python": "3.10.12",
+  "backup": {
+    "path": "/opt/focalroom/releases/otp-20261018-amd64/backup-verified",
+    "directory_mode": "0o700",
+    "environment_mode": "0o600",
+    "custom_dump_bytes": 47201,
+    "custom_dump_sha256": "e82f3eac287e2e2a6589ef6c0b7bcec9b372379464f91f882bedf521281dcbe3",
+    "preview_archive_sha256": "20e8ba367baa11540623c86f3d529965c1ba31f0b593c6e4366b7c28e29d0aaf",
+    "preview_files": 0
+  },
+  "db_readonly_metadata": [
+    "migration|0001|bee9cec8bb2b90dbe20538fbb7de84acd8f5aae4d33810dc1e61bcbb2b4b5d04",
+    "migration|0002|613949828f2508cb097bdf45a7f80505ef5296fd11d33642fab2caaf5620e7ae",
+    "migration|0006|95cc3281db6b53ee016e799ca4db5c6f33abc8f15e882ae20e01d0758a90c59a",
+    "migration|0008|ed24d431cba967eab47ae3f8339227c78385851774b02df3145068c6485931b7",
+    "migration|0009|15656ef57f26bfac7d9f1c579fa87e63d8697555a22f13d9951461e29d3f27d6",
+    "migration|0010|76f0aae430c3888e873dd209ad70b8ca70249ac574e24c562b2bb7f3b9bef61d",
+    "migration|0011|1376add9d0d5cb9e406d3a81c7c227f7545c5d70ba72930f690159b2afac0858",
+    "migration|0012|fa724d7c1010de876dc3ae6cecc543aadf3c9015350627f90e80d7dac9335191",
+    "role|focalroom_app|f|f|f",
+    "role|focalroom_migrator|f|f|f",
+    "owner|focalroom_migrator|26",
+    "users|0",
+    "projects|0"
+  ],
+  "public": {
+    "/": {
+      "status": 403,
+      "title": null
+    },
+    "/api/v2/auth/me": {
+      "status": 403,
+      "error_code": null,
+      "body_kind": "non_json",
+      "bytes": 17
+    }
+  }
+}

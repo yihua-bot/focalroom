@@ -1,0 +1,9 @@
+{
+  "local_compose_config": true,
+  "api_web_fixed_images": true,
+  "origin_team": true,
+  "mail_key_empty": true,
+  "web_loopback_retained": true,
+  "postgres_not_exposed": true,
+  "production_changes": false
+}
