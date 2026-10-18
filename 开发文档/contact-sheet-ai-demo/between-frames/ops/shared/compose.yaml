@@ -25,6 +25,8 @@ services:
       FOCALROOM_MIGRATOR_DATABASE_URL: postgresql://focalroom_migrator:${FOCALROOM_MIGRATOR_PASSWORD}@postgres:5432/focalroom
       FOCALROOM_WEB_ORIGIN: ${FOCALROOM_WEB_ORIGIN:-http://127.0.0.1:8084}
       FOCALROOM_PREVIEW_DIRECTORY: /data/previews
+      FOCALROOM_RESEND_API_KEY: ${FOCALROOM_RESEND_API_KEY:-}
+      FOCALROOM_EMAIL_FROM: ${FOCALROOM_EMAIL_FROM:-FocalRoom <noreply@focalroom.app>}
     volumes: [preview-data:/data/previews]
     depends_on:
       postgres: { condition: service_healthy }

@@ -33,6 +33,7 @@ async function migrations() {
       "0011_agent_worker.sql",
       // 每次迁移后幂等重放最小权限授权；角色由 ops/shared/postgres-init 创建。
       "0009_min_privilege_grants.sql",
+      "0012_magic_login.sql",
     ].map(
       async (name) => {
         const sql = await readFile(

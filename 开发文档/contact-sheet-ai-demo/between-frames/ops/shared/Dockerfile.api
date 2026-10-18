@@ -1,14 +1,16 @@
 FROM node:25.8.1-alpine
 WORKDIR /app
-COPY package.json package-lock.json ./
-COPY apps/api/package.json ./apps/api/package.json
-COPY packages/contracts/package.json ./packages/contracts/package.json
+COPY --chmod=0644 package.json package-lock.json ./
+COPY --chmod=0644 apps/api/package.json ./apps/api/package.json
+COPY --chmod=0644 packages/contracts/package.json ./packages/contracts/package.json
 RUN npm ci --omit=dev --workspace @betweenframes/api --workspace @betweenframes/contracts --include-workspace-root=false
-COPY apps/api/src ./apps/api/src
-COPY apps/api/migrations ./apps/api/migrations
-COPY packages/contracts/src ./packages/contracts/src
+COPY --chown=node:node apps/api/src ./apps/api/src
+COPY --chown=node:node apps/api/migrations ./apps/api/migrations
+COPY --chown=node:node packages/contracts/src ./packages/contracts/src
 # M4 云 Agent Worker 与 API 共用镜像：worker 服务以 workers/agent/src/main.ts 启动。
-COPY workers/agent/src ./workers/agent/src
+COPY --chown=node:node workers/agent/src ./workers/agent/src
+RUN find apps/api packages/contracts workers/agent -type d -exec chmod 0755 {} + \
+ && find apps/api packages/contracts workers/agent -type f -exec chmod 0644 {} +
 RUN mkdir -p /data/previews && chown -R node:node /data
 USER node
 ENV FOCALROOM_API_HOST=0.0.0.0 FOCALROOM_API_PORT=3002

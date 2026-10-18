@@ -22,6 +22,23 @@ const account = z.strictObject({
   password: z.string().min(8).max(1024),
   display_name: z.string().trim().min(1).max(200).optional(),
 });
+type AccountUser = { id: string; email: string; display_name: string };
+
+// 两种登录方式共用账户初始化与会话格式，避免工作区或 Cookie 状态分叉。
+export async function createAccount(tx: PoolClient, user: AccountUser, passwordHash: string) {
+  await tx.query("INSERT INTO fr_users(id,email,display_name,password_hash) VALUES($1,$2,$3,$4)",
+    [user.id, user.email, user.display_name, passwordHash]);
+  const workspace = randomUUID();
+  await tx.query("INSERT INTO fr_workspaces(id,title,owner_id) VALUES($1,$2,$3)",
+    [workspace, `${user.display_name} 的工作区`, user.id]);
+  await tx.query("INSERT INTO fr_memberships VALUES($1,$2,'OWNER')", [workspace, user.id]);
+}
+export async function createSession(db: Pick<Pool, "query">, user: AccountUser) {
+  const token = randomBytes(32).toString("hex"), csrf = randomBytes(24).toString("hex");
+  await db.query("INSERT INTO fr_sessions VALUES($1,$2,$3,now()+interval '24 hours')",
+    [digest(token), user.id, csrf]);
+  return { token, csrf, user: { id: user.id, email: user.email, name: user.display_name } };
+}
 export class AuthService {
   readonly pool: Pool;
   readonly origin: string;
@@ -65,21 +82,7 @@ export class AuthService {
           email: value.email,
           display_name: value.display_name!,
         };
-        await transaction(this.pool, async (tx) => {
-          await tx.query(
-            "INSERT INTO fr_users(id,email,display_name,password_hash) VALUES($1,$2,$3,$4)",
-            [user.id, user.email, user.display_name, passwordHash],
-          );
-          const workspace = randomUUID();
-          await tx.query(
-            "INSERT INTO fr_workspaces(id,title,owner_id) VALUES($1,$2,$3)",
-            [workspace, `${user.display_name} 的工作区`, user.id],
-          );
-          await tx.query("INSERT INTO fr_memberships VALUES($1,$2,'OWNER')", [
-            workspace,
-            user.id,
-          ]);
-        });
+        await transaction(this.pool, tx => createAccount(tx, user, passwordHash));
       } else {
         const row = (
           await this.pool.query(
@@ -104,17 +107,7 @@ export class AuthService {
         );
         user = row;
       }
-      const token = randomBytes(32).toString("hex"),
-        csrf = randomBytes(24).toString("hex");
-      await this.pool.query(
-        "INSERT INTO fr_sessions VALUES($1,$2,$3,now()+interval '24 hours')",
-        [digest(token), user.id, csrf],
-      );
-      return {
-        token,
-        csrf,
-        user: { id: user.id, email: user.email, name: user.display_name },
-      };
+      return createSession(this.pool, user);
     } finally {
       this.running--;
     }

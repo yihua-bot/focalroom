@@ -1,3 +1,4 @@
+import type { MagicEmailDelivery } from "./magic-login.ts";
 import "reflect-metadata";
 import { Controller, All, Req, Res, Inject, Module } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
@@ -104,9 +105,12 @@ class ApiController {
     if (path === "/workspaces" && req.method === "GET")
       return s.workspaces(headers);
     if (path === "/auth/magic/request" && req.method === "POST")
-      return s.requestMagicLogin(req.body, req.ip ?? "");
-    if (path === "/auth/magic/verify" && req.method === "POST")
-      return s.verifyMagicLogin(req.body);
+      return s.requestMagicLogin(req.body, req.socket.remoteAddress ?? "unknown");
+    if (path === "/auth/magic/verify" && req.method === "POST") {
+      const result = await s.verifyMagicLogin(req.body, req.socket.remoteAddress ?? "unknown");
+      res.setHeader("Set-Cookie", s.auth.cookie(result.token));
+      return { user: result.user, csrf: result.csrf, is_new_user: result.is_new_user };
+    }
     if (path === "/auth/verify-email" && req.method === "POST")
       return s.accounts.verifyEmail(req.body);
     if (path === "/auth/resend-verification" && req.method === "POST")
@@ -244,9 +248,10 @@ export async function createApi(options: {
   store: PreviewStore;
   origin: string;
   email?: AccountEmailDelivery;
+  magicEmail?: MagicEmailDelivery;
 }) {
   await assertSchema(options.pool);
-  const service = new CloudService(options.pool, options.origin, options.store, options.email);
+  const service = new CloudService(options.pool, options.origin, options.store, options.email, options.magicEmail);
   Module({
     controllers: [ApiController],
     providers: [{ provide: CloudService, useValue: service }],

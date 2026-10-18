@@ -1,4 +1,4 @@
-import { requestMagicCode, verifyMagicCode } from "./magic-login.ts";
+import { requestMagicCode, verifyMagicCode, type MagicEmailDelivery } from "./magic-login.ts";
 import { AccountRecoveryService, type AccountEmailDelivery } from "./account-recovery.ts";
 import { listTaskResults, modelEndpointLabel } from "./agent-tasks.ts";
 import { MetricsRegistry } from "./metrics.ts";
@@ -31,8 +31,10 @@ export class CloudService {
   readonly authority: AuthorityService;
   readonly store: PreviewStore;
   readonly accounts: AccountRecoveryService;
-  constructor(pool: Pool, origin: string, store: PreviewStore, email?: AccountEmailDelivery) {
+  private readonly magicEmail?: MagicEmailDelivery;
+  constructor(pool: Pool, origin: string, store: PreviewStore, email?: AccountEmailDelivery, magicEmail?: MagicEmailDelivery) {
     this.pool = pool;
+    this.magicEmail = magicEmail;
     this.auth = new AuthService(pool, origin);
     this.authority = new AuthorityService(pool, this.auth);
     this.store = store;
@@ -1010,13 +1012,13 @@ export class CloudService {
   }
   async requestMagicLogin(input: unknown, ip: string) {
     const email = String((input as Record<string, unknown>)?.email ?? "");
-    return requestMagicCode(this.pool, email, ip, process.env.FOCALROOM_WEB_ORIGIN ?? "http://127.0.0.1:8084");
+    return requestMagicCode(this.pool, email, ip, this.auth.origin, this.magicEmail);
   }
 
-  async verifyMagicLogin(input: unknown) {
+  async verifyMagicLogin(input: unknown, ip: string) {
     const email = String((input as Record<string, unknown>)?.email ?? "");
     const code = String((input as Record<string, unknown>)?.code ?? "");
-    const result = await verifyMagicCode(this.pool, email, code);
+    const result = await verifyMagicCode(this.pool, email, code, ip);
     assert(result, 400, "VALIDATION_ERROR", "验证码错误或已过期");
     return result;
   }

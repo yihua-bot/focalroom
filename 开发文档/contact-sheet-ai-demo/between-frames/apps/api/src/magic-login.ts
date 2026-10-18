@@ -1,115 +1,74 @@
-/**
- * M4 验证码登录：无密码——邮箱收 6 位验证码，输码即登录。
- * 10 分钟有效，一次性，每邮箱每 10 分钟最多 3 次请求。
- * 自动注册：未注册邮箱首次验证后自动创建账户。
- */
-import { randomBytes, createHash } from "node:crypto";
-import type { Pool } from "pg";
+/** 邮箱验证码与既有账户、工作区和 Cookie 会话共用同一认证域。 */
+import { randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import type { Pool, PoolClient } from "pg";
+import { z } from "zod";
+import { createAccount, createSession } from "./auth.ts";
+import { digest, transaction } from "./database.ts";
 import { sendMagicCodeEmail } from "./email.ts";
+import { assert } from "./errors.ts";
+import { hashPassword } from "./password.ts";
+import { checkRateLimits } from "./rate-limit.ts";
 
-export interface MagicLoginResult {
-  token: string;
-  user_id: string;
-  display_name: string;
-  is_new_user: boolean;
+export type MagicEmailDelivery = (email: string, code: string, origin: string) => Promise<boolean>;
+const emailInput = z.string().trim().toLowerCase().pipe(z.email().max(200));
+const codeHash = (id: string, code: string) => digest(`magic-v1:${id}:${code}`);
+async function lockEmail(tx: PoolClient, email: string) {
+  await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`magic:${email}`]);
 }
 
-function hashCode(code: string): string {
-  return createHash("sha256").update(code).digest("hex");
-}
-
-export function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 200;
-}
-
-/** 第一步：请求验证码。 */
 export async function requestMagicCode(
-  pool: Pool,
-  email: string,
-  ip: string,
-  webOrigin: string,
-): Promise<{ sent: boolean }> {
-  if (!isValidEmail(email)) {
-    return { sent: true }; // 不暴露邮箱是否有效
-  }
-  // 限流：每邮箱每 10 分钟 3 次。
-  const recent = (
-    await pool.query(
-      "SELECT COUNT(*) FROM fr_magic_login_codes WHERE email=$1 AND created_at>now()-interval '10 minutes'",
-      [email],
-    )
-  ).rows[0].count;
-  if (Number(recent) >= 3) {
-    return { sent: true }; // 静默拒绝
-  }
-
-  // 生成 6 位数字验证码。
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const codeHash = hashCode(code);
-  const raw = randomBytes(32).toString("hex"); // 请求标识
-
-  await pool.query(
-    "INSERT INTO fr_magic_login_codes(digest,email,code_hash,expires_at,ip) VALUES($1,$2,$3,now()+interval '10 minutes',$4)",
-    [raw, email, codeHash, ip],
-  );
-
-  // 发送验证码邮件。
-  const sent = await sendMagicCodeEmail(email, code, webOrigin);
-  if (!sent) {
-    console.warn("[magic-login] 邮件未发送（Key 未配置或网络错误）");
-  }
-  return { sent: true };
+  pool: Pool, input: unknown, ip: string, origin: string,
+  deliver: MagicEmailDelivery = sendMagicCodeEmail,
+): Promise<{ sent: true }> {
+  const email = emailInput.parse(input);
+  const quota = await checkRateLimits(pool, [
+    { key: `magic-send-ip:${digest(ip)}`, limit: 60, windowMs: 3_600_000 },
+    { key: `magic-send-email:${digest(email)}`, limit: 3, windowMs: 600_000 },
+  ]);
+  assert(quota.allowed, 429, "RATE_LIMITED", "验证码请求过于频繁，请稍后重试");
+  return transaction(pool, async tx => {
+    await lockEmail(tx, email);
+    const code = String(randomInt(1_000_000)).padStart(6, "0");
+    const id = randomBytes(32).toString("hex");
+    await tx.query("UPDATE fr_magic_login_codes SET used_at=now() WHERE email=$1 AND used_at IS NULL", [email]);
+    await tx.query("INSERT INTO fr_magic_login_codes(digest,email,code_hash,expires_at,ip) VALUES($1,$2,$3,now()+interval '10 minutes',$4)",
+      [id, email, codeHash(id, code), ip]);
+    let sent = false;
+    try { sent = await deliver(email, code, origin); } catch { /* 不记录验证码、密钥或邮件服务正文。 */ }
+    assert(sent, 503, "EMAIL_UNAVAILABLE", "邮件服务暂不可用，请稍后重试");
+    return { sent: true };
+  });
 }
 
-/** 第二步：验证码登录（自动注册未注册邮箱）。 */
-export async function verifyMagicCode(
-  pool: Pool,
-  email: string,
-  code: string,
-): Promise<MagicLoginResult | null> {
-  if (!isValidEmail(email) || !/^\d{6}$/.test(code)) return null;
-
-  const codeHash = hashCode(code);
-  const row = (
-    await pool.query(
-      "SELECT digest FROM fr_magic_login_codes WHERE email=$1 AND code_hash=$2 AND used_at IS NULL AND expires_at>now() FOR UPDATE",
-      [email, codeHash],
-    )
-  ).rows[0];
-  if (!row) return null;
-
-  // 标记已使用。
-  await pool.query("UPDATE fr_magic_login_codes SET used_at=now() WHERE digest=$1", [row.digest]);
-
-  // 查找或创建用户。
-  let user = (
-    await pool.query("SELECT id, display_name FROM fr_users WHERE email=$1", [email])
-  ).rows[0];
-
-  let isNew = false;
-  if (!user) {
-    // 自动注册。
-    const userId = crypto.randomUUID();
-    const name = email.split("@")[0];
-    await pool.query(
-      "INSERT INTO fr_users(id,email,display_name,password_hash) VALUES($1,$2,$3,'')",
-      [userId, email, name],
-    );
-    user = { id: userId, display_name: name };
-    isNew = true;
-  }
-
-  // 创建会话。
-  const token = randomBytes(32).toString("hex");
-  await pool.query(
-    "INSERT INTO sessions(token,user_id) VALUES($1,$2)",
-    [createHash("sha256").update(token).digest("hex"), user.id],
-  );
-
-  return {
-    token,
-    user_id: user.id,
-    display_name: user.display_name,
-    is_new_user: isNew,
-  };
+export async function verifyMagicCode(pool: Pool, inputEmail: unknown, inputCode: unknown, ip: string) {
+  const email = emailInput.parse(inputEmail);
+  const code = z.string().regex(/^\d{6}$/).parse(inputCode);
+  const quota = await checkRateLimits(pool, [
+    { key: `magic-verify-ip:${digest(ip)}`, limit: 60 },
+    { key: `magic-verify-email:${digest(email)}`, limit: 10 },
+  ]);
+  assert(quota.allowed, 429, "RATE_LIMITED", "验证尝试过多，请稍后重试");
+  return transaction(pool, async tx => {
+    await lockEmail(tx, email);
+    const row = (await tx.query(
+      "SELECT digest,code_hash,attempts FROM fr_magic_login_codes WHERE email=$1 AND used_at IS NULL AND expires_at>now() ORDER BY created_at DESC,digest DESC LIMIT 1 FOR UPDATE", [email],
+    )).rows[0];
+    if (!row || row.attempts >= 5) return null;
+    const expected = Buffer.from(row.code_hash, "hex");
+    const actual = Buffer.from(codeHash(row.digest, code), "hex");
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+      // 失败次数必须提交；在事务外返回统一错误，不能用抛错把计数回滚。
+      await tx.query("UPDATE fr_magic_login_codes SET attempts=attempts+1,used_at=CASE WHEN attempts+1>=5 THEN now() ELSE used_at END WHERE digest=$1", [row.digest]);
+      return null;
+    }
+    await tx.query("UPDATE fr_magic_login_codes SET used_at=now() WHERE email=$1 AND used_at IS NULL", [email]);
+    let user = (await tx.query("SELECT id,email,display_name FROM fr_users WHERE email=$1 FOR UPDATE", [email])).rows[0];
+    const isNew = !user;
+    if (!user) {
+      user = { id: randomUUID(), email, display_name: email.split("@")[0] };
+      await createAccount(tx, user, await hashPassword(randomBytes(32).toString("hex")));
+    }
+    await tx.query("UPDATE fr_users SET email_verified_at=now() WHERE id=$1", [user.id]);
+    return { ...await createSession(tx, user), is_new_user: isNew };
+  });
 }

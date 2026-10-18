@@ -84,7 +84,6 @@ export function accountEmailUrl(origin: string, kind: "reset-password" | "verify
 export async function sendMagicCodeEmail(
   toEmail: string,
   code: string,
-  _webOrigin: string,
 ): Promise<boolean> {
   const apiKey = process.env.FOCALROOM_RESEND_API_KEY ?? "";
   if (!apiKey) {
