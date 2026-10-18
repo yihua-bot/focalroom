@@ -409,6 +409,24 @@
   color: #e7ad6e;
   border-color: #e7ad6e;
 }
+.fr-agent-analysis {
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid #2c3a48;
+  border-radius: 6px;
+}
+.fr-agent-analysis h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.fr-analysis-result {
+  margin-top: 10px;
+  padding: 10px;
+  background: #1a2129;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
 .fr-review {
   display: grid;
   grid-template-columns: 235px minmax(0, 1fr) 340px;

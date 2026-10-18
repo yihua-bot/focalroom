@@ -11,6 +11,7 @@ import {
 } from "../shared-api";
 import { useRealtime } from "./useRealtime";
 import { AccessPanel, HistoryPanel } from "./ReviewPanels";
+import { AgentAnalysis } from "./AgentAnalysis";
 
 type CommentTarget =
   | { kind: "photo" }
@@ -719,6 +720,7 @@ export function ProjectReview({
                   disabled={!canWrite}
                 />
               </label>
+              {canApprove && <AgentAnalysis id={id} session={session} />}
             </div>
           )}
           {tab === "proposals" && (

@@ -64,8 +64,9 @@ Web/Nginx 同源代理 `/api/v2` 与 WebSocket 到独立 NestJS API；正式作�
 1. 审阅 `.dockerignore`、两个 Dockerfile、`nginx.conf`、`compose.yaml`，确认上下文不含照片、数据库和凭据；构建新隔离镜像。
 2. 用独立 Compose project 启动 PostgreSQL；等待健康，核对连接库名和账户。不使用 openyc 的库/账户/网络。
 3. 在该全新评审栈显式执行一次迁移：`docker compose run --rm api node apps/api/src/server.ts --migrate`。普通 API 启动不执行 DDL。首次初始化由 `postgres-init/01-create-roles.sh` 创建最小权限角色（需要 `FOCALROOM_APP_PASSWORD` 与 `FOCALROOM_MIGRATOR_PASSWORD`）；迁移自动改用迁移角色连接，运行时 API 使用仅 DML 的应用角色。
-4. 启动 API/Web；打开 `/shared`，用生成素材完成注册、邀请、预览、评论、提案、审批、撤权与重连。确认 Web 和 API 的 Origin 完全一致。
-5. 关闭评审栈后保留数据库卷；恢复启动验证 session/评论/版本。不要执行带 `-v` 的删除命令，除非已明确批准丢弃整个新评审库。
+4. `agent-worker` 服务领取云 Agent 队列任务（评论汇总/分歧分析）。模型 Key 经 `FOCALROOM_AGENT_MODEL_KEY` 注入；任何任务都要求项目所有者在 Web 端创建显式模型发送授权，撤回即取消未执行任务。
+5. 启动 API/Web；打开 `/shared`，用生成素材完成注册、邀请、预览、评论、提案、审批、撤权与重连。确认 Web 和 API 的 Origin 完全一致。
+6. 关闭评审栈后保留数据库卷；恢复启动验证 session/评论/版本。不要执行带 `-v` 的删除命令，除非已明确批准丢弃整个新评审库。
 
 上述步骤需要 Docker 可用；本轮没有把不可执行项记为通过。
 
@@ -73,6 +74,12 @@ Web/Nginx 同源代理 `/api/v2` 与 WebSocket 到独立 NestJS API；正式作�
 
 - 域名与 TLS 终结；精确 `FOCALROOM_WEB_ORIGIN`，同源代理并保留 Origin/Upgrade。HTTPS Origin 会启用 Secure Cookie。公网服务不使用 HTTP Origin。
 - PostgreSQL 独立数据库、独立迁移角色与受限应用角色；不使用超级用户。DDL 迁移由管理员单独执行，应用只获得所需读写/序列权限。当前 Compose 超级用户只用于全新本地评审，不用于生产。
+- 运维指标：`GET /api/v2/metrics`（Prometheus 文本）。设置 `FOCALROOM_METRICS_TOKEN` 后需 `?token=` 或 `Bearer` 携带令牌；生产仅在内网/抓取网段暴露。建议告警规则：
+  - `focalroom_agent_queue_depth > 50` 持续 5 分钟（Worker 积压或停摆）；
+  - `sum by (route) (rate(focalroom_api_requests_total{status=~"5.."}[5m])) / sum by (route) (rate(focalroom_api_requests_total[5m])) > 0.02`（API 错误率）;
+  - `focalroom_agent_jobs{status="FAILED"}` 1 小时内增量 > 3（模型或授权故障）；
+  - `focalroom_agent_cost_minor_usd_total` 日增幅超预算阈值（费用失控）；
+  - `focalroom_api_request_duration_ms_bucket{le="1000"}` 占比 < 95%（延迟劣化）。
 - 备份一致性覆盖 PostgreSQL 与预览对象。先在隔离环境完成还原演练，核验不可变版本、命令回执和对象 SHA，再制定保留期/RPO/RTO。
 - R2 使用私有桶，禁用公开 r2.dev/公开自定义域名；只给本项目桶的最小 Put/Get 权限。真实配置放仓库外文件，进程指定 `FOCALROOM_R2_CONFIG`，同时取消 `FOCALROOM_PREVIEW_DIRECTORY`。对象通过服务器网关读取，客户端拿到的是 30 秒一次性网关票据，不是可绕过撤权的裸 R2 链接。
 - R2 SDK 本轮只对本地 S3 协议服务器验证签名/PUT/GET；真实账户权限、网络、存储区域、费用、跨区域策略、对象保留与灾难恢复必须在目标环境单独验收。

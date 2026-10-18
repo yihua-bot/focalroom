@@ -7,6 +7,8 @@ RUN npm ci --omit=dev --workspace @betweenframes/api --workspace @betweenframes/
 COPY apps/api/src ./apps/api/src
 COPY apps/api/migrations ./apps/api/migrations
 COPY packages/contracts/src ./packages/contracts/src
+# M4 云 Agent Worker 与 API 共用镜像：worker 服务以 workers/agent/src/main.ts 启动。
+COPY workers/agent/src ./workers/agent/src
 RUN mkdir -p /data/previews && chown -R node:node /data
 USER node
 ENV FOCALROOM_API_HOST=0.0.0.0 FOCALROOM_API_PORT=3002

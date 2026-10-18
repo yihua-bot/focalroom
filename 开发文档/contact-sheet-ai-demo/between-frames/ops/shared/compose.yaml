@@ -28,6 +28,17 @@ services:
     volumes: [preview-data:/data/previews]
     depends_on:
       postgres: { condition: service_healthy }
+  agent-worker:
+    # M4 云 Agent Worker：领取授权队列任务，只读评论汇总；模型 Key 经环境注入。
+    build: { context: ../.., dockerfile: ops/shared/Dockerfile.api }
+    command: ["node", "workers/agent/src/main.ts"]
+    environment:
+      FOCALROOM_DATABASE_URL: postgresql://focalroom_app:${FOCALROOM_APP_PASSWORD}@postgres:5432/focalroom
+      FOCALROOM_AGENT_MODEL_KEY: ${FOCALROOM_AGENT_MODEL_KEY:-}
+      FOCALROOM_AGENT_MODEL_BASE_URL: ${FOCALROOM_AGENT_MODEL_BASE_URL:-}
+      FOCALROOM_AGENT_MODEL_NAME: ${FOCALROOM_AGENT_MODEL_NAME:-}
+    depends_on:
+      postgres: { condition: service_healthy }
   web:
     build: { context: ../.., dockerfile: ops/shared/Dockerfile.web }
     ports: ["127.0.0.1:8084:80"]

@@ -2,6 +2,47 @@
 
 基准：`fa0d2b7` + 未提交工作树（含并行的界面文案清理与 magic-login 半成品，不属于本切片）。本切片对应《M0-M5-CODE-AUDIT-2026-10-18》第 6、21、3、4、2、7 行的编码缺口；只收编码项，不含外部验收。
 
+## 第六批（同日）：运维指标与告警（M4#20）
+
+对应审计第 20 行。验证：API 集成 **39/39**（新增 metrics 3 项）；类型检查与 lint 本切片文件 0 错误。
+
+1. `apps/api/src/metrics.ts`：Prometheus 文本注册表——API 请求计数（路由模板/方法/状态）与延迟直方图（5ms–5s 桶）；UUID/长数字段归一为 `:id`/`:n` 防标签基数爆炸（带基数上限）；DB 派生指标抓取时实时查询（任务状态、队列深度、费用与 token 累计）。
+2. `server.ts`：finish 埋点中间件 + `GET /api/v2/metrics` 路由（与 /health 同模式）；可选 `FOCALROOM_METRICS_TOKEN`（查询串或 Bearer），生产建议仅内网暴露。
+3. `ops/shared/README.md`：五条告警建议规则（队列积压、5xx 错误率、任务失败增速、费用日增、P95 延迟劣化）。
+4. 修复：metrics 头解析兼容 Node 原生头对象与 fetch Headers。
+
+## 第五批（同日）：记忆混合检索 + 上下文压缩（M3#12）
+
+对应审计第 12 行。验证：Rust 全量 **190/190**（26 套件，新增 7 项内联测试；clippy -D warnings 与 fmt 干净）。
+
+1. **记忆混合检索**（`memory_search.rs` + `memory.rs`）：`hybrid_scores` 纯函数——BM25 关键词（min-max 归一）0.6 + 本地 Apple 句向量余弦（[-1,1]→[0,1]）0.4 加权；**纯语义命中按 0.4 上限折减，不反超字面命中组**（关键词命中最低 0.6）；语义不可用（非 macOS/超时/无模型/语言不支持）自动退化为纯关键词，不失败。`retrievable_for_goal` 注入 300ms 有界语义排序；排序方向随归一分修正为降序。零网络请求，不冒充语义置信度。
+2. **上下文压缩**（`context.rs`）：
+   - **分层 token 预算**：`layer_budgets` 按 maxContextTokens 推导系统 8%/任务 5%/人工证据 15%/观察 27%/历史 45%，注入 layers.policy.contextBudgets；
+   - **历史压缩**：历史估算超预算 70% 时，旧工具结果摘要化（最近 6 条完整），压缩计数透明注入 contextCompression；
+   - **观察归并**：同名工具重复调用的旧结果标记 superseded（保留最新完整）；仅预算压力下触发，小协议逐条完整（不破坏 Mock/模型的读取契约）；
+   - 权威记录在 tool_calls 回执不受影响，只收缩发给模型的投影。
+
+## 第四批（同日）：质量驱动自动选模（M3#9）
+
+对应审计第 9 行。验证：Rust 全量 **183/183**（26 套件；model_routing +4、agent_quality 新增 1；clippy -D warnings 与 fmt 干净）。修复两处迁移计数断言（0019 迁移使 18→19）。
+
+1. **质量记录存储**：`0019_model_quality.sql`（五维分/样本量/评审理由/hard_fail 硬门槛，理由非空为可核验性硬要求）；`agent/quality.rs` 写入校验与读取换算（五维均分 0–5）；Tauri 命令 `import_quality_score` 供评测协议导入。
+2. **路由消费**（`router.rs`）：`RouteRequest.quality_scores` 注入；`QualityRecord` 匹配 provider/model/taskType；**hard_fail 记录直接排除候选**（越权/幻觉 ID 零容忍）；Pro 档按均分降序、Standard 档按均分/成本性价比降序；无实测记录回退"配置云端优先"且 `decisionBasis=capability_cost_fallback_unmeasured`（不冒充质量排名）；胜出候选 quality 标注 `measured:4.6@blind-v2(n=8)`。
+3. **运行时接线**：`AgentEngine::run_inner` 加载该 provider 质量记录注入策展路由与视觉预取路由；任务绑定 provider 不自动切换的约束不变。
+4. 边界：质量数据本身仍需真人盲评产生（规格 30 任务/10 摄影师门槛未变）；本切片交付的是消费与排序链路，不预造任何分数。
+
+## 第三批（同日）：云 Agent Worker（M4#16）+ AI 分歧分析（M5#23）
+
+对应审计第 16、23 行。验证：API 集成 **36/36**（新增 agent_worker 3 项：授权全链路/崩溃恢复/失败重试，模型走本地 mock 服务器无真实外发）、前端 Vitest **233/233**（新增 AgentAnalysis 2 项）、Rust v2_tools 回归通过、compose 渲染含 agent-worker 服务。
+
+1. **M4#16 云 Agent Worker**：
+   - `0011_agent_worker.sql`：`fr_model_consents`（独立模型发送授权：端点摘要/范围/额度/撤回，项目与管理员权限不构成同意）+ `fr_agent_jobs`（QUEUED/RUNNING/COMPLETED/FAILED/CANCELLED、attempts、checkpoint、租约）。
+   - `workers/agent/src/index.ts` 重写：`runWorkerOnce` 以 `FOR UPDATE SKIP LOCKED` 领取任务（QUEUED 优先 + 租约过期 RUNNING 恢复）；执行前事务校验并扣减授权额度（撤权/用尽即失败不发请求）；模型失败最多 3 次重试后 FAILED；`startWorkerLoop` 进程模式 + `main.ts` CLI 入口；`workerStatus.implemented=true`。
+   - API：`model-consents` 创建/列表/撤回（撤回取消未执行任务）、`agent-jobs` 列表/取消、`agent-tasks/summarize` 改为绑定显式授权入队（无授权仍 MODEL_CONSENT_REQUIRED）。
+   - `agent-tasks.ts`：端点/型号改运行时读取（可测试），新增分歧分析 prompt（一致点/分歧/折中要点/待澄清）；修复三处 principal 查询缺列导致的误判。
+   - compose 新增 `agent-worker` 服务（与 API 同镜像）；Dockerfile 复制 workers；README 更新。
+2. **M5#23 AI 分析评审分歧**：Worker 支持 `summarize_disagreement`（同一授权/队列/恢复框架）；Web 批注面板新增"AI 分析评审分歧"区（授权→发起→任务状态→折中提案要点展示，额度与撤回可见）；桌面 `summarize_review_disagreement` 拒绝消息更新为指向云端授权路径（本地任务仍不读项目评论）。
+
 ## 第二批（同日下午）：evaluate_draft 真实评估 / 最小权限账户 / 跨实例 Presence
 
 对应审计第 13、17、22 行。验证：Rust 全量 **196/196**（新增 agent_evaluate 3 项；clippy -D warnings 与 fmt 干净）、API 集成 **33/33**（新增跨实例 Presence 与最小权限回归 3 项）、前端 Vitest **231/231**、compose 渲染核对通过。
