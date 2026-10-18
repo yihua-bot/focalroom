@@ -75,7 +75,7 @@ impl CapabilityProfile {
         }
         Ok(())
     }
-    pub(crate) fn names(&self) -> Vec<&'static str> {
+    pub fn names(&self) -> Vec<&'static str> {
         self.capabilities.iter().map(|cap| cap.as_str()).collect()
     }
     pub fn sha256(&self) -> String {
@@ -84,7 +84,7 @@ impl CapabilityProfile {
     }
 }
 
-pub(crate) struct ResolvedProfile {
+pub struct ResolvedProfile {
     pub profile: CapabilityProfile,
     pub source: &'static str,
 }
@@ -112,14 +112,49 @@ fn resolve_configured(
     }
     builtin(endpoint, model)
 }
-pub(crate) fn builtin(endpoint: &str, model: &str) -> Result<ResolvedProfile> {
-    let source = match (endpoint.trim().trim_end_matches('/'), model) {
+pub fn builtin(endpoint: &str, model: &str) -> Result<ResolvedProfile> {
+    let (source, capabilities) = match (endpoint.trim().trim_end_matches('/'), model) {
         // 官方文档 2026-10-16：developers.openai.com/api/docs/models/gpt-4o-mini
-        ("https://api.openai.com/v1", "gpt-4o-mini" | "gpt-4o-mini-2024-07-18") => {
-            "official_documentation"
-        }
+        ("https://api.openai.com/v1", "gpt-4o-mini" | "gpt-4o-mini-2024-07-18") => (
+            "official_documentation",
+            vec![
+                Capability::Vision,
+                Capability::ToolCalling,
+                Capability::StructuredOutput,
+                Capability::InstructionFollowing,
+            ],
+        ),
         // 本仓库真实工具/视觉协议冒烟；证据见 V2-M3-EVALUATION-TEST-REPORT.md。
-        ("https://api.deepseek.com", "deepseek-flash") => "local_protocol_smoke",
+        ("https://api.deepseek.com", "deepseek-flash") => (
+            "local_protocol_smoke",
+            vec![
+                Capability::Vision,
+                Capability::ToolCalling,
+                Capability::StructuredOutput,
+                Capability::InstructionFollowing,
+            ],
+        ),
+        // 官方文档 2026-10-18：docs.anthropic.com（Messages API）。
+        // 原生适配仅文本编排；如实不声明 Vision，视觉任务由路由拒绝并指引。
+        ("https://api.anthropic.com/v1", _) if model.starts_with("claude-") => (
+            "official_documentation",
+            vec![
+                Capability::ToolCalling,
+                Capability::StructuredOutput,
+                Capability::InstructionFollowing,
+            ],
+        ),
+        // 官方文档 2026-10-18：ai.google.dev（generateContent）。
+        ("https://generativelanguage.googleapis.com/v1beta", _) if model.starts_with("gemini-") => {
+            (
+                "official_documentation",
+                vec![
+                    Capability::ToolCalling,
+                    Capability::StructuredOutput,
+                    Capability::InstructionFollowing,
+                ],
+            )
+        }
         _ => {
             return Err(AppError::new(
                 "MODEL_CAPABILITY_MISSING",
@@ -128,16 +163,7 @@ pub(crate) fn builtin(endpoint: &str, model: &str) -> Result<ResolvedProfile> {
         }
     };
     Ok(ResolvedProfile {
-        profile: CapabilityProfile::declared(
-            endpoint,
-            model,
-            &[
-                Capability::Vision,
-                Capability::ToolCalling,
-                Capability::StructuredOutput,
-                Capability::InstructionFollowing,
-            ],
-        ),
+        profile: CapabilityProfile::declared(endpoint, model, &capabilities),
         source,
     })
 }

@@ -302,7 +302,7 @@ impl OpenAiProvider {
         Ok((observation, usage_tokens))
     }
 }
-fn user_brief(task: &Task) -> String {
+pub(crate) fn user_brief(task: &Task) -> String {
     format!(
         "编辑目标：{}\n项目 ID：{}\n任务 ID：{}\n目标张数：{}\n当前选区：{} 张",
         task.goal,
@@ -312,7 +312,7 @@ fn user_brief(task: &Task) -> String {
         task.selected_photo_ids.len()
     )
 }
-fn outcome_calls(body: &Value) -> Option<Vec<Value>> {
+pub(crate) fn outcome_calls(body: &Value) -> Option<Vec<Value>> {
     let calls = body["calls"].as_array()?;
     Some(calls.clone())
 }
@@ -344,7 +344,7 @@ fn tokens_of(response: &Value) -> u32 {
         .unwrap_or(0)
         .min(u32::MAX as u64) as u32
 }
-fn retriable(mut error: AppError) -> AppError {
+pub(crate) fn retriable(mut error: AppError) -> AppError {
     error.retriable = true;
     error
 }

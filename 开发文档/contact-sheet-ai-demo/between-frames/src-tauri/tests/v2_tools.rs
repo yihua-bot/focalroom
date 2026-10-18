@@ -176,6 +176,7 @@ fn v2_router_errors_are_readable_and_scope_never_expands() {
         budget_remaining_usd: 1.0,
         images_required: true,
         image_consent: true,
+        quality_scores: &[],
     };
     let error = route(&vision_req, false).unwrap_err();
     assert_eq!(error.code, "MODEL_CAPABILITY_MISSING");
@@ -188,6 +189,7 @@ fn v2_router_errors_are_readable_and_scope_never_expands() {
         budget_remaining_usd: 1.0,
         images_required: false,
         image_consent: false,
+        quality_scores: &[],
     };
     let ok = route(&text_req, true).unwrap();
     assert_eq!(ok.provider_id, "mock", "受限区域回落本地");
@@ -199,6 +201,7 @@ fn v2_router_errors_are_readable_and_scope_never_expands() {
         budget_remaining_usd: 1.0,
         images_required: true,
         image_consent: false,
+        quality_scores: &[],
     };
     let error = route(&no_consent, true).unwrap_err();
     assert_eq!(error.code, "PRIVACY_REGION_REJECTED");
@@ -211,6 +214,7 @@ fn v2_router_errors_are_readable_and_scope_never_expands() {
         budget_remaining_usd: 0.01,
         images_required: true,
         image_consent: true,
+        quality_scores: &[],
     };
     let error = route(&broke, true).unwrap_err();
     assert_eq!(error.code, "BUDGET_EXCEEDED");

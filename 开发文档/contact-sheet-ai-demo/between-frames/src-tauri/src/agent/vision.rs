@@ -35,6 +35,7 @@ pub(crate) async fn prefetch(
     call: &ToolCall,
     region: &super::router::RegionPolicy,
     tier: super::router::ServiceTier,
+    quality: &[super::router::QualityRecord],
 ) -> Result<Option<VisionPrefetch>> {
     use sqlx::Row;
     let mut binding_tx = db.pool.begin().await?;
@@ -144,6 +145,7 @@ pub(crate) async fn prefetch(
             budget_remaining_usd: super::router::remaining_budget(task, tier),
             images_required: true,
             image_consent: true,
+            quality_scores: quality,
         },
         &task.provider_id,
         Some(provider.route()?),

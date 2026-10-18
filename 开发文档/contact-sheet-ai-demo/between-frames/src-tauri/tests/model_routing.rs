@@ -65,6 +65,7 @@ fn configured_model_identity_is_real_unmeasured_and_credential_independent() {
         budget_remaining_usd: 0.50,
         images_required: false,
         image_consent: false,
+        quality_scores: &[],
     };
     let decision =
         route_for_provider(&request, "openai", Some(configured.route().unwrap())).unwrap();
@@ -98,6 +99,7 @@ fn unknown_residency_and_unimplemented_embedding_cannot_pass_routing_as_verified
         budget_remaining_usd: 0.50,
         images_required: true,
         image_consent: true,
+        quality_scores: &[],
     };
     assert_eq!(
         route_for_provider(
@@ -248,6 +250,7 @@ fn routing_requires_all_protocol_capabilities_including_requested_image_input() 
         budget_remaining_usd: 1.0,
         images_required: false,
         image_consent: true,
+        quality_scores: &[],
     };
     let partial = |caps| Route::responses("declared", caps);
     for tier in [ServiceTier::Standard, ServiceTier::Pro] {
@@ -301,6 +304,7 @@ fn routing_requires_all_protocol_capabilities_including_requested_image_input() 
     );
     let no_consent = RouteRequest {
         image_consent: false,
+        quality_scores: &[],
         ..vision
     };
     assert_eq!(
@@ -411,4 +415,118 @@ fn known_profiles_and_explicit_env_override_fail_closed_without_inheriting_proxy
                 .contains("private-body")
         );
     }
+}
+
+// ---- M3 质量驱动自动选模 ----
+fn quality_route(model: &str, cost: f64) -> Route {
+    Route {
+        provider_id: "openai".into(),
+        model_id: model.into(),
+        residency: "unknown".into(),
+        quality: "unmeasured".into(),
+        est_cost_usd: cost,
+        capabilities: vec!["tool_calling", "instruction_following"],
+    }
+}
+fn record(model: &str, mean: f64, hard_fail: bool) -> QualityRecord {
+    QualityRecord {
+        provider_id: "openai".into(),
+        model_id: model.into(),
+        task_type: TaskType::AgentOrchestrate,
+        mean_score: mean,
+        sample_count: 8,
+        score_version: "blind-v2".into(),
+        hard_fail,
+    }
+}
+fn quality_request<'a>(
+    tier: ServiceTier,
+    records: &'a [QualityRecord],
+    region: &'a RegionPolicy,
+) -> RouteRequest<'a> {
+    RouteRequest {
+        task_type: TaskType::AgentOrchestrate,
+        tier,
+        region,
+        budget_remaining_usd: 10.0,
+        images_required: false,
+        image_consent: false,
+        quality_scores: records,
+    }
+}
+
+#[test]
+fn pro_tier_prefers_high_mean_over_cheaper_model() {
+    let catalog = vec![quality_route("cheap", 0.02), quality_route("strong", 0.10)];
+    let records = [record("cheap", 3.9, false), record("strong", 4.6, false)];
+    let region = RegionPolicy::default();
+    let best = route_with_catalog(
+        &quality_request(ServiceTier::Pro, &records, &region),
+        catalog,
+    )
+    .unwrap();
+    assert_eq!(best.model_id, "strong");
+    assert_eq!(best.quality, "measured:4.6@blind-v2(n=8)");
+}
+
+#[test]
+fn standard_tier_prefers_quality_per_cost_value() {
+    let catalog = vec![quality_route("cheap", 0.02), quality_route("strong", 0.10)];
+    let records = [record("cheap", 3.9, false), record("strong", 4.6, false)];
+    let region = RegionPolicy::default();
+    let best = route_with_catalog(
+        &quality_request(ServiceTier::Standard, &records, &region),
+        catalog,
+    )
+    .unwrap();
+    // 3.9/0.02 = 195 价值分高于 4.6/0.10 = 46。
+    assert_eq!(best.model_id, "cheap");
+}
+
+#[test]
+fn hard_fail_records_exclude_model_from_any_tier() {
+    let catalog = vec![
+        quality_route("cheater", 0.01),
+        quality_route("honest", 0.02),
+    ];
+    let records = [record("cheater", 4.9, true), record("honest", 3.5, false)];
+    let region = RegionPolicy::default();
+    for tier in [ServiceTier::Standard, ServiceTier::Pro] {
+        let best =
+            route_with_catalog(&quality_request(tier, &records, &region), catalog.clone()).unwrap();
+        assert_eq!(best.model_id, "honest", "硬门槛违规模型必须被排除");
+    }
+}
+
+#[test]
+fn without_records_fallback_keeps_default_priority_and_explains() {
+    // 本地兜底候选（与内置 mock 同序位：provider_id=mock 排在云之后）。
+    let local = Route {
+        provider_id: "mock".into(),
+        model_id: "local-runtime".into(),
+        residency: "local".into(),
+        quality: "mock".into(),
+        est_cost_usd: 0.0,
+        capabilities: vec!["tool_calling", "instruction_following"],
+    };
+    let catalog = vec![local, quality_route("cloud", 0.02)];
+    let records: [QualityRecord; 0] = [];
+    let region = RegionPolicy::default();
+    let request = quality_request(ServiceTier::Standard, &records, &region);
+    let best = route_with_catalog(&request, catalog).unwrap();
+    assert_eq!(best.provider_id, "openai");
+    assert_eq!(best.quality, "unmeasured");
+    let explained = explain(&request, true);
+    assert_eq!(
+        explained["decisionBasis"], "capability_cost_fallback_unmeasured",
+        "无实测记录时不得声称质量排名"
+    );
+    let measured = [QualityRecord {
+        model_id: between_frames_lib::agent::openai::DEFAULT_MODEL.to_owned(),
+        ..record("cloud", 4.2, false)
+    }];
+    let measured_request = quality_request(ServiceTier::Pro, &measured, &region);
+    let explained = explain(&measured_request, true);
+    assert_eq!(explained["decisionBasis"], "quality_ranked_pro_mean");
+    assert_eq!(explained["qualityRecords"], 1);
 }

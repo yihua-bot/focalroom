@@ -27,12 +27,12 @@ impl ToolRegistry {
             .ok_or_else(|| AppError::new("PERMISSION_DENIED", "工具不在摄影工具白名单"))?;
         validate_schema(&spec["parameters"], &call.args)
     }
-    /// v2 别名解析为规范工具名（无别名返回原名）；M5 评论类工具显式拒绝。
+    /// v2 别名解析为规范工具名（无别名返回原名）；M5 评论协作分析在云端 Worker 执行。
     pub fn canonical(name: &str) -> Result<String> {
         if matches!(name, "summarize_review_disagreement") {
             return Err(AppError::new(
                 "NOT_IMPLEMENTED",
-                "评论协作工具在 M5 交付；当前任务请使用既有工具集",
+                "评论分歧分析由共享服务的云 Agent Worker 执行：项目所有者在 Web 端显式授权模型发送后排队，本地任务不读取项目评论",
             ));
         }
         let specs = Self::specs();

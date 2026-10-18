@@ -63,7 +63,12 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
         if goal.trim().is_empty() {
             return Err(AppError::new("VALIDATION_ERROR", "编辑目标不能为空"));
         }
-        let provider_id = if super::openai::OpenAiConfig::from_env().is_some() {
+        // 多供应商：显式 key 决定身份；同一时刻一种云端供应商（观察与策展同端点约束不变）。
+        let provider_id = if super::anthropic::AnthropicProvider::from_env().is_some() {
+            super::anthropic::PROVIDER_ID.to_owned()
+        } else if super::gemini::GeminiProvider::from_env().is_some() {
+            super::gemini::PROVIDER_ID.to_owned()
+        } else if super::openai::OpenAiConfig::from_env().is_some() {
             super::PROVIDER_OPENAI.to_owned()
         } else {
             super::PROVIDER_ID.to_owned()

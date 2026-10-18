@@ -79,6 +79,7 @@ pub fn run() {
             commands::delete_api_key,
             commands::get_diagnostics,
             commands::set_project_tags,
+            commands::import_quality_score,
             commands::correct_hypothesis,
             commands::set_hypothesis_enabled,
             commands::set_privacy_consent,

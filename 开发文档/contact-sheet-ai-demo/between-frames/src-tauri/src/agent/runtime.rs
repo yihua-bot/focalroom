@@ -20,6 +20,9 @@ pub struct AgentEngine {
     mock: Arc<dyn ModelProvider>,
     openai: Option<Arc<OpenAiProvider>>,
     observation: Option<Arc<OpenAiProvider>>,
+    /// 多供应商（M3）：Anthropic/Gemini 原生文本编排槽位；视觉仍走 OpenAI 兼容链路。
+    native: Option<Arc<dyn ModelProvider>>,
+    native_route: Option<router::Route>,
     active: Arc<Mutex<HashSet<String>>>,
     notify: Notifier,
     region: RegionPolicy,
@@ -55,11 +58,31 @@ impl AgentEngine {
         mock: Arc<dyn ModelProvider>,
         openai: Option<Arc<OpenAiProvider>>,
     ) -> Self {
+        // 多供应商（M3）：环境显式配置 Anthropic/Gemini 时装配原生文本编排；
+        // 视觉观察仍走 OpenAI 兼容链路（能力目录未声明 vision，路由自动拒绝并指引）。
+        let native: Option<Arc<dyn ModelProvider>> =
+            if let Some(provider) = super::anthropic::AnthropicProvider::from_env() {
+                Some(Arc::new(provider) as Arc<dyn ModelProvider>)
+            } else if let Some(provider) = super::gemini::GeminiProvider::from_env() {
+                Some(Arc::new(provider) as Arc<dyn ModelProvider>)
+            } else {
+                None
+            };
+        let native_route = native.as_ref().and_then(|provider| {
+            provider
+                .native_route()
+                .map_err(|e| {
+                    eprintln!("[agent] 原生供应商能力配置无效：{}", e.message);
+                })
+                .ok()
+        });
         Self {
             db,
             mock,
             observation: openai.clone(),
             openai,
+            native,
+            native_route,
             active: Default::default(),
             notify: Arc::new(|_| {}),
             region: RegionPolicy::default(),
@@ -142,7 +165,11 @@ impl AgentEngine {
         self.tier = tier;
         self
     }
-    fn provider_for(&self, task: &Task) -> Result<Arc<dyn ModelProvider>> {
+    fn provider_for(
+        &self,
+        task: &Task,
+        quality: &[super::router::QualityRecord],
+    ) -> Result<Arc<dyn ModelProvider>> {
         let route = router::route_for_provider(
             &RouteRequest {
                 task_type: TaskType::AgentOrchestrate,
@@ -151,6 +178,7 @@ impl AgentEngine {
                 budget_remaining_usd: super::router::remaining_budget(task, self.tier),
                 images_required: false,
                 image_consent: false,
+                quality_scores: quality,
             },
             &task.provider_id,
             if task.provider_id == super::PROVIDER_OPENAI {
@@ -158,6 +186,11 @@ impl AgentEngine {
                     .as_ref()
                     .map(|provider| provider.route())
                     .transpose()?
+            } else if matches!(
+                task.provider_id.as_str(),
+                super::anthropic::PROVIDER_ID | super::gemini::PROVIDER_ID
+            ) {
+                self.native_route.clone()
             } else {
                 None
             },
@@ -168,6 +201,10 @@ impl AgentEngine {
                 .clone()
                 .map(|p| p as Arc<dyn ModelProvider>)
                 .ok_or_else(|| AppError::new("MODEL_CAPABILITY_MISSING", "云端提供方不可用")),
+            super::anthropic::PROVIDER_ID | super::gemini::PROVIDER_ID => self
+                .native
+                .clone()
+                .ok_or_else(|| AppError::new("MODEL_CAPABILITY_MISSING", "原生提供方不可用")),
             _ => Ok(self.mock.clone()),
         }
     }
@@ -266,6 +303,11 @@ impl AgentEngine {
     async fn run_inner(&self, id: &str) -> Result<()> {
         let handler = CommandHandler::new(&self.db);
         let initial = ContextBuilder::build(&self.db, id).await?;
+        // 质量驱动选模：加载该 provider 的摄影师盲评记录（只读；无记录则回退默认优先级）。
+        let quality =
+            super::quality::load_quality_records(&self.db.pool, &initial.task.provider_id)
+                .await
+                .unwrap_or_default();
         if initial.task.state != "queued" {
             return Err(AppError::new("CANCELLED", "任务未排队"));
         }
@@ -319,6 +361,7 @@ impl AgentEngine {
                                         &call,
                                         &self.region,
                                         self.tier,
+                                        &quality,
                                     )
                                     .await
                                     {
@@ -348,7 +391,7 @@ impl AgentEngine {
                 }
                 continue;
             }
-            let provider = match self.provider_for(&input.task) {
+            let provider = match self.provider_for(&input.task, &quality) {
                 Ok(provider) => provider,
                 Err(error) if error.code == "BUDGET_EXCEEDED" => {
                     handler.agent_state(id, "paused", &error.message).await?;

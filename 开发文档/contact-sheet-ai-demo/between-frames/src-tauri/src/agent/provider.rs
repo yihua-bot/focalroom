@@ -16,6 +16,13 @@ pub struct ModelTurnResult {
     pub usage: Option<ModelTokenUsage>,
 }
 pub trait ModelProvider: Send + Sync {
+    /// 原生供应商（Anthropic/Gemini）的路由快照；OpenAI 兼容链路走 OpenAiProvider::route。
+    fn native_route(&self) -> crate::domain::Result<super::router::Route> {
+        Err(crate::domain::AppError::new(
+            "PERMISSION_DENIED",
+            "该供应商无原生路由快照",
+        ))
+    }
     fn generate<'a>(
         &'a self,
         input: &'a ModelTurnRequest,

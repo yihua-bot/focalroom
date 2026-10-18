@@ -37,9 +37,41 @@ pub struct Route {
     pub provider_id: String,
     pub model_id: String,
     pub residency: String,
-    pub quality: &'static str,
+    pub quality: String,
     pub est_cost_usd: f64,
     pub capabilities: Vec<&'static str>,
+}
+
+/// 摄影师盲评质量记录（AGENT-QUALITY-EVAL 协议产出；运行时只读消费）。
+/// mean 为五维均分（0–5）；hard_fail = 评测中出现过越权写入或幻觉 ID 等硬门槛违规。
+#[derive(Debug, Clone, PartialEq)]
+pub struct QualityRecord {
+    pub provider_id: String,
+    pub model_id: String,
+    pub task_type: TaskType,
+    pub mean_score: f64,
+    pub sample_count: u32,
+    pub score_version: String,
+    pub hard_fail: bool,
+}
+
+impl QualityRecord {
+    fn matches(&self, route: &Route, task_type: TaskType) -> bool {
+        self.provider_id == route.provider_id
+            && self.model_id == route.model_id
+            && self.task_type == task_type
+    }
+    /// 排序键：无分 None；有分为 (mean, -cost_per_point) 视档位而定。
+    fn effective_mean<'a>(
+        records: &'a [QualityRecord],
+        route: &Route,
+        task_type: TaskType,
+    ) -> Option<&'a QualityRecord> {
+        records
+            .iter()
+            .rev()
+            .find(|record| record.matches(route, task_type) && !record.hard_fail)
+    }
 }
 
 /// 部署区域约束：默认本地部署无区域限制；受限区域由配置注入。
@@ -59,6 +91,8 @@ pub struct RouteRequest<'a> {
     pub images_required: bool,
     /// 当前任务已获图像授权（consent）；需要图像但无授权时路由拒绝而不是扩大范围。
     pub image_consent: bool,
+    /// 实测质量记录（摄影师盲评）；空 = 全部候选 unmeasured，排序回退默认优先级。
+    pub quality_scores: &'a [QualityRecord],
 }
 
 pub(crate) fn required_capabilities(task: TaskType) -> &'static [&'static str] {
@@ -81,7 +115,7 @@ impl Route {
             provider_id: "openai".into(),
             model_id: model.into(),
             residency: "unknown".into(),
-            quality: "unmeasured",
+            quality: "unmeasured".into(),
             est_cost_usd: 0.02,
             capabilities,
         }
@@ -91,7 +125,7 @@ impl Route {
             provider_id: "mock".into(),
             model_id: super::MODEL_ID.into(),
             residency: "local".into(),
-            quality: "mock",
+            quality: "mock".into(),
             est_cost_usd: 0.0,
             capabilities: vec!["tool_calling", "structured_output", "instruction_following"],
         }
@@ -121,13 +155,18 @@ pub fn route_for_provider(
 ) -> Result<Route> {
     let routes = match provider {
         "mock" => vec![Route::mock()],
-        "openai" => configured
+        "openai" | "anthropic" | "gemini" => configured
             .filter(|route| route.provider_id == provider)
             .into_iter()
             .collect(),
         _ => vec![],
     };
     route_candidates(request, routes)
+}
+
+/// 显式目录路由：质量评测/诊断与多候选比较用；生产路径走 route / route_for_provider。
+pub fn route_with_catalog(request: &RouteRequest<'_>, catalog: Vec<Route>) -> Result<Route> {
+    route_candidates(request, catalog)
 }
 fn route_candidates(request: &RouteRequest<'_>, catalog: Vec<Route>) -> Result<Route> {
     let mut required = required_capabilities(request.task_type).to_vec();
@@ -140,6 +179,14 @@ fn route_candidates(request: &RouteRequest<'_>, catalog: Vec<Route>) -> Result<R
         .clone()
         .into_iter()
         .filter(|route| {
+            // 硬门槛：评测记录存在越权/幻觉 ID 违规的模型直接排除，不参与任何档位。
+            if request
+                .quality_scores
+                .iter()
+                .any(|record| record.matches(route, request.task_type) && record.hard_fail)
+            {
+                return false;
+            }
             // 区域：受限部署中，云 provider 不满足驻留要求即拒（mock 恒本地）。
             let cloud = route.provider_id != "mock";
             if cloud
@@ -184,14 +231,36 @@ fn route_candidates(request: &RouteRequest<'_>, catalog: Vec<Route>) -> Result<R
             "部署区域策略不允许当前提供方；请在设置中调整区域/驻留策略。",
         ));
     }
-    // 默认部署优先级：配置云端优先、本地其次；不是已测质量/延迟排名。
+    // 质量驱动排序：有实测分的候选按档位策略优先；无分候选保持"配置云端优先、本地兜底"。
+    // Pro 档按均分降序（质量优先）；Standard 档按均分/成本性价比降序（成本敏感）。
+    let quality_of = |route: &Route| {
+        QualityRecord::effective_mean(request.quality_scores, route, request.task_type)
+    };
+    let value_key = |tier: ServiceTier, record: &QualityRecord, cost: f64| match tier {
+        ServiceTier::Pro => record.mean_score,
+        ServiceTier::Standard => record.mean_score / cost.max(0.01),
+    };
     candidates.sort_by(|a, b| {
         let rank = |route: &Route| if route.provider_id == "mock" { 1 } else { 0 };
-        rank(a)
-            .cmp(&rank(b))
-            .then(a.est_cost_usd.partial_cmp(&b.est_cost_usd).unwrap())
+        match (quality_of(a), quality_of(b)) {
+            (Some(ra), Some(rb)) => value_key(request.tier, ra, a.est_cost_usd)
+                .partial_cmp(&value_key(request.tier, rb, b.est_cost_usd))
+                .unwrap()
+                .reverse(),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => rank(a)
+                .cmp(&rank(b))
+                .then(a.est_cost_usd.partial_cmp(&b.est_cost_usd).unwrap()),
+        }
     });
-    let best = candidates.remove(0);
+    let mut best = candidates.remove(0);
+    if let Some(record) = quality_of(&best) {
+        best.quality = format!(
+            "measured:{:.1}@{}(n={})",
+            record.mean_score, record.score_version, record.sample_count
+        );
+    }
     // 预算：单任务估算成本不得超出档位上限，也不得吃穿剩余预算。
     let ceiling = request
         .tier
@@ -218,13 +287,26 @@ pub fn explain(request: &RouteRequest<'_>, openai_available: bool) -> Value {
         }
         Err(error) => json!({"code": error.code, "message": error.message}),
     };
+    let basis = match &decision {
+        Ok(route) if route.quality.starts_with("measured:") => {
+            format!(
+                "quality_ranked_{}",
+                match request.tier {
+                    ServiceTier::Pro => "pro_mean",
+                    ServiceTier::Standard => "standard_value",
+                }
+            )
+        }
+        _ => "capability_cost_fallback_unmeasured".to_string(),
+    };
     json!({
-        "decisionBasis": "default_adapter_example_unmeasured",
+        "decisionBasis": basis,
         "taskType": request.task_type,
         "tier": request.tier,
         "requiredCapabilities": required_capabilities(request.task_type),
         "imagesRequired": request.images_required,
         "imageConsent": request.image_consent,
+        "qualityRecords": request.quality_scores.len(),
         "outcome": outcome,
         "policy": {"neverAutoExpandImageScope": true, "providerSelectionInUI": false},
     })

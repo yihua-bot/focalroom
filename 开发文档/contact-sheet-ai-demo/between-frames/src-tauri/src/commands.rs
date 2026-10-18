@@ -607,3 +607,34 @@ pub async fn agent_request(
         }
     })
 }
+
+#[tauri::command]
+/// 导入摄影师盲评质量记录（评测协议产出）；五维分/样本量/理由由后端硬校验。
+/// 评测工具与人工导入使用；写入后路由按记录排序（M3 质量驱动选模）。
+#[allow(clippy::too_many_arguments)]
+pub async fn import_quality_score(
+    state: State<'_, Backend>,
+    provider_id: String,
+    model_id: String,
+    task_type: String,
+    score_version: String,
+    scores: [i64; 5],
+    sample_count: u32,
+    hard_fail: bool,
+    rationale: String,
+) -> Result<serde_json::Value> {
+    let task = crate::agent::quality::parse_task_type(&task_type)?;
+    crate::agent::quality::record_quality_score(
+        &state.store.pool,
+        &provider_id,
+        &model_id,
+        task,
+        &score_version,
+        scores,
+        sample_count,
+        hard_fail,
+        &rationale,
+    )
+    .await?;
+    Ok(serde_json::json!({"ok": true}))
+}
