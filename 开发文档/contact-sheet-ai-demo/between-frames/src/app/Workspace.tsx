@@ -11,13 +11,13 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { Button } from '../components/shared/Button';
 import { SharedReviewLink } from '../components/shared/SharedReviewLink';
 
-export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, local = false, sharing }: {
+export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, local = false, sharing }: {
   project: Project; visible: Photo[]; kept: Photo[]; active?: Photo; busy: boolean;
   selectedIds: string[]; onSelect: (id: string, gesture?: SelectionGesture) => void;
   onBatchDecide: (status: PhotoStatus) => void; onBatchRate: (rating: number) => void;
   onEdit: () => void; onImport: () => void; onCompare: () => void; onExport: () => void;
   onDecide: (id: string, status: PhotoStatus) => void; onReorder: (ids: string[]) => void; onEnlarge: (photo: Photo) => void;
-  onUndo: () => void; onRedo: () => void; onVersions: () => void;
+  onUndo: () => void; onRedo: () => void; onVersions: () => void; onActivity: () => void;
   local?: boolean;
   sharing?: import('../domain/sharing').SharingStatus;
 }) {
@@ -30,6 +30,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
       <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">撤销</Button>
       <Button size="small" disabled={busy || !project.history?.redoGroupId} onClick={onRedo} title="⌘ / Ctrl Shift Z">重做</Button>
       <Button size="small" disabled={busy} onClick={onVersions}>作品版本{project.versions?.length ? ` · ${project.versions.length}` : ''}</Button>
+      <Button size="small" disabled={busy} onClick={onActivity}>操作历史{project.events.length ? ` · ${project.events.length}` : ''}</Button>
       <span className="micro">{project.history?.undoCount ?? 0} 次可撤销编辑</span>
     </div>
     <div className="toolbar"><div className="filter-tabs" aria-label="照片筛选">{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter && ui.view === 'grid'}

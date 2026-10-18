@@ -28,6 +28,8 @@ export interface PreviewEvent {
   photoId?: string;
   description: string;
   at: string;
+  /** 操作者：user=人工命令；system=导入等系统动作；Agent 草案经人工采纳后记 user，类型以 draft_ 前缀区分。 */
+  actor: 'user' | 'system';
   previous?: unknown;
   next?: unknown;
   context?: unknown;

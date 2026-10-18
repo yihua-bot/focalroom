@@ -163,6 +163,6 @@ export class MockRepository implements ProjectRepository {
     }
     project.revision = (project.revision ?? 1) + 1;
     this.updateHistory(project);
-    project.events.unshift({ id: crypto.randomUUID(), type, description, photoId, at: new Date().toISOString() });
+    project.events.unshift({ id: crypto.randomUUID(), type, description, photoId, at: new Date().toISOString(), actor: type === 'import' ? 'system' : 'user' });
   }
 }

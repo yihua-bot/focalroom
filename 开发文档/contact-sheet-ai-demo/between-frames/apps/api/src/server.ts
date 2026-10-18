@@ -87,6 +87,10 @@ class ApiController {
     }
     if (path === "/workspaces" && req.method === "GET")
       return s.workspaces(headers);
+    if (path === "/auth/magic/request" && req.method === "POST")
+      return s.requestMagicLogin(req.body, req.ip ?? "");
+    if (path === "/auth/magic/verify" && req.method === "POST")
+      return s.verifyMagicLogin(req.body);
     if (path === "/auth/verify-email" && req.method === "POST")
       return s.accounts.verifyEmail(req.body);
     if (path === "/auth/resend-verification" && req.method === "POST")

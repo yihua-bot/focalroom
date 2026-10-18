@@ -1,14 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, effectiveShortcuts, eventToShortcut, loadShortcutOverrides, normalizeShortcut, resetShortcutOverrides, saveShortcutOverrides } from './shortcutConfig';
+
+// 本 jsdom 环境未实现 Web Storage，用内存版替换并集中清理。
+const store = new Map<string, string>();
+vi.stubGlobal('localStorage', {
+  getItem: (key: string) => store.get(key) ?? null,
+  setItem: (key: string, value: string) => void store.set(key, value),
+  removeItem: (key: string) => void store.delete(key),
+  clear: () => store.clear(),
+});
 
 const press = (key: string, modifiers: { meta?: boolean; ctrl?: boolean; shift?: boolean } = {}) =>
   new KeyboardEvent('keydown', { key, metaKey: modifiers.meta, ctrlKey: modifiers.ctrl, shiftKey: modifiers.shift });
 
 describe('快捷键配置', () => {
   beforeEach(() => {
-    window.localStorage.clear();
+    store.clear();
     resetShortcutOverrides();
   });
+  afterEach(() => { store.clear(); });
   it('默认表覆盖全部动作且键位唯一', () => {
     expect(SHORTCUT_ACTIONS.length).toBeGreaterThanOrEqual(20);
     expect(Object.keys(DEFAULT_SHORTCUTS)).toHaveLength(SHORTCUT_ACTIONS.length);

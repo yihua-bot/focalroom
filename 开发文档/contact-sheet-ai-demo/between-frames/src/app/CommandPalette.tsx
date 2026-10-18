@@ -19,10 +19,9 @@ export function CommandPalette({ commands, onClose }: { commands: CommandEntry[]
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return commands.filter(command => terms.every(term => `${command.group} ${command.label}`.toLowerCase().includes(term)));
   }, [commands, query]);
-  useEffect(() => { setActive(0); }, [query]);
   useEffect(() => {
     const item = listRef.current?.children[active];
-    item?.scrollIntoView({ block: 'nearest' });
+    item?.scrollIntoView?.({ block: 'nearest' });
   }, [active]);
   const execute = (index: number) => {
     const command = filtered[index];
@@ -38,7 +37,7 @@ export function CommandPalette({ commands, onClose }: { commands: CommandEntry[]
       placeholder="搜索命令…"
       value={query}
       autoFocus
-      onChange={event => setQuery(event.target.value)}
+      onChange={event => { setQuery(event.target.value); setActive(0); }}
       onKeyDown={event => {
         if (event.key === 'ArrowDown') { event.preventDefault(); setActive(value => Math.min(value + 1, filtered.length - 1)); }
         if (event.key === 'ArrowUp') { event.preventDefault(); setActive(value => Math.max(value - 1, 0)); }

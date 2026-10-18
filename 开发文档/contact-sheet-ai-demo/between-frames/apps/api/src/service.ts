@@ -1,3 +1,4 @@
+import { requestMagicCode, verifyMagicCode } from "./magic-login.ts";
 import { AccountRecoveryService, type AccountEmailDelivery } from "./account-recovery.ts";
 import { listTaskResults } from "./agent-tasks.ts";
 import { randomBytes, randomUUID } from "node:crypto";

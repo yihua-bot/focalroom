@@ -80,3 +80,36 @@ export function accountEmailUrl(origin: string, kind: "reset-password" | "verify
   url.hash = new URLSearchParams({ [kind]: token }).toString();
   return url.href;
 }
+
+export async function sendMagicCodeEmail(
+  toEmail: string,
+  code: string,
+  _webOrigin: string,
+): Promise<boolean> {
+  const apiKey = process.env.FOCALROOM_RESEND_API_KEY ?? "";
+  if (!apiKey) {
+    console.warn("[email] FOCALROOM_RESEND_API_KEY 未配置，验证码邮件不发送");
+    return false;
+  }
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: process.env.FOCALROOM_EMAIL_FROM ?? "FocalRoom <noreply@focalroom.app>",
+      to: toEmail,
+      subject: `FocalRoom 验证码: ${code}`,
+      html: `
+        <div style="font-family:system-ui;max-width:480px;margin:0 auto;padding:2rem;text-align:center">
+          <h2 style="color:#1a1a2e">FocalRoom 登录验证码</h2>
+          <div style="font-size:2.5rem;font-weight:700;letter-spacing:.3em;color:#5865F2;margin:1.5rem 0">${code}</div>
+          <p style="color:#666;font-size:.85rem">验证码 10 分钟内有效。如果这不是你的操作，请忽略此邮件。</p>
+        </div>
+      `,
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  return response.ok;
+}

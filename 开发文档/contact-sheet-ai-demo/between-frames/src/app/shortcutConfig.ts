@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 /** 可配置快捷键动作清单。键位格式：单字符 / 'space' / 'escape' / 箭头，或 'mod+…'（⌘/Ctrl）组合。 */
 export const SHORTCUT_ACTIONS = [
@@ -62,8 +62,9 @@ export function effectiveShortcuts(overrides: Partial<ShortcutMap>): ShortcutMap
   return { ...DEFAULT_SHORTCUTS, ...overrides };
 }
 
-/** 保存覆盖；与其它动作键位重复时返回冲突动作，不落盘。 */
-export function saveShortcutOverrides(overrides: Partial<ShortcutMap>): ShortcutActionId | null {
+/** 保存增量覆盖（与已存覆盖合并）；与其它动作键位重复时返回冲突动作，不落盘。 */
+export function saveShortcutOverrides(delta: Partial<ShortcutMap>): ShortcutActionId | null {
+  const overrides = { ...loadShortcutOverrides(), ...delta };
   const merged = effectiveShortcuts(overrides);
   const seen = new Map<string, ShortcutActionId>();
   for (const action of SHORTCUT_ACTIONS) {
@@ -98,11 +99,10 @@ export function eventToShortcut(event: KeyboardEvent): string {
 /** React 状态封装：生效键位 + 保存/重置。 */
 export function useShortcutConfig() {
   const [overrides, setOverrides] = useState<Partial<ShortcutMap>>(() => loadShortcutOverrides());
-  useEffect(() => { setOverrides(loadShortcutOverrides()); }, []);
-  const save = (next: Partial<ShortcutMap>) => {
-    const conflict = saveShortcutOverrides(next);
+  const save = (delta: Partial<ShortcutMap>) => {
+    const conflict = saveShortcutOverrides(delta);
     if (conflict) return conflict;
-    setOverrides(next);
+    setOverrides(loadShortcutOverrides());
     return null;
   };
   const reset = () => { resetShortcutOverrides(); setOverrides({}); };

@@ -19,6 +19,14 @@ const projectSchema = z.object({
 });
 const jobSchema = z.object({ jobId: z.string(), projectId: z.string(), status: z.enum(['running', 'completed', 'cancelled']), completed: z.number(), total: z.number(), imported: z.number(), skipped: z.number(), failures: z.array(z.object({ path: z.string(), code: z.string(), message: z.string() })) });
 
+/** 事件类型 → 人类可读描述；操作历史入口与事件映射共用。 */
+export const EVENT_KIND_LABELS: Record<string, string> = {
+  decision: '修改选片状态', note: '更新照片备注', compare: '记录两图偏好', reorder: '调整作品序列', import: '导入照片', relink: '重新定位照片',
+  project: '更新项目意图', project_create: '创建项目', rating: '保存人工评分', undo: '撤销人工编辑', redo: '重做人工编辑',
+  version_save: '保存作品版本', version_restore: '恢复作品版本', project_archive: '归档项目', project_restore: '恢复项目',
+  draft_apply: '采纳草案', draft_rebase: '重新比较草案基线', draft_edit: '调整草案顺序', draft_discard: '丢弃草案',
+};
+
 async function command<T>(name: string, args?: Record<string, unknown>): Promise<T> {
   try { return await invoke<T>(name, args); }
   catch (error) {
@@ -64,8 +72,8 @@ export class TauriRepository implements DesktopProjectRepository {
     if (current && (current.revision ?? 0) > parsed.revision) return current;
     const project: Project = { ...parsed, photos: parsed.photos.map(photo => ({ ...photo, src: convertFileSrc(photo.thumbnailPath), previewSrc: convertFileSrc(photo.previewPath),
       loadOriginal: this.originalLoader(parsed.id, photo.id) })),
-      events: parsed.events.map(event => ({ id: event.id, type: event.kind, photoId: event.photoId ?? undefined, at: event.at,
-        description: event.reason || ({ decision: '修改选片状态', note: '更新照片备注', compare: '记录两图偏好', reorder: '调整作品序列', import: '导入照片', relink: '重新定位照片', project: '更新项目意图', project_create: '创建项目', rating: '保存人工评分', undo: '撤销人工编辑', redo: '重做人工编辑', version_save: '保存作品版本', version_restore: '恢复作品版本', project_archive: '归档项目', project_restore: '恢复项目', draft_apply: '采纳草案', draft_rebase: '重新比较草案基线', draft_edit: '调整草案顺序', draft_discard: '丢弃草案' }[event.kind] ?? event.kind),
+      events: parsed.events.map(event => ({ id: event.id, type: event.kind, photoId: event.photoId ?? undefined, at: event.at, actor: event.actor,
+        description: event.reason || (EVENT_KIND_LABELS[event.kind] ?? event.kind),
         previous: event.previousJson ? JSON.parse(event.previousJson) : null, next: event.nextJson ? JSON.parse(event.nextJson) : null, context: JSON.parse(event.contextJson) })),
     };
     this.snapshots.set(project.id, project);

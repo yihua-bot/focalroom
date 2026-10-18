@@ -28,10 +28,11 @@ import { Button } from '../components/shared/Button';
 import { isDesktopRepository } from '../services/TauriRepository';
 import { ImportDialog } from '../features/photo-import/ImportDialog';
 import { VersionsDialog } from '../features/project/VersionsDialog';
+import { ActivityDialog } from '../features/project/ActivityDialog';
 import { Lightbox } from '../components/inspector/Lightbox';
 import type { SelectionGesture } from '../domain/selection';
 
-type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
+type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' | 'activity' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
 
 export function AppController({ repository }: { repository: ProjectRepository }) {
   const local = isDesktopRepository(repository);
@@ -143,6 +144,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       { id: 'search', group: '导航', label: '聚焦搜索框', hint: hint('search'), run: () => document.getElementById('photo-search')?.focus() },
       { id: 'agent', group: '导航', label: '显示/隐藏编辑建议面板', hint: hint('toggleAgent'), run: ui.toggleAgent },
       { id: 'versions', group: '项目', label: '查看/保存作品版本', run: () => setDialog({ kind: 'versions' }) },
+      { id: 'activity', group: '项目', label: '按操作者浏览操作历史', run: () => setDialog({ kind: 'activity' }) },
       { id: 'export', group: '项目', label: '导出作品', run: () => setDialog({ kind: 'export' }) },
     );
   }
@@ -172,7 +174,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
         onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })}
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />
       : project ? <Workspace project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending || readOnly} local={local} sharing={sharing.data ?? undefined} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
-        onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
+        onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
         : <EmptyState title={local ? '项目未找到' : '项目不在本次预览中'} hint={local ? '项目可能已归档，请返回项目列表查看。' : '内存项目在刷新后重置，请返回项目列表。'} action={<Button onClick={() => navigate(null)}>{zh.projects}</Button>} />}
   </AppShell>
     {local && project && !(ui.inspectorOpen && ui.panel === 'ai') && <AgentStatus repository={repository} projectId={project.id} onOpen={() => ui.setPanel('ai')} />}
@@ -186,6 +188,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
     {dialog?.kind === 'versions' && project && <VersionsDialog project={project} busy={mutation.isPending} onClose={() => setDialog(null)}
       onSave={label => act(() => repository.saveVersion(project.id, label), '当前作品版本已保存')}
       onRestore={versionId => act(() => repository.restoreVersion(project.id, versionId), '版本已恢复，可撤销此操作', true)} />}
+    {dialog?.kind === 'activity' && project && <ActivityDialog project={project} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'export' && <ExportDialog repository={local ? repository : undefined} projectId={project?.id} revision={project?.revision} onChanged={refresh} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'import' && (local && project ? <ImportDialog repository={repository} projectId={project.id} onClose={() => { setDialog(null); refresh(); }} onChanged={refresh} />
       : <Modal title={zh.import} description="请在桌面版导入照片。" onClose={() => setDialog(null)}><div className="dialog-actions"><Button onClick={() => setDialog(null)}>继续体验示例项目</Button></div></Modal>)}

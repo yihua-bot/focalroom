@@ -123,6 +123,23 @@ export default function SharedApp() {
 function Login({ onLogin }: { onLogin: (session: Session) => void }) {
   const { t } = useWebI18n();
   const [recovering, setRecovering] = useState(false);
+  const [magicStep, setMagicStep] = useState<'email' | 'code' | null>(null);
+  const [magicEmail, setMagicEmail] = useState('');
+  const [magicSent, setMagicSent] = useState(false);
+  const requestMagic = async (email: string) => {
+    try {
+      await request('/auth/magic/request', { email }, 'POST');
+      setMagicEmail(email);
+      setMagicSent(true);
+      setMagicStep('code');
+    } catch (e) { setError(message(e)); }
+  };
+  const verifyMagic = async (code: string) => {
+    try {
+      const result = await request('/auth/magic/verify', { email: magicEmail, code }, 'POST');
+      onSession(result as never);
+    } catch (e) { setError(message(e)); }
+  };
   const [register, setRegister] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);

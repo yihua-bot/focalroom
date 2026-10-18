@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../components/shared/Button';
-import { SHORTCUT_ACTIONS, eventToShortcut, loadShortcutOverrides, normalizeShortcut, type ShortcutActionId, type ShortcutMap } from '../app/shortcutConfig';
+import { SHORTCUT_ACTIONS, eventToShortcut, normalizeShortcut, type ShortcutActionId, type ShortcutMap } from '../app/shortcutConfig';
 
 export function formatShortcut(key: string): string {
   return key.replace('mod+', '⌘').replace('shift+', '⇧').replace('space', '空格').replace('escape', 'Esc');
@@ -27,8 +27,7 @@ export function ShortcutEditor({ shortcuts, overrides, save, reset }: {
       if (event.key === 'Escape') { setEditing(null); return; }
       const normalized = normalizeShortcut(eventToShortcut(event));
       if (!normalized) return;
-      const next = { ...loadShortcutOverrides(), [editing]: normalized };
-      const clash = save(next);
+      const clash = save({ [editing]: normalized });
       if (clash) { setConflict(`「${labelOf(editing)}」想用 ${formatShortcut(normalized)}，与「${labelOf(clash)}」冲突，未保存。`); return; }
       setConflict('');
       setEditing(null);
