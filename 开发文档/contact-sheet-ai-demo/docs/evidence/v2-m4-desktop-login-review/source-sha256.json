@@ -1,0 +1,9 @@
+{
+  "src-tauri/src/lib.rs": "baf6ffe4f1afb2e10ae7dfb343a3823b609eafc3888107a9e0ee305bee01e857",
+  "src-tauri/src/login_guard.rs": "902cbc29714ae90235009b8244ac6829e97bb6dc36ccf61747b50b56f6e64196",
+  "src-tauri/src/commands.rs": "a5bd1477ed60474b51839f8b0050e0aea52c97a60be2d0d0a54f7463c07ef46d",
+  "src-tauri/tauri.conf.json": "e43194c8bfb2ebd49d62100026b700553402ea1ee4b7992bf03bc9b122bbbf59",
+  "src/features/cloud-login/CloudLoginView.tsx": "49d94d741e936398b8a82e7d6ea06757c594ab356bd7e693fcb3eb5a2658a803",
+  "apps/web/src/shared/MagicLogin.tsx": "d95996c50cb7b98670e1e9efacd771cecabc49e08f09328e6bf50cb72cbda852",
+  "apps/web/src/SharedApp.tsx": "80b4bc32e55ebc5db220ba239ee215fdc27997be17b5fa58e109cb8f33811e9f"
+}

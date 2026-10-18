@@ -1,3 +1,4 @@
+import { DesktopApproval, readDesktopRequest } from "./shared/DesktopApproval";
 import { MagicLogin as Login } from "./shared/MagicLogin";
 import { useEffect, useState } from "react";
 import {
@@ -27,6 +28,7 @@ export default function SharedApp() {
     [ready, setReady] = useState(false),
     [route, setRoute] = useState(() => location.hash),
     [error, setError] = useState("");
+  const desktopIntent = readDesktopRequest(new URL(location.href));
   const projectId = new URLSearchParams(route.slice(1)).get("project");
   const openProject = (id: string | null) => {
     const hash = id ? `#project=${encodeURIComponent(id)}` : "";
@@ -106,6 +108,8 @@ export default function SharedApp() {
         <p className="fr-loading">正在连接工作区…</p>
       ) : !session ? (
         <Login onLogin={setSession} />
+      ) : desktopIntent ? (
+        <DesktopApproval session={session} intent={desktopIntent} />
       ) : projectId ? (
         <ProjectReview
           key={projectId}

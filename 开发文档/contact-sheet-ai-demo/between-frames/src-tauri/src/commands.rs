@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 type ImportGrants = Arc<Mutex<HashMap<String, (String, Vec<PathBuf>)>>>;
 
 pub struct Backend {
+    pub cloud_auth: Arc<crate::cloud_auth::CloudAuth>,
     pub agent: crate::agent::runtime::AgentEngine,
     pub store: Store,
     pub cache: PathBuf,
@@ -640,22 +641,17 @@ pub async fn import_quality_score(
 }
 
 #[tauri::command]
-pub async fn cloud_login_open(
-    _state: State<'_, Backend>,
-    base_url: String,
-) -> Result<String> {
-    let url = crate::LOGIN_GUARD.get_or_init(|| tokio::sync::Mutex::new(crate::login_guard::LoginGuard::new())).lock().await.issue(&base_url);
-    crate::login_guard::open_browser(&url).await?;
-    Ok(url)
+pub async fn cloud_login_open(state: State<'_, Backend>) -> Result<()> {
+    let url = state.cloud_auth.begin().await?;
+    if let Err(error) = crate::login_guard::open_browser(&url).await {
+        state.cloud_auth.cancel().await?;
+        return Err(error);
+    }
+    Ok(())
 }
-
 #[tauri::command]
-pub async fn cloud_login_callback(
-    _state: State<'_, Backend>,
-    token: String,
-    state: String,
-) -> Result<bool> {
-    let guard_token = crate::LOGIN_GUARD.get_or_init(|| tokio::sync::Mutex::new(crate::login_guard::LoginGuard::new())).lock().await.validate(&token, &state)?;
-    // TODO: 存储 token 到钥匙串或本地设置
-    Ok(true)
-}
+pub async fn cloud_login_status(state: State<'_, Backend>) -> Result<crate::cloud_auth::CloudStatus> { state.cloud_auth.status().await }
+#[tauri::command]
+pub async fn cloud_login_cancel(state: State<'_, Backend>) -> Result<()> { state.cloud_auth.cancel().await }
+#[tauri::command]
+pub async fn cloud_login_logout(state: State<'_, Backend>) -> Result<bool> { state.cloud_auth.logout().await }

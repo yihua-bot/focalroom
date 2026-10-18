@@ -16,9 +16,8 @@ pub mod keychain;
 pub mod photo_inspection;
 mod resource_commands;
 pub mod login_guard;
-pub use login_guard::LoginGuard;
-/// 全局登录门卫（单实例——同一时刻只有一个登录会话）。
-pub static LOGIN_GUARD: std::sync::OnceLock<tokio::sync::Mutex<LoginGuard>> = std::sync::OnceLock::new();
+pub mod cloud_auth;
+pub mod cloud_credentials;
 pub mod shared_cloud;
 pub mod shared_export;
 pub mod v2_bridge;
@@ -27,6 +26,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             let directory = app.path().app_data_dir()?.join("BetweenFrames");
             let cache = directory.join("cache");
@@ -49,7 +49,24 @@ pub fn run() {
                     );
                 }),
             );
+            let cloud_auth = std::sync::Arc::new(cloud_auth::CloudAuth::new(login_guard::CLOUD_ORIGIN, &app.config().identifier, std::sync::Arc::new(cloud_credentials::SystemCredentials))?);
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let auth = cloud_auth.clone();
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        let auth = auth.clone(); let handle = handle.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(error) = auth.complete(url.as_str()).await { auth.remember_error(&error); }
+                            use tauri::Emitter;
+                            let _ = handle.emit("cloud-login-updated", ());
+                        });
+                    }
+                });
+            }
             app.manage(commands::Backend {
+                cloud_auth,
                 agent,
                 store: store.clone(),
                 cache: cache.clone(),
@@ -101,7 +118,9 @@ pub fn run() {
             commands::get_sharing_status,
             commands::open_shared_review,
             commands::cloud_login_open,
-            commands::cloud_login_callback,
+            commands::cloud_login_status,
+            commands::cloud_login_cancel,
+            commands::cloud_login_logout,
             commands::share_project
         ])
         .run(tauri::generate_context!())

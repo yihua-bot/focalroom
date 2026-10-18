@@ -34,7 +34,7 @@ test('M4 角色初始化（等价 postgres-init 脚本）与迁移角色执行�
   });
   await migrate(migrator);
   const versions = (await migrator.query('SELECT version FROM fr_migrations ORDER BY version')).rows.map((row) => row.version);
-  assert.deepEqual(versions, ['0001', '0002', '0006', '0008', '0009', '0010', '0011', '0012']);
+  assert.deepEqual(versions, ['0001', '0002', '0006', '0008', '0009', '0010', '0011', '0012', '0013']);
   // 幂等重放（0009 每次 migrate 都会重放授权）。
   await migrate(migrator);
   await migrator.end();

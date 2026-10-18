@@ -3,6 +3,7 @@
   "dependencies": {
     "@betweenframes/contracts": "^0.0.0",
     "@betweenframes/ui": "0.0.0",
+    "@react-oauth/google": "^0.13.5",
     "yjs": "^13.6.33"
   },
   "scripts": {

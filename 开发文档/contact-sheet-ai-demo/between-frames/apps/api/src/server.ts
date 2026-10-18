@@ -59,6 +59,12 @@ class ApiController {
       headers = req.headers,
       path = req.path.replace(/^\/api\/v2/, "");
     s.auth.checkOrigin(headers);
+    if (req.method === "POST" && path === "/auth/desktop/start")
+      return s.desktop.begin(req.body, req.socket.remoteAddress ?? "unknown");
+    if (req.method === "POST" && path === "/auth/desktop/authorize")
+      return s.desktop.authorize(headers, req.body);
+    if (req.method === "POST" && path === "/auth/desktop/exchange")
+      return s.desktop.exchange(req.body, req.socket.remoteAddress ?? "unknown");
     if (req.method === "GET" && path === "/health") {
       await s.pool.query("SELECT 1");
       return { ok: true, authority: "POSTGRESQL", protocol: "2.0" };

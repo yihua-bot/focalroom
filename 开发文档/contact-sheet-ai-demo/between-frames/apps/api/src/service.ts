@@ -1,4 +1,5 @@
 import { requestMagicCode, verifyMagicCode, type MagicEmailDelivery } from "./magic-login.ts";
+import { DesktopLoginService } from "./desktop-login.ts";
 import { AccountRecoveryService, type AccountEmailDelivery } from "./account-recovery.ts";
 import { listTaskResults, modelEndpointLabel } from "./agent-tasks.ts";
 import { MetricsRegistry } from "./metrics.ts";
@@ -31,11 +32,13 @@ export class CloudService {
   readonly authority: AuthorityService;
   readonly store: PreviewStore;
   readonly accounts: AccountRecoveryService;
+  readonly desktop: DesktopLoginService;
   private readonly magicEmail?: MagicEmailDelivery;
   constructor(pool: Pool, origin: string, store: PreviewStore, email?: AccountEmailDelivery, magicEmail?: MagicEmailDelivery) {
     this.pool = pool;
     this.magicEmail = magicEmail;
     this.auth = new AuthService(pool, origin);
+    this.desktop = new DesktopLoginService(pool, this.auth);
     this.authority = new AuthorityService(pool, this.auth);
     this.store = store;
     this.accounts = new AccountRecoveryService(pool, this.auth, origin, email);
