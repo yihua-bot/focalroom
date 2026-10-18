@@ -50,16 +50,15 @@ before(async () => {
   manifest = { workspace_id: workspace, local_project_id: 'worker-demo', promotion_id: randomUUID(), title: 'Worker 评片', from_revision: 0,
     snapshot: { photos: [{ id: 'wp1', filename: 'wp1.jpg', source_sha256: 'a'.repeat(64), selection: 'UNDECIDED' }], sequences: [{ id: 'seq', title: '主序列', items: [] }] },
     media_policy: { previews_only: true, strip_gps: true, max_long_edge: 2048, ai_upload_authorized: false } };
-  project = (await call('/promotions', 'POST', owner.token, manifest)).project_id;
+  const promotion = await call('/promotions', 'POST', owner.token, manifest);
+  project = promotion.project_id;
   // 上传预览并 finalize：项目转 SHARED 后才能发送项目邀请。
   const jpeg = await sharp({ create: { width: 96, height: 64, channels: 3, background: '#3178c6' } }).jpeg().toBuffer();
-  const start = await call(`/projects/${project}/snapshot`, 'GET', owner.token);
   for (const photo of manifest.snapshot.photos) {
     const response = await fetch(`${base}/api/v2/projects/${project}/previews/${photo.id}`, { method: 'PUT', headers: { authorization: `Bearer ${owner.token}`, 'content-type': 'image/jpeg' }, body: jpeg });
     assert.equal(response.status, 200, await response.text());
   }
-  await call(`/projects/${project}/finalize`, 'POST', owner.token, { manifest_digest: start.manifest_digest ?? (await call('/promotions', 'POST', owner.token, manifest)).manifest_digest });
-  void start;
+  await call(`/projects/${project}/finalize`, 'POST', owner.token, { manifest_digest: promotion.manifest_digest });
 });
 
 after(async () => { if (api) await api.close(); if (pool) await pool.end(); if (modelServer) await new Promise((resolve) => modelServer.close(resolve)); });
@@ -129,8 +128,8 @@ test('M4 无显式授权时入队被拒；授权/任务/取消/撤权全链路',
 test('M4 崩溃恢复：租约过期的 RUNNING 任务被重新领取并完成', async () => {
   const consent = await call(`/projects/${project}/model-consents`, 'POST', owner.token, { scope: 'summarize_comments', max_tasks: 5 });
   const job = await call(`/projects/${project}/agent-tasks/summarize`, 'POST', owner.token, { kind: 'summarize_comments', consent_id: consent.consent_id });
-  // 模拟 Worker 崩溃：任务滞留 RUNNING 且租约已过期。
-  await pool.query(`UPDATE fr_agent_jobs SET status='RUNNING', lease_expires=now()-interval '5 seconds' WHERE id=$1`, [job.job_id]);
+  // 模拟 Worker 崩溃：任务已执行过一次（attempts=1）后滞留 RUNNING 且租约已过期。
+  await pool.query(`UPDATE fr_agent_jobs SET status='RUNNING', attempts=1, lease_expires=now()-interval '5 seconds' WHERE id=$1`, [job.job_id]);
   const run = await runWorkerOnce(pool);
   assert.equal(run.status, 'COMPLETED', '过期租约任务应被重新领取执行');
   const jobs = await call(`/projects/${project}/agent-jobs`, 'GET', owner.token);
@@ -143,10 +142,10 @@ test('M4 模型失败有限重试后 FAILED 且不外发更多请求', async () 
   const consent = await call(`/projects/${project}/model-consents`, 'POST', owner.token, { scope: 'summarize_comments', max_tasks: 10 });
   const job = await call(`/projects/${project}/agent-tasks/summarize`, 'POST', owner.token, { kind: 'summarize_comments', consent_id: consent.consent_id });
   const before = modelCalls.length;
-  // 让 mock 返回 500。
+  // 让 mock 返回 500（仍计入调用次数）。
   const original = modelServer.listeners('request')[0];
   modelServer.removeAllListeners('request');
-  modelServer.on('request', (_request, response) => { response.statusCode = 500; response.end('boom'); });
+  modelServer.on('request', (request, response) => { modelCalls.push({ url: request.url, failed: true }); response.statusCode = 500; response.end('boom'); });
   const first = await runWorkerOnce(pool);
   assert.equal(first.status, 'REQUEUED', '首次失败重新排队');
   const second = await runWorkerOnce(pool);

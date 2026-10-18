@@ -45,7 +45,7 @@ test('M4 promotion verifies media, strips EXIF, atomically commits and replays',
   const ticket = await call(`/projects/${project}/previews/p1/ticket`, 'POST');
   const media = await fetch(`${base}${ticket.url}`); assert.equal(media.status, 200); const meta = await sharp(Buffer.from(await media.arrayBuffer())).metadata(); assert.equal(meta.exif, undefined); assert.equal(meta.width, 96);
   assert.equal((await fetch(`${base}${ticket.url}`)).status, 401, '单次票据不得重放');
-  assert.equal(Number((await pool.query('SELECT count(*) FROM fr_versions')).rows[0].count), 1);
+  assert.equal(Number((await pool.query('SELECT count(*) FROM fr_versions WHERE project_id=$1', [project])).rows[0].count), 1);
 });
 test('M4 project-only invitation, email binding, one-time acceptance and isolation', async () => {
   const invited = await invite(reviewer); await invite(viewer, 'VIEWER');
@@ -219,8 +219,9 @@ test('M4 append-only migration upgrades 0001 without rewriting legacy receipts',
 });
 test('M4 project authority does not authorize cloud model transmission', async () => {
   const before = (await pool.query('SELECT count(*) FROM fr_agent_task_results')).rows[0].count;
-  const result = await call(`/projects/${project}/agent-tasks/summarize`, 'POST', owner.token, {}, 403);
+  // 无效授权引用：项目权限与成员身份都不构成向模型发送评论的同意。
+  const result = await call(`/projects/${project}/agent-tasks/summarize`, 'POST', owner.token, { kind: 'summarize_comments', consent_id: 'no-such-consent' }, 403);
   assert.equal(result.error.code, 'MODEL_CONSENT_REQUIRED');
-  await call(`/projects/${project}/agent-tasks/summarize`, 'POST', outsider.token, {}, 403);
+  await call(`/projects/${project}/agent-tasks/summarize`, 'POST', outsider.token, { kind: 'summarize_comments', consent_id: 'no-such-consent' }, 403);
   assert.equal((await pool.query('SELECT count(*) FROM fr_agent_task_results')).rows[0].count, before);
 });

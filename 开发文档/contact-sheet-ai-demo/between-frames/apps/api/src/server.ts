@@ -20,6 +20,7 @@ import {
   type PreviewStore,
 } from "./storage.ts";
 import { attachRealtime } from "./realtime.ts";
+import { metricsAuthorized } from "./metrics.ts";
 import { migrate, assertSchema } from "./database.ts";
 
 class ApiController {
@@ -60,6 +61,21 @@ class ApiController {
     if (req.method === "GET" && path === "/health") {
       await s.pool.query("SELECT 1");
       return { ok: true, authority: "POSTGRESQL", protocol: "2.0" };
+    }
+    if (req.method === "GET" && path === "/metrics") {
+      // 指标端点：默认开放；设置 FOCALROOM_METRICS_TOKEN 后需查询串或 Bearer 令牌。
+      const search = (() => {
+        try {
+          return new URL(req.originalUrl || req.url, "http://local").searchParams;
+        } catch {
+          return new URLSearchParams();
+        }
+      })();
+      if (!metricsAuthorized(search, headers)) {
+        throw new ApiError(403, "PERMISSION_DENIED", "指标端点需要令牌");
+      }
+      res.type("text/plain").send(await s.metrics.render(s.pool));
+      return null;
     }
     if (
       req.method === "POST" &&
@@ -238,6 +254,24 @@ export async function createApi(options: {
   const app = await NestFactory.create(ApiModule, {
     logger: false,
     bodyParser: false,
+  });
+  // 运维指标：请求埋点（finish 时记录路由模板/状态/延迟）；端点在 route 内处理。
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path === "/api/v2/metrics") {
+      next();
+      return;
+    }
+    const startedAt = process.hrtime.bigint();
+    res.on("finish", () => {
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      service.metrics.observe(
+        req.path.replace(/^\/api\/v2/, ""),
+        req.method,
+        res.statusCode,
+        durationMs,
+      );
+    });
+    next();
   });
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.set({

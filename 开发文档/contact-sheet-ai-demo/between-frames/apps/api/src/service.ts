@@ -1,6 +1,7 @@
 import { requestMagicCode, verifyMagicCode } from "./magic-login.ts";
 import { AccountRecoveryService, type AccountEmailDelivery } from "./account-recovery.ts";
 import { listTaskResults, modelEndpointLabel } from "./agent-tasks.ts";
+import { MetricsRegistry } from "./metrics.ts";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -23,6 +24,8 @@ const inviteInput = z.strictObject({
   project_id: z.string().min(1).max(160).optional(),
 });
 export class CloudService {
+  /** 运维指标注册表（每实例独立；/metrics 抓取时含 DB 派生指标）。 */
+  readonly metrics = new MetricsRegistry();
   readonly pool: Pool;
   readonly auth: AuthService;
   readonly authority: AuthorityService;
@@ -1063,7 +1066,7 @@ export class CloudService {
   async modelConsentList(headers: Headers, projectId: string) {
     return transaction(this.pool, async (tx) => {
       const project = (
-        await tx.query("SELECT id FROM fr_projects WHERE id=$1", [projectId])
+        await tx.query("SELECT * FROM fr_projects WHERE id=$1", [projectId])
       ).rows[0];
       assert(project, 404, "NOT_FOUND", "项目不存在");
       const user = await this.auth.authenticate(headers, true, tx);
@@ -1140,7 +1143,7 @@ export class CloudService {
   async agentJobList(headers: Headers, projectId: string) {
     return transaction(this.pool, async (tx) => {
       const project = (
-        await tx.query("SELECT id FROM fr_projects WHERE id=$1", [projectId])
+        await tx.query("SELECT * FROM fr_projects WHERE id=$1", [projectId])
       ).rows[0];
       assert(project, 404, "NOT_FOUND", "项目不存在");
       const user = await this.auth.authenticate(headers, true, tx);
@@ -1224,7 +1227,7 @@ export class CloudService {
   async agentTaskList(headers: Headers, projectId: string) {
     return transaction(this.pool, async (tx) => {
       const project = (
-        await tx.query("SELECT id FROM fr_projects WHERE id=$1", [projectId])
+        await tx.query("SELECT * FROM fr_projects WHERE id=$1", [projectId])
       ).rows[0];
       assert(project, 404, "NOT_FOUND", "项目不存在");
       const user = await this.auth.authenticate(headers, true, tx);
