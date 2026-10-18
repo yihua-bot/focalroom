@@ -4,6 +4,7 @@
 use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 use sqlx::{Row, Sqlite, Transaction};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -361,7 +362,7 @@ pub async fn retrievable_for_goal(
         .bind(project).fetch_all(&mut **tx).await?;
     let corrected: std::collections::HashSet<_> =
         corrections.iter().map(|s| statement_key(s)).collect();
-    let relevance = super::memory_search::ranks(tx, project, goal).await?;
+    let keyword_ranks = super::memory_search::ranks(tx, project, goal).await?;
     let mut usable: Vec<HypothesisView> = all
         .into_iter()
         .filter(|h| {
@@ -370,6 +371,25 @@ pub async fn retrievable_for_goal(
                 && h.evidence_ids.len() >= if h.status == "confirmed" { 1 } else { 2 }
         })
         .collect();
+    // 混合检索：关键词 BM25 与本地句向量余弦等权融合；语义不可用（非 macOS/超时/无模型）自动退化为关键词。
+    let semantic_ranks = if goal.trim().is_empty() {
+        Default::default()
+    } else {
+        let statements: Vec<String> = usable.iter().map(|h| h.statement.clone()).collect();
+        let keys: Vec<String> = usable.iter().map(|h| h.id.to_string()).collect();
+        let ranking =
+            super::semantic::rank_cached(goal.to_string(), statements, 300, None, keys).await;
+        ranking
+            .scores
+            .iter()
+            .enumerate()
+            .filter_map(|(index, score)| {
+                let id = usable.get(index).map(|h| h.id)?;
+                score.map(|value| (id, Some(value)))
+            })
+            .collect::<HashMap<i64, Option<f64>>>()
+    };
+    let relevance = super::memory_search::hybrid_scores(&keyword_ranks, &semantic_ranks);
     usable.sort_by(|a, b| {
         let rank = |h: &HypothesisView| if h.status == "confirmed" { 0 } else { 1 };
         relevance
@@ -377,10 +397,11 @@ pub async fn retrievable_for_goal(
             .map_or(1, |_| 0)
             .cmp(&relevance.get(&b.id).map_or(1, |_| 0))
             .then_with(|| {
+                // 混合分越高越相关（旧 BM25 负值升序语义在 hybrid_scores 内已归一为正序分）。
                 relevance
-                    .get(&a.id)
+                    .get(&b.id)
                     .unwrap_or(&0.0)
-                    .total_cmp(relevance.get(&b.id).unwrap_or(&0.0))
+                    .total_cmp(relevance.get(&a.id).unwrap_or(&0.0))
             })
             .then(
                 rank(a)
