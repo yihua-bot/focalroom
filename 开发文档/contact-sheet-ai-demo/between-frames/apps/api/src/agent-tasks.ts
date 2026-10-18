@@ -14,10 +14,46 @@ export interface SummarizeResult {
   model_id: string;
 }
 
-const MODEL_BASE_URL =
+const MODEL_BASE_URL = () =>
   process.env.FOCALROOM_AGENT_MODEL_BASE_URL ?? "https://api.deepseek.com/v1";
-const MODEL_NAME =
-  process.env.FOCALROOM_AGENT_MODEL_NAME ?? "deepseek-chat";
+const MODEL_NAME = () => process.env.FOCALROOM_AGENT_MODEL_NAME ?? "deepseek-chat";
+
+/** 服务端配置的发送端点摘要（不含密钥），用于授权记录与回显。 */
+export function modelEndpointLabel(): string {
+  return `${MODEL_NAME()}@${new URL(MODEL_BASE_URL()).host}`;
+}
+
+export type CommentKind = "summarize_comments" | "summarize_disagreement";
+
+function buildPrompt(kind: CommentKind, comments: Array<{ reviewer: string; body: string }>) {
+  if (kind === "summarize_disagreement")
+    return {
+      system:
+        "你是摄影项目的审稿助手。只分析人类评论之间的分歧并给出可审阅的折中提案要点；不添加自己的审美判断，不扩大任何评论者的主张。用中文简洁输出。",
+      user: [
+        "以下是摄影项目的人工审稿评论。请输出：",
+        "1. 各方一致同意的要点",
+        "2. 明确分歧（谁主张什么、依据是什么）",
+        "3. 折中提案要点（保留双方核心诉求的可选方案，供作者决策，不代替决定）",
+        "4. 需要作者澄清的问题",
+        "",
+        ...comments.map((c, i) => `${i + 1}. [${c.reviewer}] ${c.body}`),
+      ].join("\n"),
+    };
+  return {
+    system:
+      "你是摄影项目的审稿助手。只汇总人类评论，不添加自己的审美判断。用中文简洁输出。",
+    user: [
+      "以下是摄影项目的人工审稿评论。请汇总：",
+      "1. 整体评价倾向（正面/负面/中性）",
+      "2. 主要关注点（出现 2+ 次的主题）",
+      "3. 具体建议（可执行的改进项）",
+      "4. 未解决争议（如有）",
+      "",
+      ...comments.map((c, i) => `${i + 1}. [${c.reviewer}] ${c.body}`),
+    ].join("\n"),
+  };
+}
 
 function costMinorUsd(tokensIn: number, tokensOut: number): number {
   // DeepSeek 峰时非缓存估算：输入 $0.30/M、输出 $1.20/M（保守整数向上取整）。
@@ -28,30 +64,22 @@ export async function summarizeProjectComments(
   _pool: Pool,
   _projectId: string,
   comments: Array<{ reviewer: string; body: string }>,
+  kind: CommentKind = "summarize_comments",
 ): Promise<SummarizeResult> {
   const apiKey = process.env.FOCALROOM_AGENT_MODEL_KEY ?? "";
   if (!apiKey) {
     throw Object.assign(new Error("云 Agent 模型未配置"), { status: 503 });
   }
+  const prompt = buildPrompt(kind, comments);
 
-  const prompt = [
-    "以下是摄影项目的人工审稿评论。请汇总：",
-    "1. 整体评价倾向（正面/负面/中性）",
-    "2. 主要关注点（出现 2+ 次的主题）",
-    "3. 具体建议（可执行的改进项）",
-    "4. 未解决争议（如有）",
-    "",
-    ...comments.map((c, i) => `${i + 1}. [${c.reviewer}] ${c.body}`),
-  ].join("\n");
-
-  const response = await fetch(`${MODEL_BASE_URL}/chat/completions`, {
+  const response = await fetch(`${MODEL_BASE_URL()}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL_NAME,
+      model: MODEL_NAME(),
       messages: [
         {
           role: "system",
@@ -87,7 +115,7 @@ export async function summarizeProjectComments(
     tokens_in: tokensIn,
     tokens_out: tokensOut,
     cost_estimate_minor_usd: costMinorUsd(tokensIn, tokensOut),
-    model_id: data.model ?? MODEL_NAME,
+    model_id: data.model ?? MODEL_NAME(),
   };
 }
 

@@ -18,7 +18,7 @@ import { QuickStartModal } from '../features/quick-start/QuickStartModal';
 import { PhotoInspector } from '../components/inspector/PhotoInspector';
 import { CompareModal } from '../components/compare/CompareModal';
 import { AgentStatus } from '../features/ai-editor/AgentStatus';
-import { AIPanel } from '../features/ai-editor/AIPanel';
+import { AIPanel, type QuickAgentAction } from '../features/ai-editor/AIPanel';
 import { ProposalsPanel } from '../features/proposals/ProposalsPanel';
 import { PreferencePanel } from '../features/preference-memory/PreferencePanel';
 import { ExportDialog } from '../features/export/ExportDialog';
@@ -45,6 +45,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
   const [pendingGoal, setPendingGoal] = useState<{ goal: string; count: number } | null>(null);
+  const [quickAction, setQuickAction] = useState<QuickAgentAction | null>(null);
   const [notice, setNotice] = useState('');
   useEffect(() => {
     if (!local) return;
@@ -95,6 +96,23 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const rateSelection = (rating: number) => { if (project && targets.length) act(() => repository.rate(project.id, targets, rating), rating ? `人工评分已保存：${rating} 星` : '人工评分已清除'); };
   const undo = () => { if (project?.history?.undoGroupId) act(() => repository.undo(project.id), '已撤销上一步'); };
   const redo = () => { if (project?.history?.redoGroupId) act(() => repository.redo(project.id), '已重做上一步'); };
+  const copyPlan = () => {
+    if (!project) return;
+    const stamp = new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    act(() => repository.saveVersion(project.id, `方案副本 · ${stamp} · ${kept.length} 张`), '已复制当前序列方案；可在作品版本中对比或恢复');
+  };
+  const photoName = (id: string) => project?.photos.find(photo => photo.id === id)?.name ?? id;
+  const aiCompare = local && project && selectedIds.length === 2 ? () => {
+    const [a, b] = selectedIds;
+    setQuickAction({ id: crypto.randomUUID(), count: 1, photoIds: [a, b],
+      goal: `比较照片「${photoName(a)}」与「${photoName(b)}」：哪一张更能推动叙事主线？给出结论、理由与各自适合的位置；不直接修改选片状态。` });
+    ui.setPanel('ai');
+  } : undefined;
+  const aiOrder = local && project && selectedIds.length >= 2 ? () => {
+    setQuickAction({ id: crypto.randomUUID(), count: selectedIds.length, photoIds: [...selectedIds],
+      goal: `为选中的 ${selectedIds.length} 张照片生成两版不同的作品顺序方案（方案 A / 方案 B），各自解释编排逻辑、开合节奏与适用场景；输出为可审阅草案。` });
+    ui.setPanel('ai');
+  } : undefined;
   const reorder = (ids: string[]) => { if (project) act(() => repository.reorder(project.id, ids), local ? '作品顺序已保存' : zh.savedSequence); };
   const compare = () => {
     if (!project || !active) return;
@@ -145,6 +163,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       { id: 'agent', group: '导航', label: '显示/隐藏编辑建议面板', hint: hint('toggleAgent'), run: ui.toggleAgent },
       { id: 'versions', group: '项目', label: '查看/保存作品版本', run: () => setDialog({ kind: 'versions' }) },
       { id: 'activity', group: '项目', label: '按操作者浏览操作历史', run: () => setDialog({ kind: 'activity' }) },
+      { id: 'copy-plan', group: '项目', label: '复制当前序列方案', run: copyPlan },
       { id: 'export', group: '项目', label: '导出作品', run: () => setDialog({ kind: 'export' }) },
     );
   }
@@ -164,7 +183,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       onRelink={local ? () => { act(async () => (await repository.relink(project.id, active.id)) ?? project); } : undefined}
       onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
       : <EmptyState title="选择一张照片" hint="点击网格，开始检查画面。" />)
-      : ui.panel === 'ai' ? <><AIPanel repository={local ? repository : undefined} project={project} selectedIds={selectedIds} initialGoal={pendingGoal?.goal} initialCount={pendingGoal?.count} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /><ProposalsPanel project={project} enabled={local} /></> : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
+      : ui.panel === 'ai' ? <><AIPanel repository={local ? repository : undefined} project={project} selectedIds={selectedIds} initialGoal={pendingGoal?.goal} initialCount={pendingGoal?.count} quickAction={quickAction} onQuickActionFired={() => setQuickAction(null)} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /><ProposalsPanel project={project} enabled={local} /></> : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
   </aside> : undefined;
   return <><AppShell inspector={panel} collapsed={!ui.sidebarOpen} nav={<SideNav project={navProject} page={route.page} view={ui.view} local={local} authority={sharing.data?.authority}
     onView={view => { if (!navProject) return; if (route.page === 'projects') navigate(navProject.id); ui.setView(view); }}
@@ -174,7 +193,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
         onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })}
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />
       : project ? <Workspace project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending || readOnly} local={local} sharing={sharing.data ?? undefined} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
-        onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
+        onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCopyPlan={copyPlan} onAICompare={aiCompare} onAIOrder={aiOrder} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
         : <EmptyState title={local ? '项目未找到' : '项目不在本次预览中'} hint={local ? '项目可能已归档，请返回项目列表查看。' : '内存项目在刷新后重置，请返回项目列表。'} action={<Button onClick={() => navigate(null)}>{zh.projects}</Button>} />}
   </AppShell>
     {local && project && !(ui.inspectorOpen && ui.panel === 'ai') && <AgentStatus repository={repository} projectId={project.id} onOpen={() => ui.setPanel('ai')} />}

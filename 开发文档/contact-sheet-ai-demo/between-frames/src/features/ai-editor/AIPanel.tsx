@@ -13,7 +13,18 @@ const budgetFields: { key: keyof AgentBudget; label: string; min: number; max: n
  { key: 'maxTotalTokens', label: '累计文本估算上限', min: 128, max: 2000000 }, { key: 'maxOutputTokens', label: '输出估算上限', min: 128, max: 16000 },
  { key: 'maxCloudImages', label: '云端图像上限（张）', min: 0, max: 100 }, { key: 'maxCostMinorUsd', label: '费用上限（美分）', min: 0, max: 100000 },
 ];
-export function AIPanel({ repository, project, selectedIds, onUpdated, initialGoal, initialCount }: { repository?: DesktopProjectRepository; project: Project; selectedIds: string[]; onUpdated: (project: Project) => void; initialGoal?: string; initialCount?: number }) {
+export interface QuickAgentAction {
+  /** 每次触发生成新 id，驱动 effect 一次性发起。 */
+  id: string;
+  goal: string;
+  count: number;
+  photoIds: string[];
+}
+
+export function AIPanel({ repository, project, selectedIds, onUpdated, initialGoal, initialCount, quickAction, onQuickActionFired }: {
+  repository?: DesktopProjectRepository; project: Project; selectedIds: string[]; onUpdated: (project: Project) => void;
+  initialGoal?: string; initialCount?: number; quickAction?: QuickAgentAction | null; onQuickActionFired?: () => void;
+}) {
  const client = useQueryClient();
  const key = ['agent', project.id];
  const query = useQuery({ queryKey: key, queryFn: () => repository!.agent.query(project.id), enabled: Boolean(repository), refetchInterval: repository ? 800 : false, refetchOnWindowFocus: 'always' });
@@ -30,6 +41,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  const [draftId, setDraftId] = useState<string | null>(null);
  const [consentPrompt, setConsentPrompt] = useState(false);
  const [consentStartsTask, setConsentStartsTask] = useState(false);
+ const [pendingStart, setPendingStart] = useState<{ goal: string; count: number; ids: string[] } | null>(null);
  const configQuery = useQuery({ queryKey: ['ai-config', project.id], queryFn: () => repository!.agent.aiConfig(project.id), enabled: Boolean(repository), staleTime: 30_000 });
  const config = configQuery.data;
  const observation = config?.observation;
@@ -89,7 +101,8 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
    setConsentPrompt(false);
    setConsentStartsTask(false);
    void configQuery.refetch();
-   if (mode !== 'deny' && consentStartsTask) { await request({ type: 'StartTask', goal: goal.trim(), targetCount: count, selectedPhotoIds: scopeSelection ? selectedIds : [], budget, consentId: granted.id }); }
+   if (mode !== 'deny' && consentStartsTask && pendingStart) { const payload = pendingStart; setPendingStart(null); await request({ type: 'StartTask', goal: payload.goal, targetCount: payload.count, selectedPhotoIds: payload.ids, budget, consentId: granted.id }); }
+   else setPendingStart(null);
   }
   catch (error) {
    setError(error instanceof Error ? error.message : String(error));
@@ -97,11 +110,26 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
   }
   finally { setBusy(false); }
  };
+ const fireStart = (payload: { goal: string; count: number; ids: string[] }, consentId: number | string | null) =>
+   request({ type: 'StartTask', goal: payload.goal, targetCount: payload.count, selectedPhotoIds: payload.ids, budget, consentId: consentId === null ? null : Number(consentId) });
  const startFlow = () => {
   if (configurationBlocked) return;
-  if (visionWanted && !consentActive) { setConsentStartsTask(true); setConsentPrompt(true); return; }
-  void request({ type: 'StartTask', goal: goal.trim(), targetCount: count, selectedPhotoIds: scopeSelection ? selectedIds : [], budget, consentId: consentActive?.id ?? null });
+  const payload = { goal: goal.trim(), count, ids: scopeSelection ? selectedIds : [] };
+  if (visionWanted && !consentActive) { setPendingStart(payload); setConsentStartsTask(true); setConsentPrompt(true); return; }
+  void fireStart(payload, consentActive?.id ?? null);
  };
+ // 免 Prompt 上下文动作：选区按钮直接发起并自动携带所选 photo_id；云端图像授权仍需显式确认。
+ // 外部命令式启动（与滚动定位同类）：一次性消费 quickAction 打开授权卡，无级联渲染链。
+ useEffect(() => {
+  if (!repository || !quickAction || busy || running || configurationBlocked) return;
+  const payload = { goal: quickAction.goal, count: quickAction.count, ids: quickAction.photoIds };
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- 一次性消费外部命令输入。
+  if (visionWanted && !consentActive) { setPendingStart(payload); setConsentStartsTask(true); setConsentPrompt(true); }
+  else void fireStart(payload, consentActive?.id ?? null);
+  onQuickActionFired?.();
+  // 依赖含 configurationBlocked：模型配置异步加载完成后补触发一次；触发后父层清空 quickAction 防重复。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [quickAction?.id, configurationBlocked]);
  const drafts = query.data?.drafts.filter(draft => !task || draft.taskId === task.id) ?? [];
  const draft = query.data?.drafts.find(item => item.id === draftId);
  return <section className="ai-panel agent-panel"><h3>编辑建议</h3>{providerLabel && <p className="micro">{providerLabel}</p>}

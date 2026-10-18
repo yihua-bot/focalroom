@@ -180,6 +180,9 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .activity-body time, .activity-item > time { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .activity-restore-point { margin-left: 8px; font-style: normal; font-size: 10px; color: var(--accent); border: 1px dashed var(--accent); padding: 2px 5px; border-radius: 3px; }
 .activity-empty { justify-content: center; color: var(--muted); }
+.grid-groups { display: flex; flex-direction: column; gap: 18px; }
+.grid-group-head { margin: 0 0 8px; font-size: 11px; letter-spacing: .12em; color: var(--accent); border-bottom: 1px solid #2e302a; padding-bottom: 6px; }
+.group-field { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
 @keyframes shortcut-pulse { 50% { opacity: .45; } }
 .page-message { padding: 40px; color: var(--muted); }
 @media (max-width: 1250px) {

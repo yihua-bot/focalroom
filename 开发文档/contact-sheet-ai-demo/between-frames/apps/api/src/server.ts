@@ -142,9 +142,19 @@ class ApiController {
       if (action === "ai-comments" && req.method === "GET")
         return s.aiComments(headers, id);
       if (action === "agent-tasks/summarize" && req.method === "POST")
-        return s.agentSummarize(headers, id);
+        return s.agentSummarize(headers, id, req.body);
       if (action === "agent-tasks" && req.method === "GET")
         return s.agentTaskList(headers, id);
+      if (action === "agent-jobs" && req.method === "GET")
+        return s.agentJobList(headers, id);
+      if (action.startsWith("agent-jobs/") && action.endsWith("/cancel") && req.method === "POST")
+        return s.agentJobCancel(headers, id, action.slice("agent-jobs/".length, -"/cancel".length));
+      if (action === "model-consents" && req.method === "GET")
+        return s.modelConsentList(headers, id);
+      if (action === "model-consents" && req.method === "POST")
+        return s.modelConsentGrant(headers, id, req.body);
+      if (action.startsWith("model-consents/") && req.method === "DELETE")
+        return s.modelConsentRevoke(headers, id, action.slice("model-consents/".length));
       if (action === "agent-scopes" && req.method === "POST")
         return s.issueAgentScope(headers, id);
       if (action.startsWith("agent-scopes/") && req.method === "DELETE")
@@ -292,7 +302,17 @@ export async function main() {
   );
   const pool = new Pool({ connectionString: config.database_url, max: 10 });
   if (process.argv.includes("--migrate")) {
-    await migrate(pool);
+    // 迁移走独立 DDL 角色；未配置时回退应用连接并明示（该账户须具备 DDL 权限）。
+    const migratorUrl = process.env.FOCALROOM_MIGRATOR_DATABASE_URL;
+    const migratePool = migratorUrl
+      ? new Pool({ connectionString: migratorUrl, max: 2 })
+      : pool;
+    if (!migratorUrl)
+      process.stdout.write(
+        "[migrate] 未配置 FOCALROOM_MIGRATOR_DATABASE_URL，使用应用连接执行迁移\n",
+      );
+    await migrate(migratePool);
+    if (migratePool !== pool) await migratePool.end();
     await pool.end();
     return;
   }

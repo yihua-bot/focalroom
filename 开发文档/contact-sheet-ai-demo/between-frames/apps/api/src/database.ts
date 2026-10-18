@@ -26,9 +26,13 @@ async function migrations() {
       "0001_shared_authority.sql",
       "0002_audit_envelopes.sql",
       "0006_rate_limits.sql",
-      // 0003–0005 的未登记草案使用 UUID 外键，与 0001 的 text 主键不兼容；
-      // 0007 是管理员角色模板。保留原文件，以新增迁移落实兼容结构。
+      // 0003–0005 的未登记草案使用 UUID 外键，与 0001 的 text 主键不兼容；保留原文件，以新增迁移落实兼容结构。
       "0008_account_services.sql",
+      // 0010/0011 建 Presence 总线与 Agent 队列表；必须先于 0009 执行，让授权重放覆盖新表。
+      "0010_presence_bus.sql",
+      "0011_agent_worker.sql",
+      // 每次迁移后幂等重放最小权限授权；角色由 ops/shared/postgres-init 创建。
+      "0009_min_privilege_grants.sql",
     ].map(
       async (name) => {
         const sql = await readFile(

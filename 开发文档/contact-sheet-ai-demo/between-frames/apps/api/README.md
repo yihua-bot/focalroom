@@ -4,7 +4,7 @@
 
 ## 本地验证
 
-2026-10-18 账户恢复增量见 `../../../docs/V2-M4-ACCOUNT-RECOVERY-TEST-REPORT.md`（从应用根目录为 `../docs/`）。当前显式迁移登记 0001/0002/0006/0008；0003–0005 未登记草案的 UUID 外键与基座 text 不兼容，0007 为管理员角色模板，禁止按文件名批量执行。新 0008 只在隔离库验收，生产手工状态需先核对。
+2026-10-18 账户恢复增量见 `../../../docs/V2-M4-ACCOUNT-RECOVERY-TEST-REPORT.md`（从应用根目录为 `../docs/`）。当前显式迁移登记 0001/0002/0006/0008/0009；0003–0005 未登记草案的 UUID 外键与基座 text 不兼容，禁止按文件名批量执行。旧 0007 管理员角色模板已删除：角色创建由 `ops/shared/postgres-init/01-create-roles.sh` 在首次初始化执行，`0009` 在每次迁移后幂等重放授权。迁移命令优先使用 `FOCALROOM_MIGRATOR_DATABASE_URL`（DDL 角色），运行时连接用最小权限应用角色。新 0008/0009 已在隔离库验收，生产手工状态需先核对。
 
 `POST /auth/forgot-password` 的 `sent:true` 只表示统一受理，避免泄露账户存在与否，不代表已投递。`POST /auth/reset-password` 成功后旧会话和所有未用恢复令牌失效。已登录账户用 `POST /auth/resend-verification` 请求邮件，未配置或交付失败明确报 EMAIL_UNAVAILABLE；`POST /auth/verify-email` 明确消费一次性令牌。新链接为 `/shared#reset-password=...` / `/shared#verify-email=...`，Web 打开后清理URL且不自动提交。生产须配置真实 HTTPS Origin、Resend Key 和已验证发件域；缺失时不能声称邮件已发送。
 

@@ -122,6 +122,26 @@ test('M5 authenticated WS, private Yjs, presence, snapshot reconnect and revoke'
   assert.equal((await call(`/projects/${project}/snapshot`)).revision, 2);
   reopened.ws.close(); doc.destroy(); restored.destroy();
 });
+test('M5 cross-instance presence syncs through the PostgreSQL bus', async () => {
+  const pool2 = new Pool({ connectionString: process.env.FOCALROOM_TEST_DATABASE_URL });
+  const second = await createApi({ pool: pool2, store: new LocalPreviewStore(join(process.env.FOCALROOM_TEST_DIRECTORY, 'previews-second')), origin: 'http://127.0.0.1:1424' });
+  await second.app.listen(0, '127.0.0.1'); const base2 = await second.app.getUrl();
+  const connectAt = async (target, account) => {
+    const ticket = await call(`/projects/${project}/ws-ticket`, 'POST', account.token);
+    const ws = new WebSocket(target.replace('http', 'ws') + '/api/v2/realtime', { origin: 'http://127.0.0.1:1424' });
+    const messages = []; ws.on('message', raw => messages.push(JSON.parse(raw.toString())));
+    await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); }); ws.send(JSON.stringify({ type: 'authenticate', ticket: ticket.token }));
+    await until(() => messages.some(m => m.type === 'sync')); return { ws, messages };
+  };
+  const onA = await connectAt(base, owner);
+  const onB = await connectAt(base2, viewer);
+  onB.ws.send(JSON.stringify({ type: 'presence', photo_id: 'p1' }));
+  await until(() => onA.messages.some(m => m.type === 'presence' && m.users.some(u => u.id === viewer.user.id && u.photo_id === 'p1')), '实例一应看到实例二的在线状态');
+  await until(() => onB.messages.some(m => m.type === 'presence' && m.users.some(u => u.id === owner.user.id)), '实例二应看到实例一的在线状态');
+  onB.ws.close(); await new Promise(resolve => onB.ws.once('close', resolve));
+  await until(() => onA.messages.some(m => m.type === 'presence' && !m.users.some(u => u.id === viewer.user.id)), '断开后应从广播中消失');
+  onA.ws.close(); await second.close(); await pool2.end();
+});
 test('M5 short task principals are project scoped, read-only, expiring and revocable', async () => {
   const scoped = await call(`/projects/${project}/agent-scopes`, 'POST', viewer.token);
   const read = async (token, status = 200) => { const response = await fetch(`${base}/api/v2/agent/comments`, { headers: { authorization: `Task ${token}` } }); const value = await response.json(); assert.equal(response.status, status, JSON.stringify(value)); return value; };

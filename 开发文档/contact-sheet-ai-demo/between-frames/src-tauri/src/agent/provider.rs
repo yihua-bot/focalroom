@@ -143,16 +143,37 @@ fn decide(input: &ModelTurnRequest) -> Result<ModelOutcome> {
     let count = (t.target_count as usize).min(pool.len());
     if created.is_empty() || last.0 == "evaluate_draft" {
         if last.0 == "evaluate_draft" {
-            let duplicate_groups = last.1["duplicate_groups"]
+            // 合并完全重复、相邻相似与人工重复提示：每组保留首位，其余排除后重排。
+            let mut duplicate_groups: Vec<Vec<String>> = vec![];
+            for key in ["identical_groups", "human_hint_groups"] {
+                for group in last.1[key].as_array().cloned().unwrap_or_default() {
+                    if let Some(ids) = group.as_array() {
+                        duplicate_groups.push(
+                            ids.iter()
+                                .filter_map(|i| i.as_str().map(String::from))
+                                .collect(),
+                        );
+                    }
+                }
+            }
+            for pair in last.1["similar_adjacent"]
                 .as_array()
                 .cloned()
-                .unwrap_or_default();
+                .unwrap_or_default()
+            {
+                if let Some(ids) = pair["photo_ids"].as_array() {
+                    duplicate_groups.push(
+                        ids.iter()
+                            .filter_map(|i| i.as_str().map(String::from))
+                            .collect(),
+                    );
+                }
+            }
             if !duplicate_groups.is_empty() {
                 let excluded: HashSet<String> = duplicate_groups
                     .iter()
-                    .filter_map(Value::as_array)
-                    .flat_map(|g| g.iter().skip(1))
-                    .filter_map(|i| i.as_str().map(String::from))
+                    .flat_map(|group| group.iter().skip(1))
+                    .cloned()
                     .collect();
                 let ids: Vec<_> = pool
                     .iter()

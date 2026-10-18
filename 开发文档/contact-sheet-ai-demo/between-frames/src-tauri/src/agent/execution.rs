@@ -283,9 +283,11 @@ pub(crate) async fn tool(
             "create_selection_draft" => format!("创建 {} 项候选草案", v["count"]),
             "update_draft_sequence" => format!("修订草案至 {} 项", v["count"]),
             "evaluate_draft" => format!(
-                "核验 {} 项草案，人工重复组 {} 组",
+                "核验 {} 项草案：完全重复 {} 组、相邻相似 {} 处、人工重复组 {} 组",
                 v["count"],
-                v["duplicate_groups"].as_array().map_or(0, Vec::len)
+                v["identical_groups"].as_array().map_or(0, Vec::len),
+                v["similar_adjacent"].as_array().map_or(0, Vec::len),
+                v["human_hint_groups"].as_array().map_or(0, Vec::len)
             ),
             "request_feedback" => "提出人工问题，等待答复".into(),
             "finish_task" => format!(

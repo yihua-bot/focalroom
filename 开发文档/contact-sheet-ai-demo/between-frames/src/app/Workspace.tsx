@@ -1,6 +1,7 @@
-import { Columns3, PanelRightClose, PanelRightOpen, Film, Search } from 'lucide-react';
+import { Columns3, PanelRightClose, PanelRightOpen, Film, Search, Copy } from 'lucide-react';
 import type { SelectionGesture } from '../domain/selection';
 import type { Photo, PhotoFilter, PhotoStatus, Project } from '../domain/models';
+import { groupPhotos, type GridGrouping } from '../domain/grouping';
 import { useUIStore } from '../stores/uiStore';
 import { zh } from './copy';
 import { ProjectHeader } from '../features/project/ProjectHeader';
@@ -11,13 +12,14 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { Button } from '../components/shared/Button';
 import { SharedReviewLink } from '../components/shared/SharedReviewLink';
 
-export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, local = false, sharing }: {
+export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, onCopyPlan, onAICompare, onAIOrder, local = false, sharing }: {
   project: Project; visible: Photo[]; kept: Photo[]; active?: Photo; busy: boolean;
   selectedIds: string[]; onSelect: (id: string, gesture?: SelectionGesture) => void;
   onBatchDecide: (status: PhotoStatus) => void; onBatchRate: (rating: number) => void;
   onEdit: () => void; onImport: () => void; onCompare: () => void; onExport: () => void;
   onDecide: (id: string, status: PhotoStatus) => void; onReorder: (ids: string[]) => void; onEnlarge: (photo: Photo) => void;
-  onUndo: () => void; onRedo: () => void; onVersions: () => void; onActivity: () => void;
+  onUndo: () => void; onRedo: () => void; onVersions: () => void; onActivity: () => void; onCopyPlan: () => void;
+  onAICompare?: () => void; onAIOrder?: () => void;
   local?: boolean;
   sharing?: import('../domain/sharing').SharingStatus;
 }) {
@@ -40,15 +42,31 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
         <Button size="small" onClick={ui.toggleFilmstrip} aria-label={ui.filmstripOpen ? '收起序列带' : '展开序列带'} aria-pressed={ui.filmstripOpen}><Film size={15} /></Button>
         <Button size="small" onClick={ui.toggleInspector} aria-label={ui.inspectorOpen ? '收起检查器' : '展开检查器'}>{ui.inspectorOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}</Button></div>
       <div className="workspace-tools"><label className="search-field" htmlFor="photo-search"><Search size={14} /><input id="photo-search" type="search" aria-label="搜索照片文件名或备注" placeholder="搜索文件名或备注 · ⌘F" value={ui.search} onChange={event => ui.setSearch(event.target.value)} /></label>
+        <label className="group-field">分组
+          <select aria-label="网格分组" value={ui.grouping} onChange={event => ui.setGrouping(event.target.value as GridGrouping)}>
+            <option value="none">不分组</option>
+            <option value="status">按选片状态</option>
+            <option value="rating">按人工评分</option>
+            <option value="prefix">按文件名前缀</option>
+          </select>
+        </label>
         <span className="micro">⌘ / Ctrl 点选 · Shift 连选</span></div>
       {selectedIds.length > 1 && <div className="selection-tools" role="group" aria-label="批量选片"><span>已选 {selectedIds.length} 张</span>{(['keep', 'reject', 'undecided'] as const).map(status => <Button key={status} size="small" disabled={busy} onClick={() => onBatchDecide(status)}>{status === 'keep' ? '保留选区' : status === 'reject' ? '淘汰选区' : '选区待定'}</Button>)}
         <select aria-label="批量人工评分" disabled={busy} value="" onChange={event => onBatchRate(Number(event.target.value))}><option value="" disabled>人工评分…</option>{[0, 1, 2, 3, 4, 5].map(rating => <option key={rating} value={rating}>{rating ? `${rating} 星` : '清除评分'}</option>)}</select>
+        {onAICompare && selectedIds.length === 2 && <Button size="small" disabled={busy} onClick={onAICompare} title="把两张选区照片交给编辑建议，比较叙事价值">AI 比较叙事价值</Button>}
+        {onAIOrder && <Button size="small" disabled={busy} onClick={onAIOrder} title="把选区交给编辑建议，生成两版顺序方案">生成两版顺序</Button>}
         <Button size="small" variant="quiet" onClick={ui.clearSelection}>清除选区</Button></div>}
     </div>
     <div className="canvas-area"><div className="workspace-scroll"><div className="canvas-label"><span>{ui.view === 'grid' ? 'CONTACT SHEET' : 'SEQUENCE BOARD'}</span>
-      <span>{ui.view === 'grid' ? `${visible.length} 张` : `${kept.length} 张`}</span></div>
+      <span>{ui.view === 'grid' ? `${visible.length} 张` : `${kept.length} 张`}</span>
+      {ui.view === 'sequence' && kept.length > 0 && <Button size="small" disabled={busy} onClick={onCopyPlan} title="把当前作品序列保存为独立的方案副本，可在作品版本中对比与恢复"><Copy size={13} /> 复制序列方案</Button>}</div>
       {!local && <div className="preview-banner">{zh.preview}</div>}
-      {ui.view === 'grid' ? (visible.length ? <ContactSheetGrid photos={visible} activeId={active?.id ?? null} selectedIds={selectedIds} dense={ui.dense} busy={busy} onSelect={onSelect} onDecide={onDecide} onEnlarge={onEnlarge} />
+      {ui.view === 'grid' ? (visible.length ? <div className="grid-groups">
+        {groupPhotos(visible, ui.grouping).map(group => group.label ? <section key={group.key} className="grid-group" aria-label={`分组 ${group.label}`}>
+          <h3 className="grid-group-head">{group.label}</h3>
+          <ContactSheetGrid photos={group.photos} activeId={active?.id ?? null} selectedIds={selectedIds} dense={ui.dense} busy={busy} onSelect={onSelect} onDecide={onDecide} onEnlarge={onEnlarge} />
+        </section> : <ContactSheetGrid key={group.key} photos={group.photos} activeId={active?.id ?? null} selectedIds={selectedIds} dense={ui.dense} busy={busy} onSelect={onSelect} onDecide={onDecide} onEnlarge={onEnlarge} />)}
+      </div>
         : <EmptyState title={project.photos.length ? zh.emptyFilter : zh.emptyTitle} hint={project.photos.length ? '更改筛选条件。' : local ? '导入照片或文件夹。' : zh.emptyHint}
           action={<Button onClick={project.photos.length ? () => { ui.setFilter('all'); ui.setSearch(''); } : onImport}>{project.photos.length ? zh.allPhotos : local ? zh.import : `${zh.import} · 桌面版`}</Button>} />)
         : (kept.length ? <SequenceBoard photos={kept} activeId={active?.id ?? null} busy={busy} onSelect={ui.select} onReorder={onReorder} />

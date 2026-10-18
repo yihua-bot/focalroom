@@ -215,8 +215,101 @@ pub(crate) async fn execute(
             Ok(json!({"draft_id":id,"draft_revision":revision+1,"count":items.len()}))
         }
         "evaluate_draft" => {
+            // 结构化本地评估：内容哈希完全重复、观察事实相邻相似、评分/状态分布与观察覆盖。
+            // 叙事判断仍由策展模型结合本证据进行；不触发上传、不修改正式状态。
             let items = store::items(tx, a["draft_id"].as_str().unwrap()).await?;
             let facts = photos(tx, task).await?;
+            let draft_ids: Vec<String> = items.iter().map(|i| i.photo_id.clone()).collect();
+            // 1) 完全重复：草案内 content_sha256 相同的照片组。
+            let hash_rows = sqlx::query("SELECT id, content_sha256 FROM photos WHERE project_id=?")
+                .bind(&task.project_id)
+                .fetch_all(&mut **tx)
+                .await?;
+            let mut by_hash: HashMap<String, Vec<String>> = HashMap::new();
+            for row in &hash_rows {
+                let id: String = row.get("id");
+                if draft_ids.contains(&id) {
+                    by_hash
+                        .entry(row.get::<String, _>("content_sha256"))
+                        .or_default()
+                        .push(id);
+                }
+            }
+            let mut identical: Vec<Vec<String>> =
+                by_hash.into_values().filter(|g| g.len() > 1).collect();
+            for group in &mut identical {
+                group.sort();
+            }
+            identical.sort();
+            // 2) 观察缓存：草案照片内每张最新观察（photo_hash 对齐，正文有界 64KiB）。
+            let scoped: Vec<String> = task
+                .allowed_photo_ids
+                .iter()
+                .filter(|id| draft_ids.contains(id))
+                .cloned()
+                .collect();
+            let observations: HashMap<String, (Vec<String>, String)> = if scoped.is_empty() {
+                HashMap::new()
+            } else {
+                let scope_json = crate::command_audit::encode(&scoped)?;
+                let rows = sqlx::query(
+                    r#"
+                    SELECT o.photo_id, o.observation_json FROM photo_observations o
+                    JOIN (SELECT MAX(e.id) AS id FROM photo_observations e
+                          JOIN photos p ON p.id=e.photo_id AND p.content_sha256=e.photo_hash
+                          JOIN json_each(?) scope ON scope.value=p.id
+                          WHERE p.project_id=? GROUP BY e.photo_id) latest ON latest.id=o.id
+                    WHERE length(CAST(o.observation_json AS BLOB))<=65536
+                    "#,
+                )
+                .bind(&scope_json)
+                .bind(&task.project_id)
+                .fetch_all(&mut **tx)
+                .await?;
+                rows.iter()
+                    .filter_map(|row| {
+                        let raw: String = row.get("observation_json");
+                        let value = serde_json::from_str::<Value>(&raw).ok()?;
+                        let visible: Vec<String> = value["visible_facts"]
+                            .as_array()?
+                            .iter()
+                            .filter_map(|fact| fact.as_str().map(String::from))
+                            .collect();
+                        if visible.is_empty() {
+                            return None;
+                        }
+                        let interpretation = value["interpretation"]
+                            .as_str()
+                            .unwrap_or("")
+                            .chars()
+                            .take(160)
+                            .collect::<String>();
+                        Some((row.get::<String, _>("photo_id"), (visible, interpretation)))
+                    })
+                    .collect()
+            };
+            // 3) 相邻相似：按草案顺序的相邻两张，visible_facts Jaccard >= 0.6。
+            let mut similar_adjacent: Vec<Value> = vec![];
+            for pair in items.windows(2) {
+                let (Some((left, _)), Some((right, _))) = (
+                    observations.get(&pair[0].photo_id),
+                    observations.get(&pair[1].photo_id),
+                ) else {
+                    continue;
+                };
+                let set_a: HashSet<&String> = left.iter().collect();
+                let set_b: HashSet<&String> = right.iter().collect();
+                let shared: Vec<&String> = set_a.intersection(&set_b).cloned().collect();
+                let union = set_a.union(&set_b).count();
+                if union > 0 && shared.len() as f64 / union as f64 >= 0.6 {
+                    similar_adjacent.push(json!({
+                        "positions": [pair[0].position, pair[1].position],
+                        "photo_ids": [pair[0].photo_id, pair[1].photo_id],
+                        "shared_facts": shared.iter().take(3).map(|s| s.to_string()).collect::<Vec<_>>(),
+                    }));
+                }
+            }
+            // 4) 人工备注中的重复组提示（保留旧通道，作为 human_hint）。
             let mut groups: HashMap<String, Vec<String>> = HashMap::new();
             for i in &items {
                 if let Some(note) = facts
@@ -234,11 +327,74 @@ pub(crate) async fn execute(
                         .push(i.photo_id.clone());
                 }
             }
-            let mut duplicates: Vec<_> = groups.into_values().filter(|ids| ids.len() > 1).collect();
-            duplicates.sort();
-            Ok(
-                json!({"draft_id":a["draft_id"],"valid":true,"count":items.len(),"duplicate_groups":duplicates,"mode":"mock_human_annotation_only","uncertainty":"重复组来自人工备注，未做像素相似性分析"}),
-            )
+            let mut human_hints: Vec<Vec<String>> =
+                groups.into_values().filter(|ids| ids.len() > 1).collect();
+            for group in &mut human_hints {
+                group.sort();
+            }
+            human_hints.sort();
+            // 5) 结构指标与逐张事实（有界）。
+            let observed = items
+                .iter()
+                .filter(|i| observations.contains_key(&i.photo_id))
+                .count();
+            let rated: Vec<i64> = items
+                .iter()
+                .filter_map(|i| {
+                    facts
+                        .iter()
+                        .find(|p| p["photo_id"] == i.photo_id)
+                        .and_then(|p| p["rating"].as_i64())
+                })
+                .collect();
+            let rated_count = rated.len() as f64;
+            let avg_rating = if rated.is_empty() {
+                0.0
+            } else {
+                (rated.iter().sum::<i64>() as f64 / rated_count * 10.0).round() / 10.0
+            };
+            let status_count = |want: &str| {
+                items
+                    .iter()
+                    .filter(|i| {
+                        facts
+                            .iter()
+                            .find(|p| p["photo_id"] == i.photo_id)
+                            .is_some_and(|p| p["status"] == want)
+                    })
+                    .count()
+            };
+            let item_facts: Vec<Value> = items
+                .iter()
+                .take(12)
+                .filter_map(|i| {
+                    let (visible, interpretation) = observations.get(&i.photo_id)?;
+                    Some(json!({
+                        "photo_id": i.photo_id,
+                        "position": i.position,
+                        "top_facts": visible.iter().take(3).collect::<Vec<_>>(),
+                        "interpretation": interpretation,
+                    }))
+                })
+                .collect();
+            Ok(json!({
+                "draft_id": a["draft_id"],
+                "valid": true,
+                "count": items.len(),
+                "identical_groups": identical,
+                "similar_adjacent": similar_adjacent,
+                "human_hint_groups": human_hints,
+                "metrics": {
+                    "observed": observed,
+                    "unobserved": items.len() - observed,
+                    "rated": rated.len(),
+                    "avg_rating": avg_rating,
+                    "status_mix": {"keep": status_count("keep"), "undecided": status_count("undecided"), "reject": status_count("reject")},
+                },
+                "item_facts": item_facts,
+                "mode": "structured_local_evaluation",
+                "uncertainty": "重复性与结构指标为本地确定性计算（内容哈希与观察事实比对）；观察缓存可能来自历史模型版本且未观察照片不参与相似性比对；叙事判断由策展模型结合 item_facts 进行，人工评审保留最终决定。",
+            }))
         }
         "request_feedback" => {
             task.question = Some(a["question"].as_str().unwrap().into());

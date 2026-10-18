@@ -63,7 +63,7 @@ Web/Nginx 同源代理 `/api/v2` 与 WebSocket 到独立 NestJS API；正式作�
 
 1. 审阅 `.dockerignore`、两个 Dockerfile、`nginx.conf`、`compose.yaml`，确认上下文不含照片、数据库和凭据；构建新隔离镜像。
 2. 用独立 Compose project 启动 PostgreSQL；等待健康，核对连接库名和账户。不使用 openyc 的库/账户/网络。
-3. 在该全新评审栈显式执行一次迁移：`docker compose run --rm api node apps/api/src/server.ts --migrate`。普通 API 启动不执行 DDL。
+3. 在该全新评审栈显式执行一次迁移：`docker compose run --rm api node apps/api/src/server.ts --migrate`。普通 API 启动不执行 DDL。首次初始化由 `postgres-init/01-create-roles.sh` 创建最小权限角色（需要 `FOCALROOM_APP_PASSWORD` 与 `FOCALROOM_MIGRATOR_PASSWORD`）；迁移自动改用迁移角色连接，运行时 API 使用仅 DML 的应用角色。
 4. 启动 API/Web；打开 `/shared`，用生成素材完成注册、邀请、预览、评论、提案、审批、撤权与重连。确认 Web 和 API 的 Origin 完全一致。
 5. 关闭评审栈后保留数据库卷；恢复启动验证 session/评论/版本。不要执行带 `-v` 的删除命令，除非已明确批准丢弃整个新评审库。
 

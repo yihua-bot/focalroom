@@ -7,7 +7,11 @@ services:
       POSTGRES_USER: focalroom
       POSTGRES_PASSWORD: ${FOCALROOM_DB_PASSWORD:?set an isolated database password}
       POSTGRES_DB: focalroom
-    volumes: [pg-data:/var/lib/postgresql/data]
+      # 首次初始化由 01-create-roles.sh 创建最小权限角色（密码不落仓库）。
+      FOCALROOM_APP_PASSWORD: ${FOCALROOM_APP_PASSWORD:?set the app role password}
+      FOCALROOM_MIGRATOR_PASSWORD: ${FOCALROOM_MIGRATOR_PASSWORD:?set the migrator role password}
+    volumes:
+      [pg-data:/var/lib/postgresql/data, ./postgres-init:/docker-entrypoint-initdb.d:ro]
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U focalroom -d focalroom"]
       interval: 5s
@@ -16,7 +20,9 @@ services:
   api:
     build: { context: ../.., dockerfile: ops/shared/Dockerfile.api }
     environment:
-      FOCALROOM_DATABASE_URL: postgresql://focalroom:${FOCALROOM_DB_PASSWORD}@postgres:5432/focalroom
+      # 运行时使用最小权限应用角色（仅 DML）；迁移命令另用迁移角色（DDL）。
+      FOCALROOM_DATABASE_URL: postgresql://focalroom_app:${FOCALROOM_APP_PASSWORD}@postgres:5432/focalroom
+      FOCALROOM_MIGRATOR_DATABASE_URL: postgresql://focalroom_migrator:${FOCALROOM_MIGRATOR_PASSWORD}@postgres:5432/focalroom
       FOCALROOM_WEB_ORIGIN: ${FOCALROOM_WEB_ORIGIN:-http://127.0.0.1:8084}
       FOCALROOM_PREVIEW_DIRECTORY: /data/previews
     volumes: [preview-data:/data/previews]

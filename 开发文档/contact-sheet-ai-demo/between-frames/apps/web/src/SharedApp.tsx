@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
   request,
   sessionSchema,
@@ -125,44 +125,22 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
   const [recovering, setRecovering] = useState(false);
   const [magicStep, setMagicStep] = useState<'email' | 'code' | null>(null);
   const [magicEmail, setMagicEmail] = useState('');
-  const [magicSent, setMagicSent] = useState(false);
+  const [error, setError] = useState('');
+  const [busy] = useState(false);
   const requestMagic = async (email: string) => {
     try {
-      await request('/auth/magic/request', { email }, 'POST');
+      await request('/auth/magic/request', null, 'POST', { email });
       setMagicEmail(email);
-      setMagicSent(true);
       setMagicStep('code');
     } catch (e) { setError(message(e)); }
   };
   const verifyMagic = async (code: string) => {
     try {
-      const result = await request('/auth/magic/verify', { email: magicEmail, code }, 'POST');
-      onSession(result as never);
+      const result = await request<{ token: string; user_id: string; display_name: string }>(
+        '/auth/magic/verify', null, 'POST', { email: magicEmail, code },
+      );
+      onLogin({ id: result.user_id, email: magicEmail, name: result.display_name, csrf: result.token });
     } catch (e) { setError(message(e)); }
-  };
-  const [register, setRegister] = useState(false),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setBusy(true);
-    setError("");
-    try {
-      const result = await request<{
-        csrf: string;
-        user: { id: string; email: string; name: string };
-      }>(register ? "/auth/register" : "/auth/login", null, "POST", {
-        email: form.get("email"),
-        password: form.get("password"),
-        ...(register ? { display_name: form.get("name") } : {}),
-      });
-      onLogin(sessionSchema.parse({ ...result.user, csrf: result.csrf }));
-    } catch (error) {
-      setError(message(error));
-    } finally {
-      setBusy(false);
-    }
   };
   if (recovering) return <AccountRecovery onBack={() => setRecovering(false)} />;
   return (
@@ -171,53 +149,39 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
         <h1>共享评片</h1>
         <p>查看照片、批注和编辑提案。</p>
       </section>
-      <form
-        className="fr-card fr-login"
-        onSubmit={(event) => void submit(event)}
-      >
-        <h2>{register ? "创建账户" : "登录 FocalRoom"}</h2>
-        <p>使用受邀邮箱登录。</p>
-        {register && (
+      <div className="fr-card fr-login">
+        {magicStep === null && (<>
+          <h2>登录 FocalRoom</h2>
+          <p>输入邮箱，我们会发送验证码。</p>
           <label>
-            姓名
-            <input name="name" autoComplete="name" required maxLength={200} />
+            邮箱
+            <input type="email" autoComplete="email" required value={magicEmail}
+              onChange={e => setMagicEmail(e.target.value)} />
           </label>
-        )}
-        <label>
-          邮箱
-          <input name="email" type="email" autoComplete="email" required />
-        </label>
-        <label>
-          密码
-          <input
-            name="password"
-            type="password"
-            autoComplete={register ? "new-password" : "current-password"}
-            minLength={8}
-            maxLength={1024}
-            required
-          />
-        </label>
-        {error && (
-          <p role="alert" className="fr-error">
-            {error}
-          </p>
-        )}
-        <button className="fr-primary" disabled={busy}>
-          {busy ? "正在连接…" : register ? "注册并进入" : "登录"}
-        </button>
-        <button
-          type="button"
-          className="fr-text"
-          onClick={() => {
-            setRegister(!register);
-            setError("");
-          }}
-        >
-          {register ? "已有账户，去登录" : "首次使用，创建账户"}
-        </button>
-        {!register && <button type="button" className="fr-text" disabled={busy} onClick={() => setRecovering(true)}>{t("web.forgotPassword")}</button>}
-      </form>
+          {error && <p role="alert" className="fr-error">{error}</p>}
+          <button className="fr-primary" disabled={busy || !magicEmail}
+            onClick={e => { e.preventDefault(); void requestMagic(magicEmail); }}>
+            {busy ? "发送中…" : "发送验证码"}
+          </button>
+        </>)}
+        {magicStep === 'code' && (<>
+          <h2>输入验证码</h2>
+          <p>已发送到 {magicEmail}</p>
+          <label>
+            验证码
+            <input type="text" inputMode="numeric" pattern="[0-9]{6}" maxLength={6}
+              required placeholder="000000" autoComplete="one-time-code"
+              onChange={e => { if (e.target.value.length === 6) void verifyMagic(e.target.value); }} />
+          </label>
+          {error && <p role="alert" className="fr-error">{error}</p>}
+          <button className="fr-primary" disabled={busy}>验证中…</button>
+          <button type="button" style={{marginTop:'.5rem'}} onClick={() => setMagicStep(null)}>← 重新输入邮箱</button>
+        </>)}
+        <p style={{marginTop:'.75rem',fontSize:'.85rem',color:'var(--text2,#888)'}}>
+          没有账号？验证码登录会自动为你创建。
+        </p>
+        {!recovering && <button type="button" className="fr-text" disabled={busy} onClick={() => setRecovering(true)}>{t("web.forgotPassword")}</button>}
+      </div>
     </main>
   );
 }

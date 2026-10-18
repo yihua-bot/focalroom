@@ -1,6 +1,6 @@
 import { requestMagicCode, verifyMagicCode } from "./magic-login.ts";
 import { AccountRecoveryService, type AccountEmailDelivery } from "./account-recovery.ts";
-import { listTaskResults } from "./agent-tasks.ts";
+import { listTaskResults, modelEndpointLabel } from "./agent-tasks.ts";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -1005,6 +1005,19 @@ export class CloudService {
       },
     );
   }
+  async requestMagicLogin(input: unknown, ip: string) {
+    const email = String((input as Record<string, unknown>)?.email ?? "");
+    return requestMagicCode(this.pool, email, ip, process.env.FOCALROOM_WEB_ORIGIN ?? "http://127.0.0.1:8084");
+  }
+
+  async verifyMagicLogin(input: unknown) {
+    const email = String((input as Record<string, unknown>)?.email ?? "");
+    const code = String((input as Record<string, unknown>)?.code ?? "");
+    const result = await verifyMagicCode(this.pool, email, code);
+    assert(result, 400, "VALIDATION_ERROR", "验证码错误或已过期");
+    return result;
+  }
+
   async agentComments(headers: Headers) {
     const token = headers.authorization?.match(/^Task ([a-f0-9]{64})$/)?.[1];
     assert(token, 401, "UNAUTHORIZED", "需要短期任务身份");
@@ -1046,7 +1059,110 @@ export class CloudService {
     });
   }
 
-  async agentSummarize(headers: Headers, projectId: string) {
+  /** 独立模型发送授权：项目/管理员权限不是同意，须显式创建并可在任务前撤回。 */
+  async modelConsentList(headers: Headers, projectId: string) {
+    return transaction(this.pool, async (tx) => {
+      const project = (
+        await tx.query("SELECT id FROM fr_projects WHERE id=$1", [projectId])
+      ).rows[0];
+      assert(project, 404, "NOT_FOUND", "项目不存在");
+      const user = await this.auth.authenticate(headers, true, tx);
+      await this.authority.principal(tx, user, project);
+      const consents = (
+        await tx.query(
+          `SELECT c.id, c.scope, c.endpoint_label, c.model_id, c.max_tasks, c.used, c.state,
+                  c.granted_at, c.revoked_at, u.display_name AS granted_by_name
+           FROM fr_model_consents c JOIN fr_users u ON u.id=c.granted_by
+           WHERE c.project_id=$1 ORDER BY c.granted_at DESC`,
+          [projectId],
+        )
+      ).rows;
+      return { consents, endpoint_label: modelEndpointLabel() };
+    });
+  }
+
+  async modelConsentGrant(headers: Headers, projectId: string, body: unknown) {
+    const input = z.strictObject({
+      scope: z.enum(["summarize_comments", "summarize_disagreement"]),
+      max_tasks: z.number().int().min(1).max(100),
+    }).parse(body);
+    return transaction(this.pool, async (tx) => {
+      const project = (
+        await tx.query("SELECT * FROM fr_projects WHERE id=$1 FOR SHARE", [projectId])
+      ).rows[0];
+      assert(project, 404, "NOT_FOUND", "项目不存在");
+      const user = await this.auth.authenticate(headers, true, tx);
+      const principal = await this.authority.principal(tx, user, project);
+      assert(
+        principal.role === "OWNER" || principal.role === "ADMIN",
+        403, "PERMISSION_DENIED", "只有所有者或管理员可以授予模型发送",
+      );
+      const id = randomUUID();
+      const endpoint = modelEndpointLabel();
+      await tx.query(
+        `INSERT INTO fr_model_consents(id, project_id, granted_by, endpoint_label, model_id, scope, max_tasks)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [id, projectId, user.id, endpoint, endpoint.split("@")[0], input.scope, input.max_tasks],
+      );
+      return { consent_id: id, endpoint_label: endpoint, scope: input.scope, max_tasks: input.max_tasks };
+    });
+  }
+
+  async modelConsentRevoke(headers: Headers, projectId: string, consentId: string) {
+    return transaction(this.pool, async (tx) => {
+      const project = (
+        await tx.query("SELECT * FROM fr_projects WHERE id=$1 FOR SHARE", [projectId])
+      ).rows[0];
+      assert(project, 404, "NOT_FOUND", "项目不存在");
+      const user = await this.auth.authenticate(headers, true, tx);
+      const principal = await this.authority.principal(tx, user, project);
+      const consent = (
+        await tx.query("SELECT * FROM fr_model_consents WHERE id=$1 AND project_id=$2 FOR UPDATE", [consentId, projectId])
+      ).rows[0];
+      assert(consent, 404, "NOT_FOUND", "授权不存在");
+      assert(
+        principal.role === "OWNER" || principal.role === "ADMIN" || consent.granted_by === user.id,
+        403, "PERMISSION_DENIED", "只能撤回自己授予或由管理员撤回",
+      );
+      await tx.query(
+        "UPDATE fr_model_consents SET state='REVOKED', revoked_at=now() WHERE id=$1 AND state='ACTIVE'",
+        [consentId],
+      );
+      const cancelled = await tx.query(
+        `UPDATE fr_agent_jobs SET status='CANCELLED', error='授权已撤回', updated_at=now()
+         WHERE consent_id=$1 AND status IN ('QUEUED','RUNNING') RETURNING id`,
+        [consentId],
+      );
+      return { revoked: true, cancelled_jobs: cancelled.rows.length };
+    });
+  }
+
+  async agentJobList(headers: Headers, projectId: string) {
+    return transaction(this.pool, async (tx) => {
+      const project = (
+        await tx.query("SELECT id FROM fr_projects WHERE id=$1", [projectId])
+      ).rows[0];
+      assert(project, 404, "NOT_FOUND", "项目不存在");
+      const user = await this.auth.authenticate(headers, true, tx);
+      await this.authority.principal(tx, user, project);
+      const jobs = (
+        await tx.query(
+          `SELECT j.id, j.kind, j.status, j.attempts, j.error, j.result_id, j.created_at, j.updated_at,
+                  u.display_name AS created_by_name
+           FROM fr_agent_jobs j JOIN fr_users u ON u.id=j.created_by
+           WHERE j.project_id=$1 ORDER BY j.created_at DESC LIMIT 50`,
+          [projectId],
+        )
+      ).rows;
+      return { jobs };
+    });
+  }
+
+  async agentSummarize(headers: Headers, projectId: string, body: unknown) {
+    const input = z.strictObject({
+      kind: z.enum(["summarize_comments", "summarize_disagreement"]).default("summarize_comments"),
+      consent_id: z.string().min(1).max(160),
+    }).parse(body);
     return transaction(this.pool, async (tx) => {
       const project = (
         await tx.query("SELECT * FROM fr_projects WHERE id=$1 FOR SHARE", [projectId])
@@ -1058,9 +1174,50 @@ export class CloudService {
         principal.role === "OWNER" || principal.role === "ADMIN",
         403, "PERMISSION_DENIED", "只有所有者或管理员可以触发 AI 汇总",
       );
-      // 项目/管理员权限不是向模型发送评论的授权；配置 Key 也不是同意。
-      // 云端专属授权与可恢复 Worker 尚未接入前，在任何网络请求前拒绝。
-      throw new ApiError(403, "MODEL_CONSENT_REQUIRED", "云评论汇总尚未接入独立模型发送授权，当前不可执行");
+      // 项目/管理员权限不是向模型发送评论的同意；必须绑定显式授权。
+      const consent = (
+        await tx.query(
+          "SELECT * FROM fr_model_consents WHERE id=$1 AND project_id=$2 AND scope=$3 FOR UPDATE",
+          [input.consent_id, projectId, input.kind],
+        )
+      ).rows[0];
+      if (!consent || consent.state !== "ACTIVE" || consent.used >= consent.max_tasks)
+        throw new ApiError(403, "MODEL_CONSENT_REQUIRED", "缺少有效模型发送授权；请先创建或更换未用尽的授权");
+      const job = randomUUID();
+      await tx.query(
+        `INSERT INTO fr_agent_jobs(id, project_id, consent_id, created_by, kind)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [job, projectId, consent.id, user.id, input.kind],
+      );
+      return { job_id: job, status: "QUEUED", kind: input.kind };
+    });
+  }
+
+  async agentJobCancel(headers: Headers, projectId: string, jobId: string) {
+    return transaction(this.pool, async (tx) => {
+      const project = (
+        await tx.query("SELECT * FROM fr_projects WHERE id=$1 FOR SHARE", [projectId])
+      ).rows[0];
+      assert(project, 404, "NOT_FOUND", "项目不存在");
+      const user = await this.auth.authenticate(headers, true, tx);
+      const principal = await this.authority.principal(tx, user, project);
+      const job = (
+        await tx.query("SELECT * FROM fr_agent_jobs WHERE id=$1 AND project_id=$2 FOR UPDATE", [jobId, projectId])
+      ).rows[0];
+      assert(job, 404, "NOT_FOUND", "任务不存在");
+      assert(
+        job.created_by === user.id || principal.role === "OWNER" || principal.role === "ADMIN",
+        403, "PERMISSION_DENIED", "只能取消自己创建或由管理员取消",
+      );
+      assert(
+        job.status === "QUEUED" || job.status === "RUNNING",
+        409, "REVISION_CONFLICT", "任务已结束，不能取消",
+      );
+      await tx.query(
+        "UPDATE fr_agent_jobs SET status='CANCELLED', updated_at=now() WHERE id=$1",
+        [jobId],
+      );
+      return { cancelled: true };
     });
   }
 

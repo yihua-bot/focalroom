@@ -264,3 +264,42 @@ it('从管理入口更新项目授权不会自动创建编辑任务', async () =
  await vi.waitFor(() => expect(agent.setConsent).toHaveBeenCalledWith('p1', 'project', 100, readyConfig.consentProvider));
  expect(agent.request).not.toHaveBeenCalled();
 });
+
+describe('免 Prompt 上下文动作', () => {
+ const mountWithQuick = (repository: unknown, quickAction: unknown, onFired?: () => void) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} selectedIds={['a']} onUpdated={() => {}} quickAction={quickAction as never} onQuickActionFired={onFired} /></QueryClientProvider>);
+ };
+ it('无图配置下快捷动作直接携带所选 photo_id 发起任务', async () => {
+  const { repository, calls } = makeRepository({ capabilities: ['tool_calling', 'instruction_following'] });
+  const onFired = vi.fn();
+  mountWithQuick(repository, { id: 'qa-1', goal: '比较照片 a 与 b 的叙事价值', count: 1, photoIds: ['a', 'b'] }, onFired);
+  await vi.waitFor(() => expect(calls.filter(call => call.command).length).toBe(1));
+  const command = calls.find(call => call.command)!.command as Extract<TaskCommand, { type: 'StartTask' }>;
+  expect(command.type).toBe('StartTask');
+  expect(command.goal).toContain('叙事价值');
+  expect(command.selectedPhotoIds).toEqual(['a', 'b']);
+  expect(command.targetCount).toBe(1);
+  expect(onFired).toHaveBeenCalled();
+ });
+ it('视觉预算开启且未授权时，快捷动作先弹授权，确认后按快捷参数发任务', async () => {
+  const { repository, calls } = makeRepository();
+  const user = userEvent.setup();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const initial = <QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} selectedIds={['a']} onUpdated={() => {}} /></QueryClientProvider>;
+  const view = render(initial);
+  await screen.findByRole('button', { name: '开始编辑任务（不上传照片）' });
+  await user.clear(screen.getByLabelText('云端图像上限（张）'));
+  await user.type(screen.getByLabelText('云端图像上限（张）'), '4');
+  view.rerender(<QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} selectedIds={['a']} onUpdated={() => {}} quickAction={{ id: 'qa-2', goal: '生成两版顺序', count: 4, photoIds: ['a', 'b', 'c', 'd'] }} /></QueryClientProvider>);
+  const dialog = await screen.findByRole('dialog', { name: '云端图像授权' });
+  expect(dialog).toBeVisible();
+  expect(calls.filter(call => call.command)).toHaveLength(0);
+  await user.click(screen.getByRole('button', { name: '仅本次任务（4 张）' }));
+  await vi.waitFor(() => expect(calls.filter(call => call.command).length).toBe(1));
+  const command = calls.find(call => call.command)!.command as Extract<TaskCommand, { type: 'StartTask' }>;
+  expect(command.goal).toBe('生成两版顺序');
+  expect(command.selectedPhotoIds).toEqual(['a', 'b', 'c', 'd']);
+  expect(command.consentId).toBe(9);
+ });
+});

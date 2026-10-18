@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 
+// 界面文案跟随浏览器语言；本旅程断言中文，固定 zh-CN 保证与断言一致。
+test.use({ locale: 'zh-CN' });
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.tile')).toHaveCount(28);

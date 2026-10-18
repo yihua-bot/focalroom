@@ -3,14 +3,26 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProjectReview } from "./ProjectReview";
 import { request } from "../shared-api";
 
+// 本 jsdom 环境未实现 Web Storage，用内存版替换。
+const storage = new Map<string, string>();
+vi.stubGlobal("localStorage", {
+  getItem: (key: string) => storage.get(key) ?? null,
+  setItem: (key: string, value: string) => void storage.set(key, value),
+  removeItem: (key: string) => void storage.delete(key),
+  clear: () => storage.clear(),
+});
+
 vi.mock("../shared-api", async importOriginal => ({
   ...await importOriginal<typeof import("../shared-api")>(),
   request: vi.fn(),
 }));
+const presenceState = {
+  people: [] as { id: string; name: string; photo_id: string | null }[],
+};
 vi.mock("./useRealtime", () => ({
   useRealtime: () => ({
     online: true,
-    people: [],
+    people: presenceState.people,
     note: "",
     updateNote: vi.fn(),
     viewPhoto: vi.fn(),
@@ -74,6 +86,8 @@ beforeEach(() => {
     if (path === "/projects/p/snapshot") return makeSnapshot();
     return {};
   });
+  presenceState.people = [];
+  storage.clear();
 });
 
 describe("序列与版本批注入口", () => {
@@ -139,5 +153,45 @@ describe("序列与版本批注入口", () => {
         revision_id: "3",
       });
     });
+  });
+});
+
+describe("协作者 Presence 展示", () => {
+  it("显示协作者正在查看的照片并可隐藏动态", async () => {
+    presenceState.people = [
+      { id: "u2", name: "林编辑", photo_id: "p1" },
+      { id: "u2", name: "林编辑", photo_id: "p1" },
+    ];
+    render(<ProjectReview id="p" session={session} onBack={() => {}} />);
+    await waitFor(() =>
+      expect(screen.getByText("正式作品序列")).toBeInTheDocument(),
+    );
+    const persons = screen.getAllByText("林", { selector: ".fr-person" });
+    expect(persons).toHaveLength(1);
+    expect(screen.getByText("p1.jpg", { selector: ".fr-person-viewing" })).toBeInTheDocument();
+    expect(screen.getByTitle("林编辑 · 正在查看 p1.jpg")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "隐藏协作者动态" }),
+    );
+    expect(
+      screen.queryByText("p1.jpg", { selector: ".fr-person-viewing" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "显示协作者动态" }),
+    ).toBeInTheDocument();
+    expect(window.localStorage.getItem("focalroom.presence.detail")).toBe(
+      "off",
+    );
+  });
+  it("记忆上次隐藏状态", async () => {
+    window.localStorage.setItem("focalroom.presence.detail", "off");
+    presenceState.people = [{ id: "u2", name: "林编辑", photo_id: null }];
+    render(<ProjectReview id="p" session={session} onBack={() => {}} />);
+    await waitFor(() =>
+      expect(screen.getByText("正式作品序列")).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByText("林", { selector: ".fr-person" }),
+    ).not.toBeInTheDocument();
   });
 });

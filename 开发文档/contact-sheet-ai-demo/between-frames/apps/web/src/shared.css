@@ -380,6 +380,34 @@
   display: grid;
   place-items: center;
   font-size: 10px !important;
+  position: relative;
+}
+.fr-person[title] {
+  width: auto;
+  min-width: 26px;
+  height: auto;
+  border-radius: 999px;
+  padding: 3px 8px;
+  gap: 4px;
+  grid-auto-flow: column;
+}
+.fr-person-viewing {
+  color: #9fb8c8;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fr-presence-toggle {
+  font-size: 10px;
+  color: #90a7b5;
+  border: 1px solid #2c3a48;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.fr-presence-toggle[aria-pressed="true"] {
+  color: #e7ad6e;
+  border-color: #e7ad6e;
 }
 .fr-review {
   display: grid;

@@ -2,6 +2,9 @@ import { test, expect, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+// 界面文案跟随浏览器语言；本旅程断言中文，固定 zh-CN 保证与断言一致。
+test.use({ locale: 'zh-CN' });
+
 const screenshots = resolve('../docs/screenshots/m0');
 async function ready(page: Page) {
   await page.goto('/');
@@ -158,13 +161,13 @@ test('新建项目的空状态截图与项目导航', async ({ page }) => {
   await page.getByRole('button', { name: '项目列表', exact: true }).click();
   await expect(page.getByRole('heading', { name: '项目' })).toBeVisible();
   await page.getByRole('button', { name: '新建项目', exact: true }).click();
-  await page.getByRole('textbox', { name: '项目名称' }).fill('光线的间隙');
-  await page.getByRole('textbox', { name: '你希望这组照片表达什么？' }).fill('在日常空间里，寻找缓慢的光。');
+  await page.locator('#project-title').fill('光线的间隙');
+  await page.locator('#project-brief').fill('在日常空间里，寻找缓慢的光。');
   await page.getByRole('button', { name: '创建并打开' }).click();
   await expect(page.getByRole('heading', { name: '暂无照片' })).toBeVisible();
   await page.screenshot({ path: resolve(screenshots, 'empty.png') });
   await page.getByRole('button', { name: '项目列表', exact: true }).click();
-  await page.getByRole('button', { name: /SAMPLE PROJECT/ }).click();
+  await page.getByRole('button', { name: /示例项目|SAMPLE PROJECT/ }).click();
   await expect(page.locator('.tile')).toHaveCount(28);
 });
 

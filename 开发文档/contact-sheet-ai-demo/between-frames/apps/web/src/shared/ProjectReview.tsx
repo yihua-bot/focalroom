@@ -50,6 +50,13 @@ export function ProjectReview({
   } | null>(null);
   const [photoPage, setPhotoPage] = useState(0),
     [sequencePage, setSequencePage] = useState(0);
+  const [presenceDetail, setPresenceDetail] = useState(() => {
+    try {
+      return window.localStorage.getItem("focalroom.presence.detail") !== "off";
+    } catch {
+      return true;
+    }
+  });
   const visiblePhotos =
     state?.snapshot.photos.slice(photoPage * 48, (photoPage + 1) * 48) ?? [];
   const visibleSequence =
@@ -282,6 +289,9 @@ export function ProjectReview({
   const photoComments = state.comments.filter(
     (c) => c.anchor.photo_id === selected && !c.parent_id,
   );
+  const visiblePeople = realtime.people.filter(
+    (p, i, all) => all.findIndex((v) => v.id === p.id) === i,
+  );
   const threadComments = state.comments.filter(
     (c) =>
       !c.parent_id &&
@@ -352,13 +362,46 @@ export function ProjectReview({
           <span className={realtime.online ? "fr-online" : "fr-offline"}>
             {realtime.online ? "实时连接" : "离线只读"}
           </span>
-          {realtime.people
-            .filter((p, i, all) => all.findIndex((v) => v.id === p.id) === i)
-            .map((p) => (
-              <span className="fr-person" key={p.id} title={p.name}>
-                {p.name.slice(0, 1).toUpperCase()}
-              </span>
-            ))}
+          <button
+            className="fr-presence-toggle"
+            aria-pressed={presenceDetail}
+            aria-label={presenceDetail ? "隐藏协作者动态" : "显示协作者动态"}
+            onClick={() => {
+              setPresenceDetail((value) => {
+                try {
+                  window.localStorage.setItem(
+                    "focalroom.presence.detail",
+                    value ? "off" : "on",
+                  );
+                } catch {
+                  /* 隐私模式忽略持久化。 */
+                }
+                return !value;
+              });
+            }}
+          >
+            {visiblePeople.length} 人在线
+          </button>
+          {presenceDetail &&
+            visiblePeople.map((p) => {
+              const viewing = p.photo_id
+                ? (state.snapshot.photos.find(
+                    (photo) => photo.id === p.photo_id,
+                  )?.filename ?? null)
+                : null;
+              return (
+                <span
+                  className="fr-person"
+                  key={p.id}
+                  title={
+                    viewing ? `${p.name} · 正在查看 ${viewing}` : p.name
+                  }
+                >
+                  {p.name.slice(0, 1).toUpperCase()}
+                  {viewing && <small className="fr-person-viewing">{viewing}</small>}
+                </span>
+              );
+            })}
         </div>
       </div>
       {error && (

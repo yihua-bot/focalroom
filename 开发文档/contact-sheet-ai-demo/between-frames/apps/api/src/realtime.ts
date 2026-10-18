@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "node:http";
+import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
 import type { CloudService } from "./service.ts";
 import { assert } from "./errors.ts";
@@ -18,6 +19,9 @@ type Peer = {
   window: number;
   access: string;
 };
+// 跨实例 Presence：本进程在线状态写入 fr_presence，广播时读取全部实例的新鲜行。
+const PRESENCE_FRESH_SECONDS = 4;
+const PRESENCE_TTL_SECONDS = 15;
 export function attachRealtime(server: Server, service: CloudService) {
   const wss = new WebSocketServer({
     noServer: true,
@@ -25,6 +29,17 @@ export function attachRealtime(server: Server, service: CloudService) {
     perMessageDeflate: false,
   });
   const peers = new Set<Peer>();
+  const instanceId = randomUUID();
+  const forgetPeer = async (peer: Peer) => {
+    try {
+      await service.pool.query(
+        "DELETE FROM fr_presence WHERE instance_id=$1 AND project_id=$2 AND user_id=$3",
+        [instanceId, peer.project.id, peer.user.id],
+      );
+    } catch {
+      /* 删除失败靠 TTL 过期兜底。 */
+    }
+  };
   server.on("upgrade", (request, socket, head) => {
     try {
       service.auth.checkOrigin(request.headers);
@@ -241,11 +256,13 @@ export function attachRealtime(server: Server, service: CloudService) {
       if (peer) {
         peers.delete(peer);
         peer.doc.destroy();
+        void forgetPeer(peer);
       }
     });
     ws.on("error", () => ws.close());
   });
   let ticking = false;
+  let sweeps = 0;
   const timer = setInterval(async () => {
     if (ticking) return;
     ticking = true;
@@ -272,19 +289,54 @@ export function attachRealtime(server: Server, service: CloudService) {
         } catch {
           peer.ws.close(4403, "access revoked");
           peers.delete(peer);
+          void forgetPeer(peer);
         }
       }
-      for (const peer of peers)
-        send(peer.ws, {
-          type: "presence",
-          users: [...peers]
-            .filter((p) => p.project.id === peer.project.id)
-            .map((p) => ({
-              id: p.user.id,
-              name: p.user.name,
-              photo_id: p.viewing,
-            })),
+      // 本实例心跳整批重写（行数=当前在线数），其他实例照常保留。
+      const livePeers = [...peers];
+      if (livePeers.length) {
+        const values = livePeers.map((p) => [
+          p.project.id,
+          p.user.id,
+          p.user.name,
+          p.viewing,
+        ]);
+        await transaction(service.pool, async (tx) => {
+          await tx.query("DELETE FROM fr_presence WHERE instance_id=$1", [
+            instanceId,
+          ]);
+          const placeholders = values
+            .map(
+              (_, index) =>
+                `($${index * 4 + 1},$${index * 4 + 2},'${instanceId}',$${index * 4 + 3},$${index * 4 + 4},now())`,
+            )
+            .join(",");
+          // instance_id 为服务端常量，不拼接外部输入。
+          await tx.query(
+            `INSERT INTO fr_presence(project_id,user_id,instance_id,user_name,photo_id,seen_at) VALUES ${placeholders}`,
+            values.flat(),
+          );
         });
+      }
+      // Presence 广播读取全部实例的新鲜行：多实例经 PostgreSQL 总线互相可见。
+      const projects = new Set(livePeers.map((p) => p.project.id));
+      for (const projectId of projects) {
+        const users = (
+          await service.pool.query(
+            "SELECT user_id AS id, user_name AS name, photo_id FROM fr_presence WHERE project_id=$1 AND seen_at>now()-interval '" +
+              PRESENCE_FRESH_SECONDS +
+              " seconds' ORDER BY user_id",
+            [projectId],
+          )
+        ).rows;
+        for (const peer of livePeers.filter((p) => p.project.id === projectId))
+          send(peer.ws, { type: "presence", users });
+      }
+      // 低频清理：实例崩溃未删的行按 TTL 兜底回收。
+      if (++sweeps % 20 === 0)
+        await service.pool.query(
+          `DELETE FROM fr_presence WHERE seen_at<now()-interval '${PRESENCE_TTL_SECONDS} seconds'`,
+        );
     } finally {
       ticking = false;
     }
