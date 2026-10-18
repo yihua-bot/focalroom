@@ -1071,7 +1071,7 @@ export class CloudService {
         await tx.query("SELECT * FROM fr_projects WHERE id=$1", [projectId])
       ).rows[0];
       assert(project, 404, "NOT_FOUND", "项目不存在");
-      const user = await this.auth.authenticate(headers, true, tx);
+      const user = await this.auth.authenticate(headers, false, tx);
       await this.authority.principal(tx, user, project);
       const consents = (
         await tx.query(
@@ -1148,7 +1148,7 @@ export class CloudService {
         await tx.query("SELECT * FROM fr_projects WHERE id=$1", [projectId])
       ).rows[0];
       assert(project, 404, "NOT_FOUND", "项目不存在");
-      const user = await this.auth.authenticate(headers, true, tx);
+      const user = await this.auth.authenticate(headers, false, tx);
       await this.authority.principal(tx, user, project);
       const jobs = (
         await tx.query(
@@ -1232,7 +1232,7 @@ export class CloudService {
         await tx.query("SELECT * FROM fr_projects WHERE id=$1", [projectId])
       ).rows[0];
       assert(project, 404, "NOT_FOUND", "项目不存在");
-      const user = await this.auth.authenticate(headers, true, tx);
+      const user = await this.auth.authenticate(headers, false, tx);
       await this.authority.principal(tx, user, project);
       return { tasks: await listTaskResults(this.pool, projectId) };
     });

@@ -68,6 +68,25 @@ async function inviteOnce(account, role) {
   await call('/invitations/accept', 'POST', account.token, { token: new URL(link.invite_url).hash.split('=')[1] });
 }
 
+test('M4 cookie-authenticated Agent GETs need no Origin/CSRF, writes remain protected', async () => {
+  for (const suffix of ['model-consents', 'agent-jobs', 'agent-tasks']) {
+    const response = await fetch(base + '/api/v2/projects/' + project + '/' + suffix, {
+      headers: { cookie: 'fr_session=' + owner.token },
+    });
+    assert.equal(response.status, 200, suffix);
+    await response.arrayBuffer();
+    const anonymous = await fetch(base + '/api/v2/projects/' + project + '/' + suffix);
+    assert.equal(anonymous.status, 401, suffix);
+    await anonymous.arrayBuffer();
+  }
+  const response = await fetch(base + '/api/v2/projects/' + project + '/model-consents', {
+    method: 'POST', headers: { cookie: 'fr_session=' + owner.token, 'content-type': 'application/json' },
+    body: JSON.stringify({ scope: 'summarize_comments', max_tasks: 1 }),
+  });
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error.code, 'CSRF_REJECTED');
+});
+
 test('M4 无显式授权时入队被拒；授权/任务/取消/撤权全链路', async () => {
   await inviteOnce(reviewer, 'REVIEWER');
   await inviteOnce(viewer, 'VIEWER');

@@ -170,3 +170,23 @@ test('M4 OTP session failure rolls back code consumption and new account atomica
   } finally { await pool.query('DROP TRIGGER otp_session_failure ON fr_sessions; DROP FUNCTION otp_session_failure()'); }
   await login(email, code);
 });
+
+test('M4 OTP failed resend preserves the previously delivered code', async () => {
+  const { email, code } = await send();
+  available = false;
+  try { await call('/auth/magic/request', { email }, {}, 503); }
+  finally { available = true; }
+  await login(email, code);
+});
+
+test('M4 OTP concurrent resend cannot bypass the shared delivery quota', async () => {
+  const email = address(), before = mail.length;
+  const responses = await Promise.all(Array.from({ length: 8 }, () => fetch(base + '/api/v2/auth/magic/request', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }),
+  })));
+  assert.deepEqual(responses.map(r => r.status).sort(), [200, 200, 200, 429, 429, 429, 429, 429]);
+  for (const response of responses) await response.arrayBuffer();
+  assert.equal(mail.length - before, 3);
+  assert.equal((await pool.query('SELECT count(*) FROM fr_magic_login_codes WHERE email=$1 AND used_at IS NULL', [email])).rows[0].count, '1');
+  await login(email, mail.at(-1).code);
+});

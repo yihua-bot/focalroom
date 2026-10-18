@@ -1,7 +1,7 @@
 // 仅供本地评审：由临时 PostgreSQL runner 启动，生成账号与仓库示例照片，不读取用户图库。
 import { Pool } from 'pg';
 import sharp from 'sharp';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,9 +12,19 @@ import { migrate } from '../src/database.ts';
 import { LocalPreviewStore } from '../src/storage.ts';
 if (!process.env.FOCALROOM_TEST_DATABASE_URL || !process.env.FOCALROOM_TEST_DIRECTORY) throw new Error('请使用 npm run review:shared，禁止传入生产数据库');
 const root = fileURLToPath(new URL('../../..', import.meta.url));
-const origin = 'http://127.0.0.1:1430', password = 'review-local-2026';
+const reviewPort = Number(process.env.FOCALROOM_REVIEW_PORT ?? 1430);
+if (!Number.isInteger(reviewPort) || reviewPort < 1024 || reviewPort > 65535 ||
+    new URL(process.env.FOCALROOM_TEST_DATABASE_URL).hostname !== '127.0.0.1') throw new Error('仅允许隔离回环评审环境');
+const origin = `http://127.0.0.1:${reviewPort}`, password = 'review-local-2026';
+const mailbox = join(process.env.FOCALROOM_TEST_DIRECTORY, 'review-magic-mail.json');
 const pool = new Pool({ connectionString: process.env.FOCALROOM_TEST_DATABASE_URL }); await migrate(pool);
-const api = await createApi({ pool, store: new LocalPreviewStore(join(process.env.FOCALROOM_TEST_DIRECTORY, 'review-previews')), origin }); await api.app.listen(0, '127.0.0.1'); const base = await api.app.getUrl();
+const api = await createApi({ pool, store: new LocalPreviewStore(join(process.env.FOCALROOM_TEST_DIRECTORY, 'review-previews')), origin,
+  magicEmail: async (email, code) => {
+    if (!['author@focalroom.local', 'editor@focalroom.local'].includes(email)) return false;
+    await writeFile(mailbox, JSON.stringify({ email, code, fixture_only: true }), { mode: 0o600 });
+    return true;
+  },
+}); await api.app.listen(0, '127.0.0.1'); const base = await api.app.getUrl();
 let vite;
 try {
   const call = async (path, token, body) => { const res = await fetch(base + '/api/v2' + path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); if (!res.ok) throw new Error('Review fixture setup failed'); return res.json(); };
@@ -31,7 +41,7 @@ try {
   const command = (kind, payload) => { const id = randomUUID(); return { version: '2.0', command_id: id, idempotency_key: id, workspace_id: workspace, project_id: start.project_id, expected_revision: 0, kind, payload }; };
   await call(`/projects/${start.project_id}/commands`, editor.token, command('comment.add', { body: '这是生成账户的协作演练批注，不是真人专业评审。可以试试回复、标记解决，或切换到提案逐项审阅。', anchor: { type: 'photo', photo_id: images[0].id, x: .58, y: .44 } }));
   const proposal = command('proposal.create', { title: '演练提案：给序列加入一次停顿', base_revision: 0, operations: [{ op: 'add', operation_id: 'demo-add', photo_id: images[4].id, to_index: 3, reason: '流程演练，不计审美偏好证据' }] }); await call(`/projects/${start.project_id}/commands`, editor.token, proposal); await call(`/projects/${start.project_id}/commands`, editor.token, command('proposal.submit', { proposal_id: proposal.command_id, expected_proposal_revision: 0 }));
-  vite = await createServer(mergeConfig(workspaceConfig(resolve(root, 'apps/web'), 1430), { configFile: false, server: { proxy: { '/api/v2': { target: base, ws: true } } } })); await vite.listen();
-  console.log(JSON.stringify({ review_url: origin + '/shared#project=' + start.project_id, api_url: base, accounts: [owner.user.email, editor.user.email], password, generated_fixture_only: true, actual_ai_calls: 0, database_directory: process.env.FOCALROOM_TEST_DIRECTORY }));
+  vite = await createServer(mergeConfig(workspaceConfig(resolve(root, 'apps/web'), reviewPort), { configFile: false, server: { proxy: { '/api/v2': { target: base, ws: true } } } })); await vite.listen();
+  console.log(JSON.stringify({ review_url: origin + '/shared#project=' + start.project_id, api_url: base, accounts: [owner.user.email, editor.user.email], password, generated_fixture_only: true, actual_ai_calls: 0, review_magic_mailbox: mailbox, database_directory: process.env.FOCALROOM_TEST_DIRECTORY }));
   await new Promise(resolve => { process.once('SIGTERM', resolve); process.once('SIGINT', resolve); });
 } finally { await vite?.close(); await api.close(); await pool.end(); }

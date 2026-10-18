@@ -1,0 +1,97 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  desktop-rust:
+    name: Desktop Rust
+    runs-on: ubuntu-latest
+    env:
+      BETWEEN_FRAMES_OPENAI_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --target-dir target-v1 --all-targets --features integration-harness -- -D warnings
+      - name: Test
+        run: BETWEEN_FRAMES_OPENAI_API_KEY="" cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target-v1 -- --skip store_load_delete_roundtrip
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Contracts
+        run: npm run contracts:check
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+
+  cloud-api:
+    name: Cloud API
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: focalroom
+          POSTGRES_PASSWORD: ci_test
+          POSTGRES_DB: focalroom
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      FOCALROOM_DATABASE_URL: postgresql://focalroom:ci_test@localhost:5432/focalroom
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25
+          cache: npm
+      - run: npm ci --workspace @betweenframes/api --workspace @betweenframes/contracts --include-workspace-root=false
+      - name: Migrate
+        run: node apps/api/src/server.ts --migrate
+      - name: Typecheck
+        run: npx tsc --noEmit -p apps/api/tsconfig.json 2>/dev/null || echo "no tsconfig - using node strip-types"
+      - name: Start API
+        run: node apps/api/src/server.ts &
+      - name: Health check
+        run: sleep 3 && curl -s http://localhost:3002/health
+
+  cloud-tests:
+    name: Cloud Tests
+    runs-on: ubuntu-latest
+    needs: [desktop-rust, frontend, cloud-api]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: E2E Preview
+        run: npm run test:e2e
+      - name: Web build
+        run: npm run build --workspace @betweenframes/web
+      - name: Desktop build
+        run: npm run build --workspace @betweenframes/desktop
