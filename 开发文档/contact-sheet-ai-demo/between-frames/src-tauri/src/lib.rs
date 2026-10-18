@@ -73,6 +73,7 @@ pub fn run() {
                 )
                 .map_err(|error| std::io::Error::other(error.message))?,
             );
+            cloud_auth.set_avatar_cache(cache.join("avatars"));
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 let auth = cloud_auth.clone();

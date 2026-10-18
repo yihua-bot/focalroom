@@ -48,7 +48,7 @@ export class DesktopLoginService {
     return transaction(this.pool, async tx => {
       // 与授权/撤销保持会话→登录事务的锁顺序，避免级联删除形成死锁。
       const source = (await tx.query("SELECT browser_session FROM fr_desktop_logins WHERE id=$1", [value.request_id])).rows[0];
-      const user = (await tx.query("SELECT u.id,u.email,u.display_name FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s", [source?.browser_session ?? null])).rows[0];
+      const user = (await tx.query("SELECT u.id,u.email,u.display_name,u.avatar_url FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s", [source?.browser_session ?? null])).rows[0];
       const row = (await tx.query("SELECT * FROM fr_desktop_logins WHERE id=$1 AND expires_at>now() AND code_expires_at>now() AND used_at IS NULL FOR UPDATE", [value.request_id])).rows[0];
       const challenge = createHash("sha256").update(value.code_verifier).digest("base64url");
       assert(row && equal(row.state_hash, digest(value.state)) && equal(row.code_hash ?? "", digest(value.code)) && equal(row.challenge, challenge),

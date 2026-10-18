@@ -644,12 +644,14 @@ pub async fn import_quality_score(
 }
 
 #[tauri::command]
-pub async fn cloud_login_open(state: State<'_, Backend>) -> Result<()> {
+pub async fn cloud_login_open(app: AppHandle, state: State<'_, Backend>) -> Result<()> {
     let url = state.cloud_auth.begin().await?;
     if let Err(error) = crate::login_guard::open_browser(&url).await {
         state.cloud_auth.cancel().await?;
+        let _ = app.emit("cloud-login-updated", ());
         return Err(error);
     }
+    let _ = app.emit("cloud-login-updated", ());
     Ok(())
 }
 #[tauri::command]
@@ -659,10 +661,14 @@ pub async fn cloud_login_status(
     state.cloud_auth.status().await
 }
 #[tauri::command]
-pub async fn cloud_login_cancel(state: State<'_, Backend>) -> Result<()> {
-    state.cloud_auth.cancel().await
+pub async fn cloud_login_cancel(app: AppHandle, state: State<'_, Backend>) -> Result<()> {
+    let result = state.cloud_auth.cancel().await;
+    let _ = app.emit("cloud-login-updated", ());
+    result
 }
 #[tauri::command]
-pub async fn cloud_login_logout(state: State<'_, Backend>) -> Result<bool> {
-    state.cloud_auth.logout().await
+pub async fn cloud_login_logout(app: AppHandle, state: State<'_, Backend>) -> Result<bool> {
+    let result = state.cloud_auth.logout().await;
+    let _ = app.emit("cloud-login-updated", ());
+    result
 }

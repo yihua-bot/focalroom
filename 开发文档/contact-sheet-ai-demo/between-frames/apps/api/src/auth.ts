@@ -87,7 +87,7 @@ export class AuthService {
       } else {
         const row = (
           await this.pool.query(
-            "SELECT id,email,display_name,password_hash FROM fr_users WHERE email=$1",
+            "SELECT id,email,display_name,avatar_url,password_hash FROM fr_users WHERE email=$1",
             [value.email],
           )
         ).rows[0];
@@ -136,7 +136,7 @@ export class AuthService {
     );
     const row = (
       await tx.query(
-        "SELECT s.digest,s.csrf,u.id,u.email,u.display_name FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s",
+        "SELECT s.digest,s.csrf,u.id,u.email,u.display_name,u.avatar_url FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s",
         [digest(token)],
       )
     ).rows[0];
@@ -153,6 +153,7 @@ export class AuthService {
       id: row.id,
       email: row.email,
       name: row.display_name,
+      avatar_url: row.avatar_url,
       session: row.digest,
       csrf: row.csrf,
     };

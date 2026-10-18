@@ -57,3 +57,23 @@ describe("桌面云登录 UI", () => {
     await waitFor(() => expect(seen?.authenticated).toBe(true));
   });
 });
+
+it("命令不发送通知时仍主动刷新退出状态；断网也保留本机退出入口",async()=>{
+ const f=fixture({authenticated:false,user:{id:"cached",name:"Cached",email:"cached@fixture.test"},error:"无法连接云端"});
+ vi.mocked(f.repository.logout).mockImplementation(async()=>{f.current.value=status();return false;});
+ render(<CloudAccount repository={f.repository}/>);
+ fireEvent.click(await screen.findByRole("button",{name:"退出登录"}));
+ expect(await screen.findByRole("alert")).toHaveTextContent("已在本机退出；云端会话未能撤销");
+ expect(await screen.findByRole("button",{name:"登录云端"})).toBeVisible();expect(screen.queryByText("Cached")).not.toBeInTheDocument();
+});
+it("浏览器打开失败显示原因，并允许重试",async()=>{
+ const f=fixture();vi.mocked(f.repository.open).mockRejectedValue(new Error("系统浏览器无法打开"));render(<CloudAccount repository={f.repository}/>);
+ fireEvent.click(await screen.findByRole("button",{name:"登录云端"}));expect(await screen.findByRole("alert")).toHaveTextContent("系统浏览器无法打开");expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+it("退出后迟到的状态请求不能恢复旧账户，卸载移除订阅",async()=>{
+ const f=fixture();let resolve!:(value:CloudStatus)=>void;vi.mocked(f.repository.status).mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
+ function Probe(){const {status:current}=useCloudStatus(f.repository);return <p>{current?.authenticated?"signed-in":"signed-out"}</p>;}
+ const view=render(<Probe/>);await waitFor(()=>expect(f.repository.status).toHaveBeenCalledOnce());f.notify();await waitFor(()=>expect(f.repository.status).toHaveBeenCalledTimes(2));
+ await import("@testing-library/react").then(({act})=>act(async()=>resolve(status({authenticated:true,user:{id:"old",name:"Old",email:"old@fixture.test"}}))));expect(screen.getByText("signed-out")).toBeVisible();
+ view.unmount();f.notify();expect(f.repository.status).toHaveBeenCalledTimes(2);
+});

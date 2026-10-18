@@ -35,6 +35,7 @@ async function migrations() {
       "0009_min_privilege_grants.sql",
       "0012_magic_login.sql",
       "0013_desktop_login.sql",
+      "0014_user_avatar.sql",
     ].map(
       async (name) => {
         const sql = await readFile(

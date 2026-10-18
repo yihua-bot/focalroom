@@ -398,3 +398,7 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .cloud-account-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cloud-account-email{font-size:10px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cloud-account-waiting{display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap}
+.cloud-account{flex-wrap:wrap}
+.cloud-account>button{font:inherit;font-size:11px;background:transparent;color:var(--text-secondary);border:1px solid var(--border);border-radius:4px;padding:4px 6px;cursor:pointer}
+.cloud-account>button:disabled{opacity:.5;cursor:default}
+.cloud-account-panel>.error-message{font-size:11px;overflow-wrap:anywhere}

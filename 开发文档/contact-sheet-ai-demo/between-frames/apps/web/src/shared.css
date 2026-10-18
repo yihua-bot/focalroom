@@ -950,3 +950,6 @@
 
 .fr-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:none}
 .fr-avatar-fallback{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#6c5ce7,#fd79a8);color:#fff;font-size:13px;font-weight:600}
+.fr-account-identity{display:flex;flex-direction:column;min-width:0;max-width:180px}
+.fr-account-identity>span,.fr-account-identity>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-account-identity>small{color:var(--fr-muted);font-size:11px}

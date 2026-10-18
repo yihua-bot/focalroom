@@ -62,7 +62,7 @@ export async function verifyMagicCode(pool: Pool, inputEmail: unknown, inputCode
       return null;
     }
     await tx.query("UPDATE fr_magic_login_codes SET used_at=now() WHERE email=$1 AND used_at IS NULL", [email]);
-    let user = (await tx.query("SELECT id,email,display_name FROM fr_users WHERE email=$1 FOR UPDATE", [email])).rows[0];
+    let user = (await tx.query("SELECT id,email,display_name,avatar_url FROM fr_users WHERE email=$1 FOR UPDATE", [email])).rows[0];
     const isNew = !user;
     if (!user) {
       user = { id: randomUUID(), email, display_name: email.split("@")[0] };

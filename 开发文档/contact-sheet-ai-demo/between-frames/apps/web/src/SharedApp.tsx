@@ -1,3 +1,4 @@
+import {AccountAvatar} from "../../../src/components/shared/AccountAvatar";
 import { DesktopApproval, readDesktopRequest } from "./shared/DesktopApproval";
 import { MagicLogin as Login } from "./shared/MagicLogin";
 import { useEffect, useState } from "react";
@@ -10,7 +11,7 @@ import {
 import { ProjectHome } from "./shared/ProjectHome";
 import { ProjectReview } from "./shared/ProjectReview";
 import { AccountRecovery, readAccountLink, VerificationRequest } from "./shared/AccountRecovery";
-import { WebLanguageSwitcher } from "./i18n";
+import { WebLanguageSwitcher,useWebI18n } from "./i18n";
 import "./shared.css";
 function Brand() {
   return (
@@ -23,6 +24,8 @@ function Brand() {
   );
 }
 export default function SharedApp() {
+  const {locale}=useWebI18n();
+  const logoutLabel={zh:"退出登录",en:"Sign out",ja:"ログアウト",ko:"로그아웃"}[locale];
   const [accountLink, setAccountLink] = useState(() => readAccountLink(new URL(location.href)));
   const [session, setSession] = useState<Session | null>(null),
     [ready, setReady] = useState(false),
@@ -73,7 +76,7 @@ export default function SharedApp() {
       await request("/auth/logout", session, "POST");
       setSession(null);
       setAccountLink(null);
-      openProject(null);
+      if (!desktopIntent) openProject(null);
     } catch (error) {
       setError(message(error));
     }
@@ -87,13 +90,9 @@ export default function SharedApp() {
           <WebLanguageSwitcher />
           {session ? (
             <>
-              {session.avatar ? (
-                <img className="fr-avatar" src={session.avatar} alt="" referrerPolicy="no-referrer" />
-              ) : (
-                <span className="fr-avatar fr-avatar-fallback" aria-hidden="true">{(session.name || "?").slice(0, 1).toUpperCase()}</span>
-              )}
-              <span>{session.name}</span>
-              <button onClick={() => void logout()}>退出登录</button>
+              <AccountAvatar className="fr-avatar" url={session.avatar} name={session.name || session.email}/>
+              <span className="fr-account-identity"><span>{session.name || session.email}</span><small>{session.email}</small></span>
+              <button onClick={() => void logout()}>{logoutLabel}</button>
             </>
           ) : null}
         </div>
