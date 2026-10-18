@@ -1,107 +1,76 @@
-import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
-import { Button } from '../../components/shared/Button';
-import { useI18n } from '../../i18n';
+// 桌面端云账户：浏览器借道登录（PKCE 一次性授权码），凭据由桌面后端保存。
+import { useCallback, useEffect, useState } from "react";
+import type { CloudAuthRepository, CloudStatus } from "../../domain/cloud-auth";
+import { useI18n } from "../../i18n";
 
-interface DeepLinkEvent {
-  path: string;
-  params: Record<string, string>;
+const copy = {
+  zh: { signin: "登录云端", waiting: "等待浏览器授权…", cancel: "取消", signout: "退出登录", title: "云端账户", failed: "登录失败或已取消" },
+  en: { signin: "Sign in to Cloud", waiting: "Waiting for browser authorization…", cancel: "Cancel", signout: "Sign out", title: "Cloud Account", failed: "Sign-in failed or was canceled" },
+  ja: { signin: "クラウドにログイン", waiting: "ブラウザ認証を待っています…", cancel: "キャンセル", signout: "ログアウト", title: "クラウドアカウント", failed: "ログインに失敗したか中止されました" },
+  ko: { signin: "클라우드 로그인", waiting: "브라우저 인증 대기 중…", cancel: "취소", signout: "로그아웃", title: "클라우드 계정", failed: "로그인에 실패했거나 취소되었습니다" },
+} as const;
+type Copy = (typeof copy)[keyof typeof copy];
+
+export function useCloudStatus(repository?: CloudAuthRepository): { status: CloudStatus | null } {
+  const [status, setStatus] = useState<CloudStatus | null>(null);
+  useEffect(() => {
+    if (!repository) return;
+    let active = true;
+    const refresh = () => repository.status().then(value => { if (active) setStatus(value); }).catch(() => {});
+    void refresh();
+    void repository.subscribe(() => void refresh());
+    return () => { active = false; };
+  }, [repository]);
+  return { status };
 }
 
-export function CloudLoginView({ onLogin, onClose }: {
-  onLogin: (token: string) => void;
-  onClose: () => void;
-}) {
-  const { t } = useI18n();
-  const [waiting, setWaiting] = useState(false);
-  const [error, setError] = useState('');
-  const [loginUrl, setLoginUrl] = useState('');
-
-  useEffect(() => {
-    // 监听深链回调
-    const unlisten = listen<DeepLinkEvent>('deeplink', async (event) => {
-      const { path, params } = event.payload;
-      if (path === 'callback' || path === 'auth') {
-        const token = params.token ?? '';
-        const state = params.state ?? '';
-        if (token && state) {
-          try {
-            const ok = await invoke('cloud_login_callback', { token, state });
-            if (ok) {
-              onLogin(token);
-              setWaiting(false);
-            }
-          } catch (e) {
-            setError(String(e));
-            setWaiting(false);
-          }
-        }
-      }
-    });
-    return () => { void unlisten.then(fn => fn()); };
-  }, [onLogin]);
-
-  const startLogin = async () => {
-    setError('');
-    setWaiting(true);
-    try {
-      const baseUrl = 'https://team.focroom.cc/shared';
-      const url = await invoke<string>('cloud_login_open', { baseUrl });
-      setLoginUrl(url);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setWaiting(false);
-    }
-  };
-
-  return (
-    <div style={{ display:'flex', height:'100%', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ width:380, borderRadius:16, border:'1px solid var(--border,#333)', padding:32, background:'var(--card-bg,#1a1a2e)' }}>
-        <div style={{ marginBottom: 16, display:'flex', alignItems:'center', gap:12 }}>
-          <span style={{ fontSize: 36 }}>📸</span>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>FocalRoom</div>
-            <div style={{ fontSize: 12, color:'var(--text2,#888)' }}>{t('auth.login')} · Cloud</div>
-          </div>
-        </div>
-
-        <p style={{ margin:'24px 0', fontSize: 13, color:'var(--text2,#aaa)', lineHeight: 1.5 }}>
-          点击按钮在系统浏览器打开登录页。支持验证码、Google 等所有登录方式。
-          登录成功后会自动返回这里。
-        </p>
-
-        {waiting ? (
-          <>
-            <div style={{ textAlign:'center', padding:'20px 0' }}>
-              <div style={{ fontSize: 14, color:'var(--accent,#6c5ce7)' }}>
-                ⏳ 等待浏览器登录回传…
-              </div>
-              <div style={{ fontSize: 11, color:'var(--text2,#666)', marginTop: 8 }}>
-                如果浏览器没有自动跳转，请手动复制登录地址：
-              </div>
-              <div style={{ fontSize: 10, color:'var(--text2,#555)', marginTop: 4, wordBreak:'break-all', fontFamily:'monospace' }}>
-                {loginUrl}
-              </div>
-            </div>
-          </>
-        ) : (
-          <Button variant="primary" onClick={() => void startLogin()} style={{ width:'100%' }}>
-            🌐 打开浏览器登录
-          </Button>
-        )}
-
-        {error && (
-          <p role="alert" style={{ color:'#e74c3c', fontSize: 12, marginTop: 12 }}>{error}</p>
-        )}
-
-        <button
-          onClick={onClose}
-          style={{ marginTop: 16, width:'100%', background:'none', border:'none', color:'var(--text2,#666)', fontSize: 12, cursor:'pointer' }}
-        >
-          暂不登录，直接使用本地功能
-        </button>
+function CloudAuthBody({ repository, copy: text, onClose }: { repository: CloudAuthRepository; copy: Copy; onClose?: () => void }) {
+  const { status } = useCloudStatus(repository);
+  const [busy, setBusy] = useState(false);
+  const open = useCallback(() => { setBusy(true); repository.open().catch(() => {}).finally(() => setBusy(false)); }, [repository]);
+  const cancel = useCallback(() => void repository.cancel(), [repository]);
+  if (!status) return null;
+  if (status.authenticated && status.user) {
+    const name = status.user.name || status.user.email;
+    return <div className="cloud-account" data-testid="cloud-account">
+      <span className="cloud-account-status" title={status.error ?? undefined} aria-label={status.error ? "离线" : "已连接"} data-offline={status.error ? "true" : undefined}>●</span>
+      {status.user.avatar ? (
+        <img className="cloud-avatar" src={status.user.avatar} alt="" referrerPolicy="no-referrer" />
+      ) : (
+        <span className="cloud-avatar cloud-avatar-fallback" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+      )}
+      <div className="cloud-account-user" title={status.user.email}>
+        <div className="cloud-account-name">{name}</div>
+        <div className="cloud-account-email">{status.user.email}</div>
       </div>
-    </div>
-  );
+      <button type="button" className="fr-text" onClick={() => void repository.logout()}>{text.signout}</button>
+    </div>;
+  }
+  if (status.waiting) {
+    return <div className="cloud-account cloud-account-waiting" role="status">
+      <span>{text.waiting}</span>
+      <button type="button" className="fr-text" onClick={cancel}>{text.cancel}</button>
+    </div>;
+  }
+  return <div className="cloud-account">
+    {status.error && <p role="alert" className="error-message">{text.failed}</p>}
+    <button type="button" className="fr-text" disabled={busy} onClick={open}>{text.signin}</button>
+    {onClose && <button type="button" className="fr-text" onClick={onClose}>{text.cancel}</button>}
+  </div>;
+}
+
+/** 侧栏底部账户块：未登录显示入口，已登录显示身份与退出。 */
+export function CloudAccount({ repository }: { repository: CloudAuthRepository }) {
+  const { locale } = useI18n();
+  return <CloudAuthBody repository={repository} copy={copy[locale]} />;
+}
+
+/** 独立登录视图（弹窗用）：带标题与关闭。 */
+export function CloudLoginView({ repository, onClose }: { repository: CloudAuthRepository; onClose: () => void }) {
+  const { locale } = useI18n();
+  const text = copy[locale];
+  return <section className="info-card cloud-login" aria-label={text.title}>
+    <h3>{text.title}</h3>
+    <CloudAuthBody repository={repository} copy={text} onClose={onClose} />
+  </section>;
 }

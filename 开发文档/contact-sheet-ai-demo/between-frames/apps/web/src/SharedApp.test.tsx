@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import SharedApp from "./SharedApp";
+import {request} from "./shared-api";
 
 vi.mock("./i18n", () => ({ useWebI18n: () => ({ locale: "zh", t: (key: string) => key }), WebLanguageSwitcher: () => null }));
 vi.mock("./shared/ProjectHome", () => ({ ProjectHome: () => <p>项目列表</p> }));
@@ -9,7 +10,40 @@ vi.mock("./shared-api", async importOriginal => ({
   ...await importOriginal<typeof import("./shared-api")>(),
   request: vi.fn(async (path: string) => { if (path === "/auth/me") throw new Error("not signed in"); return { verified: true }; }),
 }));
-beforeEach(() => history.replaceState(null, "", "/shared"));
+beforeEach(() => {
+ history.replaceState(null, "", "/shared");
+ vi.mocked(request).mockReset().mockImplementation(async(path)=>{if(path==="/auth/me")throw new Error("not signed in");return {verified:true} as never;});
+});
+
+const desktopUrl=`/shared?desktop=1&request=${"a".repeat(64)}&state=${"b".repeat(64)}`;
+const account={id:"fixture",name:"Author",email:"author@fixture.test",csrf:"private-csrf"};
+it("已有浏览器会话进入桌面确认页，不跳到项目列表且不自动授权",async()=>{
+ history.replaceState(null,"",desktopUrl);
+ vi.mocked(request).mockResolvedValue(account);
+ render(<SharedApp/>);
+ expect(await screen.findByRole("heading",{name:"登录桌面端"})).toBeVisible();
+ expect(screen.getByText(account.email)).toBeVisible();
+ expect(screen.queryByText("项目列表")).not.toBeInTheDocument();
+ expect(request).toHaveBeenCalledTimes(1);
+});
+it("验证码登录成功后保留桌面事务，统一进入账户确认页",async()=>{
+ history.replaceState(null,"",desktopUrl);
+ vi.mocked(request).mockImplementation(async(path)=>{
+  if(path==="/auth/me")throw new Error("not signed in");
+  if(path==="/auth/magic/verify")return {user:account,csrf:account.csrf} as never;
+  return {sent:true} as never;
+ });
+ render(<SharedApp/>);
+ await screen.findByRole("heading",{name:"登录 FocalRoom"});
+ expect(screen.queryByText("使用 Google 登录")).not.toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText("邮箱"),{target:{value:account.email}});
+ fireEvent.click(screen.getByRole("button",{name:"发送验证码"}));
+ fireEvent.change(await screen.findByLabelText("验证码"),{target:{value:"123456"}});
+ fireEvent.click(screen.getByRole("button",{name:"验证并登录"}));
+ expect(await screen.findByRole("heading",{name:"登录桌面端"})).toBeVisible();
+ expect(screen.queryByText("项目列表")).not.toBeInTheDocument();
+ expect(request).not.toHaveBeenCalledWith("/auth/desktop/authorize",expect.anything(),expect.anything(),expect.anything());
+});
 
 it("同页邮件链接在 popstate/hashchange 与令牌清理后仍显示操作界面", async () => {
   render(<SharedApp />);

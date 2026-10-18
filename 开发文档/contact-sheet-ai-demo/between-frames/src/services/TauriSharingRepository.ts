@@ -1,3 +1,4 @@
+import { TauriCloudAuthRepository } from "./TauriCloudAuthRepository";
 import { invoke } from "@tauri-apps/api/core";
 import { z } from "zod";
 import type { ShareRequest, SharingRepository } from "../domain/sharing";
@@ -22,6 +23,7 @@ const status = z.object({
     .optional(),
 });
 export class TauriSharingRepository implements SharingRepository {
+  readonly auth = new TauriCloudAuthRepository();
   async status(projectId: string) {
     return status.parse(await invoke("get_sharing_status", { projectId }));
   }

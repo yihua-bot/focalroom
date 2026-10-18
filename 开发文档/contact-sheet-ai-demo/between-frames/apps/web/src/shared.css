@@ -947,3 +947,6 @@
 .fr-pagination { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:10px 0; font-size:10px; color:var(--fr-muted); }.fr-pagination button { padding:2px 8px; }.fr-sequence > .fr-pagination { justify-content:flex-end; }
 
 .fr-workspace-settings { margin:24px 0; }.fr-workspace-settings summary { cursor:pointer; font-size:13px; }.fr-workspace-settings > p { font-size:12px; margin-top:15px; }.fr-members > div { display:flex; gap:20px; align-items:center; padding:10px 0; border-bottom:1px solid var(--fr-edge); }.fr-members small { color:var(--fr-muted); }.fr-members button { margin-left:auto; font-size:11px; }.fr-workspace-settings > label { margin-top:15px; }
+
+.fr-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:none}
+.fr-avatar-fallback{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#6c5ce7,#fd79a8);color:#fff;font-size:13px;font-weight:600}

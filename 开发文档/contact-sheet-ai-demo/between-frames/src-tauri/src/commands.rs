@@ -399,7 +399,10 @@ pub async fn share_project(
     request: crate::shared_cloud::ShareRequest,
 ) -> Result<serde_json::Value> {
     let id = request.project_id.clone();
-    let result = crate::shared_cloud::share(&state.store, request).await;
+    let result = {
+        let token = state.cloud_auth.bearer(&request.base_url).await?;
+        crate::shared_cloud::share(&state.store, request, &token).await
+    };
     // 成功/失败均刷新：超时也可能已经冻结了项目，前端不能继续显示可写状态。
     let _ = app.emit(
         crate::commands_generated::PROJECT_CHANGED_EVENT,
@@ -650,8 +653,16 @@ pub async fn cloud_login_open(state: State<'_, Backend>) -> Result<()> {
     Ok(())
 }
 #[tauri::command]
-pub async fn cloud_login_status(state: State<'_, Backend>) -> Result<crate::cloud_auth::CloudStatus> { state.cloud_auth.status().await }
+pub async fn cloud_login_status(
+    state: State<'_, Backend>,
+) -> Result<crate::cloud_auth::CloudStatus> {
+    state.cloud_auth.status().await
+}
 #[tauri::command]
-pub async fn cloud_login_cancel(state: State<'_, Backend>) -> Result<()> { state.cloud_auth.cancel().await }
+pub async fn cloud_login_cancel(state: State<'_, Backend>) -> Result<()> {
+    state.cloud_auth.cancel().await
+}
 #[tauri::command]
-pub async fn cloud_login_logout(state: State<'_, Backend>) -> Result<bool> { state.cloud_auth.logout().await }
+pub async fn cloud_login_logout(state: State<'_, Backend>) -> Result<bool> {
+    state.cloud_auth.logout().await
+}

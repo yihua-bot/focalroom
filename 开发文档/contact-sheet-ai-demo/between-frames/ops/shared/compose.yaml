@@ -27,6 +27,8 @@ services:
       FOCALROOM_PREVIEW_DIRECTORY: /data/previews
       FOCALROOM_RESEND_API_KEY: ${FOCALROOM_RESEND_API_KEY:-}
       FOCALROOM_EMAIL_FROM: ${FOCALROOM_EMAIL_FROM:-FocalRoom <noreply@focalroom.app>}
+      # Google 登录：与前端 VITE_FOCALROOM_GOOGLE_CLIENT_ID 同值；留空则 /auth/google 返回 501。
+      FOCALROOM_GOOGLE_CLIENT_ID: ${FOCALROOM_GOOGLE_CLIENT_ID:-}
     volumes: [preview-data:/data/previews]
     depends_on:
       postgres: { condition: service_healthy }

@@ -13,6 +13,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 mod fixtures;
 
 struct Harness {
+    cloud: Option<(String, String, Value)>,
     store: Store,
     agent: between_frames_lib::agent::runtime::AgentEngine,
     root: PathBuf,
@@ -31,14 +32,60 @@ impl Harness {
         let revision = args["expectedRevision"].as_i64().unwrap_or(0);
         let photo = args["photoId"].as_str().unwrap_or("");
         let value = match command {
+            "set_cloud_test_session" => {
+                let origin =
+                    between_frames_lib::login_guard::trusted_origin(string(args, "origin")?)?;
+                if !origin.starts_with("http://") {
+                    return Err(AppError::new("INVALID_INPUT", "测试会话仅允许回环HTTP"));
+                }
+                let token = string(args, "token")?.to_owned();
+                if !between_frames_lib::login_guard::hex64(&token) {
+                    return Err(AppError::new("INVALID_INPUT", "测试会话格式错误"));
+                }
+                let reply = reqwest::Client::new()
+                    .get(format!("{origin}/api/v2/auth/me"))
+                    .bearer_auth(&token)
+                    .send()
+                    .await
+                    .map_err(|_| AppError::new("CLOUD_UNAVAILABLE", "夹具认证失败"))?;
+                if !reply.status().is_success() {
+                    return Err(AppError::new("AUTH_REQUIRED", "夹具认证失败"));
+                }
+                let user: Value = reply
+                    .json()
+                    .await
+                    .map_err(|_| AppError::new("CLOUD_PROTOCOL", "夹具账户格式错误"))?;
+                self.cloud = Some((
+                    origin,
+                    token,
+                    json!({"id":user["id"],"email":user["email"],"name":user["name"]}),
+                ));
+                json!({"ok":true})
+            }
+            "cloud_login_status" => match &self.cloud {
+                Some((origin, _, user)) => {
+                    json!({"authenticated":true,"waiting":false,"origin":origin,"user":user,"error":null})
+                }
+                None => {
+                    json!({"authenticated":false,"waiting":false,"origin":"https://team.focroom.cc","user":null,"error":null})
+                }
+            },
             "get_sharing_status" => {
                 between_frames_lib::shared_cloud::status(&self.store, id).await?
             }
             "share_project" => {
+                let (origin, token, _) = self
+                    .cloud
+                    .as_ref()
+                    .ok_or_else(|| AppError::new("AUTH_REQUIRED", "请先登录云端"))?;
+                if args["request"]["baseUrl"].as_str() != Some(origin) {
+                    return Err(AppError::new("AUTH_ORIGIN_MISMATCH", "登录来源不匹配"));
+                }
                 between_frames_lib::shared_cloud::share(
                     &self.store,
                     serde_json::from_value(args["request"].clone())
                         .map_err(|_| AppError::new("INVALID_INPUT", "共享参数不合法"))?,
+                    token,
                 )
                 .await?
             }
@@ -459,6 +506,7 @@ async fn main() {
         .await
         .unwrap();
     let mut harness = Harness {
+        cloud: None,
         agent: between_frames_lib::agent::runtime::AgentEngine::new(store.clone()),
         store,
         root,

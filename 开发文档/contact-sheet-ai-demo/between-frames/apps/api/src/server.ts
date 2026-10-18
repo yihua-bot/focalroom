@@ -98,7 +98,7 @@ class ApiController {
     }
     if (path === "/auth/me" && req.method === "GET") {
       const u = await s.auth.authenticate(headers, false);
-      return { id: u.id, email: u.email, name: u.name, csrf: u.csrf };
+      return { id: u.id, email: u.email, name: u.name, avatar: u.avatar_url ?? null, csrf: u.csrf };
     }
     if (path === "/auth/logout" && req.method === "POST") {
       const u = await s.auth.authenticate(headers, true);
@@ -110,6 +110,11 @@ class ApiController {
     }
     if (path === "/workspaces" && req.method === "GET")
       return s.workspaces(headers);
+    if (path === "/auth/google" && req.method === "POST") {
+      const result = await s.googleLogin(req.body, req.socket.remoteAddress ?? "unknown");
+      res.setHeader("Set-Cookie", s.auth.cookie(result.token));
+      return { user: result.user, csrf: result.csrf, is_new_user: result.is_new_user };
+    }
     if (path === "/auth/magic/request" && req.method === "POST")
       return s.requestMagicLogin(req.body, req.socket.remoteAddress ?? "unknown");
     if (path === "/auth/magic/verify" && req.method === "POST") {

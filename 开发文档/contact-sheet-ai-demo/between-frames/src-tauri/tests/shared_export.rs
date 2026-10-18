@@ -63,20 +63,18 @@ async fn sharing_rejects_missing_consent_and_insecure_remote_before_freezing() {
         expected_revision: project.revision,
         base_url: "http://remote.example.com".into(),
         web_url: "https://example.com".into(),
-        email: "user@example.com".into(),
-        password: "not-used".into(),
         action: "resume".into(),
         preview_upload_authorized: consent,
     };
     assert_eq!(
-        shared_cloud::share(&store, input(false))
+        shared_cloud::share(&store, input(false), "")
             .await
             .unwrap_err()
             .code,
         "CONSENT_REQUIRED"
     );
     assert_eq!(
-        shared_cloud::share(&store, input(true))
+        shared_cloud::share(&store, input(true), "")
             .await
             .unwrap_err()
             .code,

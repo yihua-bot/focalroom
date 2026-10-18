@@ -38,6 +38,7 @@ async function command<T>(name: string, args?: Record<string, unknown>): Promise
 
 export class TauriRepository implements DesktopProjectRepository {
   readonly sharing = new TauriSharingRepository();
+  readonly cloudAuth = this.sharing.auth;
   readonly mode = 'desktop' as const;
   readonly agent = new TauriAgentRepository();
   async setTags(projectId: string, tags: string[]) {

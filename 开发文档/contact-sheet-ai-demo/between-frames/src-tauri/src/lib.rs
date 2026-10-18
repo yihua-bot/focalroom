@@ -1,4 +1,6 @@
 pub mod agent;
+pub mod cloud_auth;
+pub mod cloud_credentials;
 mod command_audit;
 pub mod command_handler;
 mod commands;
@@ -13,11 +15,9 @@ pub mod export;
 pub mod image_pipeline;
 pub mod importer;
 pub mod keychain;
+pub mod login_guard;
 pub mod photo_inspection;
 mod resource_commands;
-pub mod login_guard;
-pub mod cloud_auth;
-pub mod cloud_credentials;
 pub mod shared_cloud;
 pub mod shared_export;
 pub mod v2_bridge;
@@ -49,21 +49,64 @@ pub fn run() {
                     );
                 }),
             );
-            let cloud_auth = std::sync::Arc::new(cloud_auth::CloudAuth::new(login_guard::CLOUD_ORIGIN, &app.config().identifier, std::sync::Arc::new(cloud_credentials::SystemCredentials))?);
+            let cloud_origin = login_guard::CLOUD_ORIGIN.to_owned();
+            #[cfg(feature = "integration-harness")]
+            let cloud_origin = match std::env::var("FOCALROOM_LOGIN_REVIEW_ORIGIN")
+                .ok()
+                .or_else(|| option_env!("FOCALROOM_LOGIN_REVIEW_ORIGIN").map(str::to_owned))
+            {
+                Some(origin) => {
+                    let trusted = login_guard::trusted_origin(&origin)
+                        .map_err(|e| std::io::Error::other(e.message))?;
+                    if !trusted.starts_with("http://") {
+                        return Err(std::io::Error::other("评审登录仅允许本机回环服务").into());
+                    }
+                    trusted
+                }
+                None => cloud_origin,
+            };
+            let cloud_auth = std::sync::Arc::new(
+                cloud_auth::CloudAuth::new(
+                    &cloud_origin,
+                    &app.config().identifier,
+                    std::sync::Arc::new(cloud_credentials::SystemCredentials),
+                )
+                .map_err(|error| std::io::Error::other(error.message))?,
+            );
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 let auth = cloud_auth.clone();
                 let handle = app.handle().clone();
-                app.deep_link().on_open_url(move |event| {
-                    for url in event.urls() {
-                        let auth = auth.clone(); let handle = handle.clone();
+                let seen = std::sync::Mutex::new(None::<String>);
+                let dispatch = std::sync::Arc::new(move |urls: Vec<reqwest::Url>| {
+                    for url in urls {
+                        // 冷启动查询和运行中事件可能传回同一URL，仅处理一次。
+                        use sha2::Digest;
+                        let fingerprint =
+                            format!("{:x}", sha2::Sha256::digest(url.as_str().as_bytes()));
+                        let mut last = seen.lock().unwrap_or_else(|p| p.into_inner());
+                        if last.as_ref() == Some(&fingerprint) {
+                            continue;
+                        }
+                        *last = Some(fingerprint);
+                        drop(last);
+                        let auth = auth.clone();
+                        let handle = handle.clone();
                         tauri::async_runtime::spawn(async move {
-                            if let Err(error) = auth.complete(url.as_str()).await { auth.remember_error(&error); }
+                            if let Err(error) = auth.complete(url.as_str()).await {
+                                auth.remember_error(&error);
+                            }
                             use tauri::Emitter;
                             let _ = handle.emit("cloud-login-updated", ());
                         });
                     }
                 });
+                let listener = dispatch.clone();
+                app.deep_link()
+                    .on_open_url(move |event| listener(event.urls()));
+                if let Some(urls) = app.deep_link().get_current()? {
+                    dispatch(urls);
+                }
             }
             app.manage(commands::Backend {
                 cloud_auth,

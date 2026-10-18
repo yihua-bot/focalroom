@@ -128,6 +128,7 @@ dependencies = [
  "base64 0.22.1",
  "betweenframes-local-domain",
  "chrono",
+ "getrandom 0.4.3",
  "hmac",
  "image",
  "libc",

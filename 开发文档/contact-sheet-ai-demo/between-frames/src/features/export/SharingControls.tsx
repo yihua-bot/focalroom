@@ -1,3 +1,4 @@
+import { CloudAccount, useCloudStatus } from "../cloud-login/CloudLoginView";
 import { useEffect, useState } from "react";
 import type { SharingRepository, SharingStatus } from "../../domain/sharing";
 import { Button } from "../../components/shared/Button";
@@ -16,13 +17,15 @@ export function SharingControls({
   onBusyChange?: (busy: boolean) => void;
 }) {
   const [status, setStatus] = useState<SharingStatus | null>(null),
-    [base, setBase] = useState(""),
-    [web, setWeb] = useState(""),
-    [email, setEmail] = useState(""),
-    [password, setPassword] = useState(""),
+    [baseInput, setBase] = useState<string|null>(null),
+    [webInput, setWeb] = useState<string|null>(null),
     [consent, setConsent] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const {status: account} = useCloudStatus(repository.auth);
+  const defaultOrigin = account?.authenticated ? account.origin : "";
+  const base = status?.remote?.binding?.baseUrl ?? baseInput ?? defaultOrigin;
+  const web = status?.remote?.binding?.webUrl ?? webInput ?? defaultOrigin;
   useEffect(() => {
     let active = true;
     repository
@@ -30,8 +33,6 @@ export function SharingControls({
       .then((result) => {
         if (active) {
           setStatus(result);
-          setBase(result.remote?.binding?.baseUrl ?? "");
-          setWeb(result.remote?.binding?.webUrl ?? "");
         }
       })
       .catch(() => {
@@ -52,8 +53,6 @@ export function SharingControls({
           expectedRevision: revision,
           baseUrl: base,
           webUrl: web,
-          email,
-          password,
           action,
           previewUploadAuthorized: consent,
         }),
@@ -61,7 +60,6 @@ export function SharingControls({
     } catch (error) {
       setError(error instanceof Error ? error.message : "共享失败");
     } finally {
-      setPassword("");
       setBusy(false);
       onBusyChange?.(false);
       const current = await repository.status(projectId).catch(() => null);
@@ -72,6 +70,8 @@ export function SharingControls({
   return (
     <section className="info-card sharing-controls">
       <h3>共享项目</h3>
+      {repository.auth && <CloudAccount repository={repository.auth} />}
+      {account?.authenticated && <p>{account.user?.email}</p>}
       <p>
         迁移期间暂停编辑；完成后请在 Web 继续评片，桌面只读。原图和个人记忆留在本机。
       </p>
@@ -111,26 +111,6 @@ export function SharingControls({
                 onChange={(e) => setWeb(e.target.value)}
               />
             </label>
-            <label>
-              已注册邮箱
-              <input
-                type="email"
-                value={email}
-                autoComplete="username"
-                disabled={busy}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-            <label>
-              账户密码
-              <input
-                type="password"
-                value={password}
-                autoComplete="current-password"
-                disabled={busy}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
           </div>
           <label className="sync-toggle">
             <input
@@ -148,8 +128,8 @@ export function SharingControls({
                 busy ||
                 !base ||
                 !web ||
-                !email ||
-                !password ||
+                !account?.authenticated ||
+                base !== account.origin ||
                 !consent ||
                 !status
               }
@@ -164,7 +144,7 @@ export function SharingControls({
             </Button>
             {status?.authority === "local-promoting" && (
               <Button
-                disabled={busy || !password || !email || !consent}
+                disabled={busy || !account?.authenticated || base !== account.origin || !consent}
                 onClick={() => void run("abort")}
               >
                 验证云端未提交并取消迁移

@@ -18,8 +18,6 @@ pub struct ShareRequest {
     pub expected_revision: i64,
     pub base_url: String,
     pub web_url: String,
-    pub email: String,
-    pub password: String,
     pub action: String,
     pub preview_upload_authorized: bool,
 }
@@ -113,7 +111,7 @@ fn review_link(state: &Value) -> Result<String> {
     Ok(url)
 }
 
-pub async fn share(store: &Store, request: ShareRequest) -> Result<Value> {
+pub async fn share(store: &Store, request: ShareRequest, token: &str) -> Result<Value> {
     static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     let _lock = LOCK.lock().await;
     if !request.preview_upload_authorized || !matches!(request.action.as_str(), "resume" | "abort")
@@ -130,20 +128,19 @@ pub async fn share(store: &Store, request: ShareRequest) -> Result<Value> {
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|_| AppError::new("CLOUD_CONFIG", "HTTP 客户端创建失败"))?;
+    if !crate::login_guard::hex64(token) {
+        return Err(AppError::new("AUTH_REQUIRED", "请先登录云端"));
+    }
     let auth = response(
         client
-            .post(format!("{base}/api/v2/auth/login"))
-            .json(&json!({"email":request.email,"password":request.password}))
+            .get(format!("{base}/api/v2/auth/me"))
+            .bearer_auth(token)
             .send()
             .await
             .map_err(network)?,
     )
     .await?;
-    let token = auth["token"]
-        .as_str()
-        .filter(|s| s.len() == 64)
-        .ok_or_else(|| AppError::new("CLOUD_PROTOCOL", "登录回包不完整"))?;
-    let user = auth["user"]["id"]
+    let user = auth["id"]
         .as_str()
         .ok_or_else(|| AppError::new("CLOUD_PROTOCOL", "登录回包缺少身份"))?;
     let workspaces = response(

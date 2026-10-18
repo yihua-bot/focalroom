@@ -1,4 +1,5 @@
 import { requestMagicCode, verifyMagicCode, type MagicEmailDelivery } from "./magic-login.ts";
+import { loginWithGoogle } from "./google-login.ts";
 import { DesktopLoginService } from "./desktop-login.ts";
 import { AccountRecoveryService, type AccountEmailDelivery } from "./account-recovery.ts";
 import { listTaskResults, modelEndpointLabel } from "./agent-tasks.ts";
@@ -841,7 +842,7 @@ export class CloudService {
   ) {
     const row = (
       await tx.query(
-        "SELECT u.id,u.email,u.display_name AS name,s.csrf,s.digest AS session FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s",
+        "SELECT u.id,u.email,u.display_name AS name,u.avatar_url,s.csrf,s.digest AS session FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s",
         [session],
       )
     ).rows[0];
@@ -1016,6 +1017,10 @@ export class CloudService {
   async requestMagicLogin(input: unknown, ip: string) {
     const email = String((input as Record<string, unknown>)?.email ?? "");
     return requestMagicCode(this.pool, email, ip, this.auth.origin, this.magicEmail);
+  }
+
+  async googleLogin(input: unknown, ip: string) {
+    return loginWithGoogle(this.pool, input, ip);
   }
 
   async verifyMagicLogin(input: unknown, ip: string) {

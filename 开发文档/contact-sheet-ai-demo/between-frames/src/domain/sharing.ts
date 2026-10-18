@@ -18,12 +18,11 @@ export interface ShareRequest {
   expectedRevision: number;
   baseUrl: string;
   webUrl: string;
-  email: string;
-  password: string;
   action: "resume" | "abort";
   previewUploadAuthorized: boolean;
 }
 export interface SharingRepository {
+  auth?: import('./cloud-auth').CloudAuthRepository;
   status(projectId: string): Promise<SharingStatus>;
   share(request: ShareRequest): Promise<SharingStatus>;
 }

@@ -10,6 +10,7 @@ export type Identity = {
   id: string;
   email: string;
   name: string;
+  avatar_url?: string | null;
   session: string;
   csrf: string;
 };
@@ -22,7 +23,7 @@ const account = z.strictObject({
   password: z.string().min(8).max(1024),
   display_name: z.string().trim().min(1).max(200).optional(),
 });
-type AccountUser = { id: string; email: string; display_name: string };
+type AccountUser = { id: string; email: string; display_name: string; avatar_url?: string | null };
 
 // 两种登录方式共用账户初始化与会话格式，避免工作区或 Cookie 状态分叉。
 export async function createAccount(tx: PoolClient, user: AccountUser, passwordHash: string) {
@@ -37,7 +38,7 @@ export async function createSession(db: Pick<Pool, "query">, user: AccountUser) 
   const token = randomBytes(32).toString("hex"), csrf = randomBytes(24).toString("hex");
   await db.query("INSERT INTO fr_sessions VALUES($1,$2,$3,now()+interval '24 hours')",
     [digest(token), user.id, csrf]);
-  return { token, csrf, user: { id: user.id, email: user.email, name: user.display_name } };
+  return { token, csrf, user: { id: user.id, email: user.email, name: user.display_name, avatar: user.avatar_url ?? null } };
 }
 export class AuthService {
   readonly pool: Pool;

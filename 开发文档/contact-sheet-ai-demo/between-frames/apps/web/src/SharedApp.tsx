@@ -87,6 +87,11 @@ export default function SharedApp() {
           <WebLanguageSwitcher />
           {session ? (
             <>
+              {session.avatar ? (
+                <img className="fr-avatar" src={session.avatar} alt="" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="fr-avatar fr-avatar-fallback" aria-hidden="true">{(session.name || "?").slice(0, 1).toUpperCase()}</span>
+              )}
               <span>{session.name}</span>
               <button onClick={() => void logout()}>退出登录</button>
             </>

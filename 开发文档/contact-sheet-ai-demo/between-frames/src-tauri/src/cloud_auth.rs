@@ -4,7 +4,7 @@ use serde::{Serialize,Deserialize};
 use serde_json::{Value,json};
 use std::sync::Arc;
 #[derive(Clone,Serialize,Deserialize)]
-pub struct CloudUser {pub id:String,pub email:String,pub name:String}
+pub struct CloudUser {pub id:String,pub email:String,pub name:String,#[serde(default)]pub avatar:Option<String>}
 #[derive(Serialize)]
 #[serde(rename_all="camelCase")]
 pub struct CloudStatus {pub authenticated:bool,pub waiting:bool,pub origin:String,pub user:Option<CloudUser>,pub error:Option<String>}
@@ -67,9 +67,10 @@ impl CloudAuth {
     pub async fn status(&self)->Result<CloudStatus> {
         let _lock=self.lock.lock().await;let mut r=self.read()?;
         if r.pending.as_ref().is_some_and(|p|p.validate(&format!("focalroom://callback?code={}&state={}","0".repeat(64),"0".repeat(64)),login_guard::now()).is_err_and(|e|e.code=="AUTH_EXPIRED")) {r.pending=None;self.save(&r)?;}
-        let mut user=None;
-        if let Some(s)=&r.session {match self.request("/auth/me",None,Some(&s.token)).await {Ok(v)=>{let value=Self::user(v)?;if value.id!=s.user.id{return Err(AppError::new("CLOUD_PROTOCOL","账户校验不匹配"));}user=Some(value);},Err(e) if e.code=="AUTH_REVOKED"=>{r.session=None;self.save(&r)?;},Err(e)=>return Err(e)}}
-        Ok(CloudStatus{authenticated:user.is_some(),waiting:r.pending.is_some(),origin:self.origin.clone(),user,error:self.error.lock().unwrap_or_else(|p|p.into_inner()).clone()})
+        let mut user=None;let mut authenticated=false;
+        if let Some(s)=&r.session {match self.request("/auth/me",None,Some(&s.token)).await {Ok(v)=>{let value=Self::user(v)?;if value.id!=s.user.id{return Err(AppError::new("CLOUD_PROTOCOL","账户校验不匹配"));}user=Some(value);authenticated=true;},Err(e) if e.code=="AUTH_REVOKED"=>{r.session=None;self.save(&r)?;},Err(e)=>{ // 离线/网关故障不视为登出：保留本地身份供 UI 展示并记录原因。
+            self.remember_error(&e);user=Some(s.user.clone());}}}
+        Ok(CloudStatus{authenticated,waiting:r.pending.is_some(),origin:self.origin.clone(),user,error:self.error.lock().unwrap_or_else(|p|p.into_inner()).clone()})
     }
     pub async fn bearer(&self,origin:&str)->Result<String> {
         if origin!=self.origin{return Err(AppError::new("AUTH_ORIGIN_MISMATCH","请使用当前登录账户绑定的共享服务"));}

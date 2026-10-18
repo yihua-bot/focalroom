@@ -387,3 +387,14 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .sharing-fields input { width: 100%; min-width: 0; padding: 9px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 5px; }
 .sharing-controls .dialog-actions { flex-wrap: wrap; }.preview-banner > a { margin-left: 15px; color: var(--accent); }
 @media (max-width: 640px) { .sharing-fields { grid-template-columns: 1fr; } }
+
+/* 桌面云端账户（SideNav 底部） */
+.cloud-account{display:flex;align-items:center;gap:8px;padding:6px 4px;min-width:0}
+.cloud-account-status{font-size:8px;color:#2ecc71;flex:none}
+.cloud-account-status[data-offline="true"]{color:#e67e22}
+.cloud-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:none}
+.cloud-avatar-fallback{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#6c5ce7,#fd79a8);color:#fff;font-size:13px;font-weight:600}
+.cloud-account-user{flex:1;min-width:0;text-align:left}
+.cloud-account-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cloud-account-email{font-size:10px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cloud-account-waiting{display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap}
