@@ -13,7 +13,7 @@ beforeEach(() => history.replaceState(null, "", "/shared"));
 
 it("同页邮件链接在 popstate/hashchange 与令牌清理后仍显示操作界面", async () => {
   render(<SharedApp />);
-  await screen.findByRole("heading", { name: "欢迎回到 FocalRoom" });
+  await screen.findByRole("heading", { name: "登录 FocalRoom" });
   const target = `${location.origin}/shared#verify-email=${"a".repeat(64)}`;
   history.pushState(null, "", target);
   fireEvent(window, new PopStateEvent("popstate"));
@@ -24,7 +24,7 @@ it("同页邮件链接在 popstate/hashchange 与令牌清理后仍显示操作�
   fireEvent(window, new PopStateEvent("popstate"));
   expect(screen.getByRole("button", { name: "确认验证邮箱" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "返回登录" }));
-  await screen.findByRole("heading", { name: "欢迎回到 FocalRoom" });
+  await screen.findByRole("heading", { name: "登录 FocalRoom" });
 });
 
 it("切换到另一个邮件链接时清空前一链接的完成状态", async () => {

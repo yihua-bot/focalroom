@@ -88,7 +88,7 @@ export default function SharedApp() {
               <button onClick={() => void logout()}>退出登录</button>
             </>
           ) : (
-            <a href="/">体验本地工作台</a>
+            <a href="/">查看工作台示例</a>
           )}
         </div>
       </header>
@@ -151,27 +151,15 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
   return (
     <main className="fr-welcome">
       <section>
-        <p className="fr-eyebrow">让作品在交流中成形</p>
-        <h1>
-          在同一间暗房里，
-          <br />
-          找到照片之间的联系。
-        </h1>
-        <p>
-          私密邀请你的编辑与伙伴，留下批注、提出序列建议。每次正式改动，都由作者审阅和确认。
-        </p>
-        <div className="fr-promise">
-          <span>只分享预览</span>
-          <span>原图保留本地</span>
-          <span>AI 上传单独授权</span>
-        </div>
+        <h1>共享评片</h1>
+        <p>查看照片、批注和编辑提案。</p>
       </section>
       <form
         className="fr-card fr-login"
         onSubmit={(event) => void submit(event)}
       >
-        <h2>{register ? "建立你的工作区" : "欢迎回到 FocalRoom"}</h2>
-        <p>使用受邀邮箱登录，继续评片。</p>
+        <h2>{register ? "创建账户" : "登录 FocalRoom"}</h2>
+        <p>使用受邀邮箱登录。</p>
         {register && (
           <label>
             姓名

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import App from '../App';
@@ -19,7 +19,7 @@ describe('工作台交互', () => {
     await waitFor(async () => expect((await repository.get('sample-project')).sequence).toEqual(['sample-1']));
     await user.keyboard('{ArrowRight}x');
     await waitFor(async () => expect((await repository.get('sample-project')).photos[1].status).toBe('reject'));
-    await user.click(screen.getByRole('textbox', { name: '为什么保留 / 淘汰这张照片？' }));
+    await user.click(screen.getByRole('textbox', { name: '照片备注' }));
     await user.keyboard('kx');
     expect((await repository.get('sample-project')).photos[1].status).toBe('reject');
   });
@@ -34,9 +34,9 @@ describe('工作台交互', () => {
   });
   it('浏览器 Mock 入口不启动桌面任务，保留集合不变', async () => {
     const { repository, user } = await open();
-    await user.click(screen.getByRole('button', { name: '摄影编辑 Agent' }));
-    expect(screen.getByText('验证受控工具闭环。AI 不直接修改正式选片；云端图像仅在明确授权后上传。')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '开始本地 Mock 任务' })).toBeDisabled();
+    await user.click(within(screen.getByRole('main')).getByRole('button', { name: '编辑建议' }));
+    expect(screen.getByText('请在桌面版使用编辑建议。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '运行示例任务' })).toBeDisabled();
     expect((await repository.get('sample-project')).sequence).toEqual([]);
   });
   it('已保留筛选无照片时，显示恢复路径', async () => {

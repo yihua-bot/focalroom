@@ -62,12 +62,7 @@ export function ProjectHome({
     <main className="fr-home">
       <div className="fr-heading">
         <div>
-          <p className="fr-eyebrow">PRIVATE WORKSPACE</p>
-          <h1>你的共享项目</h1>
-          <p>
-            只有被邀请的成员可以进入。普通成员须另获项目授权；Owner/Admin
-            可管理工作区项目。
-          </p>
+          <h1>共享项目</h1>
         </div>
         <button className="fr-primary" onClick={() => setWizard(!wizard)}>
           导入共享预览包
@@ -77,7 +72,7 @@ export function ProjectHome({
         <div className="fr-card fr-invite">
           <div>
             <h2>你收到一个评片邀请</h2>
-            <p>当前邮箱：{session.email} · 接受后获得邀请指定的权限。</p>
+            <p>当前邮箱：{session.email}</p>
           </div>
           <button className="fr-primary" onClick={() => void accept()}>
             接受邀请
@@ -121,9 +116,9 @@ export function ProjectHome({
         </div>
       ) : (
         <div className="fr-empty">
-          <h2>留一点空间，给下一组作品。</h2>
+          <h2>暂无共享项目</h2>
           <p>
-            打开邀请链接加入评片，或从桌面导出共享预览包，在这里建立独立的共享副本。
+            接受邀请或导入共享预览包。
           </p>
         </div>
       )}
@@ -207,7 +202,7 @@ function PromotionImport({
     <section className="fr-card fr-import">
       <h2>导入共享预览包</h2>
       <p>
-        在云端建立独立副本。桌面原项目仍在本地；此入口不会把它自动切换为云端权威。
+        导入后创建共享项目，桌面原项目保留。
       </p>
       <div className="fr-form-row">
         <label>
@@ -253,8 +248,7 @@ function PromotionImport({
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
         />
-        我允许上传这些派生预览以供受邀成员评片。原图不上传，AI
-        上传不在本次授权范围内。
+        同意上传预览供受邀成员评片，不上传原图，不授权 AI 使用。
       </label>
       {error && (
         <p role="alert" className="fr-error">

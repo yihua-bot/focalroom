@@ -71,6 +71,10 @@ test('M5 comment anchors, parent project isolation, provenance and Viewer denial
   const note = command('comment.add', { body: '主体空间可再调整', anchor: { type: 'photo', photo_id: 'p1', x: 0.4, y: 0.6 } }); await execute(note, reviewer.token);
   await execute(command('comment.add', { body: 'forbidden', anchor: { type: 'photo', photo_id: 'p1', x: 0, y: 0 } }), viewer.token, 403);
   await execute(command('comment.add', { body: 'wrong', anchor: { type: 'photo', photo_id: 'foreign', x: 0, y: 0 } }), reviewer.token, 400);
+  await execute(command('comment.add', { body: '开场这张放第一位更稳', anchor: { type: 'sequence', sequence_item_id: 'item-p1', revision_id: '0' } }), reviewer.token);
+  await execute(command('comment.add', { body: '这一版整体节奏偏快', anchor: { type: 'revision', revision_id: '0' } }), reviewer.token);
+  await execute(command('comment.add', { body: 'wrong item', anchor: { type: 'sequence', sequence_item_id: 'item-foreign', revision_id: '0' } }), reviewer.token, 400);
+  await execute(command('comment.add', { body: 'wrong revision', anchor: { type: 'revision', revision_id: '9' } }), reviewer.token, 400);
   await call(`/projects/${project}/comments/${note.command_id}/replies`, 'POST', owner.token, { body: '收到，保留这个建议', idempotency_key: randomUUID() });
   await call(`/projects/${project}/comments/foreign-thread/replies`, 'POST', reviewer.token, { body: 'wrong project', idempotency_key: randomUUID() }, 400);
   const comments = await call(`/projects/${project}/ai-comments`); assert.equal(comments.comments[0].author_id, reviewer.user.id); assert.equal(comments.comments[0].reviewer, 'reviewer@fr.test');

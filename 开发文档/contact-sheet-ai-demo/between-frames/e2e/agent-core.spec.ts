@@ -39,20 +39,20 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  await page.goto('/#/project/' + project.id);
  await expect(page.getByRole('heading', { name: 'M2 · 草案与人工决定' })).toBeVisible();
  await page.screenshot({ path: resolve(screenshots, 'workspace.png') });
- await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
+ await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
  await page.getByRole('textbox', { name: 'Agent 编辑目标' }).fill('给两版 25 张序列');
  await page.locator('.agent-form summary').click();
  await page.getByRole('spinbutton', { name: '模型轮次上限' }).fill('2');
- await page.getByRole('button', { name: '开始本地 Mock 任务' }).click();
+ await page.getByRole('button', { name: '运行示例任务' }).click();
  await expect(page.locator('.agent-task > strong')).toHaveText('已暂停', { timeout: 15000 });
  await expect(page.locator('.agent-task > strong')).toBeInViewport();
  await page.screenshot({ path: resolve(screenshots, 'paused.png') });
  await page.reload();
- await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
+ await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
  await page.getByRole('button', { name: '按已保存预算恢复（2 轮 / 40 工具）' }).click();
  await expect(page.locator('.agent-task > strong')).toHaveText('已暂停');
  expect((await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0].usage.modelTurns).toBe(2);
- await page.getByRole('button', { name: '编辑委托与预算' }).click();
+ await page.getByRole('button', { name: '任务设置' }).click();
  await page.locator('.agent-form summary').click();
  await page.getByRole('spinbutton', { name: '模型轮次上限' }).fill('16');
  await page.getByRole('button', { name: '按当前预算恢复' }).click();
@@ -67,8 +67,8 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  // 在任务完成后人工保留一张未在候选中的照片，两个草案必须过期。
  project = await rpc<Project>('update_photo_decision', { projectId: project.id, expectedRevision: project.revision, photoId: project.photos[199].id, status: 'keep' });
  await page.reload();
- await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
- await expect(page.locator('.agent-task > strong')).toHaveText('原任务基线过期');
+ await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
+ await expect(page.locator('.agent-task > strong')).toHaveText('项目已更新');
  await page.getByRole('button', { name: '查看草案差异' }).first().click();
  const dialog = page.getByRole('dialog');
  await expect(dialog.getByRole('button', { name: /^采纳所选/ })).toBeDisabled();
@@ -121,7 +121,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  expect((await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0].state).toBe('cancelled');
  // 当前没有云服务也能主动管理/禁止全部服务的图像授权，重启后保留。
  const beforeDeny = await rpc<AgentProjection>('get_agent_projection', { projectId: project.id });
- await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
+ await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
  await page.locator('.ai-config > summary').click();
  await page.getByRole('button', { name: '管理图像授权' }).click();
  const consentDialog = page.getByRole('dialog', { name: '云端图像授权' });

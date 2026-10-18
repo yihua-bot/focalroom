@@ -772,6 +772,25 @@
                     "revision_id"
                   ],
                   "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "revision"
+                    },
+                    "revision_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "revision_id"
+                  ],
+                  "additionalProperties": false
                 }
               ]
             }

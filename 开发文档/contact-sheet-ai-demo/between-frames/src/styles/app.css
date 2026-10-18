@@ -150,6 +150,24 @@ label { display: block; color: #b6b7af; margin: 16px 0 9px; font-size: 12px; }
 .shortcut-list { display: grid; grid-template-columns: 90px 1fr; gap: 16px; margin-top: 26px; font-size: 12px; align-items: center; }
 .shortcut-list dd { margin: 0; color: #b9b9b2; line-height: 1.8; }
 kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: var(--accent); }
+.command-palette-input { width: 100%; margin-bottom: 10px; }
+.command-palette-list { list-style: none; margin: 0; padding: 0; max-height: min(420px, 50vh); overflow: auto; border: 1px solid #33342f; border-radius: 6px; }
+.command-palette-list li { display: flex; align-items: center; gap: 12px; padding: 9px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #232420; }
+.command-palette-list li:last-child { border-bottom: none; }
+.command-palette-list li[aria-selected="true"] { background: #24261f; }
+.command-palette-list li[aria-disabled="true"] { cursor: default; color: var(--muted); }
+.command-group { flex-shrink: 0; width: 44px; font-size: 10px; color: var(--muted); letter-spacing: .08em; }
+.command-label { flex: 1; }
+.command-hint { margin-left: auto; }
+.command-empty { justify-content: center; }
+.shortcut-editor h4 { margin: 16px 0 6px; font-size: 11px; color: var(--accent); letter-spacing: .1em; }
+.shortcut-edit-list { list-style: none; margin: 0; padding: 0; }
+.shortcut-edit-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 5px 0; font-size: 12px; color: #b9b9b2; }
+.shortcut-edit-keys { display: flex; align-items: center; gap: 8px; }
+.shortcut-custom { margin-left: 6px; color: var(--accent); font-style: normal; font-size: 10px; }
+.shortcut-capturing { border-style: dashed; animation: shortcut-pulse 1.2s ease-in-out infinite; }
+.shortcut-conflict { margin: 0 0 8px; font-size: 12px; }
+@keyframes shortcut-pulse { 50% { opacity: .45; } }
 .page-message { padding: 40px; color: var(--muted); }
 @media (max-width: 1250px) {
   .app-shell { grid-template-columns: 176px minmax(0, 1fr) 300px; }

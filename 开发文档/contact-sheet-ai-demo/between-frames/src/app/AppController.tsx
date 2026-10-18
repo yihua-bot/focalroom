@@ -5,6 +5,9 @@ import type { Photo, PhotoStatus, Project, ProjectRepository } from '../domain/m
 import { useUIStore } from '../stores/uiStore';
 import { useRoute, navigate } from './router';
 import { useShortcuts } from './useShortcuts';
+import { CommandPalette, type CommandEntry } from './CommandPalette';
+import { ShortcutEditor, formatShortcut } from './ShortcutEditor';
+import { useShortcutConfig } from './shortcutConfig';
 import { AppShell } from './AppShell';
 import { SideNav } from './SideNav';
 import { Workspace } from './Workspace';
@@ -28,12 +31,13 @@ import { VersionsDialog } from '../features/project/VersionsDialog';
 import { Lightbox } from '../components/inspector/Lightbox';
 import type { SelectionGesture } from '../domain/selection';
 
-type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' | 'quickStart' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
+type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
 
 export function AppController({ repository }: { repository: ProjectRepository }) {
   const local = isDesktopRepository(repository);
   const route = useRoute(local);
   const ui = useUIStore();
+  const shortcutConfig = useShortcutConfig();
   const client = useQueryClient();
   const [archived, setArchived] = useState(false);
   const query = useQuery({ queryKey: ['projects', archived], queryFn: () => repository.list(archived), refetchOnWindowFocus: local ? 'always' : false });
@@ -104,7 +108,8 @@ export function AppController({ repository }: { repository: ProjectRepository })
     if (right && right.id !== active.id) { setNotice('比较当前照片与下一张；也可选中两张后比较。'); setDialog({ kind: 'compare', left: active, right }); }
     else setNotice('当前视图不足两张照片，请调整筛选或搜索。');
   };
-  useShortcuts({ photos: navigable, activeId: active?.id ?? null, view: ui.view, blocked: Boolean(dialog) || mutation.isPending || route.page !== 'workspace',
+  useShortcuts({ shortcuts: shortcutConfig.shortcuts, photos: navigable, activeId: active?.id ?? null, view: ui.view, blocked: Boolean(dialog) || mutation.isPending || route.page !== 'workspace',
+    onCommandPalette: () => setDialog(current => current?.kind === 'palette' ? null : { kind: 'palette' }),
     onSelect: select, onSelectAll: ui.selectAll, onClear: ui.clearSelection, onDecide: (_id, status) => decideSelection(status), onRate: rateSelection,
     onCompare: compare, onEnlarge: () => { if (active) setDialog({ kind: 'enlarge', photo: active }); }, onView: ui.setView,
     onUndo: undo, onRedo: redo, onSearch: () => document.getElementById('photo-search')?.focus(), onAgent: ui.toggleAgent, onMove: offset => {
@@ -112,14 +117,48 @@ export function AppController({ repository }: { repository: ProjectRepository })
       const to = from + offset;
       if (from >= 0 && to >= 0 && to < kept.length) reorder(arrayMove(kept.map(photo => photo.id), from, to));
     } });
+  const keys = shortcutConfig.shortcuts;
+  const paletteCommands: CommandEntry[] = [];
+  if (route.page === 'workspace' && project) {
+    const hint = (id: keyof typeof keys) => formatShortcut(keys[id]);
+    if (!readOnly) {
+      paletteCommands.push(
+        { id: 'decide-keep', group: '决策', label: `保留选区（${targets.length} 张）`, hint: hint('keep'), run: () => decideSelection('keep') },
+        { id: 'decide-reject', group: '决策', label: `淘汰选区（${targets.length} 张）`, hint: hint('reject'), run: () => decideSelection('reject') },
+        { id: 'decide-undecided', group: '决策', label: `选区设为待定（${targets.length} 张）`, hint: hint('undecided'), run: () => decideSelection('undecided') },
+        { id: 'rate-clear', group: '评分', label: '清除选区评分', hint: hint('rate0'), run: () => rateSelection(0) },
+        ...[1, 2, 3, 4, 5].map(rating => ({ id: `rate-${rating}`, group: '评分', label: `选区评 ${rating} 星`, hint: hint(`rate${rating}` as keyof typeof keys), run: () => rateSelection(rating) })),
+        { id: 'undo', group: '历史', label: '撤销上一步人工编辑', hint: hint('undo'), run: undo },
+        { id: 'redo', group: '历史', label: '重做', hint: hint('redo'), run: redo },
+        { id: 'import', group: '项目', label: '导入照片', run: () => setDialog({ kind: 'import' }) },
+      );
+    }
+    paletteCommands.push(
+      { id: 'view-grid', group: '视图', label: '切换到网格视图', hint: hint('viewGrid'), run: () => ui.setView('grid') },
+      { id: 'view-sequence', group: '视图', label: '切换到作品序列', hint: hint('viewSequence'), run: () => ui.setView('sequence') },
+      { id: 'compare', group: '检查', label: '比较两张照片', hint: hint('compare'), run: compare },
+      { id: 'enlarge', group: '检查', label: '放大当前照片', hint: hint('enlarge'), run: () => { if (active) setDialog({ kind: 'enlarge', photo: active }); } },
+      { id: 'select-all', group: '选择', label: '选择当前视图全部照片', hint: hint('selectAll'), run: () => ui.selectAll(navigable.map(photo => photo.id)) },
+      { id: 'clear-selection', group: '选择', label: '清除选区', hint: hint('clearSelection'), run: ui.clearSelection },
+      { id: 'search', group: '导航', label: '聚焦搜索框', hint: hint('search'), run: () => document.getElementById('photo-search')?.focus() },
+      { id: 'agent', group: '导航', label: '显示/隐藏编辑建议面板', hint: hint('toggleAgent'), run: ui.toggleAgent },
+      { id: 'versions', group: '项目', label: '查看/保存作品版本', run: () => setDialog({ kind: 'versions' }) },
+      { id: 'export', group: '项目', label: '导出作品', run: () => setDialog({ kind: 'export' }) },
+    );
+  }
+  paletteCommands.push(
+    { id: 'new-project', group: '项目', label: '新建项目', run: () => { setArchived(false); setPendingGoal(null); setDialog({ kind: 'create' }); } },
+    { id: 'help', group: '帮助', label: '快捷键与帮助', run: () => setDialog({ kind: 'help' }) },
+  );
+  if (local) paletteCommands.push({ id: 'quick-start', group: '项目', label: '快速开始：用一句话创建项目', run: () => { setArchived(false); setDialog({ kind: 'quickStart' }); } });
   const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector">
     <h2 className="editor-title">{zh.editorTitle}</h2>
-    <div className="right-tabs" aria-label="检查器面板">{(['photo', 'ai', 'memory'] as const).map(key => <button key={key} className={ui.panel === key ? 'active' : ''} aria-pressed={ui.panel === key} onClick={() => ui.setPanel(key)}>{key === 'photo' ? '照片检查' : key === 'ai' ? 'AI 建议' : zh.memory}</button>)}</div>
+    <div className="right-tabs" aria-label="检查器面板">{(['photo', 'ai', 'memory'] as const).map(key => <button key={key} className={ui.panel === key ? 'active' : ''} aria-pressed={ui.panel === key} onClick={() => ui.setPanel(key)}>{key === 'photo' ? '照片检查' : key === 'ai' ? zh.ai : zh.memory}</button>)}</div>
     {ui.panel === 'photo' ? (active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending || readOnly} onDecide={decide}
       onRate={(id, rating) => act(() => repository.rate(project.id, [id], rating))}
       onBookMark={local && project ? (id, mark) => act(() => repository.setBookMark(project.id, id, mark), mark === 'spread' ? '已设为跨页大图' : mark === 'full' ? '已设为整页图' : '已清除册页标记') : undefined}
       draft={drafts[active.id]} onDraft={note => setDrafts(previous => ({ ...previous, [active.id]: note }))}
-      onNote={(id, note) => act(() => repository.note(project.id, id, note), local ? '判断已保存到本地' : zh.savedNote, false, () => setDrafts(previous => { const next = { ...previous }; delete next[id]; return next; }))}
+      onNote={(id, note) => act(() => repository.note(project.id, id, note), zh.savedNote, false, () => setDrafts(previous => { const next = { ...previous }; delete next[id]; return next; }))}
       onRelink={local ? () => { act(async () => (await repository.relink(project.id, active.id)) ?? project); } : undefined}
       onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
       : <EmptyState title="选择一张照片" hint="点击网格，开始检查画面。" />)
@@ -129,7 +168,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
     onView={view => { if (!navProject) return; if (route.page === 'projects') navigate(navProject.id); ui.setView(view); }}
     onProjects={() => { setArchived(false); navigate(null); }} onMemory={() => { if (navProject) navigate(navProject.id); ui.setPanel('memory'); }} onHelp={() => setDialog({ kind: 'help' })} />}>
     {query.isPending ? <p role="status" className="page-message">正在打开示例项目…</p> : query.isError ? <EmptyState title="项目加载失败" hint={query.error.message} action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />
-      : route.page === 'projects' ? <ProjectList projects={projects} onOpen={openProject} onCreate={() => { setArchived(false); setDialog({ kind: 'create' }); }} local={local} archived={archived}
+      : route.page === 'projects' ? <ProjectList projects={projects} onOpen={openProject} onCreate={() => { setArchived(false); setPendingGoal(null); setDialog({ kind: 'create' }); }} onQuickStart={local ? () => { setArchived(false); setDialog({ kind: 'quickStart' }); } : undefined} local={local} archived={archived}
         onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })}
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />
       : project ? <Workspace project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending || readOnly} local={local} sharing={sharing.data ?? undefined} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
@@ -138,7 +177,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
   </AppShell>
     {local && project && !(ui.inspectorOpen && ui.panel === 'ai') && <AgentStatus repository={repository} projectId={project.id} onOpen={() => ui.setPanel('ai')} />}
     {notice && <div role="status" className="toast">{notice}</div>}
-    {dialog?.kind === 'quickStart' && local && <QuickStartModal onClose={() => setDialog(null)} onCreate={(title, goal, count) => { setPendingGoal({ goal, count }); mutation.mutate(() => repository.create(title, ''), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); setLastProjectId(created.id); navigate(created.id); } }); }} onImport={() => setTimeout(() => setDialog({ kind: 'import' }), 300)} />}
+    {dialog?.kind === 'quickStart' && local && <QuickStartModal onClose={() => setDialog(null)} onCreate={(title, goal, count) => { setPendingGoal({ goal, count }); mutation.mutate(() => repository.create(title, ''), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); ui.setPanel('ai'); setLastProjectId(created.id); navigate(created.id); } }); }} onImport={() => setTimeout(() => setDialog({ kind: 'import' }), 300)} />}
       {(dialog?.kind === 'create' || dialog?.kind === 'edit') && <ProjectDialog project={dialog.kind === 'edit' ? project : undefined} busy={mutation.isPending} onClose={() => setDialog(null)} onSave={(title, brief, tags) => {
       if (dialog.kind === 'edit' && project) act(async () => { const updated = await repository.edit(project.id, title, brief); if (tags) await repository.setTags(project.id, tags); return updated; }, local ? '项目已保存到本地' : zh.savedProject, true);
       else mutation.mutate(() => repository.create(title, brief), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); setLastProjectId(created.id); navigate(created.id); } });
@@ -155,13 +194,9 @@ export function AppController({ repository }: { repository: ProjectRepository })
         void repository.archive(dialog.project.id).then(() => { setDialog(null); refresh(); }).catch(error => setNotice(`归档失败：${String(error)}`));
       }}>确认归档</Button></div></Modal>}
     {dialog?.kind === 'enlarge' && <Lightbox photos={navigable} activeId={dialog.photo.id} onClose={() => setDialog(null)} onNavigate={photo => { ui.select(photo.id); setDialog({ kind: 'enlarge', photo }); }} onDecide={(id, status) => decide(id, status)} onRate={(id, rating) => project && act(() => repository.rate(project.id, [id], rating), rating ? `人工评分已保存：${rating} 星` : '人工评分已清除')} />}
-    {dialog?.kind === 'help' && <Modal title={zh.help} description={zh.helpHint} onClose={() => setDialog(null)}><dl className="shortcut-list">
-      <dt><kbd>K / X / U</kbd></dt><dd>将选区明确设为保留 / 淘汰 / 待定；重复按键不会撤销</dd><dt><kbd>0–5</kbd></dt><dd>人工星级；0 清除评分</dd>
-      <dt><kbd>← →</kbd></dt><dd>切换照片；Shift + 方向键扩展选区</dd><dt><kbd>C</kbd></dt><dd>比较选中的两张；未选两张时比较当前与下一张</dd>
-      <dt><kbd>G / S</kbd></dt><dd>网格 / 作品序列</dd><dt><kbd>⌘F / ⌘A</kbd></dt><dd>搜索 / 选择当前视图所有照片（Windows 使用 Ctrl）</dd>
-      <dt><kbd>⌘Z / ⌘⇧Z</kbd></dt><dd>撤销 / 重做一次人工编辑；输入框使用文本自身撤销</dd>
-      <dt><kbd>⌘⇧A</kbd></dt><dd>显示 / 隐藏 Agent 面板</dd><dt><kbd>↑ ↓</kbd></dt><dd>在作品序列中移动当前照片</dd>
-      <dt><kbd>Space</kbd></dt><dd>打开 / 关闭大图；排序把手聚焦时启动 / 完成键盘拖动</dd>
-      <dt><kbd>Esc</kbd></dt><dd>关闭弹窗 / 取消拖拽 / 清除选区</dd></dl></Modal>}
+    {dialog?.kind === 'palette' && <CommandPalette commands={paletteCommands} onClose={() => setDialog(null)} />}
+    {dialog?.kind === 'help' && <Modal title={zh.help} description={zh.helpHint} onClose={() => setDialog(null)}>
+      <ShortcutEditor shortcuts={shortcutConfig.shortcuts} overrides={shortcutConfig.overrides} save={shortcutConfig.save} reset={shortcutConfig.reset} />
+    </Modal>}
   </>;
 }

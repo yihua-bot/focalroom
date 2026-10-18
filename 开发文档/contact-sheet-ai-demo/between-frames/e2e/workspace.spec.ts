@@ -156,12 +156,12 @@ test('序列把手处理单次合并移动事件，Escape 取消后顺序不变'
 test('新建项目的空状态截图与项目导航', async ({ page }) => {
   await ready(page);
   await page.getByRole('button', { name: '项目列表', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '你的创作，从这里继续。' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '项目' })).toBeVisible();
   await page.getByRole('button', { name: '新建项目', exact: true }).click();
   await page.getByRole('textbox', { name: '项目名称' }).fill('光线的间隙');
   await page.getByRole('textbox', { name: '你希望这组照片表达什么？' }).fill('在日常空间里，寻找缓慢的光。');
   await page.getByRole('button', { name: '创建并打开' }).click();
-  await expect(page.getByRole('heading', { name: '这里还没有照片' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '暂无照片' })).toBeVisible();
   await page.screenshot({ path: resolve(screenshots, 'empty.png') });
   await page.getByRole('button', { name: '项目列表', exact: true }).click();
   await page.getByRole('button', { name: /SAMPLE PROJECT/ }).click();
@@ -171,28 +171,28 @@ test('新建项目的空状态截图与项目导航', async ({ page }) => {
 test('备注编辑不会触发 K/X；刷新明确重置内存预览', async ({ page }) => {
   await ready(page);
   await keep(page, 1);
-  await page.getByRole('textbox', { name: '为什么保留 / 淘汰这张照片？' }).fill('kx 留白与安静');
-  await page.getByRole('button', { name: '保存我的判断' }).click();
+  await page.getByRole('textbox', { name: '照片备注' }).fill('kx 留白与安静');
+  await page.getByRole('button', { name: '保存备注' }).click();
   await expect(page.locator('.dock-images button')).toHaveCount(1);
   await page.getByTestId('photo-2').getByRole('button', { name: /^查看第/ }).click();
   await page.getByTestId('photo-1').getByRole('button', { name: /^查看第/ }).click();
-  await expect(page.getByRole('textbox', { name: '为什么保留 / 淘汰这张照片？' })).toHaveValue('kx 留白与安静');
+  await expect(page.getByRole('textbox', { name: '照片备注' })).toHaveValue('kx 留白与安静');
   await page.reload();
   await expect(page.locator('.dock-images button')).toHaveCount(0);
-  await expect(page.getByRole('textbox', { name: '为什么保留 / 淘汰这张照片？' })).toHaveValue('');
+  await expect(page.getByRole('textbox', { name: '照片备注' })).toHaveValue('');
 });
 
 test('AI、导入和导出边界明示；没有外部请求', async ({ page }) => {
   const external: string[] = [];
   page.on('request', request => { if (!request.url().startsWith('http://localhost:1420')) external.push(request.url()); });
   await ready(page);
-  await page.getByRole('button', { name: '摄影编辑 Agent' }).click();
-  await expect(page.getByRole('button', { name: '开始本地 Mock 任务' })).toBeDisabled();
+  await page.getByRole('main').getByRole('button', { name: '编辑建议' }).click();
+  await expect(page.getByRole('button', { name: '运行示例任务' })).toBeDisabled();
   await page.getByRole('button', { name: '导出 ↗' }).click();
   await expect(page.getByRole('button', { name: '项目 JSON' })).toBeDisabled();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '导入照片', exact: true }).click();
-  await expect(page.getByRole('dialog')).toContainText('请在 Tauri 桌面版导入真实照片');
+  await expect(page.getByRole('dialog')).toContainText('请在桌面版导入照片。');
   expect(external).toEqual([]);
 });
 

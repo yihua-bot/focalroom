@@ -69,8 +69,7 @@ export function WorkspaceMembers({ session }: { session: Session }) {
     <details className="fr-card fr-workspace-settings">
       <summary>工作区成员与邀请</summary>
       <p>
-        普通成员仍须单独获得项目授权。Owner/Admin
-        可管理工作区项目，请仅邀请可信任的管理员。
+        普通成员需单独设置项目权限；管理员可管理工作区内所有项目。
       </p>
       <div className="fr-form-row">
         <label>
@@ -141,8 +140,7 @@ export function WorkspaceMembers({ session }: { session: Session }) {
         ))}
       </div>
       <p className="fr-muted">
-        移除成员关系不会替代项目权限撤销；独立的 ProjectGrant
-        需要在对应项目中管理。
+        移除成员后，已有项目权限仍需在对应项目中撤销。
       </p>
     </details>
   );

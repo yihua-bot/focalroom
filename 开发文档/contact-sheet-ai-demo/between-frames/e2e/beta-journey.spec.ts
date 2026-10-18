@@ -47,8 +47,8 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   // 3. 委托 Agent（本地 Mock，零图像）。
   await page.goto('/#/project/' + project.id);
   await expect(page.getByRole('heading', { name: '成长的摄影书' })).toBeVisible();
-  await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
-  await page.getByRole('button', { name: '开始本地 Mock 任务' }).click();
+  await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
+  await page.getByRole('button', { name: '运行示例任务' }).click();
   await expect(page.locator('.agent-task > strong')).toHaveText('待审核', { timeout: 30000 });
   await expect(page.locator('.agent-drafts article')).toHaveCount(2);
   await page.screenshot({ path: resolve(screenshots, 'journey-drafts.png') });
@@ -69,7 +69,7 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   expect(after?.disabled).toBe(true);
   await page.screenshot({ path: resolve(screenshots, 'journey-memory.png') });
   // 5. 局部采纳一份草案的部分照片。
-  await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
   await page.getByRole('button', { name: '查看草案差异' }).first().click();
   await page.getByRole('button', { name: '清除选择' }).click();
   const checkboxes = page.locator('.draft-items input[type="checkbox"]');

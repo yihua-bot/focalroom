@@ -23,20 +23,20 @@ export function DiagnosticsDialog({ repository, onClose }: { repository: Diagnos
   const copy = async () => {
     if (!data || copying || query.isFetching || query.isError) return;
     setCopying(true); setNote('');
-    try { await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); setNote('诊断信息已复制，可自行检查后用于反馈。'); }
+    try { await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); setNote('诊断信息已复制。'); }
     catch { setNote('剪贴板写入失败；可以展开诊断 JSON 后手动复制。'); }
     finally { setCopying(false); }
   };
-  return <Modal title="本地存储与诊断" description="仅统计本应用数据目录的数据库、图片缓存和迁移备份。不包含原图、导出文件或应用程序本身；不会自动发送。文件大小不是物理磁盘占用。"
+  return <Modal title="本地存储与诊断" description="查看数据库、图片缓存与备份占用，不含原图。"
     onClose={onClose}>
     <div className="dialog-actions">
       <Button size="small" disabled={query.isFetching || copying} onClick={() => { setNote(''); void query.refetch(); }}>刷新统计</Button>
       <Button size="small" disabled={!data || query.isFetching || query.isError || copying} onClick={() => { void copy(); }}>复制诊断信息</Button>
     </div>
     {query.isFetching && <p role="status">正在读取本地统计…</p>}
-    {query.isError && <p role="alert">诊断读取失败；若仍显示数据，则为上次快照。请重试，未显示的项目不代表数量为 0。</p>}
+    {query.isError && <p role="alert">读取失败，请重试。已显示的数据为上次结果。</p>}
     {data && <div className="storage-diagnostics" aria-busy={query.isFetching}>
-      <p className="micro">采集时间：{new Date(data.collectedAt).toLocaleString('zh-CN')} · 应用 {data.appVersion} · 提供方 {data.provider.providerId === 'mock' ? '本地 Mock' : 'OpenAI'} · {data.provider.ready ? '密钥已配置' : '密钥未配置'}</p>
+      <p className="micro">采集时间：{new Date(data.collectedAt).toLocaleString('zh-CN')} · 应用 {data.appVersion} · 提供方 {data.provider.providerId === 'mock' ? '演示模式' : 'OpenAI'} · {data.provider.ready ? '密钥已配置' : '密钥未配置'}</p>
       <h3>存储统计</h3>
       <table><thead><tr><th scope="col">类别</th><th scope="col">已统计大小</th><th scope="col">文件数</th></tr></thead>
         <tbody>{([
@@ -50,12 +50,11 @@ export function DiagnosticsDialog({ repository, onClose }: { repository: Diagnos
         <ul>{data.storage.backupsChecked.map(backup => <li key={backup.name} data-status={backup.status}>
           {backup.status === 'ok' ? '✓ 完整性通过' : backup.status === 'corrupt' ? '⚠ 完整性异常' : '⚠ 无法打开'} · {bytes(backup.bytes)} · {backup.name}
         </li>)}</ul>
-        <p className="micro">巡检为只读快速校验（quick_check），通过不等于已演练恢复；异常备份保留原处供人工评估。应用内暂无自动恢复入口。</p>
+        <p className="micro">完整性检查通过后，仍需验证备份能否恢复。</p>
       </div>}
-      <p className="micro">缓存配置额度：{bytes(data.storage.cacheLimitBytes)}。自动清理只针对孤儿缓存，被照片引用的缓存保留。</p>
+      <p className="micro">缓存配置额度：{bytes(data.storage.cacheLimitBytes)}。仅自动清理未使用的缓存。</p>
       {data.storage.cache.bytes > data.storage.cacheLimitBytes && <p role="status">已统计缓存超过配置额度；引用缓存不会自动淘汰。</p>}
       {!data.storage.complete && <p role="status">部分条目不可读取、不是普通文件或超出扫描上限；仅显示已统计下界。不会跟随符号链接。</p>}
-      <p className="micro">文件可能在读取期间变化；缺失的可选 WAL/共享内存文件按 0 计。迁移备份数量不等于备份可恢复性验收。</p>
       <h3>数据与任务</h3>
       <dl className="diagnostic-counts">
         <div><dt>项目（含归档）</dt><dd>{data.database.projects}</dd></div>
@@ -65,7 +64,6 @@ export function DiagnosticsDialog({ repository, onClose }: { repository: Diagnos
         <div><dt>人工证据</dt><dd>{data.database.evidence}</dd></div>
         <div><dt>已应用迁移</dt><dd>{data.migrationsApplied}</dd></div>
       </dl>
-      <p className="micro">{data.notice}</p>
       <details><summary>检查诊断 JSON</summary><pre tabIndex={0} aria-label="脱敏诊断 JSON">{JSON.stringify(data, null, 2)}</pre></details>
     </div>}
     {note && <p role="status">{note}</p>}

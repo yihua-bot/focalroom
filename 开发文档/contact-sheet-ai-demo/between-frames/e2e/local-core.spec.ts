@@ -42,7 +42,7 @@ test('v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、�
   await page.getByRole('textbox', { name: '项目名称' }).fill('光线的间隙 · M1 验收');
   await page.getByRole('textbox', { name: '你希望这组照片表达什么？' }).fill('在日常空间里，寻找画面之间的距离、光线与沉默。');
   await page.getByRole('button', { name: '创建并打开' }).click();
-  await expect(page.getByRole('heading', { name: '这里还没有照片' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '暂无照片' })).toBeVisible();
   await page.screenshot({ path: resolve(screenshots, 'empty.png') });
   const projectId = new URL(page.url()).hash.split('/').pop()!;
   const checksums = await rpc<string[][]>('test_fixture_checksums');
@@ -57,9 +57,9 @@ test('v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、�
   await page.getByTestId('photo-1').getByRole('button', { name: /^查看第/ }).click();
   await page.keyboard.press('k');
   await expect(page.getByRole('button', { name: /^已保留\s*1$/ })).toBeVisible();
-  await page.getByRole('textbox', { name: '为什么保留 / 淘汰这张照片？' }).fill('保留这张，让光线成为序列中的一次停顿。');
-  await page.getByRole('button', { name: '保存我的判断' }).click();
-  await expect(page.getByRole('button', { name: '保存我的判断' })).toBeDisabled();
+  await page.getByRole('textbox', { name: '照片备注' }).fill('保留这张，让光线成为序列中的一次停顿。');
+  await page.getByRole('button', { name: '保存备注' }).click();
+  await expect(page.getByRole('button', { name: '保存备注' })).toBeDisabled();
   for (const index of [3, 5, 7, 10, 13]) {
     await page.getByTestId(`photo-${index}`).getByRole('button', { name: /^查看第/ }).click();
     await page.keyboard.press('k');
@@ -115,7 +115,7 @@ test('v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、�
   const after = await rpc<StoredProject>('get_project', { projectId });
   expect(after).toEqual(before);
   await expect(page.getByRole('button', { name: /^已保留\s*25$/ })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: '为什么保留 / 淘汰这张照片？' })).toHaveValue('保留这张，让光线成为序列中的一次停顿。');
+  await expect(page.getByRole('textbox', { name: '照片备注' })).toHaveValue('保留这张，让光线成为序列中的一次停顿。');
   expect(new Set(after.events.map(event => event.kind))).toEqual(new Set(['project_create', 'import', 'decision', 'note', 'compare', 'reorder', 'rating', 'version_save', 'undo', 'redo', 'version_restore']));
   expect(await rpc<string[][]>('test_fixture_checksums')).toEqual(checksums);
   for (const width of [1920, 1280]) {

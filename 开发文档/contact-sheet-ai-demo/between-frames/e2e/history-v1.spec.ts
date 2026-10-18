@@ -19,7 +19,7 @@ test('多选一次撤销，重做与新编辑分支；备注输入不触发项�
   await page.keyboard.press('x');
   await expect(page.locator('.tile.reject')).toHaveCount(3);
   await expect(page.getByRole('button', { name: '重做', exact: true })).toBeDisabled();
-  const note = page.getByRole('textbox', { name: '为什么保留 / 淘汰这张照片？' });
+  const note = page.getByRole('textbox', { name: '照片备注' });
   await note.fill('文本自己的撤销');
   await page.keyboard.press('ControlOrMeta+z');
   await expect(page.locator('.tile.reject')).toHaveCount(3);

@@ -28,3 +28,19 @@ describe('v1.1 项目标签筛选', () => {
     expect(screen.getByText('街道切片')).toBeInTheDocument();
   });
 });
+
+describe('快速开始入口', () => {
+  it('本地项目列表显示快速开始按钮并回调', async () => {
+    const onQuickStart = vi.fn();
+    render(<ProjectList projects={projects} onOpen={vi.fn()} onCreate={vi.fn()} local onQuickStart={onQuickStart} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '快速开始' }));
+    expect(onQuickStart).toHaveBeenCalledTimes(1);
+  });
+  it('未提供入口或归档视图时不显示', () => {
+    const { rerender } = render(<ProjectList projects={projects} onOpen={vi.fn()} onCreate={vi.fn()} local />);
+    expect(screen.queryByRole('button', { name: '快速开始' })).not.toBeInTheDocument();
+    rerender(<ProjectList projects={projects} onOpen={vi.fn()} onCreate={vi.fn()} local archived onQuickStart={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: '快速开始' })).not.toBeInTheDocument();
+  });
+});

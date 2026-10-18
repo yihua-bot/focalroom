@@ -11,6 +11,12 @@ import {
 } from "../shared-api";
 import { useRealtime } from "./useRealtime";
 import { AccessPanel, HistoryPanel } from "./ReviewPanels";
+
+type CommentTarget =
+  | { kind: "photo" }
+  | { kind: "sequence"; itemId: string; index: number }
+  | { kind: "revision" };
+
 export function ProjectReview({
   id,
   session,
@@ -30,6 +36,9 @@ export function ProjectReview({
     );
   const [body, setBody] = useState(""),
     [anchor, setAnchor] = useState({ x: 0.5, y: 0.5 }),
+    [commentTarget, setCommentTarget] = useState<CommentTarget>({
+      kind: "photo",
+    }),
     [replyTo, setReply] = useState<string | null>(null),
     [operations, setOperations] = useState<DraftOperation[]>([]),
     [title, setTitle] = useState(""),
@@ -170,13 +179,35 @@ export function ProjectReview({
       } catch (e) {
         setError(message(e));
       }
-    } else if (
-      await mutate("comment.add", {
-        body,
-        anchor: { type: "photo", photo_id: selected, ...anchor },
-      })
-    )
+      return;
+    }
+    const target =
+      commentTarget.kind === "sequence"
+        ? {
+            anchor: {
+              type: "sequence" as const,
+              sequence_item_id: commentTarget.itemId,
+              revision_id: String(state.revision),
+            },
+          }
+        : commentTarget.kind === "revision"
+          ? {
+              anchor: {
+                type: "revision" as const,
+                revision_id: String(state.revision),
+              },
+            }
+          : {
+              anchor: {
+                type: "photo" as const,
+                photo_id: selected,
+                ...anchor,
+              },
+            };
+    if (await mutate("comment.add", { body, ...target })) {
       setBody("");
+      setCommentTarget({ kind: "photo" });
+    }
   };
   const saveProposal = async (submit: boolean) => {
     if (!state || !realtime.online || !title.trim() || !operations.length)
@@ -248,6 +279,58 @@ export function ProjectReview({
     canApprove =
       ["OWNER", "ADMIN"].includes(state.principal.role) ||
       state.principal.can_approve;
+  const photoComments = state.comments.filter(
+    (c) => c.anchor.photo_id === selected && !c.parent_id,
+  );
+  const threadComments = state.comments.filter(
+    (c) =>
+      !c.parent_id &&
+      (c.anchor.type === "sequence" || c.anchor.type === "revision"),
+  );
+  const anchorLabel = (c: CloudSnapshot["comments"][number]) =>
+    c.anchor.type === "revision"
+      ? `版本 v${c.anchor.revision_id}`
+      : `序列条目 · v${c.anchor.revision_id}`;
+  const renderThread = (c: CloudSnapshot["comments"][number]) => (
+    <article className="fr-comment" key={c.id}>
+      <strong>{c.reviewer}</strong>
+      <small>
+        {c.anchor.type !== "photo"
+          ? `${anchorLabel(c)} · `
+          : ""}
+        {c.state === "RESOLVED" ? "已解决" : "待处理"}
+      </small>
+      <p>{c.body}</p>
+      {state.comments
+        .filter((r) => r.parent_id === c.id)
+        .map((r) => (
+          <div className="fr-reply" key={r.id}>
+            <strong>{r.reviewer}</strong>
+            <p>{r.body}</p>
+          </div>
+        ))}
+      <div className="fr-inline">
+        <button disabled={!canWrite} onClick={() => setReply(c.id)}>
+          回复
+        </button>
+        <button
+          disabled={
+            !canWrite ||
+            (c.author_id !== session.id &&
+              !["OWNER", "ADMIN", "EDITOR"].includes(state.principal.role))
+          }
+          onClick={() =>
+            void mutate("comment.resolve", {
+              thread_id: c.id,
+              state: c.state === "RESOLVED" ? "REOPENED" : "RESOLVED",
+            })
+          }
+        >
+          {c.state === "RESOLVED" ? "重新打开" : "标记解决"}
+        </button>
+      </div>
+    </article>
+  );
   const proposalSelection = (p: CloudSnapshot["proposals"][number]) =>
     accepted[p.id] ?? p.operations.map((o) => o.operation_id);
   const choose = (photoId: string) => {
@@ -285,7 +368,7 @@ export function ProjectReview({
       )}
       {!realtime.online && (
         <div className="fr-notice">
-          离线期间正式作品只读，未提交的提案保留在本页。重连后会重新读取权威快照，请审阅新基线再提交。
+          连接已断开，暂时无法提交。未提交的提案保留在本页，重连后请核对最新版本。
         </div>
       )}
       <main className="fr-review">
@@ -342,7 +425,11 @@ export function ProjectReview({
         <section className="fr-stage">
           <div className="fr-stage-head">
             <span>{photo?.filename}</span>
-            <span>点击预览放置批注锚点</span>
+            <span>
+              {commentTarget.kind === "photo"
+                ? "点击预览放置批注锚点"
+                : "正在批注序列或版本；发布后自动返回照片批注"}
+            </span>
           </div>
           <div className="fr-inspector">
             {photo && images[selected] && (
@@ -433,19 +520,51 @@ export function ProjectReview({
                 </button>
               </div>
             )}
-            <div>
-              {visibleSequence.map((item, i) => (
-                <button
-                  key={item.id}
-                  aria-label={`序列 ${sequencePage * 48 + i + 1}`}
-                  onClick={() => choose(item.photo_id)}
-                >
-                  {images[item.photo_id] && (
-                    <img src={images[item.photo_id]} alt="" />
-                  )}
-                  <span>{i + 1}</span>
-                </button>
-              ))}
+            <div className="fr-sequence-strip">
+              {visibleSequence.map((item, i) => {
+                const notes = state.comments.filter(
+                  (c) =>
+                    !c.parent_id &&
+                    c.anchor.sequence_item_id === item.id &&
+                    c.state !== "RESOLVED",
+                ).length;
+                return (
+                  <div className="fr-seq-item" key={item.id}>
+                    <button
+                      aria-label={`序列 ${sequencePage * 48 + i + 1}`}
+                      onClick={() => choose(item.photo_id)}
+                    >
+                      {images[item.photo_id] && (
+                        <img src={images[item.photo_id]} alt="" />
+                      )}
+                      <span>{i + 1}</span>
+                      {notes > 0 && (
+                        <small
+                          className="fr-seq-count"
+                          aria-label={`${notes} 条序列批注`}
+                        >
+                          {notes}
+                        </small>
+                      )}
+                    </button>
+                    <button
+                      className="fr-seq-note"
+                      aria-label={`批注序列第 ${sequencePage * 48 + i + 1} 张`}
+                      disabled={state.principal.role === "VIEWER"}
+                      onClick={() => {
+                        setCommentTarget({
+                          kind: "sequence",
+                          itemId: item.id,
+                          index: sequencePage * 48 + i,
+                        });
+                        setTab("comments");
+                      }}
+                    >
+                      批注
+                    </button>
+                  </div>
+                );
+              })}
               {!state.snapshot.sequences[0].items.length && (
                 <p>尚未编排。通过提案提交第一组序列。</p>
               )}
@@ -483,61 +602,41 @@ export function ProjectReview({
           </nav>
           {tab === "comments" && (
             <div className="fr-panel">
-              <h2>共同审阅，保留各自的判断。</h2>
+              <h2>批注</h2>
               <p className="fr-muted">
-                {photo?.filename} ·{" "}
-                {
-                  state.comments.filter(
-                    (c) => c.anchor.photo_id === selected && !c.parent_id,
-                  ).length
-                }{" "}
-                条批注
+                {commentTarget.kind === "photo" ? (
+                  <>
+                    {photo?.filename} · {photoComments.length} 条批注
+                  </>
+                ) : commentTarget.kind === "sequence" ? (
+                  <>
+                    目标：序列第 {commentTarget.index + 1} 张 · v
+                    {state.revision}
+                  </>
+                ) : (
+                  <>目标：作品版本 v{state.revision}</>
+                )}
+                {commentTarget.kind !== "photo" && (
+                  <button onClick={() => setCommentTarget({ kind: "photo" })}>
+                    改回照片批注
+                  </button>
+                )}
               </p>
-              {state.comments
-                .filter((c) => c.anchor.photo_id === selected && !c.parent_id)
-                .map((c) => (
-                  <article className="fr-comment" key={c.id}>
-                    <strong>{c.reviewer}</strong>
-                    <small>
-                      {c.state === "RESOLVED" ? "已解决" : "待处理"}
-                    </small>
-                    <p>{c.body}</p>
-                    {state.comments
-                      .filter((r) => r.parent_id === c.id)
-                      .map((r) => (
-                        <div className="fr-reply" key={r.id}>
-                          <strong>{r.reviewer}</strong>
-                          <p>{r.body}</p>
-                        </div>
-                      ))}
-                    <div className="fr-inline">
-                      <button
-                        disabled={!canWrite}
-                        onClick={() => setReply(c.id)}
-                      >
-                        回复
-                      </button>
-                      <button
-                        disabled={
-                          !canWrite ||
-                          (c.author_id !== session.id &&
-                            !["OWNER", "ADMIN", "EDITOR"].includes(
-                              state.principal.role,
-                            ))
-                        }
-                        onClick={() =>
-                          void mutate("comment.resolve", {
-                            thread_id: c.id,
-                            state:
-                              c.state === "RESOLVED" ? "REOPENED" : "RESOLVED",
-                          })
-                        }
-                      >
-                        {c.state === "RESOLVED" ? "重新打开" : "标记解决"}
-                      </button>
-                    </div>
-                  </article>
-                ))}
+              <div className="fr-inline">
+                <button
+                  disabled={!canWrite}
+                  onClick={() => setCommentTarget({ kind: "revision" })}
+                >
+                  批注当前版本 v{state.revision}
+                </button>
+              </div>
+              {photoComments.map(renderThread)}
+              {threadComments.length > 0 && (
+                <>
+                  <h3 className="fr-anchor-heading">序列与版本批注</h3>
+                  {threadComments.map(renderThread)}
+                </>
+              )}
               {replyTo && (
                 <p>
                   正在回复批注{" "}
@@ -545,7 +644,13 @@ export function ProjectReview({
                 </p>
               )}
               <label>
-                {replyTo ? "回复内容" : "添加批注"}
+                {replyTo
+                  ? "回复内容"
+                  : commentTarget.kind === "sequence"
+                    ? "序列批注"
+                    : commentTarget.kind === "revision"
+                      ? "版本批注"
+                      : "添加批注"}
                 <textarea
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
@@ -562,7 +667,7 @@ export function ProjectReview({
                 {replyTo ? "发布回复" : "发布批注"}
               </button>
               <label className="fr-note-label">
-                私人笔记 <span>仅你的其他窗口同步</span>
+                私人笔记
                 <textarea
                   aria-label="私人笔记"
                   value={realtime.note}
@@ -575,8 +680,7 @@ export function ProjectReview({
           )}
           {tab === "proposals" && (
             <div className="fr-panel">
-              <h2>编辑建议，逐项审阅。</h2>
-              <p className="fr-muted">提案不会直接改动正式作品。</p>
+              <h2>编辑提案</h2>
               {state.proposals.map((p) => (
                 <article className="fr-proposal" key={p.id}>
                   <h3>{p.title}</h3>
@@ -705,7 +809,7 @@ export function ProjectReview({
                   {p.base_revision !== state.revision &&
                     p.state === "SUBMITTED" && (
                       <p className="fr-warning">
-                        基线已变化，原提案保留。请基于当前版本建立新提案。
+                        作品已更新，原提案已保留。请按最新版本重建。
                       </p>
                     )}
                 </article>

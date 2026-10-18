@@ -34,7 +34,6 @@ export function ProjectDialog({ project, onClose, onSave, busy }: { project?: Pr
         <div className="template-options">{PROJECT_TEMPLATES.map(template => <button type="button" key={template.key} aria-pressed={templateKey === template.key} onClick={() => applyTemplate(template.key)}>
           {template.label}{template.key !== 'blank' && <small>{template.titleHint}</small>}
         </button>)}</div>
-        <p className="micro">模板只帮你预填文字，随时可改；不影响任何后续功能。</p>
       </fieldset>}
       <label htmlFor="project-title">{zh.projectTitle}</label><input id="project-title" className="text-input" maxLength={80} required value={title} onChange={event => setTitle(event.target.value)} />
       <label htmlFor="project-brief">{zh.projectBrief}</label><textarea id="project-brief" className="text-input" rows={5} maxLength={1500} value={brief} onChange={event => setBrief(event.target.value)} />

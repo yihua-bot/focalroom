@@ -43,7 +43,7 @@ test('v2 真实后端提案：GUI 提交、批量审批、单组撤销重做、�
   };
   await create('逆序开篇');
   await page.goto('/#/project/' + project.id);
-  await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
   const panel = page.locator('.proposals-panel');
   await panel.getByRole('button', { name: /逆序开篇/ }).click();
   await panel.getByRole('button', { name: '提交审批' }).click();
@@ -57,7 +57,7 @@ test('v2 真实后端提案：GUI 提交、批量审批、单组撤销重做、�
   await expect.poll(async () => (await rpc<Project>('get_project', { projectId: project.id })).sequence).toEqual([b.id, a.id]);
   await rpc('test_restart');
   await page.reload();
-  await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
   await panel.getByRole('button', { name: /逆序开篇/ }).click();
   await expect(panel.getByText('该提案已执行（可在工作台撤销）。')).toBeVisible();
   const screenshots = resolve('../docs/screenshots/v2-review-fixes');
@@ -67,7 +67,7 @@ test('v2 真实后端提案：GUI 提交、批量审批、单组撤销重做、�
   project = await rpc<Project>('get_project', { projectId: project.id });
   await create('冲突提案');
   await page.reload();
-  await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
   await panel.getByRole('button', { name: /冲突提案/ }).click();
   await panel.getByRole('button', { name: '提交审批' }).click();
   await expect(panel.getByRole('button', { name: '执行所选操作' })).toBeVisible();

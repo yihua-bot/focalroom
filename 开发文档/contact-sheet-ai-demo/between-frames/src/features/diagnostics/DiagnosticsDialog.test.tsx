@@ -39,7 +39,7 @@ describe('本地存储诊断', () => {
   it('读取失败可重试，复制失败保留手动复制入口，Escape 关闭', async () => {
     const user = userEvent.setup();
     const { onClose } = mount(vi.fn().mockRejectedValueOnce(new Error('unavailable')).mockResolvedValue(diagnosticsFixture()));
-    expect(await screen.findByRole('alert')).toHaveTextContent('未显示的项目不代表数量为 0');
+    expect(await screen.findByRole('alert')).toHaveTextContent('读取失败，请重试');
     expect(screen.getByRole('button', { name: '复制诊断信息' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: '刷新统计' }));
     await screen.findByText('存储统计');

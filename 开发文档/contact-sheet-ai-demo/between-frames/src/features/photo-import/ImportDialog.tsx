@@ -33,10 +33,11 @@ export function ImportDialog({ repository, projectId, onClose, onChanged }: {
     finally { setChoosing(false); }
   };
   const running = Boolean(jobId && (!job || job.status === 'running') && !error);
-  return <Modal title="导入照片" description="原图保留在原目录，仅创建缩略图与编辑预览。JPEG / PNG / WebP / TIFF；HEIC / RAW 取决于 macOS 解码支持。"
+  return <Modal title="导入照片" description="原图保留在原目录。"
     onClose={() => { if (!running && !choosing) onClose(); }}>
     {!running && <div className="export-options"><Button variant="primary" disabled={choosing} onClick={() => { void start(false); }}>选择照片</Button>
       <Button disabled={choosing} onClick={() => { void start(true); }}>选择文件夹</Button></div>}
+    <details><summary>支持的格式</summary><p>JPEG、PNG、WebP、TIFF。HEIC 和 RAW 支持情况取决于系统解码能力。</p></details>
     {choosing && <p role="status" className="muted">等待系统文件选择器…</p>}
     {jobId && <section className="import-progress" aria-label="导入进度"><progress max={job?.total || 1} value={job?.completed || 0} />
       <p role="status">{job?.status === 'cancelled' ? '已取消；已完成照片保留' : job?.status === 'completed' ? '导入完成' : job && job.total === 0 ? '正在扫描图库' : '正在导入'} · {job?.completed || 0} / {job ? job.total : '…'}</p>

@@ -30,6 +30,5 @@ export function PhotoInspector({ photo, busy, onDecide, onRate, onNote, onBookMa
       {photo.status !== 'undecided' && <Button size="small" variant="quiet" className="span-two" disabled={busy} onClick={() => onDecide(photo.id, 'undecided')}>{zh.undecided}</Button>}</div>
     <label htmlFor="photo-note" className="micro">{zh.note}</label><textarea id="photo-note" className="text-input" rows={4} maxLength={2000} placeholder={zh.notePlaceholder} value={note} onChange={event => { setLocalNote(event.target.value); onDraft?.(event.target.value); }} />
     <div className="dialog-actions"><Button size="small" disabled={busy || note === photo.note} onClick={() => onNote(photo.id, note.trim())}>{zh.saveNote}</Button></div>
-    <div className="divider" /><div className="info-card"><span className="eyebrow">COMPOSITION FIRST</span><p>预览完整构图，不裁切照片。双击网格或点击大图按钮，专注查看画面。</p></div>
   </section>;
 }

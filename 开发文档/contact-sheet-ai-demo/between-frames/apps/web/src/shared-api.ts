@@ -46,6 +46,8 @@ export const snapshotSchema = z.object({
         photo_id: z.string().optional(),
         x: z.number().optional(),
         y: z.number().optional(),
+        sequence_item_id: z.string().optional(),
+        revision_id: z.string().optional(),
       }),
       parent_id: z.string().nullable(),
       state: z.string(),

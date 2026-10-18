@@ -83,7 +83,7 @@ test('M1：500 张 PNG/JPEG 的完整 GUI 编辑、离线重启、导出与性�
   await page.getByRole('textbox', { name: '项目名称' }).fill('M1 · 500 张混合集');
   await page.getByRole('textbox', { name: '你希望这组照片表达什么？' }).fill('不使用 AI，完成 500 张照片的人工编辑与导出。');
   await page.getByRole('button', { name: '创建并打开' }).click();
-  await expect(page.getByRole('heading', { name: '这里还没有照片' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '暂无照片' })).toBeVisible();
   const projectId = new URL(page.url()).hash.split('/').pop()!;
   const importStart = performance.now();
   await startImport(page);
@@ -158,9 +158,9 @@ test('M1：500 张 PNG/JPEG 的完整 GUI 编辑、离线重启、导出与性�
   await page.getByRole('button', { name: /^全部\s*500$/ }).click();
   await page.locator('.workspace-scroll').evaluate(element => { element.scrollTop = 0; });
   await page.getByTestId('photo-1').getByRole('button', { name: /^查看第/ }).click();
-  await page.getByRole('textbox', { name: '为什么保留 / 淘汰这张照片？' }).fill('500 张中，保留这张作为序列的停顿。');
-  await page.getByRole('button', { name: '保存我的判断' }).click();
-  await expect(page.getByRole('button', { name: '保存我的判断' })).toBeDisabled();
+  await page.getByRole('textbox', { name: '照片备注' }).fill('500 张中，保留这张作为序列的停顿。');
+  await page.getByRole('button', { name: '保存备注' }).click();
+  await expect(page.getByRole('button', { name: '保存备注' })).toBeDisabled();
   await expect(page.getByRole('button', { name: '人工评分 1 星', exact: true })).toBeEnabled();
   await page.getByTestId('photo-1').getByRole('button', { name: /^查看第/ }).click();
   await page.keyboard.press('Space');

@@ -50,7 +50,7 @@ export function AccessPanel({
   };
   return (
     <div className="fr-panel">
-      <h2>邀请熟悉的编辑与伙伴。</h2>
+      <h2>邀请成员</h2>
       <p>
         仅开放本项目。链接 7 天有效，须用指定邮箱接受一次；请自行分享邀请链接。
       </p>
@@ -180,13 +180,11 @@ export function HistoryPanel({
   }, [id, session, revision]);
   return (
     <div className="fr-panel">
-      <h2>正式作品版本</h2>
-      <p>每次批准产生不可变快照。草案与评论不会覆盖正式作品。</p>
+      <h2>版本历史</h2>
       {error && <p role="alert">{error}</p>}
       {viewing && (
         <section className="fr-card">
           <strong>正在查看 v{viewing.revision} · 只读</strong>
-          <p>查看历史不会修改正式作品。</p>
           <ol>
             {viewing.snapshot.sequences[0].items.map((item) => (
               <li key={item.id}>
@@ -223,7 +221,7 @@ export function HistoryPanel({
           <small>
             {v.command_id.startsWith("promotion:")
               ? "共享副本建立"
-              : "正式命令提交"}
+              : "作品更新"}
           </small>
         </article>
       ))}

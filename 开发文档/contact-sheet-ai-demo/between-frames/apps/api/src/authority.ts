@@ -436,7 +436,20 @@ async function applyCommand(
           "VALIDATION_ERROR",
           "评论照片不属于此项目",
         );
-      else {
+      else if (anchor.type === "revision") {
+        const version = (
+          await tx.query(
+            "SELECT 1 FROM fr_versions WHERE project_id=$1 AND revision::text=$2",
+            [project.id, anchor.revision_id],
+          )
+        ).rows[0];
+        assert(
+          version,
+          400,
+          "VALIDATION_ERROR",
+          "版本锚点不存在",
+        );
+      } else {
         const version = (
           await tx.query(
             "SELECT snapshot FROM fr_versions WHERE project_id=$1 AND revision::text=$2",

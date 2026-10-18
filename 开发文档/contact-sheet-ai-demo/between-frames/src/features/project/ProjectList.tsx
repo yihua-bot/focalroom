@@ -5,7 +5,7 @@ import { zh } from '../../app/copy';
 import { Button } from '../../components/shared/Button';
 import { EmptyState } from '../../components/shared/EmptyState';
 
-export function ProjectList({ projects, onOpen, onCreate, local = false, archived = false, onArchive, onRestore, onToggleArchive }: {
+export function ProjectList({ projects, onOpen, onCreate, onQuickStart, local = false, archived = false, onArchive, onRestore, onToggleArchive }: {
   projects: Project[]; onOpen: (id: string) => void; onCreate: () => void;
   onQuickStart?: () => void; local?: boolean; archived?: boolean;
   onArchive?: (project: Project) => void; onRestore?: (project: Project) => void; onToggleArchive?: () => void;
@@ -14,7 +14,7 @@ export function ProjectList({ projects, onOpen, onCreate, local = false, archive
   const allTags = [...new Set(projects.flatMap(project => project.tags ?? []))].sort();
   const visible = filterTag ? projects.filter(project => project.tags?.includes(filterTag)) : projects;
   return <section className="project-list"><span className="eyebrow">YOUR PROJECTS / FOCALROOM</span><div className="heading">
-    <div><h1>{zh.projectListTitle}</h1></div><Button variant="primary" onClick={onCreate}><Plus size={15} />{zh.newProject}</Button></div>
+    <div><h1>{zh.projectListTitle}</h1></div><div className="top-actions">{local && !archived && onQuickStart && <Button onClick={onQuickStart}>{zh["project.quickStart"]}</Button>}<Button variant="primary" onClick={onCreate}><Plus size={15} />{zh.newProject}</Button></div></div>
     {allTags.length > 0 && <div className="tag-filter" aria-label="按标签筛选">{['全部', ...allTags].map(tag => <button key={tag} aria-pressed={filterTag === (tag === '全部' ? null : tag)} onClick={() => setFilterTag(tag === '全部' ? null : tag)}>{tag}</button>)}</div>}
     <div className="project-list-tools">{!local && <p className="preview-banner">{zh.preview}</p>}{local && <Button size="small" onClick={onToggleArchive}>{archived ? '返回项目' : '归档项目'}</Button>}</div>
     {visible.length ? <div className="project-cards">{visible.map(project => <article className="project-card" key={project.id}><button className="project-open" onClick={() => { if (archived) onRestore?.(project); else onOpen(project.id); }}>

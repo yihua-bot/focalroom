@@ -14,6 +14,7 @@ const operation = z.discriminatedUnion('op', [
 const anchor = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('photo'), photo_id: id, x: z.number().min(0).max(1), y: z.number().min(0).max(1) }),
   z.strictObject({ type: z.literal('sequence'), sequence_item_id: id, revision_id: id }),
+  z.strictObject({ type: z.literal('revision'), revision_id: id }),
 ]);
 const envelope = {
   version: z.literal('2.0'), command_id: nonce, workspace_id: id, project_id: id,

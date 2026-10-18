@@ -47,7 +47,7 @@ export function VersionsDialog({ project, busy, onSave, onRestore, onClose }: {
     }).filter(Boolean) as { id: string; changes: string[] }[];
     return { addedIds, removedIds, movedPairs, stateChanges };
   })() : null;
-  return <Modal title="作品版本" description="保存选片、顺序、人工评分和已保存备注。恢复会形成可撤销的新编辑。" onClose={() => { if (!busy) onClose(); }} wide>
+  return <Modal title="作品版本" onClose={() => { if (!busy) onClose(); }} wide>
     <form className="version-save" onSubmit={event => { event.preventDefault(); if (label.trim()) { onSave(label.trim()); setLabel(''); } }}>
       <label htmlFor="version-label">版本名称</label><input id="version-label" className="text-input" value={label} maxLength={80} placeholder="例如：初选 · 25 张" onChange={event => setLabel(event.target.value)} />
       <Button type="submit" variant="primary" disabled={busy || !label.trim()}>保存当前版本</Button>
@@ -59,7 +59,7 @@ export function VersionsDialog({ project, busy, onSave, onRestore, onClose }: {
     {mode === 'restore' ? <div className="version-layout"><div className="version-list" aria-label="已保存版本">
       {project.versions?.length ? project.versions.map(version => <button key={version.id} disabled={busy} aria-pressed={selectedId === version.id} onClick={() => setSelectedId(version.id)}>
         <strong>{version.label}</strong><span>{version.photoIds.length} 张 · {new Date(version.createdAt).toLocaleString()}</span>
-      </button>) : <p className="muted">尚未保存版本。给当前作品序列留一个回看的节点。</p>}
+      </button>) : <p className="muted">暂无已保存版本。</p>}
     </div><section className="version-preview" aria-label="版本恢复预览">
       {selected ? <><h3>{selected.label}</h3><p>恢复后 {selected.photoIds.length} 张：加入 {added.length} 张，移出 {removed.length} 张，位置变化 {moved.length} 张。</p>
         <p className="muted">人工状态、评分或备注变化：{changed} 张。此版本之后导入的照片仍留在项目中，选片状态恢复为待定。</p>
@@ -67,7 +67,6 @@ export function VersionsDialog({ project, busy, onSave, onRestore, onClose }: {
         <Button variant="primary" disabled={busy} onClick={() => onRestore(selected.id)}>确认恢复此版本</Button>
       </> : <p className="muted">选择一个已保存版本，先检查恢复范围。</p>}
     </section></div> : <div className="version-compare" aria-label="版本对比">
-      <p className="muted">对比两个已保存版本，或与当前序列比较。只读视图，不改动任何数据。</p>
       <div className="compare-pickers">
         <label>基准（A）<select aria-label="基准版本" value={baseId ?? ''} onChange={event => setBaseId(event.target.value || null)}>
           <option value="">选择版本…</option>
@@ -87,7 +86,7 @@ export function VersionsDialog({ project, busy, onSave, onRestore, onClose }: {
         {diff.removedIds.length > 0 && <><h4>B 移除</h4><ul>{diff.removedIds.map(id => <li key={id}>{name(id)}</li>)}</ul></>}
         {diff.movedPairs.length > 0 && <><h4>位置变化</h4><ul>{diff.movedPairs.map(item => <li key={item.id}>{name(item.id)}：第 {item.from + 1} 位 → 第 {item.to + 1} 位</li>)}</ul></>}
         {diff.stateChanges.length > 0 && <><h4>人工判断变化</h4><ul>{diff.stateChanges.map(item => <li key={item.id}>{name(item.id)}：{item.changes.join('；')}</li>)}</ul></>}
-      </div> : <p className="muted">选择 A 和 B 两个快照开始对比。</p>}
+      </div> : <p className="muted">选择要比较的版本。</p>}
     </div>}
   </Modal>;
 }

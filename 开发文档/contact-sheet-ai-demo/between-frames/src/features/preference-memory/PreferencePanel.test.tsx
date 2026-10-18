@@ -46,11 +46,11 @@ function mount(repository?: unknown) {
 }
 
 describe('Memory Studio', () => {
-  it('渲染假设卡与证据时间线，声明 Agent 选择不计证据', async () => {
+  it('渲染假设卡、证据和本机记忆范围', async () => {
     mount(makeRepository());
     expect(await screen.findByText(hypothesis.statement)).toBeInTheDocument();
     expect(screen.getByText(/证据 3 条 · 反例 1 条/)).toBeInTheDocument();
-    expect(screen.getByText(/Agent 的草案与建议不会出现在这里/)).toBeInTheDocument();
+    expect(screen.getByText('仅用于本机任务，不发送给云端模型。')).toBeVisible();
     // 证据时间线渲染（kindLabel 与 photoId 拼接会拆分文本节点，断言结构而非整串文本）。
     expect(document.querySelectorAll('.timeline li').length).toBeGreaterThanOrEqual(4);
   });

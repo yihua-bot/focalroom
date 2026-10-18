@@ -42,7 +42,9 @@ describe('云端图像授权对话框', () => {
     });
     mount(repository);
     const user = userEvent.setup();
-    await screen.findByText(/curator-only 负责策展，observer-only 负责图像观察/);
+    await screen.findByText('curator-only ···abcd');
+    await user.click(screen.getByText('模型设置'));
+    expect(screen.getByText('选片模型：curator-only · 图像模型：observer-only')).toBeVisible();
     await user.clear(screen.getByLabelText('云端图像上限（张）'));
     await user.type(screen.getByLabelText('云端图像上限（张）'), '2');
     await user.click(screen.getByRole('button', { name: '开始视觉任务' }));
@@ -64,7 +66,7 @@ describe('云端图像授权对话框', () => {
     await user.type(screen.getByLabelText('云端图像上限（张）'), '2');
     expect(await screen.findByRole('alert')).toHaveTextContent('观察模型不支持视觉请求');
     expect(screen.getByRole('button', { name: '开始视觉任务' })).toBeDisabled();
-    await user.click(screen.getByText('模型与密钥 · 诊断'));
+    await user.click(screen.getByText('模型设置'));
     await user.click(screen.getByRole('button', { name: '管理图像授权' }));
     expect(await screen.findByRole('button', { name: '仅本次任务（2 张）' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '禁止云端图像' })).toBeEnabled();
@@ -126,7 +128,7 @@ describe('云端图像授权对话框', () => {
     (repository as { agent: { aiConfig: Mock } }).agent.aiConfig.mockRejectedValue(new Error('invalid response'));
     mount(repository);
     expect(await screen.findByRole('alert')).toHaveTextContent('模型配置读取失败');
-    expect(screen.getByRole('button', { name: '开始本地 Mock 任务' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '运行示例任务' })).toBeDisabled();
     expect(calls).toHaveLength(0);
   });
   it('视觉预算开启且无授权时，先弹授权卡，不直接发任务', async () => {
@@ -236,8 +238,8 @@ it('已有项目授权可主动打开管理界面撤回，离线配置也保留�
  const { repository } = makeRepository({ ready: false, consentProvider: null, configurationError: null });
  const user = userEvent.setup();
  mount(repository);
- await screen.findByRole('button', { name: '开始本地 Mock 任务' });
- await user.click(screen.getByText('模型与密钥 · 诊断'));
+ await screen.findByRole('button', { name: '运行示例任务' });
+ await user.click(screen.getByText('模型设置'));
  await user.click(screen.getByRole('button', { name: '管理图像授权' }));
  expect(screen.getByRole('button', { name: '仅本次任务（0 张）' })).toBeDisabled();
  await user.click(screen.getByRole('button', { name: '禁止云端图像' }));
@@ -251,7 +253,7 @@ it('从管理入口更新项目授权不会自动创建编辑任务', async () =
  const user = userEvent.setup();
  mount(repository);
  await screen.findByRole('button', { name: '开始编辑任务（不上传照片）' });
- await user.click(screen.getByText('模型与密钥 · 诊断'));
+ await user.click(screen.getByText('模型设置'));
  await user.click(screen.getByRole('button', { name: '管理图像授权' }));
  await user.click(screen.getByRole('button', { name: '取消授权操作' }));
  expect(screen.queryByRole('dialog', { name: '云端图像授权' })).not.toBeInTheDocument();

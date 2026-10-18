@@ -34,8 +34,8 @@ test('M5 本地诊断：真实统计、查看后复制、刷新及正式状态�
   const before = await rpc('get_project', { projectId: project.id });
   const hashes = await rpc('test_fixture_checksums');
   await page.goto('/#/project/' + project.id);
-  await page.getByRole('button', { name: '摄影编辑 Agent', exact: true }).click();
-  await page.getByText('模型与密钥 · 诊断', { exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
+  await page.getByText('模型设置', { exact: true }).click();
   await page.getByRole('button', { name: '查看本地存储与诊断' }).click();
   const dialog = page.getByRole('dialog', { name: '本地存储与诊断' });
   await expect(dialog.getByRole('heading', { name: '存储统计' })).toBeVisible();
@@ -52,7 +52,7 @@ test('M5 本地诊断：真实统计、查看后复制、刷新及正式状态�
   expect(shown.database.projects).toBeGreaterThanOrEqual(1);
   expect(JSON.stringify(shown)).not.toMatch(/私密|originalPath|apiKeyTail|baseUrl|\/Users\//);
   await dialog.getByRole('button', { name: '复制诊断信息' }).click();
-  await expect(dialog.getByText('诊断信息已复制，可自行检查后用于反馈。')).toBeVisible();
+  await expect(dialog.getByText('诊断信息已复制。')).toBeVisible();
   expect(JSON.parse(await page.evaluate(() => navigator.clipboard.readText()))).toEqual(shown);
   await page.screenshot({ path: resolve(screenshots, 'view-and-copy.png') });
   await dialog.getByRole('button', { name: '刷新统计' }).click();

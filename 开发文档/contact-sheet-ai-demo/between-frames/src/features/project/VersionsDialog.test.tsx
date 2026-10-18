@@ -59,7 +59,7 @@ describe('v1.1 版本对比', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('tab', { name: '版本对比' }));
     await user.selectOptions(screen.getByRole('combobox', { name: '基准版本' }), 'v1');
-    expect(screen.getByText('选择 A 和 B 两个快照开始对比。')).toBeInTheDocument();
+    expect(screen.getByText('选择要比较的版本。')).toBeInTheDocument();
   });
   it('恢复预览模式保留原语义', async () => {
     render(<VersionsDialog project={project} busy={false} onSave={vi.fn()} onRestore={vi.fn()} onClose={vi.fn()} />);

@@ -30,10 +30,9 @@ export function ProposalsPanel({ project, enabled }: { project: Project; enabled
   const proposals = query.data ?? [];
   const open = proposals.find(p => p.id === openId) ?? null;
   return <section className="proposals-panel">
-    <h3>编辑提案 · v2 审批</h3>
-    <p className="micro">Agent 或协作者提出的操作化提案；执行必须由你确认 nonce 并勾选接受的操作。部分采纳、驳回均可；执行后可在工作台整体撤销。</p>
+    <h3>编辑提案</h3>
     {note && <p role="status">{note}</p>}
-    {proposals.length === 0 && <EmptyState title="还没有提案" hint="委托 Agent 或经 v2 通道创建提案后，这里等待你的审批。" />}
+    {proposals.length === 0 && <EmptyState title="暂无提案" hint="生成编辑建议后，在此审阅。" />}
     <ol className="proposal-list">{proposals.map(proposal => <li key={proposal.id}>
       <button aria-expanded={openId === proposal.id} onClick={() => { setOpenId(openId === proposal.id ? null : proposal.id); setAccepted(Object.fromEntries(proposal.operations.map(op => [op.operationId, true]))); setNonce(proposal.approvalNonce); setNote(''); }}>
         <strong>{proposal.title}</strong>
@@ -50,8 +49,8 @@ export function ProposalsPanel({ project, enabled }: { project: Project; enabled
         <label><input type="checkbox" checked={accepted[op.operationId] ?? false} onChange={event => setAccepted(previous => ({ ...previous, [op.operationId]: event.target.checked }))} />
           {opLabels[op.op]} · {op.photoId.slice(0, 8)}{op.toIndex !== null ? ` → 第 ${op.toIndex + 1} 位` : ''}{op.reason ? ` · ${op.reason}` : ''}</label>
       </li>)}</ul>
-      <label>审批 nonce<input className="text-input" value={nonce} onChange={event => setNonce(event.target.value)} /></label>
-      <p className="micro">nonce 与提案不符会被拒绝；不勾任何操作即整体驳回。</p>
+      <label>审批确认码<input className="text-input" value={nonce} onChange={event => setNonce(event.target.value)} /></label>
+      <p className="micro">不选择任何操作将驳回提案。</p>
       <div className="proposal-actions">
         <Button size="small" variant="primary" disabled={busy} onClick={() => { const ids = Object.entries(accepted).filter(([, on]) => on).map(([id]) => id); void act(() => repository.apply(project.id, projectRevision(), open.id, open.revision, ids, nonce.trim(), `apply-${Date.now()}`).then(result => result.discarded ? '已驳回该提案' : `已执行 ${result.applied} 个操作`)); }}>
           {Object.values(accepted).some(Boolean) ? '执行所选操作' : '驳回提案'}
