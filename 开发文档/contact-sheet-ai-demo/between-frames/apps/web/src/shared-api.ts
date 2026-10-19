@@ -5,6 +5,7 @@ export const sessionSchema = z.object({
   email: z.string(),
   name: z.string(),
   avatar: z.string().nullable().optional(),
+  emailVerified: z.boolean().optional(),
   csrf: z.string(),
 });
 export type Session = z.infer<typeof sessionSchema>;

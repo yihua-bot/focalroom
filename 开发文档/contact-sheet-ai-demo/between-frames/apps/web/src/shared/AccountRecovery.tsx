@@ -92,5 +92,6 @@ export function VerificationRequest({ session }: { session: Session }) {
     } catch (error) { setNotice(errorKey(error)); }
     finally { inFlight.current = false; setBusy(false); }
   };
+  if (session.emailVerified) return null;
   return <div className="fr-account-verification"><button type="button" disabled={busy} onClick={() => void send()}>{busy ? copy.busy : copy.resend}</button>{notice && <span role="status">{copy[notice]}</span>}</div>;
 }

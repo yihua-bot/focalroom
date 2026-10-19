@@ -11,6 +11,7 @@ export type Identity = {
   email: string;
   name: string;
   avatar_url?: string | null;
+  email_verified_at?: string | Date | null;
   session: string;
   csrf: string;
 };

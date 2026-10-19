@@ -101,7 +101,7 @@ class ApiController {
     }
     if (path === "/auth/me" && req.method === "GET") {
       const u = await s.auth.authenticate(headers, false);
-      return { id: u.id, email: u.email, name: u.name, avatar: u.avatar_url ?? null, csrf: u.csrf };
+      return { id: u.id, email: u.email, name: u.name, avatar: u.avatar_url ?? null, emailVerified: !!u.email_verified_at, csrf: u.csrf };
     }
     if (path === "/auth/logout" && req.method === "POST") {
       const u = await s.auth.authenticate(headers, true);
