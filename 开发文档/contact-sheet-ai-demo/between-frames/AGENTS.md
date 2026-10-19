@@ -1,6 +1,8 @@
 # AGENTS.md · FocalRoom 工程导航
 
-最新接手入口（2026-10-19）：../docs/DEVELOPER-HANDOFF-2026-10-19.md。含R0–R8首发拆单、M0–M5工程/真人剩余、源码与生产边界、代码入口和验收标准。当前main/49fcc65+大量WIP才是来源，无remote。旧NEXT-AGENT-HANDOFF与剩余计划的M1指令已标历史，不回退阶段；本轮只核对/交接，未重跑全量、操作生产或提交。优先R0源码基线/R1验证入口，公证profile未创建、AI真实调用未验保持明确待办；author-memory引用未登记cloud_projects草案且未接路由，Worker已有PG队列但未接账户账本、生产保持关。
+同日审计复核：先读交接第11节。GitHub yihua-bot/focalroom存在，远端23308d6ab3与本机49fcc65+WIP需先对齐；8关键blob一致不等于全树/历史一致。本机无remote不代表没远端，根.github/workflows/betweenframes-v2.yml实际存在；run39224541729已核失败（标题Preview/Shared不符+缺3002，桌面构建跳过）。评论prompt对象作为content、分歧task_type硬编码已用真实模块+fake fetch/pool离线复现，未修产品代码。首轮优先A0/A1，再A2/A3上下文/估算；R1验证入口及首发任务随后。不要按外部审计里的checkout/PR建议直接覆盖WIP或提交。详细证据在docs/evidence/handoff-20261019；标准备份脚本需Python3.11，服务器旧实测3.10须另解决兼容。
+
+最新接手入口（2026-10-19）：../docs/DEVELOPER-HANDOFF-2026-10-19.md。含R0–R8首发拆单、M0–M5工程/真人剩余、源码与生产边界、代码入口和验收标准。当前main/49fcc65+大量WIP才是来源，无remote。旧NEXT-AGENT-HANDOFF与剩余计划的M1指令已标历史，不回退阶段；本轮只核对/交接，未重跑全量、操作生产或提交。优先R0基线后按交接第11节A0/A1执行，公证profile未创建、AI真实调用未验保持明确待办；author-memory引用未登记cloud_projects草案且未接路由，Worker已有PG队列但未接账户账本、生产保持关。
 
 当前接续（2026-10-19，已批准生产邮件发布）：先读 ../docs/V2-HOSTED-AI-PRODUCTION-DEPLOYMENT-REPORT.md。用户明确确认后已备份/发布固定amd64 API/Web及0014/0015，11迁移/7关键源SHA一致；当前配置必须用 /opt/focalroom/releases/hosted-ai-20261019/runtime.compose.private.json，不只用旧base。PG容器/两卷/旧镜像保留，无down/prune；API已移除迁移URL，仅一次性私有env。Resend只验证openyc.vip，From为FocalRoom <noreply@openyc.vip>，真实邮件仅1封delivered；真实Cookie登录/刷新/API重启保持/退出/已用码400通过；用户于2026-10-19确认已在收件箱收到，邮件收件验收通过。最终1已验证用户/1工作区/0项目/0会话，31表，AI关闭/初始0/真实模型0，Worker关。私有备份不进仓库，余1.66GiB；公证/正式包/官网分发/容量灾备/真人门槛仍开。已验证用户仍显示发送验证邮件入口，未点击第二封。无commit/push/官网DNS/openyc更改；下方旧快照不是当前线上事实。
 

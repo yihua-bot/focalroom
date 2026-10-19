@@ -1,11 +1,11 @@
 .fr-shared {
-  --fr-bg: #101317;
-  --fr-surface: #191e24;
-  --fr-edge: #303740;
-  --fr-muted: #96a1ad;
-  --fr-accent: #13a6d3;
+  --fr-bg: #f4f3ee;
+  --fr-surface: #fafaf6;
+  --fr-edge: #dedfd6;
+  --fr-muted: #737a76;
+  --fr-accent: #007da2;
   background: var(--fr-bg);
-  color: #e9edf1;
+  color: #202e31;
   min-height: 100dvh;
   font:
     14px/1.6 -apple-system,
@@ -37,7 +37,7 @@
   background: #242c35;
   border: 1px solid var(--fr-edge);
   border-radius: 6px;
-  color: #e9edf1;
+  color: #202e31;
   padding: 7px 12px;
   cursor: pointer;
 }
@@ -96,7 +96,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #ecf1f5 !important;
+  color: #eef0e9 !important;
   font-size: 21px;
   font-weight: 650;
   letter-spacing: -0.6px;
@@ -206,7 +206,7 @@
 .fr-shared select {
   width: 100%;
   padding: 9px 11px;
-  color: #e4edf5;
+  color: #e2edef;
   background: #10161c;
   border: 1px solid #39434f;
   border-radius: 5px;
@@ -228,7 +228,7 @@
 .fr-error {
   background: #46262a;
   border: 1px solid #7d3c46;
-  color: #ffd8db !important;
+  color: #f6d9d6 !important;
   padding: 10px 16px;
   border-radius: 4px;
   font-size: 12px;
@@ -369,7 +369,7 @@
   margin-right: 12px;
 }
 .fr-offline {
-  color: #e7ad6e !important;
+  color: #c98a4e !important;
 }
 .fr-person {
   width: 26px;
@@ -400,19 +400,19 @@
 }
 .fr-presence-toggle {
   font-size: 10px;
-  color: #90a7b5;
-  border: 1px solid #2c3a48;
+  color: #8a9188;
+  border: 1px solid #52605c;
   border-radius: 999px;
   padding: 3px 8px;
 }
 .fr-presence-toggle[aria-pressed="true"] {
-  color: #e7ad6e;
-  border-color: #e7ad6e;
+  color: #c98a4e;
+  border-color: #c98a4e;
 }
 .fr-agent-analysis {
   margin-top: 18px;
   padding: 12px;
-  border: 1px solid #2c3a48;
+  border: 1px solid #52605c;
   border-radius: 6px;
 }
 .fr-agent-analysis h3 {
@@ -547,7 +547,7 @@
   display: grid;
   place-items: center;
   font-size: 15px;
-  border: 2px solid #e1f7ff !important;
+  border: 2px solid #dcf0f4 !important;
   pointer-events: none;
   line-height: 1;
 }
@@ -557,12 +557,12 @@
   padding: 0 !important;
   width: 20px;
   height: 20px;
-  background: #d88a31 !important;
+  background: #b3762f !important;
 }
 .fr-sequence {
   border-top: 1px solid #252e38;
   padding: 18px 22px 22px;
-  background: #14191e;
+  background: #eef0e9;
   min-height: 164px;
 }
 .fr-sequence > div {
@@ -586,7 +586,7 @@
 .fr-sequence button span {
   display: block;
   font-size: 9px;
-  color: #90a7b5;
+  color: #8a9188;
   text-align: left;
   margin: 3px 2px;
 }
@@ -605,12 +605,12 @@
   padding: 2px 0;
   font-size: 9px;
   background: #1d252e;
-  border: 1px solid #2c3a48;
-  color: #90a7b5;
+  border: 1px solid #52605c;
+  color: #8a9188;
 }
 .fr-sequence .fr-seq-note:hover:not(:disabled) {
-  color: #e8eef4;
-  border-color: #d88a31;
+  color: #e9ece4;
+  border-color: #b3762f;
 }
 .fr-seq-count {
   position: absolute;
@@ -620,8 +620,8 @@
   height: 15px;
   line-height: 15px;
   border-radius: 999px;
-  background: #d88a31;
-  color: #14191e;
+  background: #b3762f;
+  color: #eef0e9;
   font-size: 9px;
   font-weight: 700;
   text-align: center;
@@ -684,7 +684,7 @@
   margin-bottom: 12px;
 }
 .fr-comment strong {
-  color: #cedfe9;
+  color: #c9d0c6;
   font-size: 11px;
 }
 .fr-comment small {
@@ -746,7 +746,7 @@
   font-size: 11px;
 }
 .fr-warning {
-  color: #e4b477 !important;
+  color: #c99a5e !important;
 }
 .fr-proposal-builder {
   border-top: 1px solid #394653;
@@ -815,7 +815,7 @@
 }
 .fr-notice {
   padding: 8px 20px;
-  color: #dabb8e;
+  color: #c4ad84;
   background: #342c20;
   font-size: 11px;
 }
@@ -953,3 +953,18 @@
 .fr-account-identity{display:flex;flex-direction:column;min-width:0;max-width:180px}
 .fr-account-identity>span,.fr-account-identity>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fr-account-identity>small{color:var(--fr-muted);font-size:11px}
+
+
+/* ── 品牌层：官网同语言（focalroom-website DESIGN tokens）── */
+.fr-shared{font-size:14px;line-height:1.8}
+.fr-shared h1,.fr-shared h2,.fr-shared h3{font-weight:400}
+.fr-welcome>section h1,.fr-login h2,.fr-heading,.fr-stage-head h2,.fr-project-card h3,.fr-proposal h3{font-family:Georgia,"Songti SC","STSong","Noto Serif CJK SC",serif;letter-spacing:-.6px}
+.fr-welcome>section h1{font-size:clamp(34px,4vw,50px);line-height:1.42;letter-spacing:-1.6px}
+.fr-eyebrow{font-family:"SFMono-Regular",Consolas,monospace;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:var(--fr-accent)}
+.fr-primary{background:var(--fr-accent);border:none;border-radius:6px;font-weight:500;letter-spacing:.02em;transition:background .12s}
+.fr-primary:hover:not(:disabled){background:#01536e}
+.fr-avatar-fallback{background:linear-gradient(135deg,#007da2,#599a89)}
+.fr-login,.fr-card{box-shadow:0 24px 45px -25px rgba(32,46,49,.33),0 4px 10px rgba(32,46,49,.07)}
+.fr-login input:focus-visible,.fr-form-row input:focus-visible{outline:2px solid var(--fr-accent);outline-offset:1px;border-color:var(--fr-accent)}
+.fr-image-frame{background:#fff;padding:6px;border-radius:3px;box-shadow:0 3px 10px rgba(51,64,52,.12)}
+@media (prefers-reduced-motion:reduce){.fr-shared *,.fr-shared *::before,.fr-shared *::after{transition:none!important;animation:none!important}}

@@ -1,5 +1,7 @@
 # FocalRoom 官网客户端首发检查
 
+同日审计复核更正：公开仓库[yihua-bot/focalroom](https://github.com/yihua-bot/focalroom)及根workflow实际存在，本机没有remote不等于没有远端；已读run39224541729日志，确因Web预览/Shared入口断言不符失败，桌面构建跳过。最新交接与修复顺序见[第11节](DEVELOPER-HANDOFF-2026-10-19.md#11-外部审计逐项核对与第一批修复单)，不再沿用下方“缺少根workflow”的旧判断。
+
 最新增量：账户AI本地实现已补（[本地报告](V2-HOSTED-AI-TEST-REPORT.md)、ADR0044）；随后用户批准生产发布，API/Web与0014/0015已部署，真实验证码Resend delivered、网页登录/刷新/API重启保持/退出通过，API迁移凭据已隔离。From暂为已验证openyc.vip，用户已确认邮件进入收件箱。DeepSeek真实调用未执行、服务关闭/额度0；正式客户端/公证/官网分发和容量灾备门槛仍开。以 [生产报告](V2-HOSTED-AI-PRODUCTION-DEPLOYMENT-REPORT.md) 为最新事实。下方保留先前只读快照，其中“尚未部署/无邮件”不是最新状态。
 
 日期：2026-10-19。范围：现有代码、签名身份、官网静态文件与腾讯云FocalRoom独立栈只读核对。没有构建新的正式客户端、修改生产配置/数据库、发送验证码或执行公证/官网发布。
@@ -66,7 +68,7 @@ Cloudflare Pages单文件上限25MiB；最终安装包若超过限制，应改�
 - Google登录：邮件登录真正可用时可保持关闭。
 - Intel/Windows/Linux和自动更新：可后补，首版明确平台与手动更新方式。
 - M3专业质量与M5真人协作门槛：仍未完成，但可通过明确标记的预览发布招募真实试用，不能宣称所有M0–M5或专业摄影质量验收通过。
-- 远端CI尚不是有效完成证据：git根在film、当前没有remote，而workflow在产品子目录.github；其中Node22与package要求>=25.8.1<26不符，API健康路径/环境和吞掉类型错误等也需修正。可与首发验收并行补齐，不把未运行流水线说成全绿。
+- 远端CI已存在但当前已核对run失败：根workflow为`.github/workflows/betweenframes-v2.yml`、macos-14与版本文件，Web预览/Shared测试目标不符导致后续跳过。产品子目录另一份旧ci.yml的Node22/健康路径/吞错问题另计，不混称根workflow。修复并取得新远端绿灯前，不称release gate可用。
 
 ## 用户需提供/决定
 

@@ -1,0 +1,22 @@
+{
+  "node": "v25.8.1",
+  "mode": "import actual source; mocked fetch and pool; zero network and zero database writes",
+  "results": [
+    {
+      "kind": "summarize_comments",
+      "user_content_type": "object",
+      "user_content_has_system_and_user": true,
+      "system_uses_disagreement_strategy": false,
+      "stored_type_hardcoded_as_summary": true
+    },
+    {
+      "kind": "summarize_disagreement",
+      "user_content_type": "object",
+      "user_content_has_system_and_user": true,
+      "system_uses_disagreement_strategy": false,
+      "stored_type_hardcoded_as_summary": true
+    }
+  ],
+  "real_model_calls": 0,
+  "production_calls": 0
+}

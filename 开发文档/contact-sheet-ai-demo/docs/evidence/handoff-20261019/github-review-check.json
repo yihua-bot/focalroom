@@ -1,0 +1,179 @@
+{
+  "date": "2026-10-19",
+  "source": "read-only GitHub connector",
+  "repository": "https://github.com/yihua-bot/focalroom",
+  "remote_commit": "23308d6ab306778c6e79ab9e96e886e8447aa496",
+  "run": {
+    "id": 39224541729,
+    "path": ".github/workflows/betweenframes-v2.yml",
+    "status": "completed",
+    "conclusion": "failure",
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/39224541729"
+  },
+  "latest_run_at_check": [
+    {
+      "id": 39224541729,
+      "head_sha": "23308d6ab306778c6e79ab9e96e886e8447aa496",
+      "name": "Between Frames v2 M0",
+      "path": ".github/workflows/betweenframes-v2.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/yihua-bot/focalroom/actions/runs/39224541729"
+    }
+  ],
+  "jobs": [
+    {
+      "id": 117967524565,
+      "name": "foundation",
+      "status": "completed",
+      "conclusion": "failure",
+      "run_id": 39224541729,
+      "logs_url": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Rust 已验证工具链",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "选择 Rust 工具链",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "安装锁定依赖与 Chromium",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "记录实际工具链",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "M0 与既有能力回归",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 8
+        },
+        {
+          "name": "独立桌面应用构建（不运行）",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 19
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        }
+      ]
+    }
+  ],
+  "log_excerpt": [
+    "2026-10-19T08:42:17.5029910Z [WebServer] Error: connect ECONNREFUSED 127.0.0.1:3002",
+    "2026-10-19T08:42:17.5032510Z [WebServer] Error: connect ECONNREFUSED 127.0.0.1:3002",
+    "2026-10-19T08:42:22.6656400Z   1) e2e/v2-foundation.spec.ts:3:1 › v2 Web 基座复用工作台，示例编辑可操作且刷新不伪装持久化 ───────────────────────────────",
+    "2026-10-19T08:42:22.6657520Z     Error: expect(page).toHaveTitle(expected) failed",
+    "2026-10-19T08:42:22.6658730Z     Expected: \"FocalRoom · Web 工作台预览\"",
+    "2026-10-19T08:42:22.6659440Z     Received: \"FocalRoom — 团队协作审稿\"",
+    "2026-10-19T08:42:22.6660560Z       - Expect \"toHaveTitle\" with timeout 5000ms",
+    "2026-10-19T08:42:22.6663130Z     > 11 |   await expect(page).toHaveTitle('FocalRoom · Web 工作台预览');",
+    "2026-10-19T08:42:22.6670000Z         at /Users/runner/work/focalroom/focalroom/开发文档/contact-sheet-ai-demo/between-frames/e2e/v2-foundation.spec.ts:11:22",
+    "2026-10-19T08:42:22.6682290Z   1 failed",
+    "2026-10-19T08:42:22.6682850Z     e2e/v2-foundation.spec.ts:3:1 › v2 Web 基座复用工作台，示例编辑可操作且刷新不伪装持久化 ────────────────────────────────"
+  ],
+  "remote_git_blobs": [
+    {
+      "path": ".github/workflows/betweenframes-v2.yml",
+      "git_blob_sha": "8d89d61b53bbe7cda3024ccde07bb71d946b7efa",
+      "local_git_blob_sha": "8d89d61b53bbe7cda3024ccde07bb71d946b7efa",
+      "matches_local": true
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/agent-tasks.ts",
+      "git_blob_sha": "c1028dc2dcb0e3b09a991382eb1d967cdced6aab",
+      "local_git_blob_sha": "c1028dc2dcb0e3b09a991382eb1d967cdced6aab",
+      "matches_local": true
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/context.rs",
+      "git_blob_sha": "3f8f93956224c8939f90938c81bfa2cf8ea191a4",
+      "local_git_blob_sha": "3f8f93956224c8939f90938c81bfa2cf8ea191a4",
+      "matches_local": true
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/policy.rs",
+      "git_blob_sha": "804ce7ff044c1fdbbbfb309ad62110a35ff388f5",
+      "local_git_blob_sha": "804ce7ff044c1fdbbbfb309ad62110a35ff388f5",
+      "matches_local": true
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/memory.rs",
+      "git_blob_sha": "5ece44b3ed31a9af33cfe0c7ea0e734cd78e59aa",
+      "local_git_blob_sha": "5ece44b3ed31a9af33cfe0c7ea0e734cd78e59aa",
+      "matches_local": true
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/shared/ProjectReview.tsx",
+      "git_blob_sha": "e9b1160afc68a22f41339eb7a66bccf11c7885a7",
+      "local_git_blob_sha": "e9b1160afc68a22f41339eb7a66bccf11c7885a7",
+      "matches_local": true
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/hosted-ai.ts",
+      "git_blob_sha": "80d9d8a277da0f262f0e31de20bffb67c496c6f9",
+      "local_git_blob_sha": "80d9d8a277da0f262f0e31de20bffb67c496c6f9",
+      "matches_local": true
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/openai.rs",
+      "git_blob_sha": "ab664a61502bc0522f1a966d9222d306ce4d6699",
+      "local_git_blob_sha": "ab664a61502bc0522f1a966d9222d306ce4d6699",
+      "matches_local": true
+    }
+  ],
+  "production_accessed": false,
+  "git_mutated": false
+}
