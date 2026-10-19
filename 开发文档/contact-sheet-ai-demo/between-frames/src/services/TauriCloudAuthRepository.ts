@@ -12,5 +12,11 @@ export class TauriCloudAuthRepository implements CloudAuthRepository {
   open() { return call<void>("cloud_login_open"); }
   cancel() { return call<void>("cloud_login_cancel"); }
   logout() { return call<boolean>("cloud_login_logout"); }
+  async updateProfile(displayName?: string, avatarUrl?: string) {
+    return status.parse(await invoke("cloud_login_profile", { displayName, avatarUrl }).catch(cause => {
+      const value = z.object({ message: z.string() }).safeParse(cause);
+      throw Object.assign(new Error(value.success ? value.data.message : "云端连接失败，请重试"), {cause});
+    }));
+  }
   subscribe(callback: () => void) { return listen("cloud-login-updated", callback); }
 }

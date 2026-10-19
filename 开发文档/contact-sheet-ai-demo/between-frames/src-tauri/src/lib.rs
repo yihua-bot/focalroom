@@ -163,6 +163,7 @@ pub fn run() {
             commands::open_shared_review,
             commands::cloud_login_open,
             commands::cloud_login_status,
+            commands::cloud_login_profile,
             commands::cloud_login_cancel,
             commands::cloud_login_logout,
             commands::share_project

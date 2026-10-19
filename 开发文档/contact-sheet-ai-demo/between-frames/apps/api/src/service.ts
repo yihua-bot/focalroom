@@ -1022,6 +1022,23 @@ export class CloudService {
     return requestMagicCode(this.pool, email, ip, this.auth.origin, this.magicEmail);
   }
 
+  async updateProfile(user: { id: string }, input: unknown) {
+    const body = (input ?? {}) as Record<string, unknown>;
+    const name = typeof body.display_name === "string" ? body.display_name.trim().slice(0, 200) : undefined;
+    const avatar = typeof body.avatar_url === "string" ? body.avatar_url.slice(0, 400_000) : undefined;
+    if (name !== undefined) assert(name.length > 0, 400, "VALIDATION_ERROR", "昵称不能为空");
+    if (avatar !== undefined) {
+      const ok = avatar === "" || avatar.startsWith("data:image/") || avatar.startsWith("https://");
+      assert(ok, 400, "VALIDATION_ERROR", "头像格式不支持");
+    }
+    await this.pool.query(
+      "UPDATE fr_users SET display_name=COALESCE($2,display_name), avatar_url=COALESCE($3,avatar_url) WHERE id=$1",
+      [user.id, name ?? null, avatar ?? null],
+    );
+    const row = (await this.pool.query("SELECT id,email,display_name AS name,avatar_url,email_verified_at FROM fr_users WHERE id=$1", [user.id])).rows[0];
+    return { id: row.id, email: row.email, name: row.name, avatar: row.avatar_url ?? null, emailVerified: !!row.email_verified_at };
+  }
+
   async googleLogin(input: unknown, ip: string) {
     return loginWithGoogle(this.pool, input, ip);
   }

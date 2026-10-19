@@ -15,6 +15,7 @@ function fixture(state: Partial<CloudStatus> = {}) {
     open: vi.fn(async () => { current.value = status({ waiting: true }); listeners.forEach(fn => fn()); }),
     cancel: vi.fn(async () => { current.value = status(); listeners.forEach(fn => fn()); }),
     logout: vi.fn(async () => true),
+    updateProfile: vi.fn(async () => ({ authenticated: true, waiting: false, origin: 'https://t.f.cc', user: null, error: null })),
     subscribe: vi.fn(async (callback: () => void) => { listeners.add(callback); return () => listeners.delete(callback); }),
   };
   return { repository, current, notify: () => listeners.forEach(fn => fn()) };
@@ -41,8 +42,8 @@ describe("桌面云登录 UI", () => {
   it("已登录显示账户并提供退出", async () => {
     const { repository } = fixture({ authenticated: true, user: { id: "u1", email: "a@b.c", name: "摄影师" } });
     render(<CloudAccount repository={repository} />);
-    expect(await screen.findByText("摄影师")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
+    fireEvent.click(await screen.findByRole("button", { name: "账户菜单" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "退出登录" }));
     await waitFor(() => expect(repository.logout).toHaveBeenCalled());
   });
 
@@ -62,7 +63,8 @@ it("命令不发送通知时仍主动刷新退出状态；断网也保留本机�
  const f=fixture({authenticated:false,user:{id:"cached",name:"Cached",email:"cached@fixture.test"},error:"无法连接云端"});
  vi.mocked(f.repository.logout).mockImplementation(async()=>{f.current.value=status();return false;});
  render(<CloudAccount repository={f.repository}/>);
- fireEvent.click(await screen.findByRole("button",{name:"退出登录"}));
+ fireEvent.click(await screen.findByRole("button",{name:"账户菜单"}));
+ fireEvent.click(await screen.findByRole("menuitem",{name:"退出登录"}));
  expect(await screen.findByRole("alert")).toHaveTextContent("已在本机退出；云端会话未能撤销");
  expect(await screen.findByRole("button",{name:"登录云端"})).toBeVisible();expect(screen.queryByText("Cached")).not.toBeInTheDocument();
 });

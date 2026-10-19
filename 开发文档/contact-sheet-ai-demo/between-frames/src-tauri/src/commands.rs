@@ -675,6 +675,14 @@ pub async fn cloud_login_cancel(app: AppHandle, state: State<'_, Backend>) -> Re
     result
 }
 #[tauri::command]
+pub async fn cloud_login_profile(
+    state: State<'_, Backend>,
+    display_name: Option<String>,
+    avatar_url: Option<String>,
+) -> Result<crate::cloud_auth::CloudStatus> {
+    state.cloud_auth.update_profile(display_name, avatar_url).await
+}
+#[tauri::command]
 pub async fn cloud_login_logout(app: AppHandle, state: State<'_, Backend>) -> Result<bool> {
     let result = state.cloud_auth.logout().await;
     let _ = app.emit("cloud-login-updated", ());

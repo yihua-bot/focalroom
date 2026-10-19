@@ -48,8 +48,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  const account = config?.hostedAccount;
  const hostedBlocked = hosted && (Boolean(config?.hostedError) || !account?.enabled || !account.verified || account.available <= 0);
  const observation = config?.observation;
- const observationModel = observation?.modelId ?? config?.modelId;
- const providerLabel = config ? (config.ready ? `${hosted ? 'FocalRoom AI · DeepSeek' : config.modelId}${config.apiKeyTail ? ` ···${config.apiKeyTail}` : ''}` : '演示模式 · 不分析照片') : '';
+ const providerLabel = config ? (config.ready ? 'FocalRoom AI' : '演示模式 · 不分析照片') : '';
  const [apiKey, setApiKey] = useState('');
  const [configBusy, setConfigBusy] = useState(false);
  const [configNote, setConfigNote] = useState('');
@@ -146,18 +145,10 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
   {!repository && <p className="info-card">请在桌面版使用编辑建议。</p>}
   {configurationError && <p role="alert">{configurationError}</p>}
   {configQuery.isError && <p role="alert">模型配置读取失败，请刷新后重试。</p>}
-  {hosted && <div className="ai-account" aria-label="FocalRoom AI 额度">
-   {config?.hostedError ? <p role="alert">{config.hostedError}</p> : !account ? <p>正在读取 AI 额度…</p> : <>
-    <p>可用 {account.available.toLocaleString()} tokens{account.reserved > 0 ? ` · 预留 ${account.reserved.toLocaleString()}` : ''}</p>
-    {!account.enabled && <p>FocalRoom AI 暂未开放。</p>}
-    {!account.verified && <p>请先验证账户邮箱。</p>}
-    {account.enabled && account.verified && account.available === 0 && <p>AI 额度已用完，请联系 FocalRoom。</p>}
-   </>}
-   <Button size="small" disabled={configQuery.isFetching} onClick={() => { void configQuery.refetch(); }}>刷新额度</Button>
-  </div>}
+  {hosted && config?.hostedError && <p role="alert">{config.hostedError}</p>}
   {repository && <details className="ai-config"><summary>{hosted ? 'AI 设置' : '模型设置'}</summary>
    {!hosted && <p className="micro">密钥保存在系统钥匙串。</p>}
-   {config?.ready && observation && observation.modelId !== config.modelId && <p className="micro">选片模型：{config.modelId} · 图像模型：{observation.modelId}</p>}
+   {!hosted && config?.ready && observation && observation.modelId !== config.modelId && <p className="micro">选片模型：{config.modelId} · 图像模型：{observation.modelId}</p>}
    <div className="agent-task-actions">
     {!hosted && <><input type="password" aria-label="API Key（存入钥匙串）" placeholder="sk-..." disabled={configBusy} value={apiKey} maxLength={4096} onChange={event => setApiKey(event.target.value)} />
     <Button size="small" disabled={configBusy || !apiKey.trim()} onClick={() => { void saveKey(); }}>存入钥匙串</Button>
@@ -176,10 +167,9 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
    <Button type="submit" variant="primary" disabled={!repository || configurationBlocked || busy || running || !project.photos.length}>{visionWanted ? '开始视觉任务' : config?.ready ? '开始编辑任务（不上传照片）' : '运行示例任务'}</Button>
    {consentPrompt && <div className="info-card consent-card" role="dialog" aria-label="云端图像授权">
     <strong>云端图像授权</strong>
-    <p className="micro" style={{ overflowWrap: 'anywhere' }}>服务地址：{config?.ready ? config.baseUrl : '未配置'} · 型号：{config?.ready ? observationModel : '无'}</p>
     <p className="micro">仅授权此服务与型号；更换后需重新授权，不授权自动转发给其他服务。「禁止云端图像」会撤回本项目所有服务的图像授权。</p>
     {config?.ready
-     ? <p className="micro">将向 {hosted ? 'FocalRoom 与 DeepSeek' : observationModel} 上传至多 {budget.maxCloudImages} 张最长边 1400px 的 JPEG 预览（重编码、不含 EXIF/GPS）；观察事实会作为上下文交给同一服务的策展模型 {config.modelId}。应用将缓存与草案保存在本机，服务端的数据处理依其条款。拒绝后仍可用全部本地功能，视觉工具将降级为人工元数据对照。</p>
+     ? <p className="micro">将向 FocalRoom AI 上传至多 {budget.maxCloudImages} 张最长边 1400px 的 JPEG 预览（重编码、不含 EXIF/GPS）。缓存与草案保存在本机。拒绝后仍可用全部本地功能，视觉工具将降级为人工元数据对照。</p>
      : <p className="micro">当前未配置云端图像服务。你仍可禁止本项目向所有服务上传图像；本地选片功能照常可用。</p>}
     <p className="micro">费用按当前部署的预算费率估算计入任务上限，不代表服务商账单；授权可随时撤回。</p>
     <div className="agent-task-actions">

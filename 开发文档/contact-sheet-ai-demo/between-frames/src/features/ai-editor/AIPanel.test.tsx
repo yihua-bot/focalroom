@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi, type Mock } from 'vitest';
@@ -36,27 +36,29 @@ function mount(repository: unknown) {
 }
 
 describe('云端图像授权对话框', () => {
-  it('官方服务显示账户可用/预留额度，不显示用户密钥输入，零额度阻止委托', async () => {
+  it('官方服务显示内置 AI 标识且不暴露型号，不显示用户密钥输入，零额度阻止委托', async () => {
     const {repository,calls} = makeRepository({keySource:'focalroom',apiKeyTail:null,hostedAccount:{enabled:true,verified:true,policy:'deepseek-flash-v1',provider:'DeepSeek',model:'deepseek-flash',unit:'tokens',granted:1000,spent:0,reserved:1000,available:0}});
     mount(repository);
-    expect(await screen.findByText('FocalRoom AI · DeepSeek')).toBeVisible();
-    expect(screen.getByLabelText('FocalRoom AI 额度')).toHaveTextContent('预留 1,000');
+    expect(await screen.findByText('FocalRoom AI')).toBeVisible();
+    expect(screen.queryByText(/DeepSeek/)).not.toBeInTheDocument();
     expect(screen.getByRole('button',{name:'开始编辑任务（不上传照片）'})).toBeDisabled();
     await userEvent.click(screen.getByText('AI 设置'));
     expect(screen.queryByLabelText('API Key（存入钥匙串）')).not.toBeInTheDocument();
     expect(calls).toEqual([]);
   });
   it('官方服务未登录时阻止委托，真实余额刷新后允许文本任务', async () => {
-    const {repository,calls} = makeRepository({keySource:'focalroom',apiKeyTail:null,hostedError:'请先登录 FocalRoom'});
+    const {repository} = makeRepository({keySource:'focalroom',apiKeyTail:null,hostedError:'请先登录 FocalRoom'});
     mount(repository);
     expect(await screen.findByRole('alert')).toHaveTextContent('请先登录 FocalRoom');
     expect(screen.getByRole('button',{name:'开始编辑任务（不上传照片）'})).toBeDisabled();
     (repository.agent as {aiConfig:Mock}).aiConfig.mockResolvedValue({...readyConfig,keySource:'focalroom',apiKeyTail:null,hostedAccount:{enabled:true,verified:true,policy:'deepseek-flash-v1',provider:'DeepSeek',model:'deepseek-flash',unit:'tokens',granted:100000,spent:0,reserved:0,available:100000}});
-    await userEvent.click(screen.getByRole('button',{name:'刷新额度'}));
-    expect(await screen.findByText('可用 100,000 tokens')).toBeVisible();
-    expect(screen.getByRole('button',{name:'开始编辑任务（不上传照片）'})).toBeEnabled();
+    // 额度恢复后重新挂载：不再有手动刷新按钮，配置查询自动更新
+    cleanup();
+    const recovered = makeRepository({keySource:'focalroom',apiKeyTail:null,hostedAccount:{enabled:true,verified:true,policy:'deepseek-flash-v1',provider:'DeepSeek',model:'deepseek-flash',unit:'tokens',granted:100000,spent:0,reserved:0,available:100000}});
+    mount(recovered.repository);
+    expect(await screen.findByRole('button',{name:'开始编辑任务（不上传照片）'})).toBeEnabled();
     await userEvent.click(screen.getByRole('button',{name:'开始编辑任务（不上传照片）'}));
-    expect(calls).toHaveLength(1);
+    expect(recovered.calls).toHaveLength(1);
   });
   it('策展无需视觉能力，图像授权明确显示独立观察型号', async () => {
     const { repository } = makeRepository({
@@ -65,17 +67,15 @@ describe('云端图像授权对话框', () => {
     });
     mount(repository);
     const user = userEvent.setup();
-    await screen.findByText('curator-only ···abcd');
+    await screen.findByText('FocalRoom AI');
     await user.click(screen.getByText('模型设置'));
     expect(screen.getByText('选片模型：curator-only · 图像模型：observer-only')).toBeVisible();
     await user.clear(screen.getByLabelText('云端图像上限（张）'));
     await user.type(screen.getByLabelText('云端图像上限（张）'), '2');
     await user.click(screen.getByRole('button', { name: '开始视觉任务' }));
     const dialog = await screen.findByRole('dialog', { name: '云端图像授权' });
-    expect(dialog).toHaveTextContent('型号：observer-only');
-    expect(dialog).toHaveTextContent('将向 observer-only 上传至多 2 张');
-    expect(dialog).toHaveTextContent('观察事实会作为上下文交给同一服务的策展模型 curator-only');
-    expect(dialog).not.toHaveTextContent('将向 curator-only');
+        expect(dialog).toHaveTextContent('将向 FocalRoom AI 上传至多 2 张');
+        expect(dialog).not.toHaveTextContent('curator-only');
     expect(screen.getByRole('button', { name: '仅本次任务（2 张）' })).toBeEnabled();
   });
   it('观察模型能力不足时禁止视觉授权，但保留零图像编辑与全局禁止', async () => {
@@ -218,7 +218,6 @@ it('授权界面显示真实服务与型号，项目授权也携带明确回执 
  await user.clear(screen.getByLabelText('云端图像上限（张）'));
  await user.type(screen.getByLabelText('云端图像上限（张）'), '4');
  await user.click(screen.getByRole('button', { name: '开始视觉任务' }));
- expect(screen.getByText(/服务地址：https:\/\/x · 型号：gpt-test/)).toBeInTheDocument();
  expect(screen.getByText(/不授权自动转发给其他服务/)).toBeInTheDocument();
  await user.click(screen.getByRole('button', { name: '本项目（可撤回，100 张）' }));
  await vi.waitFor(() => expect(calls.find(c => c.command)?.command).toMatchObject({ consentId: 9 }));

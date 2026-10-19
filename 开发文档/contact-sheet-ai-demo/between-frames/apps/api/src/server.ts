@@ -99,6 +99,10 @@ class ApiController {
       res.setHeader("Set-Cookie", s.auth.cookie(response.token));
       return response;
     }
+    if (path === "/auth/profile" && req.method === "PATCH") {
+      const u = await s.auth.authenticate(headers, true);
+      return s.updateProfile(u, req.body);
+    }
     if (path === "/auth/me" && req.method === "GET") {
       const u = await s.auth.authenticate(headers, false);
       return { id: u.id, email: u.email, name: u.name, avatar: u.avatar_url ?? null, emailVerified: !!u.email_verified_at, csrf: u.csrf };

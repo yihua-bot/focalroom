@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SharingControls } from "./SharingControls";
 import type { SharingRepository, SharingStatus } from "../../domain/sharing";
-const auth=(signed=true)=>({status:vi.fn(async()=>({authenticated:signed,waiting:false,origin:"https://team.focroom.cc",user:signed?{id:"u",name:"Author",email:"author@fixture.test"}:null,error:null})),open:vi.fn(),cancel:vi.fn(),logout:vi.fn(),subscribe:vi.fn(async()=>()=>{})});
+const auth=(signed=true)=>({status:vi.fn(async()=>({authenticated:signed,waiting:false,origin:"https://team.focroom.cc",user:signed?{id:"u",name:"Author",email:"author@fixture.test"}:null,error:null})),open:vi.fn(),cancel:vi.fn(),logout:vi.fn(),updateProfile:vi.fn(),subscribe:vi.fn(async()=>()=>{})});
 describe("桌面共享会话与上传授权",()=>{
  it("复用已登录账户，明确授权后迁移；请求不包含邮箱密码或token",async()=>{
   let completed=false;const repository:SharingRepository={auth:auth(),status:vi.fn(async():Promise<SharingStatus>=>({project_id:"p",authority:completed?"shared":"local"})),share:vi.fn(async():Promise<SharingStatus>=>{completed=true;return{project_id:"p",authority:"shared"};})};

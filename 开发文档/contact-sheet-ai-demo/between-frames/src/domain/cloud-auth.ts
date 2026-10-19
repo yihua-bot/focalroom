@@ -4,5 +4,6 @@ export interface CloudAuthRepository {
   open(): Promise<void>;
   cancel(): Promise<void>;
   logout(): Promise<boolean>;
+  updateProfile(displayName?: string, avatarUrl?: string): Promise<CloudStatus>;
   subscribe(callback: () => void): Promise<() => void>;
 }

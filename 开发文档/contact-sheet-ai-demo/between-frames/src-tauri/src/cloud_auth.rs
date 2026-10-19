@@ -409,6 +409,20 @@ impl CloudAuth {
         }
         Ok(s.token.clone())
     }
+    /// 修改昵称/头像（PATCH /auth/profile）；成功后刷新本地会话并返回最新状态。
+    pub async fn update_profile(&self,display_name:Option<String>,avatar_url:Option<String>)->Result<CloudStatus> {
+        let _lock=self.lock.lock().await;let r=self.read()?;
+        let s=r.session.as_ref().ok_or_else(||AppError::new("AUTH_REQUIRED","请先登录云端"))?;
+        let mut body=serde_json::Map::new();
+        if let Some(n)=display_name{body.insert("display_name".into(),n.into());}
+        if let Some(a)=avatar_url{body.insert("avatar_url".into(),a.into());}
+        let value=self.request("/auth/profile",Some(Value::Object(body)),Some(&s.token)).await?;
+        let verified=Self::user(value.clone())?;
+        let new_session=Session{token:s.token.clone(),user:verified};
+        let mut rec=self.read()?;rec.session=Some(new_session);self.save(&rec)?;
+        drop(_lock);
+        self.status().await
+    }
     pub async fn logout(&self) -> Result<bool> {
         let _lock = self.lock.lock().await;
         let r = self.read()?;

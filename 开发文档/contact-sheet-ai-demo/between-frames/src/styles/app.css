@@ -402,3 +402,22 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .cloud-account>button{font:inherit;font-size:11px;background:transparent;color:var(--text-secondary);border:1px solid var(--border);border-radius:4px;padding:4px 6px;cursor:pointer}
 .cloud-account>button:disabled{opacity:.5;cursor:default}
 .cloud-account-panel>.error-message{font-size:11px;overflow-wrap:anywhere}
+
+/* 头像菜单（点头像弹出） */
+.cloud-account{display:flex;align-items:center;gap:8px;padding:6px 4px;min-width:0;position:relative;flex-wrap:wrap}
+.cloud-account-trigger{background:none;border:none;padding:0;cursor:pointer;border-radius:50%;line-height:0}
+.cloud-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:none}
+.cloud-avatar-fallback{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#6c5ce7,#fd79a8);color:#fff;font-size:13px;font-weight:600}
+.cloud-account-menu{position:relative}
+.cloud-account-dropdown{position:absolute;bottom:calc(100% + 8px);left:0;min-width:190px;background:var(--bg-secondary,#1c1c28);border:1px solid var(--border,#2a2a40);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.45);padding:6px;z-index:60}
+.cloud-account-dropdown-head{padding:8px 10px 6px;border-bottom:1px solid var(--border,#2a2a40);margin-bottom:4px}
+.cloud-account-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.cloud-account-email{font-size:10.5px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.cloud-account-dropdown button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text,#e8e8f0);font-size:12.5px;padding:7px 10px;border-radius:6px;cursor:pointer}
+.cloud-account-dropdown button:hover{background:rgba(255,255,255,.06)}
+.cloud-account-signout{color:#e74c3c !important}
+.cloud-account-edit{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cloud-account-edit input{background:var(--bg-secondary,#14141f);border:1px solid var(--border,#2a2a40);border-radius:6px;color:var(--text,#e8e8f0);font-size:12px;padding:4px 8px;max-width:150px}
+.cloud-account-hint{font-size:10px;opacity:.6}
+.cloud-account-notice{font-size:10.5px;color:#2ecc71}
+.cloud-account-waiting{display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap}
