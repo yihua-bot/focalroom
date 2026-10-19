@@ -77,7 +77,7 @@ impl Harness {
                 let (origin, token, _) = self
                     .cloud
                     .as_ref()
-                    .ok_or_else(|| AppError::new("AUTH_REQUIRED", "请先登录云端"))?;
+                    .ok_or_else(|| AppError::new("AUTH_REQUIRED", "请先登录"))?;
                 if args["request"]["baseUrl"].as_str() != Some(origin) {
                     return Err(AppError::new("AUTH_ORIGIN_MISMATCH", "登录来源不匹配"));
                 }
