@@ -1,0 +1,13 @@
+{
+  "identifier": "studio.focalroom.loginreview",
+  "schemes": [
+    {
+      "CFBundleURLSchemes": [
+        "focalroom"
+      ],
+      "CFBundleURLName": "studio.focalroom.loginreview focalroom",
+      "CFBundleTypeRole": "Editor"
+    }
+  ],
+  "binary_sha256": "1aa07346003047ae4b04e1e412c9e61ffa674f967ede2b1c8d51459ee56e44fa"
+}

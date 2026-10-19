@@ -1,0 +1,97 @@
+
+> between-frames@0.1.0 test:cloud:pg
+> node apps/api/test/run.mjs
+
+✔ Google verified profile persists and is returned immediately, by /me and subsequent OTP session (899.98925ms)
+✖ wrong audience, unverified email or self-asserted profile cannot create an identity (25.510833ms)
+✔ unsupported avatar does not replace the saved trusted image; OTP-only accounts remain null (168.441916ms)
+✔ M4 explicit migrations create account/limiter tables and remain idempotent (432.086ms)
+✔ M4 independent database clients enforce one shared hourly quota under concurrency (66.82925ms)
+✔ M4 password reset hashes match login, revoke sessions and consume every outstanding token (774.0165ms)
+✔ M4 concurrent resets with different tokens have exactly one winner (327.186042ms)
+✔ M4 invalid, expired and oversized reset inputs do not change the account (342.55525ms)
+✔ M4 forgot password normalizes email and hides account existence and email quota (395.534542ms)
+✔ M4 verification enforces session/CSRF and concurrent ten-minute delivery quota (154.140125ms)
+✔ M4 unavailable email rolls back tokens without claiming verification delivery (136.811541ms)
+✔ M4 account mail links use fragments, reject public HTTP and support the Web route (0.845292ms)
+✔ M4 quota cleanup removes expired rows without erasing longer live windows (5.119583ms)
+✔ M4 cookie-authenticated Agent GETs need no Origin/CSRF, writes remain protected (1046.049834ms)
+✔ M4 无显式授权时入队被拒；授权/任务/取消/撤权全链路 (385.847791ms)
+✔ M4 崩溃恢复：租约过期的 RUNNING 任务被重新领取并完成 (21.110583ms)
+✔ M4 模型失败有限重试后 FAILED 且不外发更多请求 (14.039083ms)
+✔ desktop grant stores hashes, fixed return URL and real PKCE session; browser never receives bearer (760.875041ms)
+✔ authorize requires browser authentication, exact state and CSRF; malformed/external redirect rejected (252.103125ms)
+✔ wrong verifier/state/code cannot redeem or consume the legitimate grant (324.783459ms)
+✔ concurrent exchanges create only one desktop session (192.371958ms)
+✔ grant and authorization code expiry both prevent redemption (303.351083ms)
+✔ browser revocation/password reset cannot yield a new desktop credential (283.898875ms)
+✔ existing browser session may approve, retry replaces code and another account cannot take over (251.281791ms)
+✔ session creation failure rolls back code consumption, then legitimate exchange can recover (127.436041ms)
+✔ revocation and redemption share session-first lock ordering without a deadlock (164.971542ms)
+✔ M4 promotion verifies media, strips EXIF, atomically commits and replays (1318.169958ms)
+✔ M4 project-only invitation, email binding, one-time acceptance and isolation (131.143625ms)
+✔ M4 cookie CSRF, session hashes, unknown fields, no model authorization (95.97825ms)
+✔ M5 comment anchors, parent project isolation, provenance and Viewer denial (117.124417ms)
+✔ M5 two concurrent proposals: one atomic formal apply, other remains submitted (194.694709ms)
+✔ M5 authenticated WS, private Yjs, presence, snapshot reconnect and revoke (1445.05375ms)
+✔ M5 cross-instance presence syncs through the PostgreSQL bus (975.383709ms)
+✔ M5 short task principals are project scoped, read-only, expiring and revocable (65.696666ms)
+✔ M4 malformed and oversized requests return safe private JSON errors (7.888041ms)
+✔ M4 invitations expire and membership never grants ordinary project access (60.999209ms)
+✔ M5 Yjs rejects formal state fields and viewer replay cannot bypass downgraded ACL (164.108875ms)
+✔ M4/M5 API restart preserves session, authoritative versions and comments (45.174ms)
+✔ M4 workspace member removal preserves independent project grants and protects owner (21.745541ms)
+✔ M5 draft revisions are private, owned, idempotent and partially approved with complete audit (371.453666ms)
+✔ M5 thread replies replay exactly and preserve an immutable original payload (53.416ms)
+✔ M4 append-only migration upgrades 0001 without rewriting legacy receipts (175.727208ms)
+✔ M4 project authority does not authorize cloud model transmission (21.547333ms)
+✔ M4 OTP migration supports legacy draft tables and repeat explicit migration (571.386708ms)
+✔ M4 OTP normalizes email and stores a challenge-bound hash, never the code (113.80325ms)
+✔ M4 OTP creates an authenticated cookie session, verified account and owner workspace (303.067667ms)
+✔ M4 OTP reuses existing accounts without changing password or duplicating workspaces (400.349584ms)
+✔ M4 OTP mail failure rejects the request and rolls back codes (125.30175ms)
+✔ M4 OTP expired codes and invalid inputs create no session (23.546042ms)
+✔ M4 OTP wrong attempts persist and revoke the code after five failures (27.0365ms)
+✔ M4 OTP resend invalidates old challenges, with one shared email quota (152.744834ms)
+✔ M4 OTP concurrent verification succeeds once and creates one session (181.201083ms)
+✔ M4 OTP session failure rolls back code consumption and new account atomically (216.461834ms)
+✔ M4 OTP failed resend preserves the previously delivered code (103.681333ms)
+✔ M4 OTP concurrent resend cannot bypass the shared delivery quota (143.887584ms)
+✔ M4 /metrics 暴露请求计数、延迟桶与 DB 派生指标 (585.714875ms)
+✔ M4 UUID 路由模板归一，防止标签基数爆炸 (9.448833ms)
+✔ M4 FOCALROOM_METRICS_TOKEN 未设置时开放，设置后需令牌 (106.517166ms)
+✔ M4 角色初始化（等价 postgres-init 脚本）与迁移角色执行迁移 (805.325792ms)
+✔ M4 应用角色只能 DML：读写通过，DDL 与建角色被拒 (45.424667ms)
+✔ M4 R2 adapter signs S3 put/get against an isolated local protocol server (236.399ms)
+✔ M4 local preview store rejects links, foreign object paths and content collisions (4.380666ms)
+✔ M4 media policy rejects oversized, PNG-disguised and corrupt sources (4.302125ms)
+✔ M4 R2 configuration requires explicit official endpoint and complete credentials (8.342667ms)
+ℹ tests 64
+ℹ suites 0
+ℹ pass 63
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11140.131833
+
+✖ failing tests:
+
+test at apps/api/test/account-avatar.mjs:34:1
+✖ wrong audience, unverified email or self-asserted profile cannot create an identity (25.510833ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  9 !== 8
+  
+      at TestContext.<anonymous> (file:///Users/yihua/Documents/film/%E5%BC%80%E5%8F%91%E6%96%87%E6%A1%A3/contact-sheet-ai-demo/between-frames/apps/api/test/account-avatar.mjs:39:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 9,
+    expected: 8,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+Isolated PostgreSQL evidence: /var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-pg-tests-lZ7VV4

@@ -1,0 +1,349 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 23.65s
+     Running unittests src/lib.rs (target/debug/deps/between_frames_lib-493f13e62af7a199)
+
+running 28 tests
+test agent::context::tests::layer_budgets_split_total_context_across_layers ... ok
+test agent::pricing::tests::rates_are_integer_rounded_versioned_and_endpoint_bound ... ok
+test agent::semantic::tests::cosine_rejects_invalid_vectors_and_keeps_signed_similarity ... ok
+test agent::semantic::tests::native_chinese_and_english_rank_real_sentence_vectors ... ignored, 需本机已有 Apple 中英文句向量；显式执行，不下载资产
+test agent::semantic::tests::native_reuses_vectors_only_for_current_language_revision_and_dimensions ... ignored, 需本机已有 Apple 句向量；精确验证真实缓存复用，不下载资产
+test agent::memory_search::hybrid_tests::equal_scores_normalize_without_division_by_zero ... ok
+test agent::memory_search::hybrid_tests::hybrid_falls_back_to_keyword_without_semantics ... ok
+test agent::memory_search::hybrid_tests::hybrid_includes_semantic_only_hits ... ok
+test agent::memory_search::hybrid_tests::hybrid_blends_keyword_and_semantic_equally ... ok
+test agent::context::tests::repeated_tool_results_are_superseded_not_dropped ... ok
+test agent::semantic::tests::invalid_or_empty_requests_skip_native_work_explicitly ... ok
+test agent::context::tests::old_tool_results_are_summarized_but_recent_kept_whole ... ok
+test agent::semantic_index::tests::refuses_linked_cache_file_and_directory_without_touching_target ... ok
+test cloud_auth::avatar_cache_tests::cache_requires_trusted_url_valid_bounded_pixels_and_url_bound_path ... ok
+test agent::semantic_index::tests::corrupt_or_oversized_cache_is_a_miss_and_invalid_vectors_cannot_replace_file ... ok
+test diagnostics::tests::scan_limit_is_reported_without_claiming_zero_usage ... ok
+test login_guard::tests::auth_origins_are_exact_and_pending_survives_serialization ... ok
+test login_guard::tests::callback_binds_state_path_fields_and_expiry ... ok
+test shared_cloud::review_link_tests::browser_link_requires_completed_bound_project_and_safe_origin ... ok
+test agent::semantic_index::tests::persists_incrementally_replaces_changed_photo_and_bounds_old_entries ... ok
+test agent::semantic_index::tests::purge_failure_keeps_observations_and_receipt_unchanged ... ok
+test agent::photo_search::tests::prepared_scores_revalidate_payload_scope_and_call_then_cancellation_stops_writes ... ok
+test agent::semantic_index::tests::database_project_isolation_and_purge_command_clear_derived_vectors ... ok
+test cr2_preview::tests::conflicting_existing_exif_falls_back_instead_of_guessing ... ok
+test cr2_preview::tests::extracts_only_declared_primary_jpeg_without_changing_source_bytes ... ok
+test cr2_preview::tests::rejects_non_jpeg_payload_and_metadata_dimension_mismatch ... ok
+test cr2_preview::tests::rejects_invalid_ranges_counts_duplicate_tags_and_pixel_limits ... ok
+test cr2_preview::tests::carries_all_eight_orientations_and_preserves_pixel_and_icc_segments ... ok
+
+test result: ok. 26 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.39s
+
+     Running unittests src/main.rs (target/debug/deps/between_frames-5d83326956157216)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/m1-harness.rs (target/debug/deps/m1_harness-3a4941a630783bed)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_evaluate.rs (target/debug/deps/agent_evaluate-b7b2490b556d8a04)
+
+running 3 tests
+test stale_hash_observation_is_ignored ... ok
+test without_observations_only_hash_and_human_hints ... ok
+test structured_evaluation_reports_duplicates_similarity_and_metrics ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/agent_memory.rs (target/debug/deps/agent_memory-b9a3cb7b969aff09)
+
+running 19 tests
+test deleted_hypothesis_stays_dead_when_evidence_count_changes ... ok
+test cross_project_memory_authorization_controls_visibility ... ok
+test batch_decisions_keep_all_participants_and_do_not_invent_past_explanations ... ok
+test delete_evidence_unlinks_hypotheses_and_purges_cache ... ok
+test ag11_correction_stops_retrieval_and_does_not_revive ... ok
+test evidence_is_deduplicated_and_hypotheses_are_deterministic ... ok
+test correction_survives_growing_evidence_legacy_duplicates_and_restart ... ok
+test controls_are_idempotent_reversible_and_leave_formal_edit_history_unchanged ... ok
+test growing_support_updates_the_same_hypothesis_and_preserves_disabled_state ... ok
+test physical_delete_hypothesis_writes_tombstone_and_never_revives ... ok
+test memory_scope_schema_and_receipt_fault_rollback_are_enforced ... ok
+test memory_changes_pause_tasks_and_require_new_context_instead_of_old_history ... ok
+test memory_exclusion_discards_a_model_reply_already_in_flight ... ok
+test fts_search_is_scoped_and_goal_relevance_precedes_confirmation ... ok
+test excluded_evidence_updates_support_counters_retrieval_and_survives_restart ... ok
+test version_eight_upgrade_backs_up_committed_wal_before_new_schema ... ok
+test v2_baseline_preserves_pre_keyword_tombstones ... ok
+test retrieve_preferences_tool_returns_evidence_backed_and_rejects_cross_project ... ok
+test agent_drafts_are_not_evidence_until_human_applies ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.29s
+
+     Running tests/agent_quality.rs (target/debug/deps/agent_quality-00b34d83d6dd4b50)
+
+running 1 test
+test quality_scores_round_trip_with_validation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/agent_runtime.rs (target/debug/deps/agent_runtime-29579a3dfd98a0b4)
+
+running 13 tests
+test ag07_receipt_replay_does_not_duplicate_draft_even_after_timeout_and_restart ... ok
+test draft_and_receipt_fault_are_one_transaction_and_m1_upgrade_has_backup ... ok
+test ag05_06_13_14_security_schema_injection_and_invalid_final_are_rejected ... ok
+test in_flight_wait_is_charged_once_on_pause_and_interruption ... ok
+test ag10_backend_caps_model_tools_context_time_and_retry_failures ... ok
+test formal_edit_during_loop_survives_and_completed_drafts_are_stale ... ok
+test ag08_15_stale_rebase_partial_apply_and_undo_preserve_unapproved_state ... ok
+test ag09_pause_restart_resume_and_pending_calls_retain_protocol_links ... ok
+test human_feedback_and_cancel_are_persistent_without_formal_writes ... ok
+test two_hundred_scope_two_twenty_five_drafts_fit_default_context_without_losing_linkage ... ok
+test ag01_different_human_facts_change_search_path_and_formal_state_is_untouched ... ok
+test ag03_reorder_scope_avoids_whole_project_reads_for_two_orders ... ok
+test ag02_duplicate_annotation_drives_revision_not_fixed_tool_order ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.64s
+
+     Running tests/agent_vision.rs (target/debug/deps/agent_vision-e4b6eddd55395c33)
+
+running 44 tests
+test cloud_search_reads_only_current_bound_endpoint_facts_without_image_transfers ... ok
+test distinct_roles_send_pixels_only_to_observer_and_finish_reviewable_draft ... ok
+test cloud_image_budget_cap_pauses_task_before_any_upload ... ok
+test crashed_in_flight_upload_keeps_reservation_and_cannot_retransmit_on_resume ... ok
+test distinct_roles_share_original_image_budget_before_observer_http ... ok
+test ag04_without_consent_no_image_leaves_formal_state_untouched ... ok
+test curator_consent_cannot_authorize_observer_explicit_or_implicit_upload ... ok
+test archived_project_and_generic_positive_consents_cannot_be_created ... ok
+test consent_isolated_by_endpoint_and_model_before_any_request_with_wrong_explicit_grant ... ok
+test consented_vision_uploads_once_then_cache_hits_without_reupload ... ok
+test hallucinated_photo_ids_are_dropped_and_quota_charged_for_real_transfer ... ok
+test http_redirect_does_not_forward_preview_or_authorization_to_another_service ... ok
+test independent_role_capability_files_are_frozen_and_never_inherit_other_model_profiles ... ok
+test observation_roles_refuse_other_endpoints_without_network ... ok
+test invalid_cached_observations_require_fresh_authorized_upload ... ok
+test invalid_observations_never_enter_cache_and_uploads_remain_charged ... ok
+test legacy_binding_without_capability_fingerprint_requires_new_delegation ... ok
+test legacy_unbound_consent_is_not_upgraded_or_used_by_new_tasks ... ok
+test recipient_identity_preserves_key_rotation_and_is_specific_to_destination_and_model ... ok
+test legacy_unbound_executed_task_requires_redelegation_without_any_http ... ok
+test malformed_model_batches_and_incomplete_responses_execute_no_tools ... ok
+test malformed_vision_response_keeps_upload_reservation_instead_of_free_retry ... ok
+test observation_cache_is_scoped_to_endpoint_even_when_model_alias_matches ... ok
+test observation_model_environment_is_optional_and_frozen_until_engine_recreation ... ok
+test obsolete_queued_checkpoint_fails_once_and_releases_the_project_for_redelegation ... ok
+test paused_upload_settles_and_replays_after_restart_without_retransmission ... ok
+test provider_error_bodies_cannot_leak_credentials_into_task_records ... ok
+test real_http_loop_receives_task_identity_and_finishes_reviewable_draft ... ok
+test recipient_receipt_replay_conflicts_and_replacement_failure_are_atomic ... ok
+test remaining_budget_reduces_request_output_without_raising_task_budget ... ok
+test reported_tokens_settle_reservations_and_excess_usage_stops_before_tools ... ok
+test role_cache_and_search_follow_observer_across_new_curators ... ok
+test role_observer_capabilities_never_fall_back_to_vision_capable_curator ... ok
+test role_pair_and_profiles_are_immutable_on_reopen_but_keys_may_rotate ... ok
+test runtime_router_keeps_offline_task_local_when_cloud_adapter_is_available ... ok
+test runtime_router_rejects_region_budget_and_missing_provider_before_http ... ok
+test stale_recipient_ui_cannot_grant_and_deny_works_without_a_usable_provider ... ok
+test task_binding_survives_restart_rejects_endpoint_or_model_switch_and_allows_key_rotation ... ok
+test task_consent_is_bound_once_and_never_used_as_project_fallback ... ok
+test text_only_profile_cannot_upload_images_even_with_project_consent_or_direct_observe ... ok
+test timed_out_upload_is_charged_and_resume_does_not_send_it_again ... ok
+test unexpected_provider_usage_is_visible_and_stops_further_requests ... ok
+test unknown_model_profile_stops_before_any_http_or_budget_reservation ... ok
+test zero_cost_and_exhausted_tool_budget_stop_before_upload ... ok
+
+test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.86s
+
+     Running tests/author_memory.rs (target/debug/deps/author_memory-cb232e5e912c63c8)
+
+running 10 tests
+test consent_failure_rolls_back_setting_and_task_pause ... ok
+test author_opt_in_is_audited_idempotent_and_does_not_accept_legacy_true ... ok
+test revoking_from_another_project_invalidates_old_history_even_after_regrant ... ok
+test checkpoint_cannot_replace_immutable_author_binding ... ok
+test source_note_change_discards_inflight_reply_but_settles_reported_usage ... ok
+test only_relevant_confirmed_local_sources_are_returned_with_provenance ... ok
+test source_controls_pause_consumers_and_archiving_invalidates_future_context ... ok
+test tool_alias_remains_scoped_and_revocation_blocks_receipt_replay_and_aba_resume ... ok
+test author_scope_limits_fail_closed_but_allow_disabling ... ok
+test corrections_disabling_and_tombstones_block_duplicate_author_claims ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+
+     Running tests/book_marks.rs (target/debug/deps/book_marks-bf45130e6f8761a3)
+
+running 2 tests
+test print_paging_respects_spread_marks ... ok
+test mark_command_roundtrip_undo_and_snapshot_restore ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/cache_quota.rs (target/debug/deps/cache_quota-c5688715e527a4ed)
+
+running 2 tests
+test sweep_missing_cache_dir_is_noop ... ok
+test sweep_keeps_live_and_oldest_first_orphans_only ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cloud_login.rs (target/debug/deps/cloud_login-021d6a75fbeaecd3)
+
+running 6 tests
+test native_cloud_keychain_roundtrip ... ignored, 显式使用独立随机服务名验证系统钥匙串，不触碰用户条目
+test real_pg_api_and_keychain_complete_one_desktop_session ... ignored, 需要显式启动隔离回环PG API；实际系统钥匙串与原生HTTP协议验收
+test failed_redemption_never_sets_logged_in_and_cannot_replay_uncertain_result ... ok
+test offline_status_blocks_cloud_writes_but_allows_local_logout ... ok
+test pending_survives_restart_and_cancel_prevents_late_return ... ok
+test pkce_callback_stores_only_in_vault_rejects_replay_and_reuses_session ... ok
+
+test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/command_history.rs (target/debug/deps/command_history-9c53b9d9815bfdd4)
+
+running 12 tests
+test generated_request_contract_round_trips_all_m1_examples_and_rejects_extra_fields ... ok
+test database_ownership_triggers_reject_cross_project_rows ... ok
+test receipt_write_failure_rolls_back_every_projection_event_and_stack ... ok
+test comparison_undo_is_logical_and_does_not_delete_evidence_rows ... ok
+test project_brief_and_archive_restore_have_compensating_history ... ok
+test durable_replay_checks_fingerprint_scope_and_returns_original_result ... ok
+test concurrent_connections_have_one_success_and_deterministic_conflict ... ok
+test named_version_restore_is_scoped_atomic_and_undoable ... ok
+test no_op_receipt_replay_keeps_its_original_history_and_revision ... ok
+test batch_history_undo_redo_persists_and_new_edit_invalidates_redo_branch ... ok
+test old_wal_database_is_backed_up_before_upgrade_and_backup_can_restore_project ... ok
+test slim_receipt_cursor_and_both_legacy_formats_replay_the_same_snapshot ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+     Running tests/diagnostics.rs (target/debug/deps/diagnostics-09804ffa972bdd55)
+
+running 7 tests
+test unavailable_storage_is_partial_and_database_failure_is_not_zero ... ok
+test cache_and_backup_symlinks_and_nested_dirs_are_not_followed ... ok
+test missing_cache_is_empty_but_missing_required_database_is_unknown ... ok
+test backup_health_does_not_follow_symlinks ... ok
+test diagnostics_counts_sizes_are_read_only_and_redacted ... ok
+test backup_health_checks_report_recoverability ... ok
+test v2_baseline_backup_health_rejects_symlink_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/export_v12.rs (target/debug/deps/export_v12-4c10a37e35530376)
+
+running 3 tests
+test desktop_export_destinations_cover_every_visible_format ... ok
+test print_reference_html_has_cover_pages_and_plates ... ok
+test sidecar_export_writes_per_photo_json_and_manifest ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/gui_v2_m1.rs (target/debug/deps/gui_v2_m1-d412bba5336dae6e)
+
+running 3 tests
+test oversized_file_is_rejected_without_touching_others ... ok
+test undo_redo_never_duplicates_sequence_positions ... ok
+test five_hundred_mixed_photos_survive_restart_with_hashes_unchanged ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.74s
+
+     Running tests/hosted_ai.rs (target/debug/deps/hosted_ai-0825bfbb31ab5ebd)
+
+running 3 tests
+
+thread '<unnamed>' (14775225) panicked at tests/hosted_ai.rs:67:54:
+called `Result::unwrap()` on an `Err` value: Os { code: 35, kind: WouldBlock, message: "Resource temporarily unavailable" }
+
+thread 'logout_account_switch_and_task_binding_mismatch_prevent_transmission' (14775223) panicked at tests/hosted_ai.rs:194:5:
+assertion `left == right` failed
+  left: "CLOUD_UNAVAILABLE"
+ right: "AUTH_REVOKED"
+
+thread 'logout_account_switch_and_task_binding_mismatch_prevent_transmission' (14775223) panicked at tests/hosted_ai.rs:131:44:
+called `Result::unwrap()` on an `Err` value: Any { .. }
+stack backtrace:
+   0:        0x100fd119c - <std::sys::backtrace::BacktraceLock::print::DisplayBacktrace as core::fmt::Display>::fmt::h36d56b525ef62c10
+   1:        0x10100ba38 - core::fmt::write::h7abf8c1e2f3ecef9
+   2:        0x100ffd3bc - std::io::default_write_fmt::h2de63ebd355853a7
+   3:        0x100fcea50 - std::sys::backtrace::BacktraceLock::print::hb5ac3e4f35ba16c3
+   4:        0x100fddb48 - std::panicking::default_hook::{{closure}}::hb48e44d9347cbd67
+   5:        0x100fdda18 - std::panicking::default_hook::h720d98f40b4cb916
+   6:        0x100b59088 - test::test_main_with_exit_callback::{{closure}}::hbdcbfdfa1722c657
+   7:        0x100fddd7c - std::panicking::panic_with_hook::h46cb45368a77ddbb
+   8:        0x100fcecf0 - std::panicking::panic_handler::{{closure}}::h5db92aec9bbe20ea
+   9:        0x100fceb48 - std::sys::backtrace::__rust_end_short_backtrace::h623e2fcc8db7a8f6
+  10:        0x100fdbed0 - __rustc[d6558f811bb9c5a2]::rust_begin_unwind
+  11:        0x1010269e8 - core::panicking::panic_fmt::h08aad460be1d2ab5
+  12:        0x101026a4c - core::result::unwrap_failed::h96a0d5b9e998d0c7
+  13:        0x100b27230 - core::result::Result<T,E>::unwrap::h4f4ee6e1fdc5d566
+                               at /private/tmp/rust-20260305-7678-hoz6nb/rustc-1.94.0-src/library/core/src/result.rs:1233:23
+  14:        0x100b27230 - <hosted_ai::Server as core::ops::drop::Drop>::drop::h433f33015cedc6f6
+                               at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/hosted_ai.rs:131:44
+  15:        0x100b26e40 - core::ptr::drop_in_place<hosted_ai::Server>::hddfbcf2c124c1595
+                               at /private/tmp/rust-20260305-7678-hoz6nb/rustc-1.94.0-src/library/core/src/ptr/mod.rs:805:1
+  16:        0x100b16c74 - hosted_ai::logout_account_switch_and_task_binding_mismatch_prevent_transmission::{{closure}}::h0cdac62aea9ef51c
+                               at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/hosted_ai.rs:203:1
+  17:        0x100b151a4 - <core::pin::Pin<P> as core::future::future::Future>::poll::h183829c8730a8580
+                               at /private/tmp/rust-20260305-7678-hoz6nb/rustc-1.94.0-src/library/core/src/future/future.rs:133:9
+  18:        0x100b15150 - <core::pin::Pin<P> as core::future::future::Future>::poll::h14b40d7dd999ddde
+                               at /private/tmp/rust-20260305-7678-hoz6nb/rustc-1.94.0-src/library/core/src/future/future.rs:133:9
+  19:        0x100b25f88 - tokio::runtime::scheduler::current_thread::CoreGuard::block_on::{{closure}}::{{closure}}::{{closure}}::h4a2ed82ed73ca37e
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/scheduler/current_thread/mod.rs:830:70
+  20:        0x100b25d90 - tokio::task::coop::with_budget::h2b4143f96313bc2b
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/task/coop/mod.rs:167:5
+  21:        0x100b25d90 - tokio::task::coop::budget::h334b1dd5d8fa58b1
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/task/coop/mod.rs:133:5
+  22:        0x100b25d90 - tokio::runtime::scheduler::current_thread::CoreGuard::block_on::{{closure}}::{{closure}}::h79fc9f2c77fcefa9
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/scheduler/current_thread/mod.rs:830:25
+  23:        0x100b243a4 - tokio::runtime::scheduler::current_thread::Context::enter::ha399eaf7b685a8b3
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/scheduler/current_thread/mod.rs:488:19
+  24:        0x100b24dd4 - tokio::runtime::scheduler::current_thread::CoreGuard::block_on::{{closure}}::hbb246711981ea9e7
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/scheduler/current_thread/mod.rs:829:44
+  25:        0x100b24aec - tokio::runtime::scheduler::current_thread::CoreGuard::enter::{{closure}}::h6aa0631f13e7a68b
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/scheduler/current_thread/mod.rs:906:68
+  26:        0x100b20b18 - tokio::runtime::context::scoped::Scoped<T>::set::hfec3fc7318d5c166
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/context/scoped.rs:40:9
+  27:        0x100b2301c - tokio::runtime::context::set_scheduler::{{closure}}::ha8700a25e506ed41
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/context.rs:187:38
+  28:        0x100b227e8 - std::thread::local::LocalKey<T>::try_with::h50922a075ae9869e
+                               at /private/tmp/rust-20260305-7678-hoz6nb/rustc-1.94.0-src/library/std/src/thread/local.rs:513:12
+  29:        0x100b2229c - std::thread::local::LocalKey<T>::with::hb59de6ee8e40b2ae
+                               at /private/tmp/rust-20260305-7678-hoz6nb/rustc-1.94.0-src/library/std/src/thread/local.rs:477:20
+  30:        0x100b22f94 - tokio::runtime::context::set_scheduler::h4618fa7ddb3e9a9f
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/context.rs:187:17
+  31:        0x100b24628 - tokio::runtime::scheduler::current_thread::CoreGuard::enter::h55422c5ac9a0de5c
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/scheduler/current_thread/mod.rs:906:27
+  32:        0x100b24b3c - tokio::runtime::scheduler::current_thread::CoreGuard::block_on::h9dfdc70b9c860032
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/scheduler/current_thread/mod.rs:817:24
+  33:        0x100b23b80 - tokio::runtime::scheduler::current_thread::CurrentThread::block_on::{{closure}}::h36bf7a1ed12c30eb
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/scheduler/current_thread/mod.rs:218:33
+  34:        0x100b1e09c - tokio::runtime::context::runtime::enter_runtime::h18a04a6493d4b614
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/context/runtime.rs:65:16
+  35:        0x100b23a00 - tokio::runtime::scheduler::current_thread::CurrentThread::block_on::h9e493e1ad47647a0
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/scheduler/current_thread/mod.rs:206:9
+  36:        0x100b15488 - tokio::runtime::runtime::Runtime::block_on_inner::haffffcf8d006cc9b
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/runtime.rs:374:52
+  37:        0x100b1561c - tokio::runtime::runtime::Runtime::block_on::h6f98583133a0e683
+                               at /Users/yihua/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.2/src/runtime/runtime.rs:343:18
+  38:        0x100b1ce30 - hosted_ai::logout_account_switch_and_task_binding_mismatch_prevent_transmission::h6ebddfb24332838f
+                               at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/hosted_ai.rs:202:55
+  39:        0x100b17ce8 - hosted_ai::logout_account_switch_and_task_binding_mismatch_prevent_transmission::{{closure}}::h30bfa1bf3a941ca8
+                               at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/hosted_ai.rs:179:80
+  40:        0x100b2651c - core::ops::function::FnOnce::call_once::h036944f5f2d7aba4
+                               at /private/tmp/rust-20260305-7678-hoz6nb/rustc-1.94.0-src/library/core/src/ops/function.rs:250:5
+  41:        0x100b58f4c - test::__rust_begin_short_backtrace::h8dcf200807e2bb33
+  42:        0x100b58400 - test::run_test_in_process::h1338dfd24254d95a
+  43:        0x100b481c8 - std::sys::backtrace::__rust_begin_short_backtrace::hc5517fb389007bd7
+  44:        0x100b32164 - core::ops::function::FnOnce::call_once{{vtable.shim}}::hbbd14019147a70cb
+  45:        0x100fedbc8 - std::sys::thread::unix::Thread::new::thread_start::hc15809c760ef2f27
+  46:        0x18cf75d00 - __pthread_exit
+
+thread 'logout_account_switch_and_task_binding_mismatch_prevent_transmission' (14775223) panicked at library/core/src/panicking.rs:233:5:
+panic in a destructor during cleanup
+thread caused non-unwinding panic. aborting.
+error: test failed, to rerun pass `--test hosted_ai`
+
+Caused by:
+  process didn't exit successfully: `/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target/debug/deps/hosted_ai-0825bfbb31ab5ebd` (signal: 6, SIGABRT: process abort signal)

@@ -1,0 +1,19 @@
+{
+  "account": {
+    "user_id": "3b845057-aaa7-44c3-a6d6-7d5f0a81d601",
+    "granted": "250000",
+    "spent": "15",
+    "reserved": "0"
+  },
+  "requests": [
+    {
+      "request_id": "cdb058bc-c199-45a6-8715-887c1860cd33",
+      "policy": "deepseek-flash-v1",
+      "reserved": 30584,
+      "charged": 15,
+      "state": "COMPLETED"
+    }
+  ],
+  "available": 249985,
+  "real_provider_calls": 0
+}

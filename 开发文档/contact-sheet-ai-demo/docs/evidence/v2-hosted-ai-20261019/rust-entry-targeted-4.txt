@@ -1,0 +1,43 @@
+   Compiling objc2-exception-helper v0.1.1
+   Compiling objc2 v0.6.5
+   Compiling ring v0.17.14
+   Compiling libsqlite3-sys v0.30.1
+   Compiling objc2-foundation v0.3.2
+   Compiling wry v0.57.0
+   Compiling block2 v0.6.2
+   Compiling objc2-core-foundation v0.3.2
+   Compiling rustls v0.23.45
+   Compiling dispatch2 v0.3.1
+   Compiling sqlx-sqlite v0.8.6
+   Compiling rustls-webpki v0.103.15
+   Compiling sqlx-macros-core v0.8.6
+   Compiling sqlx-macros v0.8.6
+   Compiling tokio-rustls v0.26.6
+   Compiling objc2-quartz-core v0.3.2
+   Compiling sqlx v0.8.6
+   Compiling hyper-rustls v0.27.10
+   Compiling reqwest v0.12.28
+   Compiling objc2-app-kit v0.3.2
+   Compiling objc2-web-kit v0.3.2
+   Compiling tao v0.37.1
+   Compiling window-vibrancy v0.8.1
+   Compiling muda v0.20.0
+   Compiling rfd v0.16.0
+   Compiling tauri-runtime v2.12.1
+   Compiling tauri-runtime-wry v2.12.1
+   Compiling tauri v2.12.3
+   Compiling tauri-plugin-fs v2.7.0
+   Compiling tauri-plugin-deep-link v2.6.2
+   Compiling tauri-plugin-dialog v2.8.2
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.07s
+     Running tests/hosted_ai.rs (target/debug/deps/hosted_ai-0825bfbb31ab5ebd)
+
+running 4 tests
+test logout_account_switch_and_task_binding_mismatch_prevent_transmission ... ok
+test hosted_calls_use_account_bearer_and_fixed_policy_without_a_provider_key ... ok
+test quota_failure_and_unknown_network_results_are_never_automatically_retriable ... ok
+test native_task_creation_freezes_hosted_provider_and_account_instead_of_running_mock ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+

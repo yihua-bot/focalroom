@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-19",
+  "baseline_head": "49fcc657c172b65dbae7651d87fb8c41f45972c6",
+  "source_file_count": 450,
+  "vitest_passed": 253,
+  "pg_tests_passed": 64,
+  "rust_default_passed": 220,
+  "rust_default_ignored_at_compile": 14,
+  "final_cloud_login_default": {
+    "passed": 4,
+    "ignored": 2
+  },
+  "explicit_keychain_passed": 1,
+  "explicit_real_pg_keychain_passed": 1,
+  "native_final": {
+    "identifier": "studio.focalroom.loginreview",
+    "imported": 2,
+    "failed_imports": 0,
+    "source_files_sha256_unchanged": true,
+    "shared_project": "df1401cc-5311-40b4-9366-b2aadee03cb7",
+    "logout_disables_sharing": true,
+    "share_completed": true,
+    "desktop_read_only": true
+  },
+  "codesign_strict": "failed-linker-adhoc-not-release",
+  "production_changes": false,
+  "real_google_calls": 0,
+  "real_email_calls": 0,
+  "real_model_calls": 0
+}

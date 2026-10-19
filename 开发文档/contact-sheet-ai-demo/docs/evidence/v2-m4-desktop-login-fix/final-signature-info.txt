@@ -1,0 +1,9 @@
+Executable=/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target/debug/bundle/macos/FocalRoom Login Review.app/Contents/MacOS/between-frames
+Identifier=between_frames-0dc6750febd142c6
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20400 size=504440 flags=0x20002(adhoc,linker-signed) hashes=15760+0 location=embedded
+Signature=adhoc
+Info.plist=not bound
+TeamIdentifier=not set
+Sealed Resources=none
+Internal requirements=none

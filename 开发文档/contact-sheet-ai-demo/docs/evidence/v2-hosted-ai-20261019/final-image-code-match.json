@@ -1,0 +1,14 @@
+{
+  "uid": 1000,
+  "imports": true,
+  "provider_key_in_image": false,
+  "hashes": {
+    "apps/api/src/hosted-ai.ts": "8aa4a5ebcd301a74a03093dbae0bf669989966f16b99a6c6fd7290c400ed1e51",
+    "apps/api/src/server.ts": "b18ac7867490657bd4da0011e84de29c60a6ba5bf3694b5cd86bc877227a612d",
+    "apps/api/src/service.ts": "bbcc6a30af04e879fcbb419e7f0a026f7cde0ff25f1f2e94902eddd620e1f8d5",
+    "apps/api/src/database.ts": "1e2bcde0867e06285046624edd7d9c1132ccb36421277e921407b7e092f3c5ed",
+    "apps/api/migrations/0015_hosted_ai.sql": "61cbbcee7df864631b3b84bc98e498a5059547b908fc8b49a027c56e7f1bb324",
+    "apps/api/tools/ai-credit.ts": "120773e187949ffcac12e4c9b1e14b4786cb2e4b59f5d653a9654be1eb35e059",
+    "apps/api/tools/ai-reconcile.ts": "2f549393b125d93466160a36283a984c04ff17a4e37653b0538f626ec4f3c294"
+  }
+}

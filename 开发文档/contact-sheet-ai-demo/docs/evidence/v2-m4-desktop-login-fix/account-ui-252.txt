@@ -1,0 +1,15 @@
+
+> between-frames@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.11 /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames
+
+(node:88187) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  38 passed (38)
+      Tests  252 passed (252)
+   Start at  00:39:15
+   Duration  11.62s (transform 3.16s, setup 7.85s, import 11.25s, tests 27.50s, environment 42.28s)
+

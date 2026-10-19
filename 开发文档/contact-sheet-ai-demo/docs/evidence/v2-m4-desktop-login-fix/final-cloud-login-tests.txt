@@ -1,0 +1,14 @@
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.83s
+     Running tests/cloud_login.rs (src-tauri/target/debug/deps/cloud_login-3bb67a4a2795a41c)
+
+running 6 tests
+test native_cloud_keychain_roundtrip ... ignored, 显式使用独立随机服务名验证系统钥匙串，不触碰用户条目
+test real_pg_api_and_keychain_complete_one_desktop_session ... ignored, 需要显式启动隔离回环PG API；实际系统钥匙串与原生HTTP协议验收
+test failed_redemption_never_sets_logged_in_and_cannot_replay_uncertain_result ... ok
+test offline_status_blocks_cloud_writes_but_allows_local_logout ... ok
+test pending_survives_restart_and_cancel_prevents_late_return ... ok
+test pkce_callback_stores_only_in_vault_rejects_replay_and_reuses_session ... ok
+
+test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

@@ -1,0 +1,67 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.api
+#1 transferring dockerfile: 1.36kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:25.8.1-alpine
+#2 DONE 2.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 189B done
+#3 DONE 0.0s
+
+#4 [ 1/13] FROM docker.io/library/node:25.8.1-alpine@sha256:5209bcaca9836eb3448b650396213dbe9d9a34d31840c2ae1f206cb2986a8543
+#4 resolve docker.io/library/node:25.8.1-alpine@sha256:5209bcaca9836eb3448b650396213dbe9d9a34d31840c2ae1f206cb2986a8543 done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 3.09kB done
+#5 DONE 0.0s
+
+#6 [ 4/13] COPY --chmod=0644 apps/api/package.json ./apps/api/package.json
+#6 CACHED
+
+#7 [ 6/13] RUN npm ci --omit=dev --workspace @betweenframes/api --workspace @betweenframes/contracts --include-workspace-root=false
+#7 CACHED
+
+#8 [ 5/13] COPY --chmod=0644 packages/contracts/package.json ./packages/contracts/package.json
+#8 CACHED
+
+#9 [ 7/13] COPY --chown=node:node apps/api/src ./apps/api/src
+#9 CACHED
+
+#10 [ 3/13] COPY --chmod=0644 package.json package-lock.json ./
+#10 CACHED
+
+#11 [ 2/13] WORKDIR /app
+#11 CACHED
+
+#12 [ 8/13] COPY --chown=node:node apps/api/migrations ./apps/api/migrations
+#12 CACHED
+
+#13 [ 9/13] COPY --chown=node:node apps/api/tools/ai-credit.ts apps/api/tools/ai-reconcile.ts ./apps/api/tools/
+#13 DONE 0.0s
+
+#14 [10/13] COPY --chown=node:node packages/contracts/src ./packages/contracts/src
+#14 DONE 0.0s
+
+#15 [11/13] COPY --chown=node:node workers/agent/src ./workers/agent/src
+#15 DONE 0.0s
+
+#16 [12/13] RUN chmod 0755 apps packages workers apps/api packages/contracts workers/agent  && find apps/api/src apps/api/migrations apps/api/tools packages/contracts/src workers/agent/src -type d -exec chmod 0755 {} +  && find apps/api/src apps/api/migrations apps/api/tools packages/contracts/src workers/agent/src -type f -exec chmod 0644 {} +
+#16 DONE 0.2s
+
+#17 [13/13] RUN mkdir -p /data/previews && chown -R node:node /data
+#17 DONE 0.1s
+
+#18 exporting to image
+#18 exporting layers 0.0s done
+#18 exporting manifest sha256:1fe6a6509a6be507d79ef576c5687843510e16d24a5850f3c7fa4b7c4390858b done
+#18 exporting config sha256:904955bbb73b48fe21b01e2b71d4c44324ec16858e97ffd62afd745e8a5dbd89 done
+#18 exporting attestation manifest sha256:dc8417aabfa443b0943d22aaba6bbe834a37a176e6943dadc91e848ba87a3fa5 done
+#18 exporting manifest list sha256:7585d079143e4832e679793b2211ad556e1f8b3f964a72334819a4f12ef28fa1 done
+#18 naming to docker.io/library/focalroom-hosted-ai-api:20261019 done
+#18 DONE 0.1s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uk7yk6m5p1ld8pu0ycjlz339k

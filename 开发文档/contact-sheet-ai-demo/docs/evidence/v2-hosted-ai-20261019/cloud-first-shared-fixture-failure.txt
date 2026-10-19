@@ -1,0 +1,205 @@
+
+> between-frames@0.1.0 test:cloud:pg
+> node apps/api/test/run.mjs
+
+✔ Google verified profile persists and is returned immediately, by /me and subsequent OTP session (200.399833ms)
+✔ wrong audience, unverified email or self-asserted profile cannot create an identity (2.024125ms)
+✔ unsupported avatar does not replace the saved trusted image; OTP-only accounts remain null (75.499167ms)
+✔ M4 explicit migrations create account/limiter tables and remain idempotent (386.855417ms)
+✔ M4 independent database clients enforce one shared hourly quota under concurrency (84.516375ms)
+✔ M4 password reset hashes match login, revoke sessions and consume every outstanding token (542.636667ms)
+✔ M4 concurrent resets with different tokens have exactly one winner (370.495875ms)
+✔ M4 invalid, expired and oversized reset inputs do not change the account (346.018541ms)
+✔ M4 forgot password normalizes email and hides account existence and email quota (303.5185ms)
+✔ M4 verification enforces session/CSRF and concurrent ten-minute delivery quota (160.875541ms)
+✔ M4 unavailable email rolls back tokens without claiming verification delivery (182.645333ms)
+✔ M4 account mail links use fragments, reject public HTTP and support the Web route (0.433416ms)
+✔ M4 quota cleanup removes expired rows without erasing longer live windows (17.490666ms)
+✔ M4 cookie-authenticated Agent GETs need no Origin/CSRF, writes remain protected (650.341417ms)
+✔ M4 无显式授权时入队被拒；授权/任务/取消/撤权全链路 (161.575792ms)
+✔ M4 崩溃恢复：租约过期的 RUNNING 任务被重新领取并完成 (24.080542ms)
+✔ M4 模型失败有限重试后 FAILED 且不外发更多请求 (40.5495ms)
+✔ desktop grant stores hashes, fixed return URL and real PKCE session; browser never receives bearer (393.304ms)
+✔ authorize requires browser authentication, exact state and CSRF; malformed/external redirect rejected (117.360875ms)
+✔ wrong verifier/state/code cannot redeem or consume the legitimate grant (127.727083ms)
+✔ concurrent exchanges create only one desktop session (133.60525ms)
+✔ grant and authorization code expiry both prevent redemption (227.897458ms)
+✔ browser revocation/password reset cannot yield a new desktop credential (263.8ms)
+✔ existing browser session may approve, retry replaces code and another account cannot take over (253.07275ms)
+✔ session creation failure rolls back code consumption, then legitimate exchange can recover (110.588375ms)
+✔ revocation and redemption share session-first lock ordering without a deadlock (156.541792ms)
+✔ hosted AI requires live account, verified email, correct policy and CSRF; key never returned (138.347125ms)
+✔ quota and grants are account isolated and idempotent, cannot self-top-up over HTTP (115.712333ms)
+✔ atomic reservation across two service instances rejects overspending and simultaneous duplicate IDs (215.975667ms)
+✔ confirmed upstream rejection releases reservation; unknown network/meter/result holds it and never replays (387.825875ms)
+✔ image forwarding requires consent and bounded local JPEG, strips metadata and blocks URLs/server tools (69.81325ms)
+✔ disabled service is explicit and has no trial side effect; exhausted quota never calls provider (108.872709ms)
+✔ M4 promotion verifies media, strips EXIF, atomically commits and replays (310.127208ms)
+✔ M4 project-only invitation, email binding, one-time acceptance and isolation (14.3545ms)
+✔ M4 cookie CSRF, session hashes, unknown fields, no model authorization (6.581666ms)
+✔ M5 comment anchors, parent project isolation, provenance and Viewer denial (21.091167ms)
+✔ M5 two concurrent proposals: one atomic formal apply, other remains submitted (22.813458ms)
+✔ M5 authenticated WS, private Yjs, presence, snapshot reconnect and revoke (1174.316333ms)
+✔ M5 cross-instance presence syncs through the PostgreSQL bus (1012.555ms)
+✔ M5 short task principals are project scoped, read-only, expiring and revocable (23.363708ms)
+✔ M4 malformed and oversized requests return safe private JSON errors (6.047ms)
+✔ M4 invitations expire and membership never grants ordinary project access (10.534209ms)
+✔ M5 Yjs rejects formal state fields and viewer replay cannot bypass downgraded ACL (71.124458ms)
+✔ M4/M5 API restart preserves session, authoritative versions and comments (10.796917ms)
+✔ M4 workspace member removal preserves independent project grants and protects owner (8.13725ms)
+✔ M5 draft revisions are private, owned, idempotent and partially approved with complete audit (59.061625ms)
+✔ M5 thread replies replay exactly and preserve an immutable original payload (9.292834ms)
+✔ M4 append-only migration upgrades 0001 without rewriting legacy receipts (129.7775ms)
+✔ M4 project authority does not authorize cloud model transmission (3.778541ms)
+✔ M4 OTP migration supports legacy draft tables and repeat explicit migration (115.099833ms)
+✔ M4 OTP normalizes email and stores a challenge-bound hash, never the code (27.89575ms)
+✔ M4 OTP creates an authenticated cookie session, verified account and owner workspace (68.182791ms)
+✔ M4 OTP reuses existing accounts without changing password or duplicating workspaces (108.267ms)
+✔ M4 OTP mail failure rejects the request and rolls back codes (54.365125ms)
+✔ M4 OTP expired codes and invalid inputs create no session (4.301041ms)
+✔ M4 OTP wrong attempts persist and revoke the code after five failures (7.093125ms)
+✔ M4 OTP resend invalidates old challenges, with one shared email quota (58.195083ms)
+✔ M4 OTP concurrent verification succeeds once and creates one session (61.918917ms)
+✔ M4 OTP session failure rolls back code consumption and new account atomically (110.927583ms)
+✔ M4 OTP failed resend preserves the previously delivered code (55.863125ms)
+✔ M4 OTP concurrent resend cannot bypass the shared delivery quota (57.885042ms)
+✖ M4 /metrics 暴露请求计数、延迟桶与 DB 派生指标 (59.196125ms)
+✔ M4 UUID 路由模板归一，防止标签基数爆炸 (3.880667ms)
+✔ M4 FOCALROOM_METRICS_TOKEN 未设置时开放，设置后需令牌 (3.226625ms)
+✖ M4 角色初始化（等价 postgres-init 脚本）与迁移角色执行迁移 (18.145ms)
+✖ M4 应用角色只能 DML：读写通过，DDL 与建角色被拒 (3.082125ms)
+✔ M4 R2 adapter signs S3 put/get against an isolated local protocol server (22.15075ms)
+✔ M4 local preview store rejects links, foreign object paths and content collisions (3.281417ms)
+✔ M4 media policy rejects oversized, PNG-disguised and corrupt sources (2.775583ms)
+✔ M4 R2 configuration requires explicit official endpoint and complete credentials (1.139875ms)
+ℹ tests 70
+ℹ suites 0
+ℹ pass 67
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 24862.672666
+
+✖ failing tests:
+
+test at apps/api/test/metrics.mjs:24:1
+✖ M4 /metrics 暴露请求计数、延迟桶与 DB 派生指标 (59.196125ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /focalroom_agent_cost_minor_usd_total 0/. Input:
+  
+  '# HELP focalroom_api_requests_total API 请求计数（按路由模板/方法/状态）\n' +
+    '# TYPE focalroom_api_requests_total counter\n' +
+    'focalroom_api_requests_total{route="/health",method="GET",status="200"} 2\n' +
+    'focalroom_api_requests_total{route="/no-such-endpoint",method="GET",status="404"} 1\n' +
+    '# HELP focalroom_api_request_duration_ms API 延迟分布（毫秒桶）\n' +
+    '# TYPE focalroom_api_request_duration_ms histogram\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="5"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="10"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="25"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="50"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="100"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="250"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="500"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="1000"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="2500"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="5000"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="+Inf"} 2\n' +
+    'focalroom_api_request_duration_ms_sum{route="/health",method="GET"} 4.259834\n' +
+    'focalroom_api_request_duration_ms_count{route="/health",method="GET"} 2\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="5"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="10"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="25"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="50"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="100"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="250"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="500"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="1000"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="2500"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="5000"} 1\n' +
+    'focalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="+Inf"} 1\n' +
+    'focalroom_api_request_duration_ms_sum{route="/no-such-endpoint",method="GET"} 0.369625\n' +
+    'focalroom_api_request_duration_ms_count{route="/no-such-endpoint",method="GET"} 1\n' +
+    '# HELP focalroom_agent_jobs 云 Agent 任务状态计数\n' +
+    '# TYPE focalroom_agent_jobs gauge\n' +
+    '# HELP focalroom_agent_queue_depth 等待执行的任务数\n' +
+    '# TYPE focalroom_agent_queue_depth gauge\n' +
+    '# HELP focalroom_agent_cost_minor_usd_total 模型费用累计（美分，估算）\n' +
+    '# TYPE focalroom_agent_cost_minor_usd_total counter\n' +
+    'focalroom_agent_jobs{kind="summarize_comments",status="FAILED"} 1\n' +
+    'focalroom_agent_jobs{kind="summarize_disagreement",status="CANCELLED"} 1\n' +
+    'focalroom_agent_jobs{kind="summarize_comments",status="CANCELLED"} 1\n' +
+    'focalroom_agent_jobs{kind="summarize_comments",status="COMPLETED"} 3\n' +
+    'focalroom_agent_cost_minor_usd_total 3\n' +
+    'focalroom_agent_tokens_total 450\n' +
+    'focalroom_agent_queue_depth 0\n' +
+    'focalroom_metrics_uptime_seconds 0\n'
+  
+      at TestContext.<anonymous> (file:///Users/yihua/Documents/film/%E5%BC%80%E5%8F%91%E6%96%87%E6%A1%A3/contact-sheet-ai-demo/between-frames/apps/api/test/metrics.mjs:40:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '# HELP focalroom_api_requests_total API 请求计数（按路由模板/方法/状态）\n# TYPE focalroom_api_requests_total counter\nfocalroom_api_requests_total{route="/health",method="GET",status="200"} 2\nfocalroom_api_requests_total{route="/no-such-endpoint",method="GET",status="404"} 1\n# HELP focalroom_api_request_duration_ms API 延迟分布（毫秒桶）\n# TYPE focalroom_api_request_duration_ms histogram\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="5"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="10"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="25"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="50"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="100"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="250"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="500"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="1000"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="2500"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="5000"} 2\nfocalroom_api_request_duration_ms_bucket{route="/health",method="GET",le="+Inf"} 2\nfocalroom_api_request_duration_ms_sum{route="/health",method="GET"} 4.259834\nfocalroom_api_request_duration_ms_count{route="/health",method="GET"} 2\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="5"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="10"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="25"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="50"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="100"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="250"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="500"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="1000"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="2500"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="5000"} 1\nfocalroom_api_request_duration_ms_bucket{route="/no-such-endpoint",method="GET",le="+Inf"} 1\nfocalroom_api_request_duration_ms_sum{route="/no-such-endpoint",method="GET"} 0.369625\nfocalroom_api_request_duration_ms_count{route="/no-such-endpoint",method="GET"} 1\n# HELP focalroom_agent_jobs 云 Agent 任务状态计数\n# TYPE focalroom_agent_jobs gauge\n# HELP focalroom_agent_queue_depth 等待执行的任务数\n# TYPE focalroom_agent_queue_depth gauge\n# HELP focalroom_agent_cost_minor_usd_total 模型费用累计（美分，估算）\n# TYPE focalroom_agent_cost_minor_usd_total counter\nfocalroom_agent_jobs{kind="summarize_comments",status="FAILED"} 1\nfocalroom_agent_jobs{kind="summarize_disagreement",status="CANCELLED"} 1\nfocalroom_agent_jobs{kind="summarize_comments",status="CANCELLED"} 1\nfocalroom_agent_jobs{kind="summarize_comments",status="COMPLETED"} 3\nfocalroom_agent_cost_minor_usd_total 3\nfocalroom_agent_tokens_total 450\nfocalroom_agent_queue_depth 0\nfocalroom_metrics_uptime_seconds 0\n',
+    expected: /focalroom_agent_cost_minor_usd_total 0/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at apps/api/test/min_privilege.mjs:13:1
+✖ M4 角色初始化（等价 postgres-init 脚本）与迁移角色执行迁移 (18.145ms)
+  error: permission denied for table fr_migrations
+      at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/node_modules/pg/lib/client.js:694:17
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async file:///Users/yihua/Documents/film/%E5%BC%80%E5%8F%91%E6%96%87%E6%A1%A3/contact-sheet-ai-demo/between-frames/apps/api/src/database.ts:60:24
+      at async transaction (file:///Users/yihua/Documents/film/%E5%BC%80%E5%8F%91%E6%96%87%E6%A1%A3/contact-sheet-ai-demo/between-frames/apps/api/src/database.ts:13:20)
+      at async migrate (file:///Users/yihua/Documents/film/%E5%BC%80%E5%8F%91%E6%96%87%E6%A1%A3/contact-sheet-ai-demo/between-frames/apps/api/src/database.ts:54:3)
+      at async TestContext.<anonymous> (file:///Users/yihua/Documents/film/%E5%BC%80%E5%8F%91%E6%96%87%E6%A1%A3/contact-sheet-ai-demo/between-frames/apps/api/test/min_privilege.mjs:35:3)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    length: 101,
+    severity: 'ERROR',
+    code: '42501',
+    detail: undefined,
+    hint: undefined,
+    position: undefined,
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'aclchk.c',
+    line: '3657',
+    routine: 'aclcheck_error'
+  }
+
+test at apps/api/test/min_privilege.mjs:43:1
+✖ M4 应用角色只能 DML：读写通过，DDL 与建角色被拒 (3.082125ms)
+  error: permission denied for table fr_migrations
+      at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///Users/yihua/Documents/film/%E5%BC%80%E5%8F%91%E6%96%87%E6%A1%A3/contact-sheet-ai-demo/between-frames/apps/api/test/min_privilege.mjs:49:16)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    length: 101,
+    severity: 'ERROR',
+    code: '42501',
+    detail: undefined,
+    hint: undefined,
+    position: undefined,
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'aclchk.c',
+    line: '3657',
+    routine: 'aclcheck_error'
+  }
+Isolated PostgreSQL evidence: /var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-pg-tests-eHuS1L

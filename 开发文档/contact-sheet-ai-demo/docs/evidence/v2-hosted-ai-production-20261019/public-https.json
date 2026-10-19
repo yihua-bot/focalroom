@@ -1,0 +1,30 @@
+[
+  {
+    "path": "/shared",
+    "status": 200,
+    "tls_verify": 0,
+    "current_title": true
+  },
+  {
+    "path": "/api/v2/health",
+    "status": 200,
+    "tls_verify": 0,
+    "body": {
+      "ok": true,
+      "authority": "POSTGRESQL",
+      "protocol": "2.0"
+    }
+  },
+  {
+    "path": "/api/v2/auth/me",
+    "status": 401,
+    "tls_verify": 0,
+    "error_code": "UNAUTHORIZED"
+  },
+  {
+    "path": "/api/v2/ai/account",
+    "status": 401,
+    "tls_verify": 0,
+    "error_code": "UNAUTHORIZED"
+  }
+]

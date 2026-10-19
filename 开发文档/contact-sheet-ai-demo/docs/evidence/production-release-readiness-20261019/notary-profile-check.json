@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-19",
+  "scope": "default keychain; named profile history checks only",
+  "profiles": [
+    { "name": "FOCALROOM_NOTARY", "exit_code": 69, "result": "No Keychain password item found" },
+    { "name": "BETWEENFRAMES_NOTARY", "exit_code": 69, "result": "No Keychain password item found" }
+  ],
+  "developer_id_application": {
+    "valid": true,
+    "team": "KXSFCZF4S3",
+    "sha1": "EFB01585E32370F1DBCF77907FF4782DBCEB847B"
+  },
+  "profile_names_found_in_package_scripts_ops_main_tauri_config": false,
+  "custom_keychains_examined": false,
+  "credentials_created_or_changed": false,
+  "applications_uploaded": false
+}

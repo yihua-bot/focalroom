@@ -1,0 +1,2 @@
+{"event": "backup_verified", "directory": "/opt/focalroom/releases/hosted-ai-20261019/backup", "database_bytes": 70807, "table_count": 27, "preview_files": 0, "verified_dump_list": true}
+{"event": "archive_verified", "bytes": 119451314, "sha256": "46341efc2076f98c105de88382463faea03ffac3f5e2465f4fc4415ee162eb19", "disk_free_bytes": 1944363008}

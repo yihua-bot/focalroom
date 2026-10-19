@@ -1,0 +1,12 @@
+{
+  "production_mutations_authorized": true,
+  "local_source_matches_deployed_critical_files": true,
+  "critical_files": 7,
+  "source_package_sha256": "46341efc2076f98c105de88382463faea03ffac3f5e2465f4fc4415ee162eb19",
+  "evidence_contains_no_mail_key_or_recipient": true,
+  "real_emails": 1,
+  "real_model_requests": 0,
+  "human_inbox_confirmation": "confirmed_inbox",
+  "frontend_after_login_shows_redundant_verify_email_action": true,
+  "human_inbox_confirmation_source": "human-inbox-confirmation.json"
+}

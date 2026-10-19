@@ -1,0 +1,1 @@
+src-tauri/target/debug/bundle/macos/FocalRoom Login Review.app: code has no resources but signature indicates they must be present

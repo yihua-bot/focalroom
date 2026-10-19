@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-19",
+  "source_files": 312,
+  "tests": {
+    "frontend": 257,
+    "postgres_http": 71,
+    "rust_full_after_entry_fix": 224,
+    "rust_ignored": 15,
+    "rust_targeted_after_final_context_filter": 4,
+    "clippy": true,
+    "types": true,
+    "lint": true,
+    "contracts": true
+  },
+  "native_gui": {
+    "login_keychain": true,
+    "directory_import": {
+      "passed": 2,
+      "failed": 0
+    },
+    "fixture_responses": 1,
+    "reported_tokens": 15,
+    "available_before": 250000,
+    "available_after": 249985,
+    "logout_disables_ai": true,
+    "restart_stays_signed_out": true,
+    "diagnostics": true,
+    "project_revision_unchanged": true,
+    "source_hashes_unchanged": true
+  },
+  "production_changed": false,
+  "real_email_sent": false,
+  "real_model_calls": 0,
+  "final_review_bundle": {
+    "path": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target/debug/bundle/macos/FocalRoom Login Review.app/Contents/MacOS/between-frames",
+    "bytes": 65106848,
+    "sha256": "00a77eebc1a8048ad687c0fedbb5399d80364ad59edaf3a74c14d1fad3c9e7a8",
+    "debug": true,
+    "distributable": false,
+    "only_last_diagnostics_copy_diff_from_protocol_test": true
+  },
+  "other_review_bundle": "superseded fixture; not a release candidate"
+}

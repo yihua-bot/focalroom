@@ -1,0 +1,1 @@
+{"uid":1000,"imports":true,"quota_migration":true,"provider_key_in_image":false}
