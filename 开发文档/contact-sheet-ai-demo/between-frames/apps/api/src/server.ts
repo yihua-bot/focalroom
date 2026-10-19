@@ -23,6 +23,7 @@ import {
 import { attachRealtime } from "./realtime.ts";
 import { metricsAuthorized } from "./metrics.ts";
 import { migrate, assertSchema } from "./database.ts";
+import { hostedAiConfig, type HostedAiConfig, type HostedAiTransport } from "./hosted-ai.ts";
 
 class ApiController {
   readonly service: CloudService;
@@ -59,6 +60,8 @@ class ApiController {
       headers = req.headers,
       path = req.path.replace(/^\/api\/v2/, "");
     s.auth.checkOrigin(headers);
+    if (path === "/ai/account" && req.method === "GET") return s.ai.account(headers);
+    if (path === "/ai/deepseek-flash-v1/responses" && req.method === "POST") return s.ai.respond(headers,req.body);
     if (req.method === "POST" && path === "/auth/desktop/start")
       return s.desktop.begin(req.body, req.socket.remoteAddress ?? "unknown");
     if (req.method === "POST" && path === "/auth/desktop/authorize")
@@ -260,9 +263,11 @@ export async function createApi(options: {
   origin: string;
   email?: AccountEmailDelivery;
   magicEmail?: MagicEmailDelivery;
+  hostedAi?: HostedAiConfig;
+  hostedAiTransport?: HostedAiTransport;
 }) {
   await assertSchema(options.pool);
-  const service = new CloudService(options.pool, options.origin, options.store, options.email, options.magicEmail);
+  const service = new CloudService(options.pool, options.origin, options.store, options.email, options.magicEmail,{config:options.hostedAi,transport:options.hostedAiTransport});
   Module({
     controllers: [ApiController],
     providers: [{ provide: CloudService, useValue: service }],
@@ -297,6 +302,7 @@ export async function createApi(options: {
     });
     next();
   });
+  app.use("/api/v2/ai/deepseek-flash-v1/responses",json({limit:"16mb"}));
   app.use(json({ limit: "2mb" }));
   app.use(raw({ type: "image/jpeg", limit: "8mb" }));
   app.use(
@@ -375,7 +381,7 @@ export async function main() {
   const store = config.r2_config
     ? await readR2Config(config.r2_config)
     : new LocalPreviewStore(config.preview_directory!);
-  const server = await createApi({ pool, store, origin: config.origin });
+  const server = await createApi({ pool, store, origin: config.origin, hostedAi: hostedAiConfig() });
   await server.app.listen(config.port, config.host);
   process.stdout.write(
     `FocalRoom API listening ${config.host}:${config.port}\n`,

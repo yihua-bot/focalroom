@@ -11,6 +11,8 @@ const projection = z.object({
 const reply = z.object({ ok: z.boolean(), data: z.object({ taskId: z.string() }).nullable(), error: z.object({ code: z.string(), message: z.string(), retryable: z.boolean() }).nullable(), revision: z.number().nullable(), requestId: z.string() });
 const consentView = z.object({ id: z.number().int(), projectId: z.string(), mode: z.enum(['task', 'project', 'deny']), provider: z.string(), quota: z.number().int(), used: z.number().int(), grantedAt: z.string(), revokedAt: z.string().nullable() });
 const aiConfigSchema = z.object({
+ hostedAccount: z.object({enabled:z.boolean(),verified:z.boolean(),policy:z.literal("deepseek-flash-v1"),provider:z.literal("DeepSeek"),model:z.literal("deepseek-flash"),unit:z.literal("tokens"),granted:z.number().int().nonnegative(),spent:z.number().int().nonnegative(),reserved:z.number().int().nonnegative(),available:z.number().int().nonnegative()}).optional(),
+ hostedError: z.string().optional(),
  observation: z.object({ modelId: z.string(), capabilities: z.array(z.enum(['vision', 'tool_calling', 'structured_output', 'instruction_following'])), capabilitySource: z.enum(['official_documentation', 'local_protocol_smoke', 'operator_declaration']).nullable(), configurationError: z.string().nullable() }).nullable(),
  consentProvider: z.string().regex(/^openai@[a-f0-9]{64}$/).nullable(),
  providerId: z.string(), modelId: z.string(), ready: z.boolean(), apiKeyTail: z.string().nullable(), keySource: z.string().nullable(), baseUrl: z.string(), promptVersion: z.string(),

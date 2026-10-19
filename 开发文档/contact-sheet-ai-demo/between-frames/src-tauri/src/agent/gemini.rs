@@ -83,6 +83,7 @@ impl GeminiProvider {
     }
     pub fn identity(&self) -> super::model_binding::ModelIdentity {
         super::model_binding::ModelIdentity {
+            account_id: None,
             provider_id: PROVIDER_ID.into(),
             model_id: self.model.clone(),
             endpoint_sha256: super::capabilities::endpoint_sha256(&self.base_url),

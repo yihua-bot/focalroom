@@ -39,16 +39,6 @@ pub fn run() {
                 command_handler::CommandHandler::new(&store).recover_agents(),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
-            let handle = app.handle().clone();
-            let agent = agent::runtime::AgentEngine::new(store.clone()).with_notify(
-                std::sync::Arc::new(move |project| {
-                    use tauri::Emitter;
-                    let _ = handle.emit(
-                        commands_generated::AGENT_TASK_UPDATED_EVENT,
-                        serde_json::json!({"projectId":project}),
-                    );
-                }),
-            );
             let cloud_origin = login_guard::CLOUD_ORIGIN.to_owned();
             #[cfg(feature = "integration-harness")]
             let cloud_origin = match std::env::var("FOCALROOM_LOGIN_REVIEW_ORIGIN")
@@ -74,6 +64,16 @@ pub fn run() {
                 .map_err(|error| std::io::Error::other(error.message))?,
             );
             cloud_auth.set_avatar_cache(cache.join("avatars"));
+            let handle = app.handle().clone();
+            let agent = agent::runtime::AgentEngine::hosted(store.clone(), cloud_auth.clone())
+                .with_notify(std::sync::Arc::new(move |project| {
+                    use tauri::Emitter;
+                    let _ = handle.emit(
+                        commands_generated::AGENT_TASK_UPDATED_EVENT,
+                        serde_json::json!({"projectId":project}),
+                    );
+                }));
+
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 let auth = cloud_auth.clone();

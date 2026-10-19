@@ -7,7 +7,7 @@ const usage = z.object({ bytes: count, files: count, skippedEntries: count, comp
 const counts = z.object({ projects: count, photos: count, decisions: count, agentTasks: count, drafts: count, toolCalls: count, observations: count, evidence: count, hypotheses: count });
 const schema = z.object({
   schemaVersion: z.literal(1), collectedAt: z.iso.datetime({ offset: true }), appVersion: z.string(),
-  provider: z.object({ providerId: z.enum(['mock', 'openai']), ready: z.boolean(), keySource: z.enum(['env', 'keychain']).nullable() }),
+  provider: z.object({ providerId: z.enum(['mock', 'openai']), ready: z.boolean(), keySource: z.enum(['env', 'keychain', 'focalroom']).nullable() }),
   database: counts, failedAgentTasks: count, migrationsApplied: count,
   storage: z.object({ database: usage, wal: usage, sharedMemory: usage, cache: usage, backups: usage, backupsChecked: z.array(z.object({ name: z.string(), bytes: count, status: z.enum(['ok', 'corrupt', 'unreadable']) })), totalBytes: count, complete: z.boolean(), cacheLimitBytes: count, scanLimitEntries: count }),
   notice: z.string(),

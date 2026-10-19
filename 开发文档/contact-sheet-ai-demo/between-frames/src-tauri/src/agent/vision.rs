@@ -37,6 +37,8 @@ pub(crate) async fn prefetch(
     tier: super::router::ServiceTier,
     quality: &[super::router::QualityRecord],
 ) -> Result<Option<VisionPrefetch>> {
+    let bound_provider = provider.bind_account()?;
+    let provider = &bound_provider;
     use sqlx::Row;
     let mut binding_tx = db.pool.begin().await?;
     let binding = super::model_binding::load(&mut binding_tx, &task.id).await?;

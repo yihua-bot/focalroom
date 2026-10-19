@@ -44,6 +44,19 @@ pub struct CloudAuth {
     avatar_cache: std::sync::Mutex<Option<std::path::PathBuf>>,
 }
 impl CloudAuth {
+    pub fn origin(&self) -> &str {
+        &self.origin
+    }
+    pub fn account_id(&self) -> Result<String> {
+        self.read()?
+            .session
+            .map(|s| s.user.id)
+            .ok_or_else(|| AppError::new("AUTH_REQUIRED", "请先登录 FocalRoom"))
+    }
+    pub async fn ai_account(&self) -> Result<Value> {
+        let token = self.bearer(&self.origin).await?;
+        self.request("/ai/account", None, Some(&token)).await
+    }
     pub fn new(origin: &str, namespace: &str, vault: Arc<dyn CredentialStore>) -> Result<Self> {
         let origin = login_guard::trusted_origin(origin)?;
         Ok(Self {
@@ -207,63 +220,121 @@ impl CloudAuth {
     pub fn set_avatar_cache(&self, dir: std::path::PathBuf) {
         *self.avatar_cache.lock().unwrap_or_else(|p| p.into_inner()) = Some(dir);
     }
-    fn avatar_paths(&self, id: &str) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
-        let dir = self
-            .avatar_cache
+    fn avatar_path(&self, user: &CloudUser) -> Option<std::path::PathBuf> {
+        use sha2::Digest;
+        let url = user.avatar.as_deref()?;
+        let parsed = reqwest::Url::parse(url).ok()?;
+        if url.len() > 2048
+            || parsed.scheme() != "https"
+            || !matches!(
+                parsed.host_str(),
+                Some(
+                    "lh3.googleusercontent.com"
+                        | "lh4.googleusercontent.com"
+                        | "lh5.googleusercontent.com"
+                        | "lh6.googleusercontent.com"
+                )
+            )
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
+            || parsed.port().is_some()
+            || parsed.fragment().is_some()
+        {
+            return None;
+        }
+        let key = format!(
+            "{:x}",
+            sha2::Sha256::digest(format!("{}\0{url}", user.id).as_bytes())
+        );
+        self.avatar_cache
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .clone()?;
-        Some((dir.join(id), dir.join(format!("{id}.url"))))
+            .as_ref()
+            .map(|dir| dir.join(key))
     }
-    /// 读本地缓存头像为 data URL；URL 变化或未缓存返回 None。
-    fn cached_avatar(&self, user: &CloudUser) -> Option<String> {
-        let url = user.avatar.as_deref()?;
-        let (data, marker) = self.avatar_paths(&user.id)?;
-        let cached_url = std::fs::read_to_string(&marker).ok()?;
-        if cached_url != url {
+    fn avatar_mime(bytes: &[u8]) -> Option<&'static str> {
+        if bytes.len() > 1_048_576 {
             return None;
         }
-        let bytes = std::fs::read(&data).ok()?;
-        if bytes.is_empty() {
-            return None;
-        }
-        let mime = match bytes.first() {
-            Some(0x89) => "image/png",
-            Some(b'R') => "image/webp",
-            _ => "image/jpeg",
+        let format = image::guess_format(bytes).ok()?;
+        let mime = match format {
+            image::ImageFormat::Png => "image/png",
+            image::ImageFormat::Jpeg => "image/jpeg",
+            image::ImageFormat::WebP => "image/webp",
+            _ => return None,
         };
+        let mut reader = image::ImageReader::with_format(std::io::Cursor::new(bytes), format);
+        let mut limits = image::Limits::default();
+        limits.max_image_width = Some(1024);
+        limits.max_image_height = Some(1024);
+        limits.max_alloc = Some(16 * 1024 * 1024);
+        reader.limits(limits);
+        reader.decode().ok()?;
+        Some(mime)
+    }
+    fn cached_avatar(&self, user: &CloudUser) -> Option<String> {
+        use std::io::Read;
+        let file = std::fs::File::open(self.avatar_path(user)?).ok()?;
+        let mut bytes = Vec::new();
+        file.take(1_048_577).read_to_end(&mut bytes).ok()?;
+        let mime = Self::avatar_mime(&bytes)?;
         use base64::Engine;
         Some(format!(
             "data:{mime};base64,{}",
             base64::engine::general_purpose::STANDARD.encode(bytes)
         ))
     }
-    /// 在线时后台下载头像到缓存；失败静默（占位符兜底）。
     async fn refresh_avatar(&self, user: &CloudUser) {
-        let Some(url) = user.avatar.clone() else {
+        let Some(path) = self.avatar_path(user) else {
             return;
         };
-        let Some((data, marker)) = self.avatar_paths(&user.id) else {
+        if self.cached_avatar(user).is_some() {
             return;
-        };
-        if let (Ok(cached), Ok(bytes)) = (std::fs::read_to_string(&marker), std::fs::read(&data)) {
-            if !bytes.is_empty() && cached == url {
-                return;
-            }
         }
-        let fetched = self
+        let Ok(mut response) = self
             .client
-            .get(&url)
-            .timeout(std::time::Duration::from_secs(8))
+            .get(user.avatar.as_deref().unwrap_or(""))
+            .timeout(std::time::Duration::from_secs(3))
             .send()
             .await
-            .and_then(|r| r.error_for_status());
-        if let Ok(response) = fetched {
-            if let Ok(bytes) = response.bytes().await {
-                if !bytes.is_empty() && bytes.len() <= 1_048_576 {
-                    let _ = std::fs::write(&data, &bytes);
-                    let _ = std::fs::write(&marker, &url);
+            .and_then(|r| r.error_for_status())
+        else {
+            return;
+        };
+        let mut bytes = Vec::new();
+        loop {
+            match response.chunk().await {
+                Ok(Some(chunk)) => {
+                    if bytes.len() + chunk.len() > 1_048_576 {
+                        return;
+                    }
+                    bytes.extend_from_slice(&chunk);
                 }
+                Ok(None) => break,
+                Err(_) => return,
+            }
+        }
+        if Self::avatar_mime(&bytes).is_none() {
+            return;
+        }
+        let Some(parent) = path.parent() else {
+            return;
+        };
+        if std::fs::create_dir_all(parent).is_err() {
+            return;
+        }
+        let temporary = path.with_extension(format!("{}.part", uuid::Uuid::new_v4()));
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        if let Ok(mut file) = options.open(&temporary) {
+            use std::io::Write;
+            if file.write_all(&bytes).is_ok() {
+                let _ = std::fs::rename(&temporary, &path);
             }
         }
     }
@@ -291,15 +362,9 @@ impl CloudAuth {
                     if value.id != s.user.id {
                         return Err(AppError::new("CLOUD_PROTOCOL", "账户校验不匹配"));
                     }
+                    self.refresh_avatar(&value).await;
                     let mut value = value;
-                    if value.avatar.is_some() && !self.cached_avatar(&value).is_some() {
-                        let mut probe = value.clone();
-                        probe.avatar = None;
-                        let _ = self.refresh_avatar(&probe).await;
-                    }
-                    if let Some(url) = self.cached_avatar(&value) {
-                        value.avatar = Some(url);
-                    }
+                    value.avatar = self.cached_avatar(&value);
                     user = Some(value);
                     authenticated = true;
                 }
@@ -309,13 +374,9 @@ impl CloudAuth {
                 }
                 Err(e) => {
                     // 离线/网关故障不视为登出：保留本地身份供 UI 展示并记录原因。
-                    self.remember_error(&e);
+                    connection_error = Some(e.message);
                     let mut cached = s.user.clone();
-                    cached.avatar = self.cached_avatar(&cached).or(if cached.avatar.is_some() {
-                        None
-                    } else {
-                        None
-                    });
+                    cached.avatar = self.cached_avatar(&cached);
                     user = Some(cached);
                 }
             }
@@ -371,33 +432,53 @@ impl CloudAuth {
 #[cfg(test)]
 mod avatar_cache_tests {
     use super::*;
-    fn user(avatar:Option<&str>)->CloudUser {CloudUser{id:"u1".into(),email:"a@b.c".into(),name:"摄影师".into(),avatar:avatar.map(str::to_string)}}
     #[test]
-    fn cached_avatar_reads_file_and_detects_url_change() {
-        let dir=std::env::temp_dir().join(format!("fr-avatar-{}",uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        struct MemVault(std::sync::Mutex<std::collections::HashMap<String,String>>);
-        impl CredentialStore for MemVault {
-            fn read(&self,service:&str)->Result<Option<String>>{Ok(self.0.lock().unwrap().get(service).cloned())}
-            fn write(&self,service:&str,secret:&str)->Result<()>{self.0.lock().unwrap().insert(service.into(),secret.into());Ok(())}
-            fn delete(&self,service:&str)->Result<()>{self.0.lock().unwrap().remove(service);Ok(())}
+    fn cache_requires_trusted_url_valid_bounded_pixels_and_url_bound_path() {
+        struct Vault;
+        impl CredentialStore for Vault {
+            fn read(&self, _: &str) -> Result<Option<String>> {
+                Ok(None)
+            }
+            fn write(&self, _: &str, _: &str) -> Result<()> {
+                Ok(())
+            }
+            fn delete(&self, _: &str) -> Result<()> {
+                Ok(())
+            }
         }
-        let auth=CloudAuth::new("http://127.0.0.1:1441","avatar-test",std::sync::Arc::new(MemVault(Default::default()))).unwrap();
-        auth.set_avatar_cache(dir.clone());
-        // 无 URL → None
-        assert!(auth.cached_avatar(&user(None)).is_none());
-        // 未缓存 → None
-        let u=user(Some("https://lh3.example/a.jpg"));
-        assert!(auth.cached_avatar(&u).is_none());
-        // 写入 1x1 PNG + url 标记
-        let png:[u8;8]=[0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A];
-        std::fs::write(dir.join("u1"),png).unwrap();
-        std::fs::write(dir.join("u1.url"),"https://lh3.example/a.jpg").unwrap();
-        let url=auth.cached_avatar(&u).expect("应返回缓存头像");
-        assert!(url.starts_with("data:image/png;base64,"),"mime 由魔数推断: {url}");
-        // URL 变化 → None（旧缓存不冒充新头像）
-        let changed=user(Some("https://lh3.example/b.jpg"));
-        assert!(auth.cached_avatar(&changed).is_none());
-        std::fs::remove_dir_all(&dir).ok();
+        let dir = tempfile::tempdir().unwrap();
+        let auth = CloudAuth::new("http://127.0.0.1:1441", "avatar-test", Arc::new(Vault)).unwrap();
+        auth.set_avatar_cache(dir.path().to_owned());
+        let mut user = CloudUser {
+            id: "../../outside".into(),
+            email: "fixture@test.test".into(),
+            name: "Fixture".into(),
+            avatar: Some("https://lh3.googleusercontent.com/a/one".into()),
+        };
+        let path = auth.avatar_path(&user).unwrap();
+        assert_eq!(path.parent(), Some(dir.path()));
+        std::fs::write(&path, [0x89, 0x50, 0x4e, 0x47]).unwrap();
+        assert!(auth.cached_avatar(&user).is_none());
+        let image = image::DynamicImage::new_rgb8(2, 2);
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+        std::fs::write(&path, bytes.into_inner()).unwrap();
+        assert!(
+            auth.cached_avatar(&user)
+                .unwrap()
+                .starts_with("data:image/png;base64,")
+        );
+        user.avatar = Some("https://lh3.googleusercontent.com/a/two".into());
+        assert_ne!(auth.avatar_path(&user).unwrap(), path);
+        assert!(auth.cached_avatar(&user).is_none());
+        for value in [
+            "http://lh3.googleusercontent.com/a",
+            "https://evil.test/a",
+            "https://lh3.googleusercontent.com.evil.test/a",
+        ] {
+            user.avatar = Some(value.into());
+            assert!(auth.avatar_path(&user).is_none());
+        }
+        assert!(CloudAuth::avatar_mime(&vec![0; 1_048_577]).is_none());
     }
 }

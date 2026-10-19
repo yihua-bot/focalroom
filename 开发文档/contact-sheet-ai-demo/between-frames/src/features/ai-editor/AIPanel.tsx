@@ -42,11 +42,14 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  const [consentPrompt, setConsentPrompt] = useState(false);
  const [consentStartsTask, setConsentStartsTask] = useState(false);
  const [pendingStart, setPendingStart] = useState<{ goal: string; count: number; ids: string[] } | null>(null);
- const configQuery = useQuery({ queryKey: ['ai-config', project.id], queryFn: () => repository!.agent.aiConfig(project.id), enabled: Boolean(repository), staleTime: 30_000 });
+ const configQuery = useQuery({ queryKey: ['ai-config', project.id], queryFn: () => repository!.agent.aiConfig(project.id), enabled: Boolean(repository), staleTime: 10_000, refetchInterval: 15_000 });
  const config = configQuery.data;
+ const hosted = config?.keySource === 'focalroom';
+ const account = config?.hostedAccount;
+ const hostedBlocked = hosted && (Boolean(config?.hostedError) || !account?.enabled || !account.verified || account.available <= 0);
  const observation = config?.observation;
  const observationModel = observation?.modelId ?? config?.modelId;
- const providerLabel = config ? (config.ready ? `${config.modelId}${config.apiKeyTail ? ` ···${config.apiKeyTail}` : ''}` : '演示模式 · 不分析照片') : '';
+ const providerLabel = config ? (config.ready ? `${hosted ? 'FocalRoom AI · DeepSeek' : config.modelId}${config.apiKeyTail ? ` ···${config.apiKeyTail}` : ''}` : '演示模式 · 不分析照片') : '';
  const [apiKey, setApiKey] = useState('');
  const [configBusy, setConfigBusy] = useState(false);
  const [configNote, setConfigNote] = useState('');
@@ -75,7 +78,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  const visionCapabilities = observation?.capabilities ?? config?.capabilities;
  const visionSupported = ['vision', 'structured_output', 'instruction_following'].every(capability => visionCapabilities?.includes(capability));
  const configurationError = config?.configurationError || (visionWanted && observation?.configurationError) || (visionWanted && !config?.consentProvider ? '服务授权标识缺失，请刷新模型配置。' : '') || (visionWanted && !visionSupported ? '当前模型未配置图像观察能力。请将云端图像上限设为 0，或联系部署方调整配置。' : '');
- const configurationBlocked = Boolean(configurationError) || !config || configQuery.isError;
+ const configurationBlocked = hostedBlocked || Boolean(configurationError) || !config || configQuery.isError;
  const consentGrantBlocked = configurationBlocked || !config?.ready || !config.consentProvider || !visionSupported || Boolean(observation?.configurationError);
  const consentActive = config?.consent?.mode === 'project' && config.consent.provider === config.consentProvider && config.consent.projectId === project.id && !config.consent.revokedAt && config.consent.quota - config.consent.used > 0 ? config.consent : null;
  useEffect(() => {
@@ -84,6 +87,12 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
   void repository.agent.subscribe(project.id, () => { void client.invalidateQueries({ queryKey: ['agent', project.id] }); }).then(fn => { if (stopped) fn(); else cleanup = fn; }).catch(() => { /* 轮询保留权威投影刷新。 */ });
   return () => { stopped = true; cleanup?.(); };
  }, [repository, project.id, client]);
+ useEffect(() => {
+  if (!hosted) return;
+  let stopped = false; let cleanup: (() => void) | undefined;
+  void import('@tauri-apps/api/event').then(({listen}) => listen('cloud-login-updated', () => { void client.resetQueries({queryKey:['ai-config',project.id]}); })).then(fn => { if (stopped) fn(); else cleanup = fn; }).catch(() => { /* 定时刷新保留。 */ });
+  return () => { stopped = true; cleanup?.(); };
+ }, [hosted,client,project.id]);
  const tasks = query.data?.tasks ?? [];
  const task = tasks.find(item => item.id === taskId) ?? tasks[0];
  const running = tasks.some(t => ['queued','planning','running'].includes(t.state));
@@ -137,14 +146,23 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
   {!repository && <p className="info-card">请在桌面版使用编辑建议。</p>}
   {configurationError && <p role="alert">{configurationError}</p>}
   {configQuery.isError && <p role="alert">模型配置读取失败，请刷新后重试。</p>}
-  {repository && <details className="ai-config"><summary>模型设置</summary>
-   <p className="micro">密钥保存在系统钥匙串。</p>
+  {hosted && <div className="ai-account" aria-label="FocalRoom AI 额度">
+   {config?.hostedError ? <p role="alert">{config.hostedError}</p> : !account ? <p>正在读取 AI 额度…</p> : <>
+    <p>可用 {account.available.toLocaleString()} tokens{account.reserved > 0 ? ` · 预留 ${account.reserved.toLocaleString()}` : ''}</p>
+    {!account.enabled && <p>FocalRoom AI 暂未开放。</p>}
+    {!account.verified && <p>请先验证账户邮箱。</p>}
+    {account.enabled && account.verified && account.available === 0 && <p>AI 额度已用完，请联系 FocalRoom。</p>}
+   </>}
+   <Button size="small" disabled={configQuery.isFetching} onClick={() => { void configQuery.refetch(); }}>刷新额度</Button>
+  </div>}
+  {repository && <details className="ai-config"><summary>{hosted ? 'AI 设置' : '模型设置'}</summary>
+   {!hosted && <p className="micro">密钥保存在系统钥匙串。</p>}
    {config?.ready && observation && observation.modelId !== config.modelId && <p className="micro">选片模型：{config.modelId} · 图像模型：{observation.modelId}</p>}
    <div className="agent-task-actions">
-    <input type="password" aria-label="API Key（存入钥匙串）" placeholder="sk-..." disabled={configBusy} value={apiKey} maxLength={4096} onChange={event => setApiKey(event.target.value)} />
+    {!hosted && <><input type="password" aria-label="API Key（存入钥匙串）" placeholder="sk-..." disabled={configBusy} value={apiKey} maxLength={4096} onChange={event => setApiKey(event.target.value)} />
     <Button size="small" disabled={configBusy || !apiKey.trim()} onClick={() => { void saveKey(); }}>存入钥匙串</Button>
     {config?.keySource === 'keychain' && <Button size="small" disabled={configBusy} onClick={() => { void removeKey(); }}>移除钥匙串密钥</Button>}
-    <Button size="small" disabled={busy} onClick={() => { setComposerOpen(true); setConsentStartsTask(false); setConsentPrompt(true); }}>管理图像授权</Button>
+    </>}<Button size="small" disabled={busy} onClick={() => { setComposerOpen(true); setConsentStartsTask(false); setConsentPrompt(true); }}>管理图像授权</Button>
     <Button size="small" onClick={() => setDiagnosticsOpen(true)}>查看本地存储与诊断</Button>
    </div>
    {configNote && <p className="micro" role="status">{configNote}</p>}
@@ -161,7 +179,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
     <p className="micro" style={{ overflowWrap: 'anywhere' }}>服务地址：{config?.ready ? config.baseUrl : '未配置'} · 型号：{config?.ready ? observationModel : '无'}</p>
     <p className="micro">仅授权此服务与型号；更换后需重新授权，不授权自动转发给其他服务。「禁止云端图像」会撤回本项目所有服务的图像授权。</p>
     {config?.ready
-     ? <p className="micro">将向 {observationModel} 上传至多 {budget.maxCloudImages} 张最长边 1400px 的 JPEG 预览（重编码、不含 EXIF/GPS）；观察事实会作为上下文交给同一服务的策展模型 {config.modelId}。应用将缓存与草案保存在本机，服务端的数据处理依其条款。拒绝后仍可用全部本地功能，视觉工具将降级为人工元数据对照。</p>
+     ? <p className="micro">将向 {hosted ? 'FocalRoom 与 DeepSeek' : observationModel} 上传至多 {budget.maxCloudImages} 张最长边 1400px 的 JPEG 预览（重编码、不含 EXIF/GPS）；观察事实会作为上下文交给同一服务的策展模型 {config.modelId}。应用将缓存与草案保存在本机，服务端的数据处理依其条款。拒绝后仍可用全部本地功能，视觉工具将降级为人工元数据对照。</p>
      : <p className="micro">当前未配置云端图像服务。你仍可禁止本项目向所有服务上传图像；本地选片功能照常可用。</p>}
     <p className="micro">费用按当前部署的预算费率估算计入任务上限，不代表服务商账单；授权可随时撤回。</p>
     <div className="agent-task-actions">

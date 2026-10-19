@@ -60,6 +60,7 @@ impl Server {
                         continue;
                     }
                 };
+                stream.set_nonblocking(false).unwrap();
                 stream
                     .set_read_timeout(Some(std::time::Duration::from_secs(2)))
                     .unwrap();
@@ -156,7 +157,10 @@ impl Server {
 impl Drop for Server {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
-        self.thread.take().unwrap().join().unwrap();
+        let result = self.thread.take().unwrap().join();
+        if !std::thread::panicking() {
+            result.unwrap();
+        }
     }
 }
 #[tokio::test]
@@ -249,4 +253,78 @@ async fn offline_status_blocks_cloud_writes_but_allows_local_logout() {
     assert!(!auth.logout().await.unwrap());
     assert!(vault.0.lock().unwrap().is_empty());
     assert!(auth.status().await.unwrap().user.is_none());
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+#[ignore = "需要显式启动隔离回环PG API；实际系统钥匙串与原生HTTP协议验收"]
+async fn real_pg_api_and_keychain_complete_one_desktop_session() {
+    use between_frames_lib::cloud_credentials::SystemCredentials;
+    let origin = std::env::var("FOCALROOM_DESKTOP_TEST_ORIGIN").expect("缺少隔离API来源");
+    let parsed = reqwest::Url::parse(&origin).unwrap();
+    assert_eq!(parsed.scheme(), "http");
+    assert_eq!(parsed.host_str(), Some("127.0.0.1"));
+    let namespace = format!("studio.focalroom.pg-login-test.{}", uuid::Uuid::new_v4());
+    struct Cleanup(String);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = SystemCredentials.delete(&self.0);
+        }
+    }
+    let _cleanup = Cleanup(format!("{namespace}.cloud-session"));
+    let auth = CloudAuth::new(&origin, &namespace, Arc::new(SystemCredentials)).unwrap();
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let response=client.post(format!("{origin}/api/v2/auth/register")).json(&json!({"email":format!("pg-desktop-{}@fixture.test",uuid::Uuid::new_v4()),"display_name":"Native PG fixture","password":"isolated-fixture-password"})).send().await.unwrap();
+    assert!(response.status().is_success());
+    let browser: Value = response.json().await.unwrap();
+    let login = reqwest::Url::parse(&auth.begin().await.unwrap()).unwrap();
+    let query: HashMap<String, String> = login
+        .query_pairs()
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    let response = client
+        .post(format!("{origin}/api/v2/auth/desktop/authorize"))
+        .bearer_auth(browser["token"].as_str().unwrap())
+        .json(&json!({"request_id":query["request"],"state":query["state"]}))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
+    let approved: Value = response.json().await.unwrap();
+    assert!(approved.get("token").is_none());
+    let callback = format!(
+        "focalroom://callback?code={}&state={}",
+        approved["code"].as_str().unwrap(),
+        query["state"]
+    );
+    auth.complete(&callback).await.unwrap();
+    let status = auth.status().await.unwrap();
+    assert!(status.authenticated);
+    assert_eq!(
+        status.user.unwrap().id,
+        browser["user"]["id"].as_str().unwrap()
+    );
+    drop(auth);
+    let restarted = CloudAuth::new(&origin, &namespace, Arc::new(SystemCredentials)).unwrap();
+    assert!(restarted.status().await.unwrap().authenticated);
+    assert!(restarted.complete(&callback).await.is_err());
+    assert!(restarted.logout().await.unwrap());
+    assert!(
+        SystemCredentials
+            .read(&format!("{namespace}.cloud-session"))
+            .unwrap()
+            .is_none()
+    );
+    let response = client
+        .post(format!("{origin}/api/v2/auth/logout"))
+        .bearer_auth(browser["token"].as_str().unwrap())
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
 }

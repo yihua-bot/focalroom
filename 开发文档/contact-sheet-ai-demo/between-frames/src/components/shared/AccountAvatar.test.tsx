@@ -12,3 +12,9 @@ it("可信头像加载失败回落首字，更新头像地址后可以重新加�
  const image=view.container.querySelector("img")!;expect(image).toHaveAttribute("referrerpolicy","no-referrer");fireEvent.error(image);expect(screen.getByText("A")).toBeVisible();
  view.rerender(<AccountAvatar name="Author" url="https://lh3.googleusercontent.com/a/two" className="cloud-avatar"/>);expect(view.container.querySelector("img")).toHaveAttribute("src","https://lh3.googleusercontent.com/a/two");
 });
+it("本地已验证位图仅在桌面显式允许时展示，Web不接收data或SVG头像",()=>{
+ const bitmap="data:image/png;base64,iVBORw0KGgo=";
+ const view=render(<AccountAvatar name="Author" url={bitmap} className="cloud-avatar"/>);expect(view.container.querySelector("img")).toBeNull();
+ view.rerender(<AccountAvatar allowEmbedded name="Author" url={bitmap} className="cloud-avatar"/>);expect(view.container.querySelector("img")).toHaveAttribute("src",bitmap);
+ view.rerender(<AccountAvatar allowEmbedded name="Author" url="data:image/svg+xml;base64,PHN2Zz4=" className="cloud-avatar"/>);expect(view.container.querySelector("img")).toBeNull();
+});

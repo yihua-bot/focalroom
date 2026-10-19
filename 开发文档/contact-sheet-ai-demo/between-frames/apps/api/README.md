@@ -2,6 +2,22 @@
 
 独立 NestJS + PostgreSQL 权威服务，Node 25 原生运行 TypeScript。旧 `cloud/` 的 axum/SQLite 是兼容实验，不是本服务的数据目录或迁移来源。默认不启用云模型、支付或邮件发送。
 
+2026-10-19 账户 AI 切片见 `../../../docs/V2-HOSTED-AI-TEST-REPORT.md`、ADR0044。当前登记增量到 **0015**。新 `GET /api/v2/ai/account` 返回本人可用/预留 tokens；`POST /api/v2/ai/deepseek-flash-v1/responses` 使用本人有效会话、已验证邮箱和固定 DeepSeek 策略，服务端保管供应商 Key。此链路是桌面策展/观察，独立云评论 Worker 尚未使用该额度账本。普通 API 启动继续只验 schema，不自动迁移。
+
+生产新配置为 `FOCALROOM_DEEPSEEK_API_KEY`（仅 API 环境）和 `FOCALROOM_AI_INITIAL_TOKENS`（默认 0，新建 AI 账户首次赠额；修改不补发旧账户）。不接受来自客户端的端点、供应商密钥、远端文件或内置服务端工具。服务未开返回 503；余额不足 402；重复 UUID/策略不符 409。客户端必须发送 `x-focalroom-ai-policy: deepseek-flash-v1`、`x-focalroom-request-id: <UUID>`，图像另需 `x-focalroom-image-consent: granted`；这些声明不替代桌面原有照片 scope/授权。额度单位是实际 input+output tokens，不是货币。
+
+管理员先在已确认的独立数据库配置连接（不要把 URL 或密钥放进 shell 历史/文档），再使用镜像内工具。以下参数均为占位，默认查询/预览，不写生产：
+
+```bash
+node "apps/api/tools/ai-credit.ts" "user@example.com"
+# 明确批准后分配；相同编号/参数可幂等重试，不同参数会冲突。
+node "apps/api/tools/ai-credit.ts" "user@example.com" "approved-grant-id" "250000" "approved trial" "--apply"
+# 必须依据供应商核账结果；不确定请求不自动退款。省略 --apply 仅预览。
+node "apps/api/tools/ai-reconcile.ts" "user@example.com" "request-uuid" "1234" "verified-billing-reference"
+```
+
+UNKNOWN 和崩溃留下的 PENDING 保留额度且不重发。离线对账工具只允许 UNKNOWN 或超过 10 分钟的 PENDING，拒绝活跃/已结算请求与超预留结算，保留外部核账依据。尚未提供公开充值或支付接口。正式上线先备份、显式迁移、API/Web 同批替换、配置密钥和种子账户额度，再执行真实会话/模型/邮件验收；关闭 AI 配置可停用服务并保留账本，不能退回不认识 0015 的旧 API 镜像。
+
 ## 本地验证
 
 2026-10-18 账户恢复增量见 `../../../docs/V2-M4-ACCOUNT-RECOVERY-TEST-REPORT.md`（从应用根目录为 `../docs/`）。当前显式迁移登记 0001/0002/0006/0008/0009；0003–0005 未登记草案的 UUID 外键与基座 text 不兼容，禁止按文件名批量执行。旧 0007 管理员角色模板已删除：角色创建由 `ops/shared/postgres-init/01-create-roles.sh` 在首次初始化执行，`0009` 在每次迁移后幂等重放授权。迁移命令优先使用 `FOCALROOM_MIGRATOR_DATABASE_URL`（DDL 角色），运行时连接用最小权限应用角色。新 0008/0009 已在隔离库验收，生产手工状态需先核对。

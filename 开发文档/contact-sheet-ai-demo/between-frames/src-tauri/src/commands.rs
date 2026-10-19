@@ -425,6 +425,16 @@ pub async fn get_ai_config(
 ) -> Result<serde_json::Value> {
     let mut config = serde_json::to_value(state.agent.ai_config())
         .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+    if config["keySource"] == "focalroom" {
+        match state.cloud_auth.ai_account().await {
+            Ok(account) => {
+                config["hostedAccount"] = account;
+            }
+            Err(error) => {
+                config["hostedError"] = error.message.into();
+            }
+        }
+    }
     config["consent"] = serde_json::to_value(
         crate::agent::consent::effective_view(
             &state.store,
@@ -591,9 +601,7 @@ pub async fn agent_request(
 ) -> Result<serde_json::Value> {
     let request_id = request.request_id.clone();
     let project_id = request.project_id.clone();
-    let result = crate::command_handler::CommandHandler::new(&state.store)
-        .agent_request(request)
-        .await;
+    let result = state.agent.request(request).await;
     Ok(match result {
         Ok(task) => {
             let id = task.id.clone();

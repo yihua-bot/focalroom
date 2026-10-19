@@ -1,0 +1,9 @@
+{
+  "productName": "FocalRoom AI Review",
+  "identifier": "studio.focalroom.aireview",
+  "build": {
+    "beforeBuildCommand": "npm run build --workspace @betweenframes/desktop",
+    "frontendDist": "../apps/desktop/dist"
+  },
+  "app": {"windows": [{"label":"main","title":"FocalRoom · 账户 AI 验收","width":1440,"height":960,"minWidth":960,"minHeight":680,"backgroundColor":"#101113"}]}
+}

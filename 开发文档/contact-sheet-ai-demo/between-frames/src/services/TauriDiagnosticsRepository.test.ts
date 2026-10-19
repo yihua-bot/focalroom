@@ -4,6 +4,12 @@ const ipc = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke: ipc }));
 import { TauriDiagnosticsRepository } from './TauriDiagnosticsRepository';
 beforeEach(() => { ipc.mockReset(); });
+it('官方账户服务可读取诊断，不泄漏会话或供应商密钥', async () => {
+  const fixture = diagnosticsFixture();
+  fixture.provider = {providerId:'openai',ready:true,keySource:'focalroom'};
+  ipc.mockResolvedValue({...fixture,provider:{...fixture.provider,token:'private-token',apiKey:'private-key'}});
+  expect((await new TauriDiagnosticsRepository().query()).provider).toEqual(fixture.provider);
+});
 
 it('只使用无路径参数命令，白名单过滤多余敏感字段', async () => {
   ipc.mockResolvedValue({ ...diagnosticsFixture(), originalPath: '/private/path', note: 'private', provider: { ...diagnosticsFixture().provider, apiKeyTail: 'secret' } });

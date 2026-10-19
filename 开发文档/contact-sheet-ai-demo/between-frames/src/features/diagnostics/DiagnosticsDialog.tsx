@@ -36,7 +36,7 @@ export function DiagnosticsDialog({ repository, onClose }: { repository: Diagnos
     {query.isFetching && <p role="status">正在读取本地统计…</p>}
     {query.isError && <p role="alert">读取失败，请重试。已显示的数据为上次结果。</p>}
     {data && <div className="storage-diagnostics" aria-busy={query.isFetching}>
-      <p className="micro">采集时间：{new Date(data.collectedAt).toLocaleString('zh-CN')} · 应用 {data.appVersion} · 提供方 {data.provider.providerId === 'mock' ? '演示模式' : 'OpenAI'} · {data.provider.ready ? '密钥已配置' : '密钥未配置'}</p>
+      <p className="micro">采集时间：{new Date(data.collectedAt).toLocaleString('zh-CN')} · 应用 {data.appVersion} · 提供方 {data.provider.keySource === 'focalroom' ? 'FocalRoom AI · DeepSeek' : <>{data.provider.providerId === 'mock' ? '演示模式' : 'OpenAI'} · {data.provider.ready ? '密钥已配置' : '密钥未配置'}</>}</p>
       <h3>存储统计</h3>
       <table><thead><tr><th scope="col">类别</th><th scope="col">已统计大小</th><th scope="col">文件数</th></tr></thead>
         <tbody>{([

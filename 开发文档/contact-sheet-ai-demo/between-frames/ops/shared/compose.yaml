@@ -29,6 +29,9 @@ services:
       FOCALROOM_EMAIL_FROM: ${FOCALROOM_EMAIL_FROM:-FocalRoom <noreply@focalroom.app>}
       # Google 登录：与前端 VITE_FOCALROOM_GOOGLE_CLIENT_ID 同值；留空则 /auth/google 返回 501。
       FOCALROOM_GOOGLE_CLIENT_ID: ${FOCALROOM_GOOGLE_CLIENT_ID:-}
+      # 官方 AI 密钥仅进入 API 容器；默认赠额为 0，运营明确分配后才可调用。
+      FOCALROOM_DEEPSEEK_API_KEY: ${FOCALROOM_DEEPSEEK_API_KEY:-}
+      FOCALROOM_AI_INITIAL_TOKENS: ${FOCALROOM_AI_INITIAL_TOKENS:-0}
     volumes: [preview-data:/data/previews]
     depends_on:
       postgres: { condition: service_healthy }

@@ -10,6 +10,8 @@ use sqlx::{Sqlite, Transaction};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ModelIdentity {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_id: Option<String>,
     pub provider_id: String,
     pub model_id: String,
     pub endpoint_sha256: String,
@@ -28,6 +30,7 @@ impl ModelIdentity {
     /// 本切片只允许同一适配器、同一服务端点分工，不授权跨服务传输。
     pub fn with_observation(mut self, observation: &Self) -> Result<Self> {
         if self.provider_id != observation.provider_id
+            || self.account_id != observation.account_id
             || self.endpoint_sha256 != observation.endpoint_sha256
             || observation.observation.is_some()
         {
@@ -56,12 +59,13 @@ impl ModelIdentity {
             .map_or(self.model_id.as_str(), |model| model.model_id.as_str())
     }
     pub fn consent_provider(&self) -> String {
-        format!(
-            "openai@{}",
-            crate::command_audit::fingerprint(&serde_json::json!({
-                "version":1,"adapter":self.provider_id,"endpoint":self.endpoint_sha256,"model":self.observation_model_id()
-            }))
-        )
+        let mut recipient = serde_json::json!({
+            "version":1,"adapter":self.provider_id,"endpoint":self.endpoint_sha256,"model":self.observation_model_id()
+        });
+        if let Some(account) = &self.account_id {
+            recipient["accountId"] = account.clone().into();
+        }
+        format!("openai@{}", crate::command_audit::fingerprint(&recipient))
     }
 
     pub fn cache_version(&self) -> String {

@@ -29,6 +29,33 @@ pub struct AgentEngine {
     tier: ServiceTier,
 }
 impl AgentEngine {
+    /// 正式 IPC 通过冻结引擎身份创建任务；模型密钥存在与否不能让账户服务降级为 Mock。
+    pub async fn request(&self, request: AgentRequest) -> Result<Task> {
+        let queues = matches!(
+            request.command,
+            TaskCommand::StartTask { .. }
+                | TaskCommand::ResumeTask { .. }
+                | TaskCommand::SubmitFeedback { .. }
+        );
+        if queues && let Some(provider) = self.openai.as_ref().filter(|p| p.is_hosted()) {
+            let bound = provider.bind_account()?;
+            bound.validate_hosted_account().await?;
+            return super::lifecycle::request_bound(&self.db, request, Some(&bound.identity()))
+                .await;
+        }
+        CommandHandler::new(&self.db).agent_request(request).await
+    }
+    pub fn hosted(db: Store, auth: Arc<crate::cloud_auth::CloudAuth>) -> Self {
+        let mut engine = Self::with_providers(
+            db,
+            Arc::new(MockProvider),
+            Some(Arc::new(OpenAiProvider::hosted(auth))),
+        );
+        // 正式客户端仅使用账户服务，不读取开发机上的其他供应商配置。
+        engine.native = None;
+        engine.native_route = None;
+        engine
+    }
     pub fn new(db: Store) -> Self {
         Self::with_provider(db, Arc::new(MockProvider))
     }
@@ -109,7 +136,11 @@ impl AgentEngine {
     pub fn ai_config(&self) -> AiConfig {
         match &self.openai {
             Some(provider) => {
-                let resolved = crate::keychain::resolve_api_key();
+                let resolved = if provider.is_hosted() {
+                    None
+                } else {
+                    crate::keychain::resolve_api_key()
+                };
                 let observation = self.observation.as_ref().unwrap_or(provider);
                 AiConfig {
                     observation: Some(ObservationModelConfig {
@@ -128,11 +159,15 @@ impl AgentEngine {
                     provider_id: super::PROVIDER_OPENAI.into(),
                     model_id: provider.model_id().into(),
                     ready: true,
-                    api_key_tail: Some(provider.api_key_tail()),
-                    key_source: resolved
-                        .as_ref()
-                        .filter(|(key, _)| provider.matches_key(key))
-                        .map(|(_, source)| (*source).to_owned()),
+                    api_key_tail: (!provider.is_hosted()).then(|| provider.api_key_tail()),
+                    key_source: if provider.is_hosted() {
+                        Some("focalroom".into())
+                    } else {
+                        resolved
+                            .as_ref()
+                            .filter(|(key, _)| provider.matches_key(key))
+                            .map(|(_, source)| (*source).to_owned())
+                    },
                     base_url: provider.base_url().into(),
                     prompt_version: super::prompt_version(super::PROVIDER_OPENAI).into(),
                     capabilities: provider
@@ -199,7 +234,11 @@ impl AgentEngine {
             super::PROVIDER_OPENAI => self
                 .openai
                 .clone()
-                .map(|p| p as Arc<dyn ModelProvider>)
+                .map(|p| {
+                    p.bind_account()
+                        .map(|p| Arc::new(p) as Arc<dyn ModelProvider>)
+                })
+                .transpose()?
                 .ok_or_else(|| AppError::new("MODEL_CAPABILITY_MISSING", "云端提供方不可用")),
             super::anthropic::PROVIDER_ID | super::gemini::PROVIDER_ID => self
                 .native
@@ -338,6 +377,7 @@ impl AgentEngine {
                     .ok_or_else(|| AppError::new("MODEL_CAPABILITY_MISSING", "云端提供方不可用"))?;
                 let binding = self.model_binding()?;
                 handler.agent_bind_model(id, &binding).await?;
+                input.layers["execution"]["hostedAccountId"] = binding.account_id.clone().into();
                 input.layers["execution"]["modelId"] = provider.model_id().into();
                 input.layers["execution"]["observationModelId"] =
                     binding.observation_model_id().into();

@@ -6,12 +6,13 @@ COPY --chmod=0644 packages/contracts/package.json ./packages/contracts/package.j
 RUN npm ci --omit=dev --workspace @betweenframes/api --workspace @betweenframes/contracts --include-workspace-root=false
 COPY --chown=node:node apps/api/src ./apps/api/src
 COPY --chown=node:node apps/api/migrations ./apps/api/migrations
+COPY --chown=node:node apps/api/tools/ai-credit.ts apps/api/tools/ai-reconcile.ts ./apps/api/tools/
 COPY --chown=node:node packages/contracts/src ./packages/contracts/src
 # M4 云 Agent Worker 与 API 共用镜像：worker 服务以 workers/agent/src/main.ts 启动。
 COPY --chown=node:node workers/agent/src ./workers/agent/src
 RUN chmod 0755 apps packages workers apps/api packages/contracts workers/agent \
- && find apps/api/src apps/api/migrations packages/contracts/src workers/agent/src -type d -exec chmod 0755 {} + \
- && find apps/api/src apps/api/migrations packages/contracts/src workers/agent/src -type f -exec chmod 0644 {} +
+ && find apps/api/src apps/api/migrations apps/api/tools packages/contracts/src workers/agent/src -type d -exec chmod 0755 {} + \
+ && find apps/api/src apps/api/migrations apps/api/tools packages/contracts/src workers/agent/src -type f -exec chmod 0644 {} +
 RUN mkdir -p /data/previews && chown -R node:node /data
 USER node
 ENV FOCALROOM_API_HOST=0.0.0.0 FOCALROOM_API_PORT=3002

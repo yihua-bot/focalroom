@@ -39,7 +39,7 @@ function CloudAuthBody({repository,onClose}:{repository:CloudAuthRepository;onCl
  return <div className="cloud-account-panel">
   {status?.user&&<div className="cloud-account" data-testid="cloud-account">
    <span className="cloud-account-status" title={status.error??undefined} aria-label={status.authenticated?text.connected:text.offline} data-offline={!status.authenticated?"true":undefined}>●</span>
-   <AccountAvatar className="cloud-avatar" url={status.user.avatar} name={name}/>
+   <AccountAvatar allowEmbedded className="cloud-avatar" url={status.user.avatar} name={name}/>
    <div className="cloud-account-user" title={status.user.email}><div className="cloud-account-name">{name}</div><div className="cloud-account-email">{status.user.email}</div></div>
    <button type="button" disabled={busy} onClick={()=>void perform(async()=>{if(!await repository.logout())setError(text.offlineLogout);})}>{text.signout}</button>
   </div>}

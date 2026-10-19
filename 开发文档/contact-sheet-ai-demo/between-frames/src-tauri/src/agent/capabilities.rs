@@ -84,6 +84,7 @@ impl CapabilityProfile {
     }
 }
 
+#[derive(Clone)]
 pub struct ResolvedProfile {
     pub profile: CapabilityProfile,
     pub source: &'static str,

@@ -13,6 +13,12 @@ function mount(query = vi.fn().mockResolvedValue(diagnosticsFixture())) {
   return { query, onClose };
 }
 describe('本地存储诊断', () => {
+  it('账户服务显示 FocalRoom 和 DeepSeek，不声称用户配置了 OpenAI 密钥', async () => {
+    const fixture=diagnosticsFixture();fixture.provider={providerId:'openai',ready:true,keySource:'focalroom'};
+    mount(vi.fn().mockResolvedValue(fixture));
+    expect(await screen.findByText(/提供方 FocalRoom AI · DeepSeek/)).toBeVisible();
+    expect(screen.queryByText(/密钥已配置/)).not.toBeInTheDocument();
+  });
   it('先查看统计，主动复制已显示的快照，刷新更新数据', async () => {
     const user = userEvent.setup();
     const { query } = mount();

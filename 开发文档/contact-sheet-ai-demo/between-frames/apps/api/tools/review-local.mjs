@@ -18,7 +18,9 @@ if (!Number.isInteger(reviewPort) || reviewPort < 1024 || reviewPort > 65535 ||
 const origin = `http://127.0.0.1:${reviewPort}`, password = 'review-local-2026';
 const mailbox = join(process.env.FOCALROOM_TEST_DIRECTORY, 'review-magic-mail.json');
 const pool = new Pool({ connectionString: process.env.FOCALROOM_TEST_DATABASE_URL }); await migrate(pool);
+const hostedFixture = process.env.FOCALROOM_REVIEW_HOSTED_AI === '1';
 const api = await createApi({ pool, store: new LocalPreviewStore(join(process.env.FOCALROOM_TEST_DIRECTORY, 'review-previews')), origin,
+  ...(hostedFixture ? {hostedAi:{key:'local-fixture-only',initialTokens:250000},hostedAiTransport:async()=>Response.json({id:'fixture',status:'completed',output:[{type:'message',content:[{type:'output_text',text:'本地协议夹具已收到请求；此结果不包含视觉分析或选片建议。'}]}],usage:{input_tokens:10,output_tokens:5,total_tokens:15}})} : {}),
   magicEmail: async (email, code) => {
     if (!['author@focalroom.local', 'editor@focalroom.local'].includes(email)) return false;
     await writeFile(mailbox, JSON.stringify({ email, code, fixture_only: true }), { mode: 0o600 });
@@ -30,6 +32,7 @@ try {
   const call = async (path, token, body) => { const res = await fetch(base + '/api/v2' + path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); if (!res.ok) throw new Error('Review fixture setup failed'); return res.json(); };
   const owner = await call('/auth/register', null, { email: 'author@focalroom.local', display_name: '作者 · 本地演练', password });
   const editor = await call('/auth/register', null, { email: 'editor@focalroom.local', display_name: '编辑 · 本地演练', password });
+  if (hostedFixture) await pool.query('UPDATE fr_users SET email_verified_at=now() WHERE id=ANY($1::text[])',[[owner.user.id,editor.user.id]]);
   const workspace = (await call('/workspaces', owner.token))[0].id;
   const images = [];
   for (let i = 1; i <= 8; i++) { const bytes = await readFile(resolve(root, '../assets', `frame_${String(i).padStart(2, '0')}.jpg`)); images.push({ id: 'demo-frame-' + i, filename: `Frame_${String(i).padStart(2, '0')}.jpg`, source_sha256: createHash('sha256').update(bytes).digest('hex'), selection: i <= 3 ? 'KEEP' : 'UNDECIDED', bytes }); }
@@ -42,6 +45,6 @@ try {
   await call(`/projects/${start.project_id}/commands`, editor.token, command('comment.add', { body: '这是生成账户的协作演练批注，不是真人专业评审。可以试试回复、标记解决，或切换到提案逐项审阅。', anchor: { type: 'photo', photo_id: images[0].id, x: .58, y: .44 } }));
   const proposal = command('proposal.create', { title: '演练提案：给序列加入一次停顿', base_revision: 0, operations: [{ op: 'add', operation_id: 'demo-add', photo_id: images[4].id, to_index: 3, reason: '流程演练，不计审美偏好证据' }] }); await call(`/projects/${start.project_id}/commands`, editor.token, proposal); await call(`/projects/${start.project_id}/commands`, editor.token, command('proposal.submit', { proposal_id: proposal.command_id, expected_proposal_revision: 0 }));
   vite = await createServer(mergeConfig(workspaceConfig(resolve(root, 'apps/web'), reviewPort), { configFile: false, server: { proxy: { '/api/v2': { target: base, ws: true } } } })); await vite.listen();
-  console.log(JSON.stringify({ review_url: origin + '/shared#project=' + start.project_id, api_url: base, accounts: [owner.user.email, editor.user.email], password, generated_fixture_only: true, actual_ai_calls: 0, review_magic_mailbox: mailbox, database_directory: process.env.FOCALROOM_TEST_DIRECTORY }));
+  console.log(JSON.stringify({ review_url: origin + '/shared#project=' + start.project_id, api_url: base, accounts: [owner.user.email, editor.user.email], password, generated_fixture_only: true, hosted_ai_fixture:hostedFixture, actual_ai_calls: 0, review_magic_mailbox: mailbox, database_directory: process.env.FOCALROOM_TEST_DIRECTORY }));
   await new Promise(resolve => { process.once('SIGTERM', resolve); process.once('SIGINT', resolve); });
 } finally { await vite?.close(); await api.close(); await pool.end(); }

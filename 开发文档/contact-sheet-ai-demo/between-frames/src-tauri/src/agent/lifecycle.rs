@@ -9,6 +9,13 @@ use serde_json::json;
 use sqlx::Row;
 
 pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
+    request_bound(db, r, None).await
+}
+pub(crate) async fn request_bound(
+    db: &Store,
+    r: AgentRequest,
+    identity: Option<&super::model_binding::ModelIdentity>,
+) -> Result<Task> {
     validate_schema(
         &serde_json::from_str(include_str!(
             "../../../contracts/agent-task-request.schema.json"
@@ -39,8 +46,20 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
                 "任务请求 ID 已用于其他请求",
             ));
         }
-        return serde_json::from_str(&row.get::<String, _>("result_json"))
-            .map_err(crate::command_audit::serialization);
+        let task: Task = serde_json::from_str(&row.get::<String, _>("result_json"))
+            .map_err(crate::command_audit::serialization)?;
+        if let Some(expected) = identity
+            && super::model_binding::load(&mut tx, &task.id)
+                .await?
+                .as_ref()
+                != Some(expected)
+        {
+            return Err(AppError::new(
+                "RECOVERY_ERROR",
+                "账户或服务已改变，请重新委托",
+            ));
+        }
+        return Ok(task);
     }
     let mut task = if let Some(id) = r.command.task_id() {
         let t = store::load(&mut tx, id).await?;
@@ -64,7 +83,9 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
             return Err(AppError::new("VALIDATION_ERROR", "编辑目标不能为空"));
         }
         // 多供应商：显式 key 决定身份；同一时刻一种云端供应商（观察与策展同端点约束不变）。
-        let provider_id = if super::anthropic::AnthropicProvider::from_env().is_some() {
+        let provider_id = if let Some(identity) = identity {
+            identity.provider_id.clone()
+        } else if super::anthropic::AnthropicProvider::from_env().is_some() {
             super::anthropic::PROVIDER_ID.to_owned()
         } else if super::gemini::GeminiProvider::from_env().is_some() {
             super::gemini::PROVIDER_ID.to_owned()
@@ -160,9 +181,24 @@ pub(crate) async fn request(db: &Store, r: AgentRequest) -> Result<Task> {
         .bind(domain::timestamp())
         .execute(&mut *tx)
         .await?;
+        if let Some(identity) = identity {
+            super::model_binding::ensure(&mut tx, &t, identity).await?;
+            super::consent::ensure_task_recipient(&mut tx, &t, identity).await?;
+        }
         super::memory_scope::bind(&mut tx, &t).await?;
         t
     };
+    if let Some(identity) = identity
+        && super::model_binding::load(&mut tx, &task.id)
+            .await?
+            .as_ref()
+            != Some(identity)
+    {
+        return Err(AppError::new(
+            "RECOVERY_ERROR",
+            "账户或服务已改变，请重新委托",
+        ));
+    }
     if matches!(
         r.command,
         TaskCommand::ResumeTask { .. } | TaskCommand::SubmitFeedback { .. }

@@ -1,5 +1,7 @@
 # FocalRoom
 
+**最新开发接续（2026-10-19）**：[详细交接与剩余任务](docs/DEVELOPER-HANDOFF-2026-10-19.md)。API/Web及0014/0015、真实邮件登录/收件已验；官方AI生产仍关闭，正式安装包/公证/官网下载及M0–M5其余验收未全部完成。以下旧阶段记录保留历史，不作当前实施顺序。
+
 **使用文档**：[详细操作说明书](docs/FOCALROOM-USER-MANUAL.md) · [浏览器阅读版](docs/FOCALROOM-USER-MANUAL.html)。覆盖桌面选片、Agent、记忆、导出、共享迁移与 Web 多人评片，按当前界面说明功能边界。
 
 **当前接续：M4/M5 共享协作（2026-10-17）**。按用户要求推进到 M5：新增可运行的 NestJS/PostgreSQL 权威服务、桌面真实迁移向导、Web 登录/邀请/私有预览/批注/草案修订/逐项审批/历史版本、实时 Presence/重连/撤权和受限评论 Task 工具。共享不会授予 AI 上传或作者记忆权限。可在 `between-frames` 运行 `npm run review:shared` 启动独立本地评审；全部证据、测试、失败记录和边界见 [M4/M5 验收报告](docs/V2-M4-M5-SHARED-AUTHORITY-TEST-REPORT.md)、[部署说明](between-frames/ops/shared/README.md) 与 [剩余计划](docs/V2-REMAINING-PLAN.md)。M3 专业质量、M5 真人双人项目和真实生产部署仍待完成，未开展 M6/M7。下方阶段记录保留历史，当前状态以本段及链接报告为准。
