@@ -16,6 +16,7 @@ pub mod image_pipeline;
 pub mod importer;
 pub mod keychain;
 pub mod login_guard;
+pub mod seed_demo;
 pub mod photo_inspection;
 mod resource_commands;
 pub mod shared_cloud;
@@ -38,6 +39,18 @@ pub fn run() {
             tauri::async_runtime::block_on(
                 command_handler::CommandHandler::new(&store).recover_agents(),
             )
+            .map_err(|error| std::io::Error::other(error.message))?;
+            // 首启动内置演示项目：无项目时从应用资源导入示例照片。
+            let resource_demo = app
+                .path()
+                .resource_dir()
+                .map_err(|error| std::io::Error::other(error.to_string()))?
+                .join("resources/demo");
+            tauri::async_runtime::block_on(seed_demo::seed_if_empty(
+                &store,
+                &resource_demo,
+                &cache,
+            ))
             .map_err(|error| std::io::Error::other(error.message))?;
             let cloud_origin = login_guard::CLOUD_ORIGIN.to_owned();
             #[cfg(feature = "integration-harness")]
