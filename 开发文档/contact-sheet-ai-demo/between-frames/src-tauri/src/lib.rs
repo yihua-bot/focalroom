@@ -17,6 +17,7 @@ pub mod importer;
 pub mod keychain;
 pub mod login_guard;
 pub mod photo_inspection;
+pub mod product_links;
 mod resource_commands;
 pub mod seed_demo;
 pub mod shared_cloud;
@@ -137,6 +138,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            product_links::open_product_link,
             commands::agent_request,
             commands::get_agent_projection,
             commands::get_ai_config,

@@ -26,7 +26,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   const ui = useUIStore();
   const filters: PhotoFilter[] = ['all', 'keep', 'undecided', 'reject'];
   const readOnly = !!sharing && sharing.authority !== 'local';
-  return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={() => ui.setPanel('ai')} readOnly={readOnly} />
+  return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={ui.openAgent} readOnly={readOnly} />
     {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 桌面只读，请在 Web 继续评片。' : '迁移未完成 · 编辑已暂停，请在导出窗口继续或取消迁移。'}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
     <div className="history-toolbar" role="group" aria-label="编辑历史">
       <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">撤销</Button>

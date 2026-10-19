@@ -34,9 +34,9 @@ test('M5 本地诊断：真实统计、查看后复制、刷新及正式状态�
   const before = await rpc('get_project', { projectId: project.id });
   const hashes = await rpc('test_fixture_checksums');
   await page.goto('/#/project/' + project.id);
-  await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
-  await page.getByText('模型设置', { exact: true }).click();
-  await page.getByRole('button', { name: '查看本地存储与诊断' }).click();
+  await page.getByRole('button', { name: '账户菜单' }).click();
+  await page.getByRole('menuitem', { name: '设置', exact: true }).click();
+  await page.getByRole('button', { name: '本地存储与诊断' }).click();
   const dialog = page.getByRole('dialog', { name: '本地存储与诊断' });
   await expect(dialog.getByRole('heading', { name: '存储统计' })).toBeVisible();
   await expect(dialog.getByRole('row', { name: /图片缓存/ })).toBeVisible();
@@ -63,6 +63,6 @@ test('M5 本地诊断：真实统计、查看后复制、刷新及正式状态�
   expect(await rpc('test_fixture_checksums')).toEqual(hashes);
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '查看本地存储与诊断' })).toBeFocused();
+  await expect(page.getByRole('button', { name: '本地存储与诊断' })).toBeFocused();
   expect(errors).toEqual([]); expect(outside).toEqual([]);
 });

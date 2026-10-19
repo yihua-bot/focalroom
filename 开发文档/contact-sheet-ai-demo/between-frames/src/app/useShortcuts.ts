@@ -19,6 +19,9 @@ export function useShortcuts({ shortcuts, photos, activeId, view, blocked, onCom
         return;
       }
       const target = event.target instanceof HTMLElement ? event.target : null;
+      if (!blocked && !event.defaultPrevented && !event.repeat && !event.isComposing && target?.closest('.ai-drawer') && eventToShortcut(event) === shortcuts.toggleAgent) {
+        event.preventDefault(); onAgent(); return;
+      }
       if (blocked || event.defaultPrevented || event.repeat || event.altKey || event.isComposing || target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], .drag-handle')) return;
       const combo = eventToShortcut(event);
       const action = (Object.keys(shortcuts) as ShortcutActionId[]).find(id => shortcuts[id] === combo);

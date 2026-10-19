@@ -69,6 +69,13 @@ test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索
   await page.getByRole('textbox', { name: '搜索偏好关键词' }).fill('留白');
   await page.getByRole('button', { name: '搜索', exact: true }).click();
   await expect(card).toBeVisible();
+  const field = await page.getByRole('textbox', { name: '搜索偏好关键词' }).boundingBox();
+  const searchButton = await page.getByRole('button', { name: '搜索', exact: true }).boundingBox();
+  expect(field).not.toBeNull(); expect(searchButton).not.toBeNull();
+  expect(Math.abs(field!.y + field!.height - searchButton!.y - searchButton!.height)).toBeLessThan(2);
+  expect(field!.x + field!.width).toBeLessThanOrEqual(searchButton!.x);
+  await mkdir(resolve('../docs/evidence/ux-chat-drawer-2026-10-20'), { recursive: true });
+  await page.screenshot({ path: resolve('../docs/evidence/ux-chat-drawer-2026-10-20/memory-search.png') });
   await page.screenshot({ path: resolve(screenshots, 'restored-search.png') });
   const memory = await rpc<MemoryProjection>('get_memory_projection', { projectId: project.id });
   expect(await rpc<Project>('get_project', { projectId: project.id })).toEqual(formal);

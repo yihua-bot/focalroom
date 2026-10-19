@@ -436,3 +436,109 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 
 .project-back { text-decoration: none; border: 0; background: none; padding: 0; color: var(--muted); font-size: 12px; }
 .project-back:hover { color: var(--text); }
+
+/* 工作台对话抽屉 */
+.ai-drawer { position: fixed; inset: 0 0 0 auto; z-index: 60; width: 480px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; background: #15191e; color: var(--text); border-left: 1px solid #35434f; box-shadow: -18px 0 65px #0007; outline: none; }
+.ai-drawer-header { display: flex; align-items: center; gap: 12px; padding: 22px 20px; border-bottom: 1px solid #ffffff0d; }
+.ai-drawer-header > div { flex: 1; min-width: 0; }
+.ai-drawer-header h2 { margin: 0; font: 600 15px/1.5 var(--font-sans, sans-serif); }
+.ai-drawer-header p { margin: 3px 0 0; font-size: 11px; color: #9ba8b5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-orb, .chat-welcome-mark { display: grid; place-items: center; background: linear-gradient(145deg,#194f73,#253843); color: #8dd6ff; border: 1px solid #72b6e32e; border-radius: 13px; width: 38px; height: 38px; flex-shrink: 0; }
+.ai-drawer-header .icon-button { display: grid; place-items: center; width: 32px; height: 32px; color: #a9b5c1; }
+.ai-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.ai-chat-feed { overflow: auto; flex: 1; min-height: 0; padding: 24px 22px; overscroll-behavior: contain; }
+.ai-chat-welcome { padding: 36px 0 24px; }
+.chat-welcome-mark { width: 52px; height: 52px; border-radius: 18px; margin-bottom: 24px; }
+.ai-chat-welcome h3 { font: 600 23px/1.5 var(--font-sans, sans-serif); letter-spacing: -.4px; max-width: 340px; margin: 0 0 10px; }
+.ai-chat-welcome > p { font-size: 13px; line-height: 1.8; color: #9ba8b5; margin: 0; }
+.chat-suggestions { display: grid; gap: 9px; margin-top: 28px; }
+.chat-suggestions button { display: flex; justify-content: space-between; align-items: center; padding: 13px 15px; border: 1px solid #ffffff12; border-radius: 10px; background: #ffffff03; color: #cbd4dc; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
+.chat-suggestions button:hover { border-color: #7ab5d955; background: #75b8e20b; }
+.chat-suggestions span { color: #758a9a; }
+.chat-turn { margin-bottom: 28px; }
+.chat-user-message { margin-left: 30px; border-radius: 14px 14px 3px 14px; padding: 12px 16px; background: #283640; color: #edf4f9; font-size: 13px; }
+.chat-user-message p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.chat-assistant-message { display: flex; gap: 11px; margin-top: 19px; font-size: 13px; line-height: 1.8; }
+.chat-assistant-message > div { min-width: 0; flex: 1; }
+.chat-assistant-message p { white-space: pre-wrap; overflow-wrap: anywhere; color: #b7c3ce; }
+.chat-assistant-icon { color: #8dd6ff; margin-top: 3px; flex-shrink: 0; }
+.chat-task-status { font-weight: 500; color: #bbcbd8; }
+.chat-task-status[data-state="failed"] { color: #f6a3a3; }
+.chat-draft-card { margin-top: 14px; padding: 15px; border: 1px solid #ffffff15; border-radius: 10px; background: #ffffff03; }
+.chat-draft-card > div { display: flex; align-items: center; gap: 7px; color: #c9dfce; }
+.chat-task-controls { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+.ai-chat-composer { padding: 14px 20px 20px; border-top: 1px solid #ffffff0d; background: #15191e; }
+.chat-compose-box { border: 1px solid #42515d; border-radius: 14px; background: #1d232a; padding: 12px; }
+.chat-compose-box:focus-within { border-color: #6ca8ce; box-shadow: 0 0 0 2px #69b7e713; }
+.chat-compose-box textarea { width: 100%; resize: none; min-height: 70px; max-height: 150px; border: 0; outline: none; background: transparent; color: #ecf2f8; font: inherit; font-size: 13px; line-height: 1.8; padding: 0 3px; }
+.chat-compose-box textarea::placeholder { color: #8393a1; }
+.chat-compose-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.chat-count { display: flex; align-items: center; gap: 8px; color: #a6b4c1; font-size: 11px; }
+.chat-count input { width: 58px; padding: 5px 7px; border: 1px solid #ffffff16; border-radius: 6px; background: #ffffff05; color: #dce6ee; font: inherit; }
+.chat-send { display: grid; place-items: center; width: 33px; height: 33px; border: 0; border-radius: 10px; background: #8cccef; color: #112433; cursor: pointer; }
+.chat-send:disabled { opacity: .3; cursor: default; }
+.chat-scope-row { display: flex; align-items: center; gap: 6px; margin: 12px 2px 0; color: #8193a1; }
+.chat-scope-row select { min-width: 0; max-width: 100%; border: 0; background: transparent; color: #afbdc9; font: inherit; font-size: 11px; }
+.chat-footnote { font-size: 10px; line-height: 1.7; color: #81919e; margin: 11px 3px 0; }
+.chat-notice { font-size: 11px; line-height: 1.7; color: #b6b8a7; margin: 0 0 10px; }
+.chat-notice button { border: 0; background: none; color: #9aceed; cursor: pointer; margin-left: 8px; }
+.chat-error { color: #f0a4a4; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.ai-settings-fields { display: grid; gap: 20px; padding: 8px 0; }
+.ai-settings-fields > label { display: grid; gap: 9px; font-size: 13px; }
+.ai-settings-fields select { padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: inherit; }
+.settings-service { display: flex; align-items: center; gap: 9px; color: #8fc6e6; }
+.ai-chat-feed .proposals-panel { margin-top: 22px; }
+
+/* 账户菜单与通用设置 */
+.sidebar .sidebar-bottom { display: block; padding: 14px 10px; margin-top: auto; }
+.cloud-account .cloud-account-trigger { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 8px; border-radius: 10px; line-height: 1.4; text-align: left; color: inherit; }
+.cloud-account-trigger:hover { background: #ffffff08; }
+.cloud-account .cloud-avatar { width: 33px; height: 33px; flex-shrink: 0; }
+.guest-avatar { display: grid; place-items: center; color: #a8b5c0; background: #ffffff0b; border: 1px solid #ffffff16; border-radius: 50%; }
+.account-trigger-label { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.account-trigger-label strong { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-trigger-label small { font-size: 9px; color: #84929e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cloud-account .cloud-account-dropdown { position: fixed; z-index: 120; bottom: 86px; left: 14px; width: 250px; max-width: calc(100vw - 28px); padding: 7px; border: 1px solid #35404a; border-radius: 12px; background: #1b2026; box-shadow: 0 10px 40px #0008; }
+.cloud-account-dropdown-head { padding: 10px 11px 13px; margin-bottom: 5px; border-bottom: 1px solid #ffffff10; }
+.cloud-account-dropdown [role="menuitem"] { display: flex; align-items: center; gap: 10px; border-radius: 7px; padding: 10px 11px; min-height: 38px; font-size: 12px; }
+.cloud-account-dropdown [role="menuitem"]:focus-visible { outline: 1px solid #89bddf; background: #ffffff09; }
+.sidebar-collapsed .sidebar-bottom { display: block; padding: 10px 3px; }
+.sidebar-collapsed .account-trigger-label, .sidebar-collapsed .cloud-account-trigger > svg { display: none; }
+.cloud-account-edit { position: fixed; left: 14px; bottom: 86px; z-index: 121; background: #1b2026; padding: 18px; width: 270px; max-width: calc(100vw - 28px); border: 1px solid #35404a; border-radius: 12px; }
+.global-settings { display: grid; gap: 28px; padding: 8px 0; }
+.settings-section h3 { font-size: 12px; color: #9ba9b6; font-weight: 500; margin: 0 0 13px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 13px; }
+.settings-about { border-top: 1px solid var(--border); padding-top: 24px; display: flex; align-items: center; gap: 14px; }
+.settings-about img { width: 40px; height: 40px; object-fit: contain; }
+.settings-about > div { display: grid; gap: 6px; }
+.settings-about a { color: #9ab8cc; font-size: 12px; display: flex; gap: 7px; align-items: center; text-decoration: none; }
+.contact-author { display: grid; justify-items: center; gap: 16px; padding: 10px 0; }
+.contact-avatar { width: 54px; height: 54px; display: grid; place-items: center; background: #254353; color: #a8d8ed; border-radius: 50%; font-size: 23px; }
+.contact-author h3 { margin: 0 0 8px; }
+.contact-card { width: 100%; display: flex; align-items: center; gap: 12px; padding: 15px; border: 1px solid var(--border); border-radius: 9px; font-size: 12px; text-decoration: none; color: inherit; flex-wrap: wrap; }
+.contact-card > span { flex: 1; overflow-wrap: anywhere; }
+.contact-card > strong { font-weight: 500; color: #a4c6dd; }
+
+/* 审美记忆保留一致的纵向节奏，搜索框与操作按钮对齐。 */
+.memory-panel { display: grid; gap: 18px; min-width: 0; }
+.inspector .memory-panel > h3 { margin: 0; }
+.memory-panel > p { margin: 0; line-height: 1.75; }
+.memory-panel > .stat-row { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 0; }
+.memory-panel .info-card { margin: 0; padding: 14px; min-width: 0; }
+.memory-panel .info-card h4 { margin: 0 0 10px; }
+.memory-panel .info-card p { line-height: 1.7; }
+.memory-panel .memory-search { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 9px; margin: 0; }
+.memory-panel .memory-search label { display: grid; gap: 8px; min-width: 0; }
+.memory-panel .memory-search input { width: 100%; min-width: 0; margin: 0; height: 38px; }
+.memory-panel .memory-search .button { height: 38px; white-space: nowrap; }
+.memory-panel .memory-search > .muted { grid-column: 1 / -1; }
+.memory-panel .correction-form { display: grid; gap: 10px; margin-top: 14px; }
+.memory-panel .divider { margin: 0; }
+.memory-panel .hypothesis-card + .hypothesis-card { margin-top: 12px; }
+@media (max-width: 850px) {
+ .sidebar .sidebar-bottom { display: block; margin: 0 0 0 auto; padding: 3px; }
+ .sidebar .account-trigger-label, .sidebar .cloud-account-trigger > svg { display: none; }
+ .cloud-account .cloud-account-dropdown, .cloud-account-edit { left: auto; right: 12px; bottom: auto; top: 75px; }
+ .ai-drawer { width: 460px; }
+}
+@media (max-width: 520px) { .ai-drawer { max-width: 100vw; width: 100vw; } .ai-chat-feed { padding: 18px; } .ai-drawer-header { padding: 16px; } .ai-chat-composer { padding: 12px 16px 16px; } }

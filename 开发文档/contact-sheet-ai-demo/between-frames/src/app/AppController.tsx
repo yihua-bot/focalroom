@@ -19,6 +19,7 @@ import { QuickStartModal, parseGoal } from '../features/quick-start/QuickStartMo
 import { PhotoInspector } from '../components/inspector/PhotoInspector';
 import { CompareModal } from '../components/compare/CompareModal';
 import { AgentStatus } from '../features/ai-editor/AgentStatus';
+import { AISelectionDrawer } from '../features/ai-editor/AISelectionDrawer';
 import { AIPanel, type QuickAgentAction } from '../features/ai-editor/AIPanel';
 import { ProposalsPanel } from '../features/proposals/ProposalsPanel';
 import { PreferencePanel } from '../features/preference-memory/PreferencePanel';
@@ -106,12 +107,12 @@ export function AppController({ repository }: { repository: ProjectRepository })
     const [a, b] = selectedIds;
     setQuickAction({ projectId: project.id, id: crypto.randomUUID(), count: 1, photoIds: [a, b],
       goal: `比较照片「${photoName(a)}」与「${photoName(b)}」：哪一张更能推动叙事主线？给出结论、理由与各自适合的位置；不直接修改选片状态。` });
-    ui.setPanel('ai');
+    ui.openAgent();
   } : undefined;
   const aiOrder = local && project && selectedIds.length >= 2 ? () => {
     setQuickAction({ projectId: project.id, id: crypto.randomUUID(), count: selectedIds.length, photoIds: [...selectedIds],
       goal: `为选中的 ${selectedIds.length} 张照片生成两版不同的作品顺序方案（方案 A / 方案 B），各自解释编排逻辑、开合节奏与适用场景；输出为可审阅草案。` });
-    ui.setPanel('ai');
+    ui.openAgent();
   } : undefined;
   const reorder = (ids: string[]) => { if (project) act(() => repository.reorder(project.id, ids), local ? '作品顺序已保存' : zh.savedSequence); };
   const compare = () => {
@@ -160,7 +161,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       { id: 'select-all', group: '选择', label: '选择当前视图全部照片', hint: hint('selectAll'), run: () => ui.selectAll(navigable.map(photo => photo.id)) },
       { id: 'clear-selection', group: '选择', label: '清除选区', hint: hint('clearSelection'), run: ui.clearSelection },
       { id: 'search', group: '导航', label: '聚焦搜索框', hint: hint('search'), run: () => document.getElementById('photo-search')?.focus() },
-      { id: 'agent', group: '导航', label: '显示/隐藏AI 智能选片面板', hint: hint('toggleAgent'), run: ui.toggleAgent },
+      { id: 'agent', group: '导航', label: '打开/关闭 AI 智能选片', hint: hint('toggleAgent'), run: ui.toggleAgent },
       { id: 'versions', group: '项目', label: '查看/保存作品版本', run: () => setDialog({ kind: 'versions' }) },
       { id: 'activity', group: '项目', label: '按操作者浏览操作历史', run: () => setDialog({ kind: 'activity' }) },
       { id: 'copy-plan', group: '项目', label: '复制当前序列方案', run: copyPlan },
@@ -172,8 +173,8 @@ export function AppController({ repository }: { repository: ProjectRepository })
     { id: 'help', group: '帮助', label: '快捷键与帮助', run: () => setDialog({ kind: 'help' }) },
   );
   if (local) paletteCommands.push({ id: 'quick-start', group: '项目', label: '快速开始：用一句话创建项目', run: () => { setArchived(false); setDialog({ kind: 'quickStart' }); } });
-  const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector" aria-label={ui.panel === 'photo' ? zh.editorTitle : ui.panel === 'ai' ? zh.ai : zh.memory}>
-    <h2 className="editor-title">{ui.panel === 'photo' ? zh.editorTitle : ui.panel === 'ai' ? zh.ai : zh.memory}</h2>
+  const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector" aria-label={ui.panel === 'photo' ? zh.editorTitle : zh.memory}>
+    <h2 className="editor-title">{ui.panel === 'photo' ? zh.editorTitle : zh.memory}</h2>
     {ui.panel === 'photo' ? (active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending || readOnly} onDecide={decide}
       onRate={(id, rating) => act(() => repository.rate(project.id, [id], rating))}
       onBookMark={local && project ? (id, mark) => act(() => repository.setBookMark(project.id, id, mark), mark === 'spread' ? '已设为跨页大图' : mark === 'full' ? '已设为整页图' : '已清除册页标记') : undefined}
@@ -182,10 +183,10 @@ export function AppController({ repository }: { repository: ProjectRepository })
       onRelink={local ? () => { act(async () => (await repository.relink(project.id, active.id)) ?? project); } : undefined}
       onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
       : <EmptyState title="选择一张照片" hint="点击网格，开始检查画面。" />)
-      : ui.panel === 'ai' ? <><AIPanel key={project.id} repository={local ? repository : undefined} project={project} selectedIds={selectedIds} initialGoal={pendingGoal?.projectId === project.id ? pendingGoal.goal : project.brief} initialCount={pendingGoal?.projectId === project.id ? pendingGoal.count : Math.min(parseGoal(project.brief).count, project.photos.length || 100)} quickAction={quickAction?.projectId === project.id ? quickAction : null} onQuickActionFired={() => setQuickAction(null)} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /><ProposalsPanel project={project} enabled={local} /></> : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
+      : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
   </aside> : undefined;
   return <><AppShell inspector={panel} assistant={ui.panel !== 'photo'} collapsed={!ui.sidebarOpen} nav={<SideNav cloudAuth={local ? repository.cloudAuth : undefined} project={route.page === 'workspace' ? project : undefined} page={route.page} view={ui.view} local={local} authority={sharing.data?.authority}
-    onView={ui.setView} onAI={() => ui.setPanel('ai')}
+    diagnostics={local ? repository.diagnostics : undefined} onView={ui.setView}
     onProjects={() => { setArchived(false); navigate(null); }} onMemory={() => ui.setPanel('memory')} onHelp={() => setDialog({ kind: 'help' })} />}>
     {query.isPending ? <p role="status" className="page-message">正在加载项目…</p> : query.isError ? <EmptyState title="项目加载失败" hint={query.error.message} action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />
       : route.page === 'projects' ? <ProjectList projects={projects} onOpen={openProject} onCreate={() => { setArchived(false); setPendingGoal(null); setDialog({ kind: 'create' }); }} onQuickStart={local ? () => { setArchived(false); setDialog({ kind: 'quickStart' }); } : undefined} local={local} archived={archived}
@@ -195,9 +196,18 @@ export function AppController({ repository }: { repository: ProjectRepository })
         onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCopyPlan={copyPlan} onAICompare={aiCompare} onAIOrder={aiOrder} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
         : <EmptyState title={local ? '项目未找到' : '项目不在本次预览中'} hint={local ? '项目可能已归档，请返回项目列表查看。' : '内存项目在刷新后重置，请返回项目列表。'} action={<Button onClick={() => navigate(null)}>{zh.projects}</Button>} />}
   </AppShell>
-    {local && project && !(ui.inspectorOpen && ui.panel === 'ai') && <AgentStatus repository={repository} projectId={project.id} onOpen={() => ui.setPanel('ai')} />}
+    {ui.aiOpen && project && route.page === 'workspace' && <AISelectionDrawer projectTitle={project.title} onClose={ui.closeAgent}>
+      {(settingsOpen, closeSettings) => <AIPanel key={project.id} repository={local ? repository : undefined} project={project} selectedIds={selectedIds}
+        initialGoal={pendingGoal?.projectId === project.id ? pendingGoal.goal : project.brief}
+        initialCount={pendingGoal?.projectId === project.id ? pendingGoal.count : Math.min(parseGoal(project.brief).count, project.photos.length || 100)}
+        quickAction={quickAction?.projectId === project.id ? quickAction : null} onQuickActionFired={() => setQuickAction(null)}
+        settingsOpen={settingsOpen} onSettingsClose={closeSettings}
+        onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }}>
+        <ProposalsPanel project={project} enabled={local} /></AIPanel>}
+    </AISelectionDrawer>}
+    {local && project && !ui.aiOpen && <AgentStatus repository={repository} projectId={project.id} onOpen={() => ui.openAgent()} />}
     {notice && <div role="status" className="toast">{notice}</div>}
-    {dialog?.kind === 'quickStart' && local && <QuickStartModal busy={mutation.isPending} onClose={() => setDialog(null)} onCreate={(title, goal, count) => { mutation.mutate(() => repository.create(title, goal), { onSuccess: created => { setPendingGoal({ projectId: created.id, goal, count }); ui.reset(); ui.setPanel('ai'); navigate(created.id); setDialog({ kind: 'import' }); } }); }} />}
+    {dialog?.kind === 'quickStart' && local && <QuickStartModal busy={mutation.isPending} onClose={() => setDialog(null)} onCreate={(title, goal, count) => { mutation.mutate(() => repository.create(title, goal), { onSuccess: created => { setPendingGoal({ projectId: created.id, goal, count }); ui.reset(); ui.openAgent(); navigate(created.id); setDialog({ kind: 'import' }); } }); }} />}
       {(dialog?.kind === 'create' || dialog?.kind === 'edit') && <ProjectDialog project={dialog.kind === 'edit' ? project : undefined} busy={mutation.isPending} onClose={() => setDialog(null)} onSave={(title, brief, tags) => {
       if (dialog.kind === 'edit' && project) act(async () => { const updated = await repository.edit(project.id, title, brief); if (tags) await repository.setTags(project.id, tags); return updated; }, local ? '项目已保存到本地' : zh.savedProject, true);
       else mutation.mutate(() => repository.create(title, brief), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); navigate(created.id); } });

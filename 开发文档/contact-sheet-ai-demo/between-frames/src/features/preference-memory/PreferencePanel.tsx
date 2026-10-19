@@ -28,7 +28,7 @@ export function PreferencePanel({ events, repository, project }: { events: Previ
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   };
-  return <section><h3>{zh.memoryTitle}</h3>{!repository && <p className="micro">示例记录 · 完整记忆管理请使用桌面版</p>}
+  return <section className="memory-panel">{!repository && <p className="micro">示例记录 · 完整记忆管理请使用桌面版</p>}
    <div className="stat-row">
     <div className="info-card"><strong className="stat">{repository ? activeEvidence.filter(item => item.kind === 'keep' || item.kind === 'reject').length : events.filter(event => event.type === 'decision').length}</strong><small>人工选择</small></div>
     <div className="info-card"><strong className="stat">{repository ? activeEvidence.filter(item => item.kind === 'comparison').length : events.filter(event => event.type === 'compare').length}</strong><small>比较记录</small></div>
@@ -78,7 +78,7 @@ export function PreferencePanel({ events, repository, project }: { events: Previ
      </div>}
      {!['corrected', 'retired'].includes(hypothesis.status) && <div className="agent-task-actions">
       {correcting === hypothesis.id
-       ? <form onSubmit={event => { event.preventDefault(); void act(async () => { await repository.memory.correct(project.id, hypothesis.id, correction.trim()); setCorrecting(null); setCorrection(''); }); }}>
+       ? <form className="correction-form" onSubmit={event => { event.preventDefault(); void act(async () => { await repository.memory.correct(project.id, hypothesis.id, correction.trim()); setCorrecting(null); setCorrection(''); }); }}>
           <label>纠正说明<textarea className="text-input" aria-label="纠正说明" required maxLength={2000} value={correction} onChange={event => setCorrection(event.target.value)} /></label>
           <Button type="submit" size="small" disabled={busy || !correction.trim()}>提交纠正</Button>
           <Button size="small" disabled={busy} onClick={() => { setCorrecting(null); setCorrection(''); }}>取消</Button>
@@ -89,7 +89,7 @@ export function PreferencePanel({ events, repository, project }: { events: Previ
      </div>}
     </article>) : <EmptyState title={keyword ? "没有匹配的假设" : "还没有假设"} hint="选片并填写备注后，可查看相关偏好。" />}
     <div className="divider" /><div className="eyebrow">人工证据</div>
-    <div className="agent-task-actions"><Button size="small" disabled={busy} onClick={() => { if (window.confirm('清空本项目的视觉观察结果及相关检索缓存？已上传的云端数据不受影响；再次视觉观察会重新申请授权并上传。')) { void act(() => repository.memory.purgeObservationCache(project.id)); } }}>清空视觉观察缓存</Button></div>
+    <div className="agent-task-actions"><Button size="small" disabled={busy} onClick={() => { if (window.confirm('清空本项目的视觉观察结果及相关检索缓存？已上传的云端数据不受影响；下次发送选片请求时，会重新使用照片预览。')) { void act(() => repository.memory.purgeObservationCache(project.id)); } }}>清空视觉观察缓存</Button></div>
     {evidence.length ? <MemoryEvidenceList ids={evidence.slice(0, evidenceLimit).map(item => item.id)} evidence={evidence} photos={project.photos} busy={busy} onExclude={item => { void act(() => repository.memory.request(project.id, { type: 'SetEvidenceExcluded', evidenceId: item.id, excluded: !item.excluded })); }} onDelete={item => { void act(() => repository.memory.deleteEvidence(project.id, item.id)); }} /> : <EmptyState title={zh.noEvents} hint="保留或淘汰照片后显示记录。" />}
     {evidence.length > evidenceLimit && <Button size="small" onClick={() => setEvidenceLimit(value => value + 20)}>查看更多证据</Button>}
    </>}

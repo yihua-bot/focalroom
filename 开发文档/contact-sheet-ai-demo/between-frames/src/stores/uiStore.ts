@@ -4,6 +4,9 @@ import type { InspectorPanel, PhotoFilter, WorkspaceView } from '../domain/model
 import { selectPhotos, type SelectionGesture } from '../domain/selection';
 
 interface UIState {
+  aiOpen: boolean;
+  openAgent: () => void;
+  closeAgent: () => void;
   aiDrafts: Record<string, { goal: string; count: number; scopeSelection: boolean }>;
   saveAIDraft: (projectId: string, draft: { goal: string; count: number; scopeSelection: boolean }) => void;
   activeId: string | null;
@@ -34,7 +37,7 @@ interface UIState {
   toggleInspector: () => void;
   reset: () => void;
 }
-const initial = { activeId: null as string | null, selectedIds: [] as string[], anchorId: null as string | null, search: '', filmstripOpen: true, sidebarOpen: true, filter: 'all' as PhotoFilter, grouping: 'none' as GridGrouping, view: 'grid' as WorkspaceView, panel: 'photo' as InspectorPanel, dense: false, inspectorOpen: true };
+const initial = { aiOpen: false, activeId: null as string | null, selectedIds: [] as string[], anchorId: null as string | null, search: '', filmstripOpen: true, sidebarOpen: true, filter: 'all' as PhotoFilter, grouping: 'none' as GridGrouping, view: 'grid' as WorkspaceView, panel: 'photo' as InspectorPanel, dense: false, inspectorOpen: true };
 export const useUIStore = create<UIState>(set => ({
   aiDrafts: {},
   saveAIDraft: (projectId, draft) => set(state => ({ aiDrafts: { ...state.aiDrafts, [projectId]: draft } })),
@@ -46,12 +49,14 @@ export const useUIStore = create<UIState>(set => ({
   setSearch: search => set({ search, selectedIds: [], anchorId: null, activeId: null, view: 'grid' }),
   setFilter: filter => set({ filter, view: 'grid', selectedIds: [], anchorId: null, activeId: null }),
   setGrouping: grouping => set({ grouping }),
-  setView: view => set({ view, panel: 'photo', inspectorOpen: true, selectedIds: [], anchorId: null }),
-  setPanel: panel => set({ panel, inspectorOpen: true }),
+  setView: view => set({ view, aiOpen: false, panel: 'photo', inspectorOpen: true, selectedIds: [], anchorId: null }),
+  setPanel: panel => set({ panel, aiOpen: false, inspectorOpen: true }),
   toggleDensity: () => set(state => ({ dense: !state.dense })),
   toggleInspector: () => set(state => ({ inspectorOpen: !state.inspectorOpen })),
   toggleFilmstrip: () => set(state => ({ filmstripOpen: !state.filmstripOpen })),
   toggleSidebar: () => set(state => ({ sidebarOpen: !state.sidebarOpen })),
-  toggleAgent: () => set(state => state.inspectorOpen && state.panel === 'ai' ? { inspectorOpen: false } : { panel: 'ai', inspectorOpen: true }),
+  openAgent: () => set({ aiOpen: true, view: 'grid', panel: 'photo' }),
+  closeAgent: () => set({ aiOpen: false }),
+  toggleAgent: () => set(state => ({ aiOpen: !state.aiOpen, view: 'grid', panel: 'photo' })),
   reset: () => set({ ...initial, selectedIds: [...initial.selectedIds], filter: 'all', view: 'grid', panel: 'photo' }),
 }));

@@ -190,7 +190,8 @@ test('AI、导入和导出边界明示；没有外部请求', async ({ page }) =
   page.on('request', request => { if (!request.url().startsWith('http://localhost:1420')) external.push(request.url()); });
   await ready(page);
   await page.getByRole('main').getByRole('button', { name: 'AI 智能选片' }).click();
-  await expect(page.getByRole('button', { name: 'AI 暂不可用' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '关闭 AI 智能选片' }).click();
   await page.getByRole('button', { name: '导出 ↗' }).click();
   await expect(page.getByRole('button', { name: '共享预览包' })).toBeDisabled();
   await page.keyboard.press('Escape');

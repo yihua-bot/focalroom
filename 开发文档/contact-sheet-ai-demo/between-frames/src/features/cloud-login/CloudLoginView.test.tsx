@@ -35,7 +35,7 @@ describe("桌面云登录 UI", () => {
     const { repository } = fixture({ waiting: true });
     render(<CloudAccount repository={repository} />);
     fireEvent.click(await screen.findByRole("button", { name: "取消" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "登录" })).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("未登录")).toBeVisible());
     expect(repository.cancel).toHaveBeenCalled();
   });
 
@@ -66,11 +66,12 @@ it("命令不发送通知时仍主动刷新退出状态；断网也保留本机�
  fireEvent.click(await screen.findByRole("button",{name:"账户菜单"}));
  fireEvent.click(await screen.findByRole("menuitem",{name:"退出登录"}));
  expect(await screen.findByRole("alert")).toHaveTextContent("已在本机退出；云端会话未能撤销");
- expect(await screen.findByRole("button",{name:"登录"})).toBeVisible();expect(screen.queryByText("Cached")).not.toBeInTheDocument();
+ expect(await screen.findByText("未登录")).toBeVisible();expect(screen.queryByText("Cached")).not.toBeInTheDocument();
 });
 it("浏览器打开失败显示原因，并允许重试",async()=>{
  const f=fixture();vi.mocked(f.repository.open).mockRejectedValue(new Error("系统浏览器无法打开"));render(<CloudAccount repository={f.repository}/>);
- fireEvent.click(await screen.findByRole("button",{name:"登录"}));expect(await screen.findByRole("alert")).toHaveTextContent("系统浏览器无法打开");expect(screen.queryByRole("status")).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button",{name:"账户菜单"}));
+ fireEvent.click(await screen.findByRole("menuitem",{name:"登录"}));expect(await screen.findByRole("alert")).toHaveTextContent("系统浏览器无法打开");expect(screen.queryByRole("status")).not.toBeInTheDocument();
 });
 it("退出后迟到的状态请求不能恢复旧账户，卸载移除订阅",async()=>{
  const f=fixture();let resolve!:(value:CloudStatus)=>void;vi.mocked(f.repository.status).mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));
@@ -78,4 +79,12 @@ it("退出后迟到的状态请求不能恢复旧账户，卸载移除订阅",as
  const view=render(<Probe/>);await waitFor(()=>expect(f.repository.status).toHaveBeenCalledOnce());f.notify();await waitFor(()=>expect(f.repository.status).toHaveBeenCalledTimes(2));
  await import("@testing-library/react").then(({act})=>act(async()=>resolve(status({authenticated:true,user:{id:"old",name:"Old",email:"old@fixture.test"}}))));expect(screen.getByText("signed-out")).toBeVisible();
  view.unmount();f.notify();expect(f.repository.status).toHaveBeenCalledTimes(2);
+});
+
+it("未登录账户菜单可访问设置、帮助和联系作者，Esc 归还焦点",async()=>{
+ const onSettings=vi.fn();render(<CloudAccount onSettings={onSettings} onHelp={vi.fn()} onContact={vi.fn()}/>);
+ expect(screen.getByText("未登录")).toBeVisible();const trigger=screen.getByRole("button",{name:"账户菜单"});
+ fireEvent.click(trigger);expect(screen.getByRole("menuitem",{name:"联系作者"})).toBeVisible();
+ fireEvent.keyDown(screen.getByRole("menu"),{key:"Escape"});expect(trigger).toHaveFocus();
+ fireEvent.click(trigger);fireEvent.click(screen.getByRole("menuitem",{name:"设置"}));expect(onSettings).toHaveBeenCalledOnce();expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 });

@@ -2,7 +2,7 @@ import type { DraftRepository } from './agent';
 export type PhotoStatus = 'undecided' | 'keep' | 'reject';
 export type PhotoFilter = 'all' | PhotoStatus;
 export type WorkspaceView = 'grid' | 'sequence';
-export type InspectorPanel = 'photo' | 'ai' | 'memory';
+export type InspectorPanel = 'photo' | 'memory';
 export interface InspectionImage { src: string; kind: 'original' | 'derived_preview' | 'embedded_preview' }
 
 export interface Photo {

@@ -1,19 +1,22 @@
 import { CloudAccount } from "../features/cloud-login/CloudLoginView";
 import type { CloudAuthRepository } from "../domain/cloud-auth";
-import { Grid2X2, ListOrdered, FolderOpen, Gem, Sparkles, Keyboard, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Grid2X2, ListOrdered, FolderOpen, Gem, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useUIStore } from '../stores/uiStore';
 import type { Project, WorkspaceView } from '../domain/models';
 import type { SharingStatus } from '../domain/sharing';
 import { zh } from './copy';
-import { LanguageSwitcher } from '../i18n';
+import { useState } from 'react';
+import type { DiagnosticsRepository } from '../domain/diagnostics';
+import { SettingsDialog } from './SettingsDialog';
 
-export function SideNav({ project, page, view, onView, onAI, onProjects, onMemory, onHelp, local = false, authority, cloudAuth }: {
+export function SideNav({ project, page, view, onView, onProjects, onMemory, onHelp, local = false, authority, cloudAuth, diagnostics }: {
   project?: Project; page: 'projects' | 'workspace'; view: WorkspaceView;
-  onView: (view: WorkspaceView) => void; onAI: () => void; onProjects: () => void; onMemory: () => void; onHelp: () => void;
-  cloudAuth?: CloudAuthRepository;
+  onView: (view: WorkspaceView) => void; onProjects: () => void; onMemory: () => void; onHelp: () => void;
+  cloudAuth?: CloudAuthRepository; diagnostics?: DiagnosticsRepository;
   local?: boolean; authority?: SharingStatus['authority'];
 }) {
   const ui = useUIStore();
+  const [settingsPage, setSettingsPage] = useState<'general' | 'contact' | null>(null);
   const projectKind = !local ? (project?.id === 'sample-project' ? '示例项目' : '预览项目')
     : authority === 'shared' ? '共享项目 · 只读'
     : authority === 'local-promoting' ? '共享迁移中 · 暂停编辑'
@@ -28,11 +31,11 @@ export function SideNav({ project, page, view, onView, onAI, onProjects, onMemor
       <div className="project-link"><strong>{project.title}</strong><small>{project.photos.length} 张图像 · {project.sequence.length} 张入选<br />{projectKind}</small></div>
       <nav aria-label={project.title}>
         <button className={`nav ${ui.panel === 'photo' && view === 'grid' ? 'current' : ''}`} aria-current={ui.panel === 'photo' && view === 'grid' ? 'page' : undefined} aria-label={zh.workspace} onClick={() => onView('grid')}><Grid2X2 size={17} /><span>{zh.workspace}</span></button>
-        <button className={`nav ${ui.panel === 'ai' ? 'current' : ''}`} aria-current={ui.panel === 'ai' ? 'page' : undefined} aria-label={zh.ai} onClick={onAI}><Sparkles size={17} /><span>{zh.ai}</span></button>
         <button className={`nav ${ui.panel === 'photo' && view === 'sequence' ? 'current' : ''}`} aria-current={ui.panel === 'photo' && view === 'sequence' ? 'page' : undefined} aria-label={zh.sequence} onClick={() => onView('sequence')}><ListOrdered size={17} /><span>{zh.sequence}</span></button>
         <button className={`nav ${ui.panel === 'memory' ? 'current' : ''}`} aria-current={ui.panel === 'memory' ? 'page' : undefined} aria-label={zh.memory} onClick={onMemory}><Gem size={17} /><span>{zh.memory}</span></button>
       </nav>
     </>}
-    <div className="sidebar-bottom">{cloudAuth && <CloudAccount repository={cloudAuth} />}<div style={{marginBottom:8}}><LanguageSwitcher /></div><button className="help-link" onClick={onHelp}><Keyboard size={14} />{zh.help}</button></div>
+    <div className="sidebar-bottom"><CloudAccount repository={cloudAuth} onSettings={() => setSettingsPage('general')} onHelp={onHelp} onContact={() => setSettingsPage('contact')} /></div>
+    {settingsPage && <SettingsDialog page={settingsPage} diagnostics={diagnostics} onClose={() => setSettingsPage(null)} />}
   </aside>;
 }

@@ -1,5 +1,7 @@
 // 桌面端云账户：浏览器借道登录（PKCE 一次性授权码），凭据由桌面后端保存。
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { ChevronUp, HelpCircle, LogOut, Mail, Settings2, UserRound } from "lucide-react";
+import { zh } from "../../app/copy";
 import type { CloudAuthRepository, CloudStatus } from "../../domain/cloud-auth";
 import { AccountAvatar } from "../../components/shared/AccountAvatar";
 import { useI18n } from "../../i18n";
@@ -25,9 +27,10 @@ export function useCloudStatus(repository?: CloudAuthRepository): { status: Clou
     let active = true;
     const bump = () => { if (active) refresh(); };
     bump();
-    void repository.subscribe(bump);
+    let cleanup: (() => void) | undefined;
+    void repository.subscribe(bump).then(fn => { if (active) cleanup = fn; else fn(); }).catch(() => {});
     const seqOnMount = seqRef;
-    return () => { active = false; seqOnMount.current += 1; };
+    return () => { active = false; seqOnMount.current += 1; cleanup?.(); };
   }, [repository, refresh]);
   return { status, refresh };
 }
@@ -46,7 +49,8 @@ async function compressAvatar(file: File): Promise<string> {
   return data;
 }
 
-function CloudAuthBody({ repository, copy: text, onClose }: { repository: CloudAuthRepository; copy: Copy; onClose?: () => void }) {
+type AccountActions = { onSettings?: () => void; onHelp?: () => void; onContact?: () => void };
+function CloudAuthBody({ repository, copy: text, onClose, onSettings, onHelp, onContact }: { repository?: CloudAuthRepository; copy: Copy; onClose?: () => void } & AccountActions) {
   const { status, refresh } = useCloudStatus(repository);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -56,98 +60,89 @@ function CloudAuthBody({ repository, copy: text, onClose }: { repository: CloudA
   const [notice, setNotice] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
   const open = useCallback(() => {
-    setBusy(true); setNotice("");
-    repository.open().catch(cause => { setError(cause instanceof Error ? cause.message : "登录失败或已取消"); }).finally(() => setBusy(false));
-  }, [repository]);
-  const cancel = useCallback(() => void repository.cancel(), [repository]);
-  const signOut = useCallback(() => {
+    if (!repository) return;
+    setBusy(true); setNotice(""); setError("");
+    repository.open().catch(cause => { setError(cause instanceof Error ? cause.message : text.failed); }).finally(() => { setBusy(false); refresh(); });
+  }, [repository, refresh, text.failed]);
+  const cancel = () => { if (repository) void repository.cancel().then(refresh); };
+  const signOut = () => {
+    if (!repository) return;
     setBusy(true);
     repository.logout().then(revoked => { if (!revoked) setError("已在本机退出；云端会话未能撤销"); })
-      .catch(() => {})
-      .finally(() => { setBusy(false); refresh(); });
-  }, [repository, refresh]);
-
+      .catch(() => {}).finally(() => { setBusy(false); refresh(); });
+  };
+  const choose = (action: () => void) => { setMenuOpen(false); triggerRef.current?.focus(); action(); };
   useEffect(() => {
     const onDoc = (event: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false); };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
-
   const saveName = async () => {
-    const name = nameInput.trim();
-    if (!name) return;
+    if (!repository || !nameInput.trim()) return;
     setBusy(true); setNotice("");
-    try { await repository.updateProfile(name); setEditing(null); setNotice(text.saved); }
+    try { await repository.updateProfile(nameInput.trim()); setEditing(null); setNotice(text.saved); refresh(); }
     catch { setNotice(text.failed); }
     finally { setBusy(false); }
   };
   const onAvatarFile = async (file: File) => {
+    if (!repository) return;
     setBusy(true); setNotice("");
-    try { await repository.updateProfile(undefined, await compressAvatar(file)); setEditing(null); setNotice(text.saved); }
+    try { await repository.updateProfile(undefined, await compressAvatar(file)); setEditing(null); setNotice(text.saved); refresh(); }
     catch { setNotice(text.failed); }
     finally { setBusy(false); }
   };
-
-  if (!status) return null;
-  if (status.user) {
-    const name = status.user.name || status.user.email;
-    return <div className="cloud-account" data-testid="cloud-account">
-      <div className="cloud-account-menu" ref={menuRef}>
-        <button type="button" className="cloud-account-trigger" aria-label={text.menuLabel} aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}>
-          <AccountAvatar className="cloud-avatar" url={status.user.avatar} name={name} allowEmbedded />
-        </button>
-        {menuOpen && <div className="cloud-account-dropdown" role="menu">
-          <div className="cloud-account-dropdown-head">
-            <div className="cloud-account-name">{name}</div>
-            <div className="cloud-account-email">{status.user.email}</div>
-            {!status.authenticated && status.error && <div className="cloud-account-offline" role="status">{status.error}</div>}
-          </div>
-          <button type="button" role="menuitem" onClick={() => { setEditing("name"); setNameInput(status.user!.name); setMenuOpen(false); }}>{text.editName}</button>
-          <button type="button" role="menuitem" onClick={() => { setEditing("avatar"); setMenuOpen(false); }}>{text.editAvatar}</button>
-          <button type="button" role="menuitem" className="cloud-account-signout" onClick={() => { setMenuOpen(false); signOut(); }}>{text.signout}</button>
-        </div>}
-      </div>
-      {editing === "name" && <div className="cloud-account-edit" role="dialog" aria-label={text.editName}>
-        <input value={nameInput} maxLength={200} placeholder={text.namePlaceholder} onChange={e => setNameInput(e.target.value)} disabled={busy} />
-        <button type="button" className="fr-text" disabled={busy || !nameInput.trim()} onClick={() => void saveName()}>{text.save}</button>
-        <button type="button" className="fr-text" onClick={() => setEditing(null)}>{text.cancel}</button>
+  const user = status?.user;
+  const name = user?.name || user?.email || zh.notSignedIn;
+  return <div className="cloud-account" data-testid="cloud-account">
+    {onClose && !user ? <>
+      {status?.waiting ? <div role="status">{text.waiting}<button type="button" onClick={cancel}>{text.cancel}</button></div>
+       : <button type="button" className="fr-text" disabled={busy} onClick={open}>{text.signin}</button>}
+      <button type="button" className="fr-text" onClick={onClose}>{text.cancel}</button>
+    </> : <div className="cloud-account-menu" ref={menuRef}>
+      <button ref={triggerRef} type="button" className="cloud-account-trigger" aria-label={text.menuLabel} aria-haspopup="menu" aria-controls={menuId} aria-expanded={menuOpen}
+        onClick={() => setMenuOpen(value => !value)} onKeyDown={event => { if (event.key === "ArrowDown") { event.preventDefault(); setMenuOpen(true); requestAnimationFrame(() => menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus()); } }}>
+        {user ? <AccountAvatar className="cloud-avatar" url={user.avatar} name={name} allowEmbedded /> : <span className="cloud-avatar guest-avatar"><UserRound size={19} /></span>}
+        <span className="account-trigger-label"><strong>{name}</strong><small>{status?.waiting ? zh.signingIn : user ? user.email : zh.accountGuestHint}</small></span><ChevronUp size={14} />
+      </button>
+      {menuOpen && <div id={menuId} className="cloud-account-dropdown" role="menu" onKeyDown={event => {
+        const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')];
+        const index = items.indexOf(document.activeElement as HTMLButtonElement);
+        if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) { event.preventDefault(); const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + items.length) % items.length; items[next]?.focus(); }
+        if (event.key === "Escape") { event.preventDefault(); setMenuOpen(false); triggerRef.current?.focus(); }
+      }}>
+        <div className="cloud-account-dropdown-head"><div className="cloud-account-name">{name}</div>{user && <div className="cloud-account-email">{user.email}</div>}{status?.error && <div className="cloud-account-offline" role="status">{status.error}</div>}</div>
+        {!user && <button type="button" role="menuitem" disabled={busy || !repository || status?.waiting} onClick={() => choose(open)}><UserRound size={15} />{text.signin}</button>}
+        {user && <><button type="button" role="menuitem" onClick={() => choose(() => { setEditing("name"); setNameInput(user.name); })}><UserRound size={15} />{text.editName}</button>
+        <button type="button" role="menuitem" onClick={() => choose(() => setEditing("avatar"))}><UserRound size={15} />{text.editAvatar}</button></>}
+        {onSettings && <button type="button" role="menuitem" onClick={() => choose(onSettings)}><Settings2 size={15} />{zh.settings}</button>}
+        {onHelp && <button type="button" role="menuitem" onClick={() => choose(onHelp)}><HelpCircle size={15} />{zh.help}</button>}
+        {onContact && <button type="button" role="menuitem" onClick={() => choose(onContact)}><Mail size={15} />{zh.contactAuthor}</button>}
+        {user && <button type="button" role="menuitem" className="cloud-account-signout" disabled={busy} onClick={() => choose(signOut)}><LogOut size={15} />{text.signout}</button>}
       </div>}
-      {editing === "avatar" && <div className="cloud-account-edit" role="dialog" aria-label={text.editAvatar}>
-        <input ref={fileRef} type="file" accept="image/jpeg,image/png" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void onAvatarFile(f); }} />
-        <button type="button" className="fr-text" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? text.waiting : text.chooseFile}</button>
-        <span className="cloud-account-hint">{text.avatarHint}</span>
-        <button type="button" className="fr-text" onClick={() => setEditing(null)}>{text.cancel}</button>
-      </div>}
-        {notice && <span role="status" className="cloud-account-notice">{notice}</span>}
-        {error && <p role="alert" className="error-message">{error}</p>}
-      </div>;
-  }
-  if (status.waiting) {
-    return <div className="cloud-account cloud-account-waiting" role="status">
-      <span>{text.waiting}</span>
-      <button type="button" className="fr-text" onClick={cancel}>{text.cancel}</button>
-    </div>;
-  }
-  return <div className="cloud-account">
-    {(error || status.error) && <p role="alert" className="error-message">{error || status.error}</p>}
-    <button type="button" className="fr-text" disabled={busy} onClick={open}>{text.signin}</button>
-    {onClose && <button type="button" className="fr-text" onClick={onClose}>{text.cancel}</button>}
+    </div>}
+    {!onClose && status?.waiting && <div className="cloud-account-waiting" role="status"><span>{text.waiting}</span><button type="button" onClick={cancel}>{text.cancel}</button></div>}
+    {editing === "name" && <div className="cloud-account-edit" role="dialog" aria-label={text.editName}>
+      <input aria-label={text.editName} value={nameInput} maxLength={200} placeholder={text.namePlaceholder} onChange={event => setNameInput(event.target.value)} disabled={busy} />
+      <button type="button" className="fr-text" disabled={busy || !nameInput.trim()} onClick={() => { void saveName(); }}>{text.save}</button><button type="button" className="fr-text" onClick={() => setEditing(null)}>{text.cancel}</button>
+    </div>}
+    {editing === "avatar" && <div className="cloud-account-edit" role="dialog" aria-label={text.editAvatar}>
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png" hidden onChange={event => { const file = event.target.files?.[0]; if (file) void onAvatarFile(file); }} />
+      <button type="button" className="fr-text" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? text.waiting : text.chooseFile}</button><span className="cloud-account-hint">{text.avatarHint}</span><button type="button" className="fr-text" onClick={() => setEditing(null)}>{text.cancel}</button>
+    </div>}
+    {notice && <span role="status" className="cloud-account-notice">{notice}</span>}
+    {(error || (!menuOpen && status?.error)) && <p role="alert" className="error-message">{error || status?.error}</p>}
   </div>;
 }
 
-/** 侧栏底部账户块：未登录显示入口，已登录点头像弹菜单。 */
-export function CloudAccount({ repository }: { repository: CloudAuthRepository }) {
+export function CloudAccount({ repository, ...actions }: { repository?: CloudAuthRepository } & AccountActions) {
   const { locale } = useI18n();
-  return <CloudAuthBody repository={repository} copy={copy[locale]} />;
+  return <CloudAuthBody repository={repository} copy={copy[locale]} {...actions} />;
 }
-
-/** 独立登录视图（弹窗用）：带标题与关闭。 */
 export function CloudLoginView({ repository, onClose }: { repository: CloudAuthRepository; onClose: () => void }) {
   const { locale } = useI18n();
   const text = copy[locale];
-  return <section className="info-card cloud-login" aria-label={text.title}>
-    <h3>{text.title}</h3>
-    <CloudAuthBody repository={repository} copy={text} onClose={onClose} />
-  </section>;
+  return <section className="info-card cloud-login" aria-label={text.title}><h3>{text.title}</h3><CloudAuthBody repository={repository} copy={text} onClose={onClose} /></section>;
 }

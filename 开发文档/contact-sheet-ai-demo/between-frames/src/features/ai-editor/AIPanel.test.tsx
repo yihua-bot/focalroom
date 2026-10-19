@@ -1,358 +1,45 @@
-import { cleanup, act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUIStore } from '../../stores/uiStore';
 import { AIPanel } from './AIPanel';
-import type { AiConfig, AgentProjection, TaskCommand } from '../../domain/agent';
+import type { AiConfig, AgentProjection, AgentTask } from '../../domain/agent';
+import { defaultAgentBudget } from '../../domain/agent';
 import type { Project } from '../../domain/models';
-
-const project = { id: 'p1', title: 't', brief: '', revision: 3, photos: [{ id: 'a', status: 'undecided' }], sequence: [], events: [] } as unknown as Project;
-const readyConfig: AiConfig = { observation: null, consentProvider: 'openai@' + 'a'.repeat(64), providerId: 'openai', modelId: 'gpt-test', ready: true, apiKeyTail: 'abcd', keySource: 'keychain', baseUrl: 'https://x', promptVersion: 'm3-openai-6', capabilities: ['vision', 'tool_calling', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null, consent: null };
-const emptyProjection: AgentProjection = { tasks: [], drafts: [] };
-vi.mock('@tauri-apps/api/event', () => ({listen:vi.fn().mockResolvedValue(() => {})}));
-
-function makeRepository(overrides: Partial<AiConfig> = {}) {
-  const calls: { command: TaskCommand; consentMode: string | null }[] = [];
-  const repository: Record<string, unknown> = {
-    agent: {
-      query: vi.fn().mockResolvedValue(emptyProjection),
-      request: vi.fn().mockImplementation((_projectId: string, command: TaskCommand) => { calls.push({ command, consentMode: null }); return Promise.resolve('task-1'); }),
-      subscribe: vi.fn().mockResolvedValue(() => {}),
-      aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...overrides }),
-      setConsent: vi.fn().mockImplementation((_projectId: string, mode: 'task' | 'project' | 'deny') => {
-        calls.push({ command: null as never, consentMode: mode });
-        const config = (repository as { agent: { aiConfig: Mock } }).agent.aiConfig;
-        config.mockResolvedValue({ ...readyConfig, consent: { id: 9, projectId: 'p1', mode, provider: 'openai@' + 'a'.repeat(64), quota: 4, used: 0, grantedAt: 'now', revokedAt: null } });
-        return Promise.resolve({ id: 9, projectId: 'p1', mode, provider: 'openai@' + 'a'.repeat(64), quota: 4, used: 0, grantedAt: 'now', revokedAt: null });
-      }),
-    },
-  };
-  return { repository, calls };
+const project = { id: 'p1', title: 't', brief: '', revision: 3, photos: [{ id: 'a', status: 'undecided' }, { id: 'b', status: 'undecided' }], sequence: [], events: [] } as unknown as Project;
+const readyConfig: AiConfig = { observation: null, consentProvider: 'openai@' + 'a'.repeat(64), providerId: 'openai', modelId: 'test-model', ready: true, apiKeyTail: 'abcd', keySource: 'keychain', baseUrl: 'https://x', promptVersion: 'test', capabilities: ['vision', 'tool_calling', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null, consent: null };
+vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn().mockResolvedValue(() => {}) }));
+function fixture(config: Partial<AiConfig> = {}, projection: AgentProjection = { tasks: [], drafts: [] }) {
+ const agent = { query: vi.fn().mockResolvedValue(projection), request: vi.fn().mockResolvedValue('task-1'), subscribe: vi.fn().mockResolvedValue(() => {}), aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...config }), setConsent: vi.fn().mockResolvedValue({ id: 9 }) };
+ return { agent };
 }
-
-function mount(repository: unknown) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return { ...render(<QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} selectedIds={['a']} initialGoal="选出最有叙事力的照片" onUpdated={() => {}} /></QueryClientProvider>), client };
+function mount(repository = fixture(), props: Partial<React.ComponentProps<typeof AIPanel>> = {}) {
+ const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+ const panel = (extra = {}) => <QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} selectedIds={['a']} initialGoal="选出有叙事力的照片" initialCount={1} onUpdated={() => {}} {...props} {...extra} /></QueryClientProvider>;
+ const result = render(panel()); return { ...result, repository, panel, client };
 }
-
+const send = () => screen.getByRole('button', { name: '发送' });
+const ready = () => waitFor(() => expect(send()).toBeEnabled());
+function task(state: AgentTask['state']): AgentTask { return { id: 't1', state, goal: '旅行故事', baseRevision: 3, reason: '预算已用完', question: state === 'needs_input' ? '希望以人物为主吗？' : null, budget: defaultAgentBudget, usage: { modelTurns: 1, toolCalls: 1, inputEstimate: 1, outputEstimate: 1, cloudImages: 0, costMinorUsd: 0 }, elapsedMs: 1, finalDraftIds: [], providerId: 'test', steps: [], createdAt: 'now' }; }
 beforeEach(() => useUIStore.setState({ aiDrafts: {} }));
-
-describe('云端图像授权对话框', () => {
-  it('未输入目标或未配置真实模型时，不会运行隐含目标或示例任务', async () => {
-    const { repository, calls } = makeRepository({ ready: false, providerId: 'mock' });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(<QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} selectedIds={[]} onUpdated={() => {}} /></QueryClientProvider>);
-    expect(screen.getByLabelText('选片目标')).toHaveValue('');
-    const start = await screen.findByRole('button', { name: 'AI 暂不可用' });
-    expect(start).toBeDisabled();
-    await userEvent.type(screen.getByLabelText('选片目标'), '选择旅行照片');
-    fireEvent.submit(start.closest('form')!);
-    expect(calls).toHaveLength(0);
-    expect(screen.queryByText('运行示例任务')).not.toBeInTheDocument();
-  });
-  it('限制选区后清空选区，不会隐式扩大到整个项目', async () => {
-    const { repository, calls } = makeRepository();
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const panel = (ids: string[]) => <QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} initialGoal="选择旅行照片" selectedIds={ids} onUpdated={() => {}} /></QueryClientProvider>;
-    const { rerender } = render(panel(['a']));
-    await screen.findByText('FocalRoom AI');
-    await userEvent.click(screen.getByRole('checkbox', { name: '仅使用选中的照片（1 张）' }));
-    rerender(panel([]));
-    const start = screen.getByRole('button', { name: '开始选片' });
-    expect(start).toBeDisabled();
-    fireEvent.submit(start.closest('form')!);
-    expect(calls).toHaveLength(0);
-  });
-  it('官方服务显示内置 AI 标识且不暴露型号，不显示用户密钥输入，零额度阻止委托', async () => {
-    const {repository,calls} = makeRepository({keySource:'focalroom',apiKeyTail:null,hostedAccount:{enabled:true,verified:true,policy:'deepseek-flash-v1',provider:'DeepSeek',model:'deepseek-flash',unit:'tokens',granted:1000,spent:0,reserved:1000,available:0}});
-    mount(repository);
-    expect(await screen.findByText('FocalRoom AI')).toBeVisible();
-    expect(screen.getByRole('alert')).toHaveTextContent('AI 额度不足');
-    expect(screen.queryByText(/DeepSeek/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button',{name:'开始选片'})).toBeDisabled();
-    await userEvent.click(screen.getByText('AI 设置'));
-    expect(screen.queryByLabelText('API Key（存入钥匙串）')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('模型轮次上限')).not.toBeInTheDocument();
-    expect(screen.queryByText('费用为估算值。')).not.toBeInTheDocument();
-    expect(calls).toEqual([]);
-  });
-  it('官方服务未登录时阻止委托，真实余额刷新后允许文本任务', async () => {
-    const {repository} = makeRepository({keySource:'focalroom',apiKeyTail:null,hostedError:'请先登录 FocalRoom'});
-    mount(repository);
-    expect(await screen.findByRole('alert')).toHaveTextContent('请先登录 FocalRoom');
-    expect(screen.getByRole('button',{name:'开始选片'})).toBeDisabled();
-    (repository.agent as {aiConfig:Mock}).aiConfig.mockResolvedValue({...readyConfig,keySource:'focalroom',apiKeyTail:null,hostedAccount:{enabled:true,verified:true,policy:'deepseek-flash-v1',provider:'DeepSeek',model:'deepseek-flash',unit:'tokens',granted:100000,spent:0,reserved:0,available:100000}});
-    // 额度恢复后重新挂载：不再有手动刷新按钮，配置查询自动更新
-    cleanup();
-    const recovered = makeRepository({keySource:'focalroom',apiKeyTail:null,hostedAccount:{enabled:true,verified:true,policy:'deepseek-flash-v1',provider:'DeepSeek',model:'deepseek-flash',unit:'tokens',granted:100000,spent:0,reserved:0,available:100000}});
-    mount(recovered.repository);
-    expect(await screen.findByRole('button',{name:'开始选片'})).toBeEnabled();
-    await userEvent.click(screen.getByRole('button',{name:'开始选片'}));
-    expect(recovered.calls).toHaveLength(1);
-  });
-  it('策展无需视觉能力，图像授权明确显示独立观察型号', async () => {
-    const { repository } = makeRepository({
-      modelId: 'curator-only', capabilities: ['tool_calling', 'instruction_following'],
-      observation: { modelId: 'observer-only', capabilities: ['vision', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null },
-    });
-    mount(repository);
-    const user = userEvent.setup();
-    await screen.findByText('FocalRoom AI');
-    await user.click(screen.getByText('模型设置'));
-    expect(screen.getByText('选片模型：curator-only · 图像模型：observer-only')).toBeVisible();
-    await user.clear(screen.getByLabelText('最多上传预览（张）'));
-    await user.type(screen.getByLabelText('最多上传预览（张）'), '2');
-    await user.click(screen.getByRole('button', { name: '开始选片' }));
-    const dialog = await screen.findByRole('dialog', { name: '云端图像授权' });
-        expect(dialog).toHaveTextContent('将向 FocalRoom AI 上传至多 2 张');
-        expect(dialog).not.toHaveTextContent('curator-only');
-    expect(screen.getByRole('button', { name: '仅本次任务（2 张）' })).toBeEnabled();
-  });
-  it('观察模型能力不足时禁止视觉授权，但保留零图像编辑与全局禁止', async () => {
-    const { repository, calls } = makeRepository({
-      observation: { modelId: 'observer-text', capabilities: ['instruction_following'], capabilitySource: 'operator_declaration', configurationError: '观察模型不支持视觉请求' },
-    });
-    mount(repository);
-    const user = userEvent.setup();
-    expect(await screen.findByRole('button', { name: '开始选片' })).toBeEnabled();
-    await user.clear(screen.getByLabelText('最多上传预览（张）'));
-    await user.type(screen.getByLabelText('最多上传预览（张）'), '2');
-    expect(await screen.findByRole('alert')).toHaveTextContent('观察模型不支持视觉请求');
-    expect(screen.getByRole('button', { name: '开始选片' })).toBeDisabled();
-    await user.click(screen.getByText('模型设置'));
-    await user.click(screen.getByRole('button', { name: '管理图像授权' }));
-    expect(await screen.findByRole('button', { name: '仅本次任务（2 张）' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '禁止云端图像' })).toBeEnabled();
-    expect(calls).toEqual([]);
-  });
-  it('已打开授权卡后能力配置失效仍可禁止图像，禁止继续授予和委托', async () => {
-    const { repository, calls } = makeRepository();
-    const { client } = mount(repository);
-    const user = userEvent.setup();
-    await screen.findByRole('button', { name: '开始选片' });
-    await user.clear(screen.getByLabelText('最多上传预览（张）'));
-    await user.type(screen.getByLabelText('最多上传预览（张）'), '2');
-    await user.click(screen.getByRole('button', { name: '开始选片' }));
-    expect(await screen.findByRole('dialog', { name: '云端图像授权' })).toBeInTheDocument();
-    await act(async () => { client.setQueryData(['ai-config', project.id], { ...readyConfig, capabilities: ['tool_calling', 'instruction_following'] }); });
-    expect(await screen.findByRole('alert')).toHaveTextContent('当前暂不支持分析画面');
-    expect(screen.getByRole('button', { name: '仅本次任务（2 张）' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '禁止云端图像' })).toBeEnabled();
-    await user.click(screen.getByRole('button', { name: '仅本次任务（2 张）' }));
-    const consent = (repository as { agent: { setConsent: Mock } }).agent.setConsent;
-    expect(consent).not.toHaveBeenCalled();
-    expect(calls).toHaveLength(0);
-    await user.click(screen.getByRole('button', { name: '禁止云端图像' }));
-    await vi.waitFor(() => expect(consent).toHaveBeenCalledWith('p1', 'deny', 0, null));
-    expect(screen.getByLabelText('最多上传预览（张）')).toHaveValue(0);
-    expect(calls.filter(call => call.command)).toHaveLength(0);
-  });
-  it('未知能力配置显示错误，点击或直接提交表单都不发起任务和授权', async () => {
-    const { repository, calls } = makeRepository({ capabilities: [], capabilitySource: null, configurationError: '当前模型缺少可信能力配置' });
-    mount(repository);
-    expect(await screen.findByRole('alert')).toHaveTextContent('当前模型缺少可信能力配置');
-    const start = screen.getByRole('button', { name: '开始选片' });
-    expect(start).toBeDisabled();
-    fireEvent.submit(start.closest('form')!);
-    expect(calls).toHaveLength(0);
-    expect(screen.queryByRole('dialog', { name: '云端图像授权' })).not.toBeInTheDocument();
-  });
-  it('文本模型保留无图任务，视觉预算开启时阻止授权，归零后恢复', async () => {
-    const { repository, calls } = makeRepository({ capabilities: ['tool_calling', 'instruction_following'] });
-    mount(repository);
-    const user = userEvent.setup();
-    const start = await screen.findByRole('button', { name: '开始选片' });
-    expect(start).toBeEnabled();
-    await user.clear(screen.getByLabelText('最多上传预览（张）'));
-    await user.type(screen.getByLabelText('最多上传预览（张）'), '2');
-    expect(await screen.findByRole('alert')).toHaveTextContent('当前暂不支持分析画面');
-    expect(screen.getByRole('button', { name: '开始选片' })).toBeDisabled();
-    fireEvent.submit(start.closest('form')!);
-    expect(calls).toHaveLength(0);
-    await user.clear(screen.getByLabelText('最多上传预览（张）'));
-    await user.type(screen.getByLabelText('最多上传预览（张）'), '0');
-    await user.click(screen.getByRole('button', { name: '开始选片' }));
-    await vi.waitFor(() => expect(calls.filter(call => call.command)).toHaveLength(1));
-    expect(calls[0].command).toMatchObject({ type: 'StartTask', budget: { maxCloudImages: 0 } });
-    expect((repository as { agent: { setConsent: Mock } }).agent.setConsent).not.toHaveBeenCalled();
-  });
-  it('配置查询失败时显示失败并阻止委托', async () => {
-    const { repository, calls } = makeRepository();
-    (repository as { agent: { aiConfig: Mock } }).agent.aiConfig.mockRejectedValue(new Error('invalid response'));
-    mount(repository);
-    expect(await screen.findByRole('alert')).toHaveTextContent('AI 服务连接失败');
-    expect(screen.getByRole('button', { name: 'AI 暂不可用' })).toBeDisabled();
-    expect(calls).toHaveLength(0);
-  });
-  it('视觉预算开启且无授权时，先弹授权卡，不直接发任务', async () => {
-    const { repository, calls } = makeRepository();
-    mount(repository as never);
-    const user = userEvent.setup();
-    await screen.findByRole('button', { name: '开始选片' });
-    await user.clear(screen.getByLabelText('最多上传预览（张）'));
-    await user.type(screen.getByLabelText('最多上传预览（张）'), '4');
-    await user.click(await screen.findByRole('button', { name: '开始选片' }));
-    expect(await screen.findByRole('dialog', { name: '云端图像授权' })).toBeInTheDocument();
-    expect(calls.filter(call => call.command)).toHaveLength(0);
-  });
-  it('选择仅本次任务后按配额授权并携带 consentId 发起任务', async () => {
-    const granted = { id: 9, projectId: 'p1', mode: 'task' as const, provider: 'openai@' + 'a'.repeat(64), quota: 4, used: 0, grantedAt: 'now', revokedAt: null };
-    const { repository, calls } = makeRepository();
-    const agent = (repository as { agent: { aiConfig: Mock } }).agent;
-    // 首次（面板加载）无授权；授权动作后再次查询返回已授权。
-    agent.aiConfig.mockResolvedValueOnce({ ...readyConfig, consent: null });
-    void granted;
-    mount(repository as never);
-    const user = userEvent.setup();
-    await screen.findByRole('button', { name: '开始选片' });
-    await user.clear(screen.getByLabelText('最多上传预览（张）'));
-    await user.type(screen.getByLabelText('最多上传预览（张）'), '4');
-    await user.click(await screen.findByRole('button', { name: '开始选片' }));
-    await user.click(await screen.findByRole('button', { name: '仅本次任务（4 张）' }));
-    const setConsentMock = (repository as { agent: { setConsent: Mock } }).agent.setConsent;
-    await vi.waitFor(() => expect(setConsentMock).toHaveBeenCalledWith('p1', 'task', 4, 'openai@' + 'a'.repeat(64)));
-    await vi.waitFor(() => expect(calls.filter(call => call.command)).toHaveLength(1));
-    expect(calls.find(call => call.command)?.command).toMatchObject({ type: 'StartTask', consentId: 9 });
-  });
-  it('禁止云端图像会把预算归零并回到本地任务', async () => {
-    const { repository } = makeRepository();
-    mount(repository as never);
-    const user = userEvent.setup();
-    await screen.findByRole('button', { name: '开始选片' });
-    await user.clear(screen.getByLabelText('最多上传预览（张）'));
-    await user.type(screen.getByLabelText('最多上传预览（张）'), '4');
-    await user.click(await screen.findByRole('button', { name: '开始选片' }));
-    await user.click(await screen.findByRole('button', { name: '禁止云端图像' }));
-    expect((screen.getByLabelText('最多上传预览（张）') as HTMLInputElement).value).toBe('0');
-    expect(screen.queryByRole('dialog', { name: '云端图像授权' })).not.toBeInTheDocument();
-    expect((repository as { agent: { setConsent: Mock } }).agent.setConsent).toHaveBeenCalledWith('p1', 'deny', 0, null);
-  });
-  it('旧的单次任务授权不能跳过下一次任务的确认', async () => {
-    const { repository, calls } = makeRepository({ consent: { id: 9, projectId: 'p1', mode: 'task', provider: 'openai@' + 'a'.repeat(64), quota: 4, used: 1, grantedAt: 'now', revokedAt: null } });
-    mount(repository);
-    const user = userEvent.setup();
-    await screen.findByRole('button', { name: '开始选片' });
-    await user.clear(screen.getByLabelText('最多上传预览（张）'));
-    await user.type(screen.getByLabelText('最多上传预览（张）'), '2');
-    await user.click(screen.getByRole('button', { name: '开始选片' }));
-    expect(await screen.findByRole('dialog', { name: '云端图像授权' })).toBeInTheDocument();
-    expect(calls.filter(call => call.command)).toHaveLength(0);
-  });
-});
-
-it('授权界面显示真实服务与型号，项目授权也携带明确回执 ID', async () => {
- const { repository, calls } = makeRepository();
- const user = userEvent.setup();
- mount(repository);
- await screen.findByRole('button', { name: '开始选片' });
- await user.clear(screen.getByLabelText('最多上传预览（张）'));
- await user.type(screen.getByLabelText('最多上传预览（张）'), '4');
- await user.click(screen.getByRole('button', { name: '开始选片' }));
- expect(screen.getByText(/不会自动转发给其他服务/)).toBeInTheDocument();
- await user.click(screen.getByRole('button', { name: '本项目（可撤回，100 张）' }));
- await vi.waitFor(() => expect(calls.find(c => c.command)?.command).toMatchObject({ consentId: 9 }));
-});
-it('其他收件人或已撤回的项目授权不能跳过明确授权', async () => {
- for (const consent of [
-  { provider: 'openai@' + 'b'.repeat(64), revokedAt: null },
-  { provider: readyConfig.consentProvider!, revokedAt: 'revoked' },
- ]) {
-  const { repository } = makeRepository({ consent: { id: 9, projectId: 'p1', mode: 'project', quota: 100, used: 0, grantedAt: 'now', ...consent } });
-  const mounted = mount(repository);
-  const user = userEvent.setup();
-  await screen.findByRole('button', { name: '开始选片' });
-  await user.clear(screen.getByLabelText('最多上传预览（张）'));
- await user.type(screen.getByLabelText('最多上传预览（张）'), '4');
-  await user.click(screen.getByRole('button', { name: '开始选片' }));
-  expect(screen.getByRole('dialog', { name: '云端图像授权' })).toBeInTheDocument();
-  expect((repository as { agent: { request: Mock } }).agent.request).not.toHaveBeenCalled();
-  mounted.unmount();
- }
-});
-it('服务目标变化时显示原因并刷新配置，授权失败不开始任务', async () => {
- const { repository } = makeRepository();
- const agent = (repository as { agent: { setConsent: Mock; aiConfig: Mock; request: Mock } }).agent;
- agent.setConsent.mockRejectedValue(Object.assign(new Error('服务目标已变化，请重新授权'), { code: 'CONSENT_TARGET_CHANGED' }));
- mount(repository);
- const user = userEvent.setup();
- await screen.findByRole('button', { name: '开始选片' });
- await user.clear(screen.getByLabelText('最多上传预览（张）'));
- await user.type(screen.getByLabelText('最多上传预览（张）'), '4');
- await user.click(screen.getByRole('button', { name: '开始选片' }));
- const reads = agent.aiConfig.mock.calls.length;
- await user.click(screen.getByRole('button', { name: '仅本次任务（4 张）' }));
- expect(await screen.findByRole('alert')).toHaveTextContent('服务目标已变化');
- await vi.waitFor(() => expect(agent.aiConfig.mock.calls.length).toBeGreaterThan(reads));
- expect(agent.request).not.toHaveBeenCalled();
-});
-
-it('已有项目授权可主动打开管理界面撤回，离线配置也保留禁止入口', async () => {
- const { repository } = makeRepository({ ready: false, consentProvider: null, configurationError: null });
- const user = userEvent.setup();
- mount(repository);
- await screen.findByRole('button', { name: 'AI 暂不可用' });
- await user.click(screen.getByText('模型设置'));
- await user.click(screen.getByRole('button', { name: '管理图像授权' }));
- expect(screen.getByRole('button', { name: '仅本次任务（0 张）' })).toBeDisabled();
- await user.click(screen.getByRole('button', { name: '禁止云端图像' }));
- const agent = (repository as { agent: { setConsent: Mock; request: Mock } }).agent;
- await vi.waitFor(() => expect(agent.setConsent).toHaveBeenCalledWith('p1', 'deny', 0, null));
- expect(agent.request).not.toHaveBeenCalled();
-});
-
-it('从管理入口更新项目授权不会自动创建编辑任务', async () => {
- const { repository } = makeRepository();
- const user = userEvent.setup();
- mount(repository);
- await screen.findByRole('button', { name: '开始选片' });
- await user.click(screen.getByText('模型设置'));
- await user.click(screen.getByRole('button', { name: '管理图像授权' }));
- await user.click(screen.getByRole('button', { name: '取消授权操作' }));
- expect(screen.queryByRole('dialog', { name: '云端图像授权' })).not.toBeInTheDocument();
- expect((repository as { agent: { setConsent: Mock } }).agent.setConsent).not.toHaveBeenCalled();
- await user.click(screen.getByRole('button', { name: '管理图像授权' }));
- await user.click(screen.getByRole('button', { name: '本项目（可撤回，100 张）' }));
- const agent = (repository as { agent: { setConsent: Mock; request: Mock } }).agent;
- await vi.waitFor(() => expect(agent.setConsent).toHaveBeenCalledWith('p1', 'project', 100, readyConfig.consentProvider));
- expect(agent.request).not.toHaveBeenCalled();
-});
-
-describe('免 Prompt 上下文动作', () => {
- const mountWithQuick = (repository: unknown, quickAction: unknown, onFired?: () => void) => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} selectedIds={['a']} initialGoal="选出最有叙事力的照片" onUpdated={() => {}} quickAction={quickAction as never} onQuickActionFired={onFired} /></QueryClientProvider>);
- };
- it('无图配置下快捷动作直接携带所选 photo_id 发起任务', async () => {
-  const { repository, calls } = makeRepository({ capabilities: ['tool_calling', 'instruction_following'] });
-  const onFired = vi.fn();
-  mountWithQuick(repository, { id: 'qa-1', goal: '比较照片 a 与 b 的叙事价值', count: 1, photoIds: ['a', 'b'] }, onFired);
-  await vi.waitFor(() => expect(calls.filter(call => call.command).length).toBe(1));
-  const command = calls.find(call => call.command)!.command as Extract<TaskCommand, { type: 'StartTask' }>;
-  expect(command.type).toBe('StartTask');
-  expect(command.goal).toContain('叙事价值');
-  expect(command.selectedPhotoIds).toEqual(['a', 'b']);
-  expect(command.targetCount).toBe(1);
-  expect(onFired).toHaveBeenCalled();
- });
- it('视觉预算开启且未授权时，快捷动作先弹授权，确认后按快捷参数发任务', async () => {
-  const { repository, calls } = makeRepository();
-  const user = userEvent.setup();
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const initial = <QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} selectedIds={['a']} initialGoal="选出最有叙事力的照片" onUpdated={() => {}} /></QueryClientProvider>;
-  const view = render(initial);
-  await screen.findByRole('button', { name: '开始选片' });
-  await user.clear(screen.getByLabelText('最多上传预览（张）'));
-  await user.type(screen.getByLabelText('最多上传预览（张）'), '4');
-  view.rerender(<QueryClientProvider client={client}><AIPanel repository={repository as never} project={project} selectedIds={['a']} initialGoal="选出最有叙事力的照片" onUpdated={() => {}} quickAction={{ id: 'qa-2', goal: '生成两版顺序', count: 4, photoIds: ['a', 'b', 'c', 'd'] }} /></QueryClientProvider>);
-  const dialog = await screen.findByRole('dialog', { name: '云端图像授权' });
-  expect(dialog).toBeVisible();
-  expect(calls.filter(call => call.command)).toHaveLength(0);
-  await user.click(screen.getByRole('button', { name: '仅本次任务（4 张）' }));
-  await vi.waitFor(() => expect(calls.filter(call => call.command).length).toBe(1));
-  const command = calls.find(call => call.command)!.command as Extract<TaskCommand, { type: 'StartTask' }>;
-  expect(command.goal).toBe('生成两版顺序');
-  expect(command.selectedPhotoIds).toEqual(['a', 'b', 'c', 'd']);
-  expect(command.consentId).toBe(9);
- });
+describe('选片对话与本次预览使用', () => {
+ it('仅打开对话不会授权、发送任务或伪造回复', async () => { const { repository } = mount(); await ready(); expect(repository.agent.setConsent).not.toHaveBeenCalled(); expect(repository.agent.request).not.toHaveBeenCalled(); expect(screen.queryByText('管理图像授权')).not.toBeInTheDocument(); });
+ it('发送时先绑定本次预览范围，再委托真实任务', async () => { const { repository } = mount(); await ready(); await userEvent.click(send()); await waitFor(() => expect(repository.agent.request).toHaveBeenCalled()); expect(repository.agent.setConsent).toHaveBeenCalledWith('p1', 'task', 2, readyConfig.consentProvider); expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'StartTask', consentId: 9, targetCount: 1, selectedPhotoIds: [], budget: expect.objectContaining({ maxCloudImages: 2 }) })); expect(repository.agent.setConsent.mock.invocationCallOrder[0]).toBeLessThan(repository.agent.request.mock.invocationCallOrder[0]); expect(screen.getByLabelText('选片消息')).toHaveValue(''); });
+ it('授权写入失败时保留输入，不开始任务、不自动重试', async () => { const repo = fixture(); repo.agent.setConsent.mockRejectedValue(new Error('保存失败')); mount(repo); await ready(); await userEvent.click(send()); expect(await screen.findByRole('alert')).toHaveTextContent('保存失败'); expect(repo.agent.request).not.toHaveBeenCalled(); expect(repo.agent.setConsent).toHaveBeenCalledTimes(1); expect(screen.getByLabelText('选片消息')).not.toHaveValue(''); });
+ it('服务身份在发送前改变时拒绝委托，不误发到新供应商', async () => { const repo = fixture(); mount(repo); await ready(); repo.agent.aiConfig.mockResolvedValue({ ...readyConfig, consentProvider: 'other' }); await userEvent.click(send()); expect(await screen.findByRole('alert')).toHaveTextContent('服务配置已变更'); expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).not.toHaveBeenCalled(); });
+ it('未知视觉接收方不能授权或发送', async () => { const repo = fixture({ consentProvider: null }); mount(repo); await ready(); await userEvent.click(send()); await screen.findByRole('alert'); expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).not.toHaveBeenCalled(); });
+ it('发送前配置查询失败时拒绝委托', async () => { const repo = fixture(); mount(repo); await ready(); repo.agent.aiConfig.mockRejectedValue(new Error('network')); await userEvent.click(send()); await screen.findAllByRole('alert'); expect(repo.agent.request).not.toHaveBeenCalled(); });
+ it('文本服务不授权图片，明确提示且以零图像预算运行', async () => { const repo = fixture({ capabilities: ['tool_calling', 'instruction_following'] }); mount(repo); await ready(); expect(screen.getByText(/当前服务不支持看图/)).toBeVisible(); await userEvent.click(send()); await waitFor(() => expect(repo.agent.request).toHaveBeenCalled()); expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ consentId: null, budget: expect.objectContaining({ maxCloudImages: 0 }) })); });
+ it('独立视觉模型的能力用于实际预览预算', async () => { const repo = fixture({ capabilities: ['tool_calling'], observation: { modelId: 'observer', capabilities: ['vision', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null } }); mount(repo); await ready(); await userEvent.click(send()); await waitFor(() => expect(repo.agent.setConsent).toHaveBeenCalled()); });
+ it.each([{ ready: false }, { configurationError: '配置无效' }, { keySource: 'focalroom', hostedError: '请先登录' }, { keySource: 'focalroom', hostedAccount: { enabled: true, verified: true, available: 0 } }, { keySource: 'focalroom', hostedAccount: { enabled: false, verified: true, available: 100 } }])('未就绪/未登录/零额度阻止发送：%j', async config => { const repo = fixture(config as Partial<AiConfig>); mount(repo); await screen.findByRole('status'); expect(send()).toBeDisabled(); fireEvent.submit(send().closest('form')!); expect(repo.agent.request).not.toHaveBeenCalled(); });
+ it('选区为空不会隐式扩大为全项目', async () => { const { repository, rerender, panel } = mount(); await ready(); await userEvent.selectOptions(screen.getByLabelText('照片范围'), 'selected'); rerender(panel({ selectedIds: [] })); expect(send()).toBeDisabled(); fireEvent.submit(send().closest('form')!); expect(repository.agent.request).not.toHaveBeenCalled(); });
+ it('选区发送只携带选中的 ID 和对应预算', async () => { const { repository } = mount(); await ready(); await userEvent.selectOptions(screen.getByLabelText('照片范围'), 'selected'); await userEvent.click(send()); await waitFor(() => expect(repository.agent.request).toHaveBeenCalled()); expect(repository.agent.setConsent).toHaveBeenCalledWith('p1', 'task', 1, readyConfig.consentProvider); expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ selectedPhotoIds: ['a'] })); });
+ it('连续提交只创建一次授权与任务', async () => { const { repository } = mount(); await ready(); fireEvent.submit(send().closest('form')!); fireEvent.submit(send().closest('form')!); await waitFor(() => expect(repository.agent.request).toHaveBeenCalledTimes(1)); expect(repository.agent.setConsent).toHaveBeenCalledTimes(1); });
+ it('自然语言中明确的张数同步到保留选项', async () => { mount(); await ready(); fireEvent.change(screen.getByLabelText('选片消息'), { target: { value: '给旅行摄影书选出 7 张照片' } }); expect(screen.getByLabelText('保留张数')).toHaveValue(7); });
+ it('快捷比较只填写消息，等待用户发送', async () => { const { repository } = mount(fixture(), { quickAction: { id: 'q1', goal: '比较这两张', count: 1, photoIds: ['a'] } }); await ready(); expect(screen.getByLabelText('选片消息')).toHaveValue('比较这两张'); expect(screen.getByLabelText('照片范围')).toHaveValue('selected'); expect(repository.agent.request).not.toHaveBeenCalled(); });
+ it('追问回答发送反馈，不创建新任务或图片授权', async () => { const repo = fixture({}, { tasks: [task('needs_input')], drafts: [] }); mount(repo); await ready(); expect(screen.getByText('希望以人物为主吗？')).toBeVisible(); await userEvent.click(send()); await waitFor(() => expect(repo.agent.request).toHaveBeenCalledWith('p1', { type: 'SubmitFeedback', taskId: 't1', answer: '选出有叙事力的照片' })); expect(repo.agent.setConsent).not.toHaveBeenCalled(); });
+ it('补充要求保留上一轮目标', async () => { const repo = fixture({}, { tasks: [task('review_ready')], drafts: [] }); mount(repo); await ready(); await userEvent.click(send()); await waitFor(() => expect(repo.agent.request).toHaveBeenCalled()); expect(repo.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ goal: '旅行故事\n\n补充要求：选出有叙事力的照片' })); });
+ it('运行中的任务禁用再次发送，暂停按钮传递真实任务 ID', async () => { const repo = fixture({}, { tasks: [task('running')], drafts: [] }); mount(repo); await screen.findByText('执行中'); expect(send()).toBeDisabled(); await userEvent.click(screen.getByRole('button', { name: '暂停' })); await waitFor(() => expect(repo.agent.request).toHaveBeenCalledWith('p1', { type: 'PauseTask', taskId: 't1' })); });
+ it('设置只提供照片数与等待时间，不暴露引擎参数', async () => { mount(fixture(), { settingsOpen: true }); expect(await screen.findByRole('dialog', { name: '设置' })).toBeVisible(); expect(screen.getByLabelText('每次最多分析照片')).toBeVisible(); expect(screen.getByLabelText('最长等待时间')).toBeVisible(); expect(screen.queryByLabelText('模型轮次上限')).not.toBeInTheDocument(); });
 });
