@@ -15,7 +15,7 @@ export function PhotoInspector({ photo, busy, onDecide, onRate, onNote, onBookMa
   const note = draft ?? localNote;
   return <section aria-label={zh.inspector}><button className="inspector-preview" aria-label={zh.enlarge} onClick={() => onEnlarge(photo)}>
     <img src={photo.previewSrc ?? photo.src} alt={`当前选中：${photo.name}`} /><Maximize2 size={16} /></button>
-    <div className="micro">FRAME {String(photo.index).padStart(2, '0')} / {photo.originalPath ? 'LOCAL PHOTO' : 'SAMPLE ROLL'}</div>
+    <div className="micro">FRAME {String(photo.index).padStart(2, '0')}</div>
     <h3>{photo.name}</h3><div className={`status-label ${photo.status}`}>{String(zh['status.' + photo.status] ?? photo.status)}</div>
     {photo.isMissing && <div className="missing-notice"><p>原图失联，缓存预览仍可查看。</p><Button size="small" disabled={busy} onClick={onRelink}>重新定位原图</Button></div>}
     {photo.width && <p className="micro">{photo.width} × {photo.height}</p>}

@@ -39,23 +39,24 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  await page.goto('/#/project/' + project.id);
  await expect(page.getByRole('heading', { name: 'M2 · 草案与人工决定' })).toBeVisible();
  await page.screenshot({ path: resolve(screenshots, 'workspace.png') });
- await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
- await page.getByRole('textbox', { name: 'Agent 编辑目标' }).fill('给两版 25 张序列');
+ await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+ await page.getByRole('textbox', { name: '选片目标' }).fill('给两版 25 张序列');
+ await page.getByRole('spinbutton', { name: '目标照片数' }).fill('25');
  await page.locator('.agent-form summary').click();
  await page.getByRole('spinbutton', { name: '模型轮次上限' }).fill('2');
- await page.getByRole('button', { name: '运行示例任务' }).click();
+ await page.getByRole('button', { name: '开始选片' }).click();
  await expect(page.locator('.agent-task > strong')).toHaveText('已暂停', { timeout: 15000 });
  await expect(page.locator('.agent-task > strong')).toBeInViewport();
  await page.screenshot({ path: resolve(screenshots, 'paused.png') });
  await page.reload();
- await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
- await page.getByRole('button', { name: '按已保存预算恢复（2 轮 / 40 工具）' }).click();
+ await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+ await page.getByRole('button', { name: '继续选片' }).click();
  await expect(page.locator('.agent-task > strong')).toHaveText('已暂停');
  expect((await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0].usage.modelTurns).toBe(2);
  await page.getByRole('button', { name: '任务设置' }).click();
  await page.locator('.agent-form summary').click();
  await page.getByRole('spinbutton', { name: '模型轮次上限' }).fill('16');
- await page.getByRole('button', { name: '按当前预算恢复' }).click();
+ await page.getByRole('button', { name: '按新设置继续' }).click();
  await expect(page.locator('.agent-task > strong')).toHaveText('待审核', { timeout: 20000 });
  await expect(page.locator('.agent-drafts article')).toHaveCount(2);
  expect((await rpc<Project>('get_project', { projectId: project.id })).sequence).toHaveLength(0);
@@ -67,7 +68,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  // 在任务完成后人工保留一张未在候选中的照片，两个草案必须过期。
  project = await rpc<Project>('update_photo_decision', { projectId: project.id, expectedRevision: project.revision, photoId: project.photos[199].id, status: 'keep' });
  await page.reload();
- await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
+ await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
  await expect(page.locator('.agent-task > strong')).toHaveText('项目已更新');
  await page.getByRole('button', { name: '查看草案差异' }).first().click();
  const dialog = page.getByRole('dialog');
@@ -121,13 +122,13 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  expect((await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0].state).toBe('cancelled');
  // 当前没有云服务也能主动管理/禁止全部服务的图像授权，重启后保留。
  const beforeDeny = await rpc<AgentProjection>('get_agent_projection', { projectId: project.id });
- await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
+ await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
  await page.locator('.ai-config > summary').click();
  await page.getByRole('button', { name: '管理图像授权' }).click();
  const consentDialog = page.getByRole('dialog', { name: '云端图像授权' });
  await expect(consentDialog.getByRole('button', { name: /^仅本次任务/ })).toBeDisabled();
  await expect(consentDialog.getByRole('button', { name: /^本项目/ })).toBeDisabled();
- await expect(consentDialog).toContainText('服务地址：未配置');
+ await expect(consentDialog).toContainText('当前未配置云端图像服务');
  await mkdir(resolve('../docs/evidence/v2-m3-provider-consent'), { recursive: true });
  await consentDialog.scrollIntoViewIfNeeded();
  await page.screenshot({ path: resolve('../docs/evidence/v2-m3-provider-consent/offline-revoke-ui.png') });

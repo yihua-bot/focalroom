@@ -55,9 +55,9 @@ test('工作台与检查器截图，完整构图、密度切换和面板收起',
   await page.screenshot({ path: resolve(screenshots, 'workspace.png') });
   await page.getByRole('button', { name: '切换网格密度' }).click();
   await expect(page.locator('.contact-grid')).toHaveClass(/dense/);
-  await page.getByRole('button', { name: '收起检查器' }).click();
+  await page.getByRole('button', { name: '收起侧栏' }).click();
   await expect(page.locator('.inspector')).toHaveCount(0);
-  await page.getByRole('button', { name: '展开检查器' }).click();
+  await page.getByRole('button', { name: '展开侧栏' }).click();
   await expect(page.locator('.inspector')).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -189,10 +189,10 @@ test('AI、导入和导出边界明示；没有外部请求', async ({ page }) =
   const external: string[] = [];
   page.on('request', request => { if (!request.url().startsWith('http://localhost:1420')) external.push(request.url()); });
   await ready(page);
-  await page.getByRole('main').getByRole('button', { name: '编辑建议' }).click();
-  await expect(page.getByRole('button', { name: '运行示例任务' })).toBeDisabled();
+  await page.getByRole('main').getByRole('button', { name: 'AI 智能选片' }).click();
+  await expect(page.getByRole('button', { name: 'AI 暂不可用' })).toBeDisabled();
   await page.getByRole('button', { name: '导出 ↗' }).click();
-  await expect(page.getByRole('button', { name: '项目 JSON' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '共享预览包' })).toBeDisabled();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '导入照片', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('请在桌面版导入照片。');

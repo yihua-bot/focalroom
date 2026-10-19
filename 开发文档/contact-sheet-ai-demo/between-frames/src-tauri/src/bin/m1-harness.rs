@@ -201,6 +201,10 @@ impl Harness {
             .unwrap(),
             "get_ai_config" => {
                 let mut config = serde_json::to_value(self.agent.ai_config()).unwrap();
+                // 隔离测试提供可运行的假模型；正式客户端不会编译此二进制。
+                if config["providerId"] == "mock" {
+                    config["ready"] = json!(true);
+                }
                 config["consent"] = serde_json::to_value(
                     between_frames_lib::agent::consent::effective_view(
                         &self.store,

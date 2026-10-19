@@ -40,7 +40,7 @@ test('v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、�
   await page.goto('/');
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByRole('textbox', { name: '项目名称' }).fill('光线的间隙 · M1 验收');
-  await page.getByRole('textbox', { name: '你希望这组照片表达什么？' }).fill('在日常空间里，寻找画面之间的距离、光线与沉默。');
+  await page.getByRole('textbox', { name: '创作意图' }).fill('在日常空间里，寻找画面之间的距离、光线与沉默。');
   await page.getByRole('button', { name: '创建并打开' }).click();
   await expect(page.getByRole('heading', { name: '暂无照片' })).toBeVisible();
   await page.screenshot({ path: resolve(screenshots, 'empty.png') });
@@ -130,20 +130,23 @@ test('v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、�
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await page.getByRole('button', { name: '导出 ↗' }).click();
-  for (const name of ['项目 JSON', '选片 CSV', '接触印相']) {
-    await page.getByRole('button', { name, exact: true }).click();
-    await expect(page.locator('.export-receipt')).toContainText('已导出：');
-    const text = await page.locator('.export-receipt p').innerText();
-    const bytes = await readFile(text.replace('已导出：', ''));
-    const hash = createHash('sha256').update(bytes).digest('hex');
-    if (name === '项目 JSON') {
+  await page.getByRole('button', { name: '照片总览', exact: true }).click();
+  await expect(page.locator('.export-receipt')).toContainText('已导出：');
+  const htmlPath = (await page.locator('.export-receipt p').innerText()).replace('已导出：', '');
+  const htmlBytes = await readFile(htmlPath);
+  await expect(page.locator('.export-receipt')).toContainText(createHash('sha256').update(htmlBytes).digest('hex'));
+  expect(htmlBytes.toString('utf8')).not.toContain(before.photos[0].originalPath);
+  // JSON/CSV 保留后端兼容性校验，正式导出界面使用面向作品的选项。
+  for (const format of ['json', 'csv']) {
+    const receipt = await rpc<{ path: string; sha256: string }>('export_project', { projectId, format, includePaths: false });
+    const bytes = await readFile(receipt.path);
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(receipt.sha256);
+    if (format === 'json') {
       const exported = JSON.parse(bytes.toString('utf8'));
       expect(exported.includesLocalPaths).toBe(false);
       expect(exported.photos[0]).not.toHaveProperty('originalPath');
       expect(bytes.toString('utf8')).not.toContain(before.photos[0].originalPath);
-    }
-    if (name === '选片 CSV') expect(bytes.toString('utf8').split('\r\n')[0]).not.toContain('original_path');
-    await expect(page.locator('.export-receipt')).toContainText(hash);
+    } else expect(bytes.toString('utf8').split('\r\n')[0]).not.toContain('original_path');
   }
   await page.keyboard.press('Escape');
   await rpc('test_move_source', { projectId });
@@ -159,7 +162,7 @@ test('v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、�
   await expect(ownCard).toHaveCount(0);
   await page.locator('.project-list-tools').getByRole('button', { name: '归档项目', exact: true }).click();
   await ownCard.getByRole('button', { name: '恢复项目', exact: true }).click();
-  await expect(ownCard.getByText('PROJECT CACHE', { exact: true })).toBeVisible();
+  await expect(ownCard.getByRole('button', { name: /200 张照片/ })).toBeVisible();
   await expect(ownCard.getByRole('button', { name: '归档项目', exact: true })).toBeVisible();
   expect(errors).toEqual([]);
   expect(externalRequests).toEqual([]);

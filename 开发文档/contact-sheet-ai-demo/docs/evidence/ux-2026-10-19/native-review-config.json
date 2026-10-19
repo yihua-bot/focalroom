@@ -1,0 +1,1 @@
+{"productName": "FocalRoom UX Review", "identifier": "studio.focalroom.uxreview", "app": {"windows": [{"label": "main", "title": "FocalRoom", "width": 1440, "height": 960, "minWidth": 960, "minHeight": 680, "backgroundColor": "#101113"}]}, "plugins": {"deep-link": {"desktop": {"schemes": ["focalroom-uxreview"]}}}}

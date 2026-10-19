@@ -12,9 +12,10 @@ import { AppShell } from './AppShell';
 import { SideNav } from './SideNav';
 import { Workspace } from './Workspace';
 import { zh } from './copy';
+import { useI18n } from '../i18n';
 import { ProjectList } from '../features/project/ProjectList';
 import { ProjectDialog } from '../features/project/ProjectDialog';
-import { QuickStartModal } from '../features/quick-start/QuickStartModal';
+import { QuickStartModal, parseGoal } from '../features/quick-start/QuickStartModal';
 import { PhotoInspector } from '../components/inspector/PhotoInspector';
 import { CompareModal } from '../components/compare/CompareModal';
 import { AgentStatus } from '../features/ai-editor/AgentStatus';
@@ -35,6 +36,7 @@ import type { SelectionGesture } from '../domain/selection';
 type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' | 'activity' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
 
 export function AppController({ repository }: { repository: ProjectRepository }) {
+  useI18n();
   const local = isDesktopRepository(repository);
   const route = useRoute(local);
   const ui = useUIStore();
@@ -44,8 +46,8 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const query = useQuery({ queryKey: ['projects', archived], queryFn: () => repository.list(archived), refetchOnWindowFocus: local ? 'always' : false });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
-  const [pendingGoal, setPendingGoal] = useState<{ goal: string; count: number } | null>(null);
-  const [quickAction, setQuickAction] = useState<QuickAgentAction | null>(null);
+  const [pendingGoal, setPendingGoal] = useState<{ projectId: string; goal: string; count: number } | null>(null);
+  const [quickAction, setQuickAction] = useState<(QuickAgentAction & { projectId: string }) | null>(null);
   const [notice, setNotice] = useState('');
   useEffect(() => {
     if (!local) return;
@@ -63,8 +65,6 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const project = projects.find(item => item.id === route.projectId);
   const sharing = useQuery({ queryKey: ['sharing', project?.id], enabled: !!(local && repository.sharing && project), queryFn: () => local && repository.sharing && project ? repository.sharing.status(project.id) : Promise.resolve(null), refetchOnWindowFocus: true });
   const readOnly = !!sharing.data && sharing.data.authority !== 'local';
-  const [lastProjectId, setLastProjectId] = useState('sample-project');
-  const navProject = project ?? projects.find(item => item.id === lastProjectId);
   const mutation = useMutation({ mutationFn: (task: () => Promise<Project>) => task(), onSuccess: updated => {
     if (updated.archived) {
       client.setQueryData<Project[]>(['projects', false], previous => previous?.filter(item => item.id !== updated.id));
@@ -77,7 +77,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
   }, onError: error => { setNotice(`操作失败：${error.message}`); void client.invalidateQueries({ queryKey: ['projects'] }); } });
   const refresh = useCallback(() => { void client.invalidateQueries({ queryKey: ['projects'] }); void client.invalidateQueries({ queryKey: ['sharing'] }); }, [client]);
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 4000); return () => window.clearTimeout(timer); }, [notice]);
-  const openProject = (id: string) => { ui.reset(); ui.select(projects.find(item => item.id === id)?.photos[0]?.id ?? null); setLastProjectId(id); navigate(id); };
+  const openProject = (id: string) => { ui.reset(); ui.select(projects.find(item => item.id === id)?.photos[0]?.id ?? null); navigate(id); };
   const terms = ui.search.normalize('NFKC').toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
   const visible = project?.photos.filter(photo => (ui.filter === 'all' || photo.status === ui.filter) && terms.every(term => `${photo.name} ${photo.note} ${photo.index}`.normalize('NFKC').toLocaleLowerCase().includes(term))) ?? [];
   const kept = project?.sequence.map(id => project.photos.find(photo => photo.id === id)).filter((photo): photo is Photo => Boolean(photo)) ?? [];
@@ -104,12 +104,12 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const photoName = (id: string) => project?.photos.find(photo => photo.id === id)?.name ?? id;
   const aiCompare = local && project && selectedIds.length === 2 ? () => {
     const [a, b] = selectedIds;
-    setQuickAction({ id: crypto.randomUUID(), count: 1, photoIds: [a, b],
+    setQuickAction({ projectId: project.id, id: crypto.randomUUID(), count: 1, photoIds: [a, b],
       goal: `比较照片「${photoName(a)}」与「${photoName(b)}」：哪一张更能推动叙事主线？给出结论、理由与各自适合的位置；不直接修改选片状态。` });
     ui.setPanel('ai');
   } : undefined;
   const aiOrder = local && project && selectedIds.length >= 2 ? () => {
-    setQuickAction({ id: crypto.randomUUID(), count: selectedIds.length, photoIds: [...selectedIds],
+    setQuickAction({ projectId: project.id, id: crypto.randomUUID(), count: selectedIds.length, photoIds: [...selectedIds],
       goal: `为选中的 ${selectedIds.length} 张照片生成两版不同的作品顺序方案（方案 A / 方案 B），各自解释编排逻辑、开合节奏与适用场景；输出为可审阅草案。` });
     ui.setPanel('ai');
   } : undefined;
@@ -172,9 +172,8 @@ export function AppController({ repository }: { repository: ProjectRepository })
     { id: 'help', group: '帮助', label: '快捷键与帮助', run: () => setDialog({ kind: 'help' }) },
   );
   if (local) paletteCommands.push({ id: 'quick-start', group: '项目', label: '快速开始：用一句话创建项目', run: () => { setArchived(false); setDialog({ kind: 'quickStart' }); } });
-  const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector">
-    <h2 className="editor-title">{zh.editorTitle}</h2>
-    <div className="right-tabs" aria-label="检查器面板">{(['photo', 'ai', 'memory'] as const).map(key => <button key={key} className={ui.panel === key ? 'active' : ''} aria-pressed={ui.panel === key} onClick={() => ui.setPanel(key)}>{key === 'photo' ? '照片检查' : key === 'ai' ? zh.ai : zh.memory}</button>)}</div>
+  const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector" aria-label={ui.panel === 'photo' ? zh.editorTitle : ui.panel === 'ai' ? zh.ai : zh.memory}>
+    <h2 className="editor-title">{ui.panel === 'photo' ? zh.editorTitle : ui.panel === 'ai' ? zh.ai : zh.memory}</h2>
     {ui.panel === 'photo' ? (active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending || readOnly} onDecide={decide}
       onRate={(id, rating) => act(() => repository.rate(project.id, [id], rating))}
       onBookMark={local && project ? (id, mark) => act(() => repository.setBookMark(project.id, id, mark), mark === 'spread' ? '已设为跨页大图' : mark === 'full' ? '已设为整页图' : '已清除册页标记') : undefined}
@@ -183,12 +182,12 @@ export function AppController({ repository }: { repository: ProjectRepository })
       onRelink={local ? () => { act(async () => (await repository.relink(project.id, active.id)) ?? project); } : undefined}
       onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
       : <EmptyState title="选择一张照片" hint="点击网格，开始检查画面。" />)
-      : ui.panel === 'ai' ? <><AIPanel repository={local ? repository : undefined} project={project} selectedIds={selectedIds} initialGoal={pendingGoal?.goal} initialCount={pendingGoal?.count} quickAction={quickAction} onQuickActionFired={() => setQuickAction(null)} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /><ProposalsPanel project={project} enabled={local} /></> : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
+      : ui.panel === 'ai' ? <><AIPanel key={project.id} repository={local ? repository : undefined} project={project} selectedIds={selectedIds} initialGoal={pendingGoal?.projectId === project.id ? pendingGoal.goal : project.brief} initialCount={pendingGoal?.projectId === project.id ? pendingGoal.count : Math.min(parseGoal(project.brief).count, project.photos.length || 100)} quickAction={quickAction?.projectId === project.id ? quickAction : null} onQuickActionFired={() => setQuickAction(null)} onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }} /><ProposalsPanel project={project} enabled={local} /></> : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
   </aside> : undefined;
-  return <><AppShell inspector={panel} collapsed={!ui.sidebarOpen} nav={<SideNav cloudAuth={local ? repository.cloudAuth : undefined} project={navProject} page={route.page} view={ui.view} local={local} authority={sharing.data?.authority}
-    onView={view => { if (!navProject) return; if (route.page === 'projects') navigate(navProject.id); ui.setView(view); }}
-    onProjects={() => { setArchived(false); navigate(null); }} onMemory={() => { if (navProject) navigate(navProject.id); ui.setPanel('memory'); }} onHelp={() => setDialog({ kind: 'help' })} />}>
-    {query.isPending ? <p role="status" className="page-message">正在打开示例项目…</p> : query.isError ? <EmptyState title="项目加载失败" hint={query.error.message} action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />
+  return <><AppShell inspector={panel} assistant={ui.panel !== 'photo'} collapsed={!ui.sidebarOpen} nav={<SideNav cloudAuth={local ? repository.cloudAuth : undefined} project={route.page === 'workspace' ? project : undefined} page={route.page} view={ui.view} local={local} authority={sharing.data?.authority}
+    onView={ui.setView} onAI={() => ui.setPanel('ai')}
+    onProjects={() => { setArchived(false); navigate(null); }} onMemory={() => ui.setPanel('memory')} onHelp={() => setDialog({ kind: 'help' })} />}>
+    {query.isPending ? <p role="status" className="page-message">正在加载项目…</p> : query.isError ? <EmptyState title="项目加载失败" hint={query.error.message} action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />
       : route.page === 'projects' ? <ProjectList projects={projects} onOpen={openProject} onCreate={() => { setArchived(false); setPendingGoal(null); setDialog({ kind: 'create' }); }} onQuickStart={local ? () => { setArchived(false); setDialog({ kind: 'quickStart' }); } : undefined} local={local} archived={archived}
         onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })}
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />
@@ -198,10 +197,10 @@ export function AppController({ repository }: { repository: ProjectRepository })
   </AppShell>
     {local && project && !(ui.inspectorOpen && ui.panel === 'ai') && <AgentStatus repository={repository} projectId={project.id} onOpen={() => ui.setPanel('ai')} />}
     {notice && <div role="status" className="toast">{notice}</div>}
-    {dialog?.kind === 'quickStart' && local && <QuickStartModal onClose={() => setDialog(null)} onCreate={(title, goal, count) => { setPendingGoal({ goal, count }); mutation.mutate(() => repository.create(title, ''), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); ui.setPanel('ai'); setLastProjectId(created.id); navigate(created.id); } }); }} onImport={() => setTimeout(() => setDialog({ kind: 'import' }), 300)} />}
+    {dialog?.kind === 'quickStart' && local && <QuickStartModal busy={mutation.isPending} onClose={() => setDialog(null)} onCreate={(title, goal, count) => { mutation.mutate(() => repository.create(title, goal), { onSuccess: created => { setPendingGoal({ projectId: created.id, goal, count }); ui.reset(); ui.setPanel('ai'); navigate(created.id); setDialog({ kind: 'import' }); } }); }} />}
       {(dialog?.kind === 'create' || dialog?.kind === 'edit') && <ProjectDialog project={dialog.kind === 'edit' ? project : undefined} busy={mutation.isPending} onClose={() => setDialog(null)} onSave={(title, brief, tags) => {
       if (dialog.kind === 'edit' && project) act(async () => { const updated = await repository.edit(project.id, title, brief); if (tags) await repository.setTags(project.id, tags); return updated; }, local ? '项目已保存到本地' : zh.savedProject, true);
-      else mutation.mutate(() => repository.create(title, brief), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); setLastProjectId(created.id); navigate(created.id); } });
+      else mutation.mutate(() => repository.create(title, brief), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); navigate(created.id); } });
     }} />}
     {dialog?.kind === 'compare' && project && <CompareModal left={dialog.left} right={dialog.right} busy={mutation.isPending} onClose={() => setDialog(null)} onCompare={(preferred, reason) => act(() => repository.compare(project.id, dialog.left.id, dialog.right.id, preferred, reason), zh.savedCompare, true)} />}
     {dialog?.kind === 'versions' && project && <VersionsDialog project={project} busy={mutation.isPending} onClose={() => setDialog(null)}
@@ -209,7 +208,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       onRestore={versionId => act(() => repository.restoreVersion(project.id, versionId), '版本已恢复，可撤销此操作', true)} />}
     {dialog?.kind === 'activity' && project && <ActivityDialog project={project} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'export' && <ExportDialog repository={local ? repository : undefined} projectId={project?.id} revision={project?.revision} onChanged={refresh} onClose={() => setDialog(null)} />}
-    {dialog?.kind === 'import' && (local && project ? <ImportDialog repository={repository} projectId={project.id} onClose={() => { setDialog(null); refresh(); }} onChanged={refresh} />
+    {dialog?.kind === 'import' && (local ? project && <ImportDialog repository={repository} projectId={project.id} onClose={() => { setDialog(null); refresh(); }} onChanged={refresh} />
       : <Modal title={zh.import} description="请在桌面版导入照片。" onClose={() => setDialog(null)}><div className="dialog-actions"><Button onClick={() => setDialog(null)}>继续体验示例项目</Button></div></Modal>)}
     {dialog?.kind === 'archive' && local && <Modal title="确认归档项目" description={`“${dialog.project.title}”将移至归档列表，可随时恢复。原图、备注和决策日志全部保留。`} onClose={() => setDialog(null)}>
       <div className="dialog-actions"><Button onClick={() => setDialog(null)}>取消</Button><Button variant="primary" onClick={() => {

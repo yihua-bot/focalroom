@@ -47,13 +47,14 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   // 3. 委托 Agent（本地 Mock，零图像）。
   await page.goto('/#/project/' + project.id);
   await expect(page.getByRole('heading', { name: '成长的摄影书' })).toBeVisible();
-  await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
-  await page.getByRole('button', { name: '运行示例任务' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+  await page.getByRole('textbox', { name: '选片目标' }).fill('整理成长的摄影书，突出窗边的光线');
+  await page.getByRole('button', { name: '开始选片' }).click();
   await expect(page.locator('.agent-task > strong')).toHaveText('待审核', { timeout: 30000 });
   await expect(page.locator('.agent-drafts article')).toHaveCount(2);
   await page.screenshot({ path: resolve(screenshots, 'journey-drafts.png') });
   // 4. 记忆面板出现人工证据与假设，纠正一条假设（AG-11 旅程级）。
-  await page.locator('aside button[aria-pressed]').getByText('审美记忆').click();
+  await page.getByRole('button', { name: '审美记忆', exact: true }).click();
   await expect(page.getByText('人工证据')).toBeVisible();
   const memory = await rpc<{ evidence: unknown[]; hypotheses: { id: number; statement: string }[] }>('get_memory_projection', { projectId: project.id });
   expect(memory.evidence.length).toBeGreaterThanOrEqual(11);
@@ -69,7 +70,7 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   expect(after?.disabled).toBe(true);
   await page.screenshot({ path: resolve(screenshots, 'journey-memory.png') });
   // 5. 局部采纳一份草案的部分照片。
-  await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
   await page.getByRole('button', { name: '查看草案差异' }).first().click();
   await page.getByRole('button', { name: '清除选择' }).click();
   const checkboxes = page.locator('.draft-items input[type="checkbox"]');
@@ -82,7 +83,7 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   // 6. 导出 CSV（默认私密）。
   const exported = await rpc<{ path: string }>('export_project', { projectId: project.id, format: 'csv', includePaths: false });
   expect(await readFile(exported.path, 'utf8')).not.toContain('original_path');
-  // 6.1 新格式走实际前端按钮、IPC 和 Rust 导出器，不能只测库函数。
+  // 6.1 印刷参考走当前 GUI、IPC 和 Rust 导出器。
   await page.getByRole('button', { name: '导出 ↗' }).click();
   await page.getByRole('button', { name: '印刷参考', exact: true }).click();
   await expect(page.locator('.export-receipt')).toContainText('已导出：');
@@ -98,9 +99,9 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
     const pages = pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)?.length ?? 0;
     expect(pages).toBe(1 + (printHtml.match(/class="sheet"/g)?.length ?? 0));
   } finally { await printPage.close(); }
-  await page.getByRole('button', { name: '元数据侧车', exact: true }).click();
-  await expect(page.locator('.export-receipt')).toContainText('已导出：');
-  const sidecarPath = (await page.locator('.export-receipt p').innerText()).replace('已导出：', '');
+  // 侧车不再是前端选项，后端兼容导出仍验证文件数量与路径脱敏。
+  const sidecar = await rpc<{ path: string }>('export_project', { projectId: project.id, format: 'sidecar', includePaths: false });
+  const sidecarPath = sidecar.path;
   const manifest = JSON.parse(await readFile(join(sidecarPath, 'manifest.json'), 'utf8'));
   expect(manifest.photos).toBe(200);
   expect(manifest.files).toHaveLength(200);

@@ -1,3 +1,4 @@
+import { setCopyLocale } from '../app/copy';
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 
 export type Locale = 'zh' | 'en' | 'ja' | 'ko';
@@ -43,16 +44,16 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   // 加载语言包 + 同步 copy locale
   useState(() => {
     bundles[locale]().then(setBundle);
-    import('../app/copy').then(({ setCopyLocale }) => setCopyLocale(locale));
+    setCopyLocale(locale);
   });
 
   const setLocale = useCallback((l: Locale) => {
+    setCopyLocale(l);
     setLocaleState(l);
     localStorage.setItem('focalroom-locale', l);
     bundles[l]().then(setBundle);
     document.documentElement.lang = l;
     // 同步 copy.ts 的 locale 代理。
-    import('../app/copy').then(({ setCopyLocale }) => setCopyLocale(l));
   }, []);
 
   const t = useCallback((key: string, fallback?: string) => {

@@ -144,7 +144,7 @@ it('作者记忆开启需要确认，取消不发命令，关闭无需再次确�
   mount(repository);
   const user = userEvent.setup();
   await screen.findByText(hypothesis.statement);
-  const toggle = screen.getByRole('checkbox', { name: '允许离线 Agent 引用其他本地项目记忆' });
+  const toggle = screen.getByRole('checkbox', { name: '参考其他本地项目的偏好' });
   expect(toggle).not.toBeChecked();
   await user.click(toggle);
   expect(repository.memory.request).not.toHaveBeenCalled();
@@ -176,5 +176,5 @@ it('查询失败不允许用默认值覆盖作者授权', async () => {
   repository.memory.query.mockRejectedValue(new Error('本地存储不可读'));
   mount(repository);
   await screen.findByRole('alert');
-  expect(screen.getByRole('checkbox', { name: '允许离线 Agent 引用其他本地项目记忆' })).toBeDisabled();
+  expect(screen.getByRole('checkbox', { name: '参考其他本地项目的偏好' })).toBeDisabled();
 });

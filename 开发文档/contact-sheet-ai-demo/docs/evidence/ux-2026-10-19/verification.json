@@ -1,0 +1,52 @@
+{
+  "recordedAt": "2026-10-19T21:35:18.330052+08:00",
+  "baseCommit": "2702f91",
+  "gitCommitted": false,
+  "scope": "项目导航、AI 入口、生产文案与内置演示",
+  "checks": {
+    "typecheck": "passed",
+    "lint": "passed",
+    "contracts": "passed",
+    "frontend": {
+      "passed": 263
+    },
+    "browser": {
+      "passed": 16
+    },
+    "integration": {
+      "passed": 6,
+      "externalModelCalls": 0
+    },
+    "rust": {
+      "passed": 221,
+      "ignored": 15,
+      "filtered": 1
+    },
+    "clippy": "passed (-D warnings)",
+    "nativeBuild": "passed",
+    "bundleDemoJpegs": 12,
+    "legacyPreviewFrames": 0,
+    "identifiedLegacyFixtureArchived": true
+  },
+  "nativeScenarios": [
+    "首次启动内置一个12张照片演示项目",
+    "重启不重复生成演示",
+    "项目列表不展示项目内功能",
+    "照片详情与AI独立导航",
+    "照片切换不退出AI",
+    "项目目标预填8张",
+    "一句话创建后进入正确项目导入窗口",
+    "新项目目标6张与演示隔离",
+    "无需登录可人工保留演示照片并查看作品序列",
+    "撤销后演示入选恢复0张"
+  ],
+  "nativeLimit": "最后一处隐藏费用提示的改动后Mac锁屏，未重新做屏幕复验；该改动已通过组件测试，最终本地构建成功。",
+  "bundlePath": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target/debug/bundle/macos/FocalRoom UX Review.app",
+  "binarySha256": "70f6746baf7063dcb3240ab687cf796721d77f2a80eb5781b3748c237a20fec7",
+  "release": {
+    "productionAppReplaced": false,
+    "websiteDownloadUpdated": false,
+    "apiWebDeployed": false,
+    "reviewBundleSigned": false
+  }
+}

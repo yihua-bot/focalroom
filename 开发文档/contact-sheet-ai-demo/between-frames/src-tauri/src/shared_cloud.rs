@@ -129,7 +129,7 @@ pub async fn share(store: &Store, request: ShareRequest, token: &str) -> Result<
         .build()
         .map_err(|_| AppError::new("CLOUD_CONFIG", "HTTP 客户端创建失败"))?;
     if !crate::login_guard::hex64(token) {
-        return Err(AppError::new("AUTH_REQUIRED", "请先登录云端"));
+        return Err(AppError::new("AUTH_REQUIRED", "请先登录"));
     }
     let auth = response(
         client

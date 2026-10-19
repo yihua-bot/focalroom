@@ -6,8 +6,8 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist"
+    "beforeBuildCommand": "npm run typecheck && npm run build --workspace @betweenframes/desktop",
+    "frontendDist": "../apps/desktop/dist"
   },
   "app": {
     "windows": [

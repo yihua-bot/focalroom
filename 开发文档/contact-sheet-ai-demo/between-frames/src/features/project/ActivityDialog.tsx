@@ -9,7 +9,7 @@ const ACTOR_OPTIONS: { value: ActorFilter; label: string }[] = [
   { value: 'all', label: '全部操作者' },
   { value: 'user', label: '人工' },
   { value: 'system', label: '系统' },
-  { value: 'agent', label: 'Agent 草案' },
+  { value: 'agent', label: 'AI 方案' },
 ];
 
 /** 按操作者（人工/系统/Agent 草案）与版本恢复点浏览操作历史；只读不改写。 */
@@ -50,7 +50,7 @@ export function ActivityDialog({ project, onClose }: { project: Project; onClose
     <ul className="activity-list" aria-label="操作历史列表">
       {events.map(event => <li key={event.id} className="activity-item">
         <span className="activity-actor" data-actor={event.actor === 'system' ? 'system' : event.type.startsWith('draft_') ? 'agent' : 'user'}>
-          {event.actor === 'system' ? '系统' : event.type.startsWith('draft_') ? 'Agent' : '人工'}
+          {event.actor === 'system' ? '系统' : event.type.startsWith('draft_') ? 'AI' : '人工'}
         </span>
         <span className="activity-body">
           <strong>{event.description}</strong>

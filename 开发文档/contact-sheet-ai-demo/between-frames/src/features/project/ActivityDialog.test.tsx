@@ -27,7 +27,7 @@ describe('操作历史入口', () => {
     expect(items[0]).toHaveTextContent('保存人工评分');
     expect(screen.getByText('恢复点')).toBeInTheDocument();
     expect(screen.getByText('系统', { selector: '.activity-actor' })).toBeInTheDocument();
-    expect(screen.getByText('Agent', { selector: '.activity-actor' })).toBeInTheDocument();
+    expect(screen.getByText('AI', { selector: '.activity-actor' })).toBeInTheDocument();
     expect(screen.getAllByText(/DSC_001\.jpg/, { selector: '.activity-body small' })).toHaveLength(2);
   });
   it('按人工筛选只剩 user 事件', () => {

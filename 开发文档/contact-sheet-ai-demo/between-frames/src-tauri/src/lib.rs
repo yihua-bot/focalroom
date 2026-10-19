@@ -16,9 +16,9 @@ pub mod image_pipeline;
 pub mod importer;
 pub mod keychain;
 pub mod login_guard;
-pub mod seed_demo;
 pub mod photo_inspection;
 mod resource_commands;
+pub mod seed_demo;
 pub mod shared_cloud;
 pub mod shared_export;
 pub mod v2_bridge;
@@ -40,18 +40,9 @@ pub fn run() {
                 command_handler::CommandHandler::new(&store).recover_agents(),
             )
             .map_err(|error| std::io::Error::other(error.message))?;
-            // 首启动内置演示项目：无项目时从应用资源导入示例照片。
-            let resource_demo = app
-                .path()
-                .resource_dir()
-                .map_err(|error| std::io::Error::other(error.to_string()))?
-                .join("resources/demo");
-            tauri::async_runtime::block_on(seed_demo::seed_if_empty(
-                &store,
-                &resource_demo,
-                &cache,
-            ))
-            .map_err(|error| std::io::Error::other(error.message))?;
+            let resource_demo = app.path().resource_dir()?.join("resources/demo");
+            tauri::async_runtime::block_on(seed_demo::ensure_demo(&store, &resource_demo, &cache))
+                .map_err(|error| std::io::Error::other(error.message))?;
             let cloud_origin = login_guard::CLOUD_ORIGIN.to_owned();
             #[cfg(feature = "integration-harness")]
             let cloud_origin = match std::env::var("FOCALROOM_LOGIN_REVIEW_ORIGIN")

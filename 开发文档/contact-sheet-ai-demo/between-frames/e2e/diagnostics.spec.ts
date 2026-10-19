@@ -34,7 +34,7 @@ test('M5 本地诊断：真实统计、查看后复制、刷新及正式状态�
   const before = await rpc('get_project', { projectId: project.id });
   const hashes = await rpc('test_fixture_checksums');
   await page.goto('/#/project/' + project.id);
-  await page.getByRole('main').getByRole('button', { name: '编辑建议', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
   await page.getByText('模型设置', { exact: true }).click();
   await page.getByRole('button', { name: '查看本地存储与诊断' }).click();
   const dialog = page.getByRole('dialog', { name: '本地存储与诊断' });

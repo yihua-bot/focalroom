@@ -90,7 +90,7 @@ test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索
   const sourceHypothesis = (await rpc<MemoryProjection>('get_memory_projection', { projectId: source.id })).hypotheses.find(h => h.statement.includes('留白'))!;
   const confirmed = await rpc<{ ok: boolean }>('execute_memory_command', { request: { requestId: crypto.randomUUID(), projectId: source.id, command: { type: 'ConfirmHypothesis', hypothesisId: sourceHypothesis.id } } });
   expect(confirmed.ok).toBe(true);
-  const toggle = page.getByRole('checkbox', { name: '允许离线 Agent 引用其他本地项目记忆' });
+  const toggle = page.getByRole('checkbox', { name: '参考其他本地项目的偏好' });
   await expect(toggle).not.toBeChecked();
   page.once('dialog', dialog => dialog.dismiss());
   await toggle.click();

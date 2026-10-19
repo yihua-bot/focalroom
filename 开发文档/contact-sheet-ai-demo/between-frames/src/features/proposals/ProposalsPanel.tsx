@@ -29,10 +29,11 @@ export function ProposalsPanel({ project, enabled }: { project: Project; enabled
   };
   const proposals = query.data ?? [];
   const open = proposals.find(p => p.id === openId) ?? null;
+  if (!proposals.length && !query.isError) return null;
   return <section className="proposals-panel">
-    <h3>编辑提案</h3>
+    <h3>选片方案</h3>
     {note && <p role="status">{note}</p>}
-    {proposals.length === 0 && <EmptyState title="暂无提案" hint="生成编辑建议后，在此审阅。" />}
+    {query.isError && <EmptyState title="选片方案加载失败" hint="请重试。" action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />}
     <ol className="proposal-list">{proposals.map(proposal => <li key={proposal.id}>
       <button aria-expanded={openId === proposal.id} onClick={() => { setOpenId(openId === proposal.id ? null : proposal.id); setAccepted(Object.fromEntries(proposal.operations.map(op => [op.operationId, true]))); setNonce(proposal.approvalNonce); setNote(''); }}>
         <strong>{proposal.title}</strong>

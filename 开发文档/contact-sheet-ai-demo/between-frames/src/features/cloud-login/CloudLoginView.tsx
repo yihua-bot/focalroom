@@ -5,10 +5,10 @@ import { AccountAvatar } from "../../components/shared/AccountAvatar";
 import { useI18n } from "../../i18n";
 
 const copy = {
-  zh: { signin: "登录云端", waiting: "等待浏览器授权…", cancel: "取消", signout: "退出登录", title: "云端账户", failed: "登录失败或已取消", editName: "修改昵称", editAvatar: "修改头像", save: "保存", namePlaceholder: "输入新昵称", chooseFile: "选择图片", avatarHint: "支持 JPG/PNG，自动压缩到 256KB 内", saved: "已保存", menuLabel: "账户菜单" },
-  en: { signin: "Sign in to Cloud", waiting: "Waiting for browser authorization…", cancel: "Cancel", signout: "Sign out", title: "Cloud Account", failed: "Sign-in failed or was canceled", editName: "Edit name", editAvatar: "Edit avatar", save: "Save", namePlaceholder: "Enter a new name", chooseFile: "Choose image", avatarHint: "JPG/PNG, auto-compressed under 256KB", saved: "Saved", menuLabel: "Account menu" },
-  ja: { signin: "クラウドにログイン", waiting: "ブラウザ認証を待っています…", cancel: "キャンセル", signout: "ログアウト", title: "クラウドアカウント", failed: "ログインに失敗したか中止されました", editName: "名前を変更", editAvatar: "アイコンを変更", save: "保存", namePlaceholder: "新しい名前を入力", chooseFile: "画像を選択", avatarHint: "JPG/PNG、256KB以下に自動圧縮", saved: "保存しました", menuLabel: "アカウントメニュー" },
-  ko: { signin: "클라우드 로그인", waiting: "브라우저 인증 대기 중…", cancel: "취소", signout: "로그아웃", title: "클라우드 계정", failed: "로그인에 실패했거나 취소되었습니다", editName: "이름 변경", editAvatar: "프로필 사진 변경", save: "저장", namePlaceholder: "새 이름 입력", chooseFile: "이미지 선택", avatarHint: "JPG/PNG, 256KB 이하로 자동 압축", saved: "저장됨", menuLabel: "계정 메뉴" },
+  zh: { signin: "登录", waiting: "等待浏览器授权…", cancel: "取消", signout: "退出登录", title: "账户", failed: "登录失败或已取消", editName: "修改昵称", editAvatar: "修改头像", save: "保存", namePlaceholder: "输入新昵称", chooseFile: "选择图片", avatarHint: "支持 JPG/PNG，自动压缩到 256KB 内", saved: "已保存", menuLabel: "账户菜单" },
+  en: { signin: "Sign in", waiting: "Waiting for browser authorization…", cancel: "Cancel", signout: "Sign out", title: "Account", failed: "Sign-in failed or was canceled", editName: "Edit name", editAvatar: "Edit avatar", save: "Save", namePlaceholder: "Enter a new name", chooseFile: "Choose image", avatarHint: "JPG/PNG, auto-compressed under 256KB", saved: "Saved", menuLabel: "Account menu" },
+  ja: { signin: "ログイン", waiting: "ブラウザ認証を待っています…", cancel: "キャンセル", signout: "ログアウト", title: "アカウント", failed: "ログインに失敗したか中止されました", editName: "名前を変更", editAvatar: "アイコンを変更", save: "保存", namePlaceholder: "新しい名前を入力", chooseFile: "画像を選択", avatarHint: "JPG/PNG、256KB以下に自動圧縮", saved: "保存しました", menuLabel: "アカウントメニュー" },
+  ko: { signin: "로그인", waiting: "브라우저 인증 대기 중…", cancel: "취소", signout: "로그아웃", title: "계정", failed: "로그인에 실패했거나 취소되었습니다", editName: "이름 변경", editAvatar: "프로필 사진 변경", save: "저장", namePlaceholder: "새 이름 입력", chooseFile: "이미지 선택", avatarHint: "JPG/PNG, 256KB 이하로 자동 압축", saved: "저장됨", menuLabel: "계정 메뉴" },
 } as const;
 type Copy = (typeof copy)[keyof typeof copy];
 

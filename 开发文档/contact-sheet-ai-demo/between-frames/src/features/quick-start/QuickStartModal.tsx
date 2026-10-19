@@ -8,7 +8,7 @@ export function parseGoal(text: string): { title: string; count: number; goal: s
   const trimmed = text.trim();
   // 提取数量：中文数字或阿拉伯数字。
   const countMatch = trimmed.match(/(\d+)\s*张/) ?? trimmed.match(/选[出择]?(\d+)/);
-  const count = countMatch ? Math.min(Math.max(parseInt(countMatch[1], 10), 1), 500) : 20;
+  const count = countMatch ? Math.min(Math.max(parseInt(countMatch[1], 10), 1), 100) : 20;
   // 提取主题：第一句去掉「我要/帮我/制作/做一个」等前缀。
   const topic = trimmed
     .replace(/^我想?\s*[要做]|^帮我\s*[做创建]|^制作\s*一?[个本]?|^做一个?|^创建\s*一?[个本]?/g, '')
@@ -17,14 +17,14 @@ export function parseGoal(text: string): { title: string; count: number; goal: s
     .trim();
   const title = topic.length > 2 ? topic.slice(0, 40) : '新项目';
   // 完整原文作为 Agent 目标。
-  const goal = trimmed.slice(0, 4000);
+  const goal = trimmed.slice(0, 1500);
   return { title, count, goal };
 }
 
-export function QuickStartModal({ onClose, onCreate, onImport }: {
+export function QuickStartModal({ onClose, onCreate, busy = false }: {
   onClose: () => void;
   onCreate: (title: string, goal: string, count: number) => void;
-  onImport: () => void;
+  busy?: boolean;
 }) {
   const [text, setText] = useState('');
   const [step, setStep] = useState<'describe' | 'confirm'>('describe');
@@ -36,19 +36,18 @@ export function QuickStartModal({ onClose, onCreate, onImport }: {
   };
 
   const create = () => {
-    if (!parsed) return;
+    if (!parsed || busy) return;
     onCreate(parsed.title, parsed.goal, parsed.count);
-    onClose();
-    onImport();
   };
 
-  return <Modal title={zh["quickstart.title"]} onClose={() => { onClose(); setStep('describe'); }} initialFocusRef={undefined}>
+  return <Modal title={zh["quickstart.title"]} onClose={() => { if (!busy) onClose(); }} initialFocusRef={undefined}>
     {step === 'describe' && <>
       <div className="form-group">
         <label htmlFor="quick-start-input">{zh["quickstart.input.label"]}</label>
         <textarea
           id="quick-start-input"
           rows={4}
+          maxLength={1500}
           placeholder={zh["quickstart.placeholder"]}
           value={text}
           onChange={e => setText(e.target.value)}
@@ -71,8 +70,8 @@ export function QuickStartModal({ onClose, onCreate, onImport }: {
         <p><strong>{zh["quickstart.preview.goal"]}：</strong>{parsed.goal}</p>
       </div>
       <div className="dialog-actions">
-        <Button onClick={() => setStep('describe')}>{zh["quickstart.back"]}</Button>
-        <Button variant="primary" onClick={create}>{zh["quickstart.confirm"]}</Button>
+        <Button disabled={busy} onClick={() => setStep('describe')}>{zh["quickstart.back"]}</Button>
+        <Button variant="primary" disabled={busy} onClick={create}>{zh["quickstart.confirm"]}</Button>
       </div>
     </>}
   </Modal>;

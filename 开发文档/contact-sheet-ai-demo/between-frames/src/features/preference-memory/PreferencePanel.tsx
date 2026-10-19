@@ -37,12 +37,12 @@ export function PreferencePanel({ events, repository, project }: { events: Previ
    {repository && <>
     <p className="micro">修改记忆后，需重新启动进行中的任务。</p>
     <div className="info-card">
-      <label><input type="checkbox" aria-label="允许离线 Agent 引用其他本地项目记忆" checked={query.data?.crossProjectEnabled ?? false} disabled={busy || !query.data || query.isError}
+      <label><input type="checkbox" aria-label="参考其他本地项目的偏好" checked={query.data?.crossProjectEnabled ?? false} disabled={busy || !query.data || query.isError}
         onChange={event => {
           const enabled = event.target.checked;
-          if (enabled && !window.confirm('允许离线 Agent 引用其他本地项目已确认的假设？这些线索会附来源项目与证据引用。共享项目和云模型不参与；更改授权会暂停执行中的任务，需要重新委托。')) return;
+          if (enabled && !window.confirm('允许参考其他本地项目已确认的偏好？这些线索会附来源项目与证据引用。共享项目和云模型不参与；更改授权会暂停执行中的任务，需要重新委托。')) return;
           void act(() => repository.memory.request(project.id, { type: 'SetCrossProjectMemory', enabled }));
-        }} /> 允许离线 Agent 引用其他本地项目记忆</label>
+        }} /> 参考其他本地项目的偏好</label>
       <p className="micro">仅用于本机任务，不发送给云端模型。</p>
     </div>
     <form className="memory-search" onSubmit={event => { event.preventDefault(); setKeyword(search.trim()); }}>

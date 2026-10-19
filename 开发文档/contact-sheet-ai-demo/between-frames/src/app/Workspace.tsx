@@ -40,7 +40,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
       <div className="toolbar-actions"><Button size="small" onClick={ui.toggleDensity} aria-label="切换网格密度" aria-pressed={ui.dense}><Columns3 size={15} /></Button>
         <Button size="small" disabled={project.photos.length < 2 || !active} onClick={onCompare}>{zh.compare}</Button><Button size="small" onClick={onExport}>{zh.export} ↗</Button>
         <Button size="small" onClick={ui.toggleFilmstrip} aria-label={ui.filmstripOpen ? '收起序列带' : '展开序列带'} aria-pressed={ui.filmstripOpen}><Film size={15} /></Button>
-        <Button size="small" onClick={ui.toggleInspector} aria-label={ui.inspectorOpen ? '收起检查器' : '展开检查器'}>{ui.inspectorOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}</Button></div>
+        <Button size="small" onClick={ui.toggleInspector} aria-label={ui.inspectorOpen ? zh.hidePanel : zh.showPanel}>{ui.inspectorOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}</Button></div>
       <div className="workspace-tools"><label className="search-field" htmlFor="photo-search"><Search size={14} /><input id="photo-search" type="search" aria-label="搜索照片文件名或备注" placeholder="搜索文件名或备注 · ⌘F" value={ui.search} onChange={event => ui.setSearch(event.target.value)} /></label>
         <label className="group-field">分组
           <select aria-label="网格分组" value={ui.grouping} onChange={event => ui.setGrouping(event.target.value as GridGrouping)}>

@@ -4,7 +4,7 @@ import { zh } from '../../app/copy';
 import { Button } from '../../components/shared/Button';
 
 export function ProjectHeader({ project, onEdit, onImport, onAI, readOnly = false }: { project: Project; onEdit: () => void; onImport: () => void; onAI: () => void; readOnly?: boolean }) {
-  return <header className="project-header"><div className="eyebrow">{project.id === 'sample-project' ? '示例项目' : ''}</div>
+  return <header className="project-header"><a className="project-back" href="#/projects">← {zh.projects}</a>
     <div className="heading"><div><h1>{project.title}</h1></div>
       <div className="top-actions"><Button disabled={readOnly} onClick={onImport}><Plus size={15} />{zh.import}</Button>
         <Button disabled={readOnly} variant="primary" onClick={onAI}><Sparkles size={15} />{zh.ai}</Button></div></div>

@@ -1,12 +1,12 @@
 //! 首启动内置演示项目：从应用资源拷贝示例照片并经正式导入链路入库。
-//! 仅在没有任何未删除项目时执行一次；所有照片走 image_pipeline + import_photo
+//! 内置项目仅创建一次，归档后不再创建；所有照片走 image_pipeline + import_photo
 //! （与用户手动导入完全同一条审计路径）。
 use crate::{command_handler::CommandHandler, db::Store, domain::Result, image_pipeline};
 use std::path::Path;
 
 const DEMO_PROJECT_ID: &str = "demo-first-walk";
-const DEMO_TITLE: &str = "示例 · 第一次散步";
-const DEMO_BRIEF: &str = "内置示例照片，体验选片、比较与 AI 智能选片。可随时删除。";
+const DEMO_TITLE: &str = "第一次散步 · 演示项目";
+const DEMO_BRIEF: &str = "从这些冬日影像中选出 8 张照片，突出雪地的光线变化与动物的自然状态，编排一组节奏舒缓的漫游影像。";
 
 /// 资源目录中的演示照片（有序）。
 fn demo_photos(resource_demo: &Path) -> Vec<std::path::PathBuf> {
@@ -21,15 +21,13 @@ fn demo_photos(resource_demo: &Path) -> Vec<std::path::PathBuf> {
     files
 }
 
-/// 首启动 seed：无项目时创建演示项目并导入全部示例照片。
-pub async fn seed_if_empty(store: &Store, resource_demo: &Path, cache: &Path) -> Result<()> {
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM projects WHERE deleted_at IS NULL",
-    )
-    .fetch_one(&store.pool)
-    .await
-    .unwrap_or(0);
-    if count > 0 {
+/// 内置演示独立于用户项目：只补齐一次，尊重用户之后的编辑和归档。
+pub async fn ensure_demo(store: &Store, resource_demo: &Path, cache: &Path) -> Result<()> {
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM projects WHERE id=?)")
+        .bind(DEMO_PROJECT_ID)
+        .fetch_one(&store.pool)
+        .await?;
+    if exists {
         return Ok(());
     }
     let photos = demo_photos(resource_demo);
@@ -59,7 +57,11 @@ pub async fn seed_if_empty(store: &Store, resource_demo: &Path, cache: &Path) ->
             Ok(value) => value,
             Err(_) => continue, // 单张失败跳过，不阻塞演示项目
         };
-        if handler.import_photo(DEMO_PROJECT_ID, &prepared).await.unwrap_or(false) {
+        if handler
+            .import_photo(DEMO_PROJECT_ID, &prepared)
+            .await
+            .unwrap_or(false)
+        {
             imported += 1;
         }
     }
