@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-19",
+  "basis": "existing local 1.0.2 release app; read-only verification; no launch or upload",
+  "signature": {
+    "chunk_id": "2b22d7",
+    "wall_time_seconds": 0.000024,
+    "exit_code": 0,
+    "original_token_count": 79,
+    "output": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target/release/bundle/macos/FocalRoom.app: valid on disk\n/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target/release/bundle/macos/FocalRoom.app: satisfies its Designated Requirement\n"
+  },
+  "codesign_details": {
+    "chunk_id": "7e4a0a",
+    "wall_time_seconds": 0.00001425,
+    "exit_code": 0,
+    "original_token_count": 313,
+    "output": "Executable=/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target/release/bundle/macos/FocalRoom.app/Contents/MacOS/between-frames\nIdentifier=studio.betweenframes.desktop\nFormat=app bundle with Mach-O thin (arm64)\nCodeDirectory v=20500 size=24744 flags=0x10000(runtime) hashes=762+7 location=embedded\nVersionPlatform=1\nVersionMin=720896\nVersionSDK=1704448\nHash type=sha256 size=32\nCandidateCDHash sha256=f84b03172f69d6a0f332f77bd63716927869c395\nCandidateCDHashFull sha256=f84b03172f69d6a0f332f77bd63716927869c3955e3103d0df81470b4176dd02\nHash choices=sha256\nCMSDigest=f84b03172f69d6a0f332f77bd63716927869c3955e3103d0df81470b4176dd02\nCMSDigestType=2\nExecutable Segment base=0\nExecutable Segment limit=12124160\nExecutable Segment flags=0x1\nPage size=16384\nCDHash=f84b03172f69d6a0f332f77bd63716927869c395\nSignature size=9044\nAuthority=Developer ID Application: liqiang song (KXSFCZF4S3)\nAuthority=Developer ID Certification Authority\nAuthority=Apple Root CA\nTimestamp=Oct 19, 2026 at 16:43:49\nNotarization Ticket=stapled\nInfo.plist entries=15\nTeamIdentifier=KXSFCZF4S3\nRuntime Version=26.2.0\nSealed Resources version=2 rules=13 files=13\nInternal requirements count=1 size=188\nTotal signatures=1\nChosen signature=1\n"
+  },
+  "build_version": {
+    "chunk_id": "564aa9",
+    "wall_time_seconds": 1.9140245839999999,
+    "exit_code": 0,
+    "original_token_count": 78,
+    "output": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target/release/bundle/macos/FocalRoom.app/Contents/MacOS/between-frames:\nLoad command 10\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform MACOS\n    minos 11.0\n      sdk 26.2\n   ntools 1\n     tool LD\n  version 1230.1\narm64\n"
+  },
+  "gatekeeper": {
+    "exit_code": 0,
+    "result": "accepted",
+    "source": "Notarized Developer ID"
+  },
+  "stapler_validate": {
+    "exit_code": 68,
+    "result": "inconclusive: Apple CloudKit TLS -1200/-9816",
+    "endpoint": "https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/records/lookup"
+  },
+  "app_launch_or_user_database_access": false
+}

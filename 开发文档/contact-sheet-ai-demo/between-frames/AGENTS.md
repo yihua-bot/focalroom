@@ -1,5 +1,9 @@
 # AGENTS.md · FocalRoom 工程导航
 
+末次交接校验HEAD78bd018（Web纸感换肤，父发行f582ed2/1.0.2），外部提交收录了部分本聊天先行文档；仍有后续文档WIP，保留全部代码/设计改动。下文f582ed2指发行基线，当前开发接续看78bd018+WIP。本聊天未commit；新Web换肤未在本轮做GUI/生产验收。
+
+交接末尾最新增量：HEAD已由其他开发推进f582ed2，R0源码/文档已提交，ab65a96已有emailVerified隐藏入口，dc9910e/9caf850/f582ed2发行1.0.0–1.0.2，含12图seed。先读../docs/DEVELOPER-HANDOFF-2026-10-19.md第12节：实际1.0.2 codesign strict与spctl Notarized Developer ID接受、公网ZIP8557296bytes/SHA810990bf…dfcc8c5匹配；stapler68为Apple TLS未完成，不重做“缺profile所以从未公证”。官网10.15与二进制minos11.0不符要修；seed固定ID+软删归档后重启可能冲突需复现。shared.css有外部改动保留，本聊天未提交/发版/启动正式用户库。A0/A1/A2/A3未修，生产v1.0.1更新提交须重核实际指针，不盲用旧runtime。下方49fcc65/WIP/无正式包为早期快照。
+
 同日审计复核：先读交接第11节。GitHub yihua-bot/focalroom存在，远端23308d6ab3与本机49fcc65+WIP需先对齐；8关键blob一致不等于全树/历史一致。本机无remote不代表没远端，根.github/workflows/betweenframes-v2.yml实际存在；run39224541729已核失败（标题Preview/Shared不符+缺3002，桌面构建跳过）。评论prompt对象作为content、分歧task_type硬编码已用真实模块+fake fetch/pool离线复现，未修产品代码。首轮优先A0/A1，再A2/A3上下文/估算；R1验证入口及首发任务随后。不要按外部审计里的checkout/PR建议直接覆盖WIP或提交。详细证据在docs/evidence/handoff-20261019；标准备份脚本需Python3.11，服务器旧实测3.10须另解决兼容。
 
 最新接手入口（2026-10-19）：../docs/DEVELOPER-HANDOFF-2026-10-19.md。含R0–R8首发拆单、M0–M5工程/真人剩余、源码与生产边界、代码入口和验收标准。当前main/49fcc65+大量WIP才是来源，无remote。旧NEXT-AGENT-HANDOFF与剩余计划的M1指令已标历史，不回退阶段；本轮只核对/交接，未重跑全量、操作生产或提交。优先R0基线后按交接第11节A0/A1执行，公证profile未创建、AI真实调用未验保持明确待办；author-memory引用未登记cloud_projects草案且未接路由，Worker已有PG队列但未接账户账本、生产保持关。

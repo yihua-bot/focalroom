@@ -968,3 +968,25 @@
 .fr-login input:focus-visible,.fr-form-row input:focus-visible{outline:2px solid var(--fr-accent);outline-offset:1px;border-color:var(--fr-accent)}
 .fr-image-frame{background:#fff;padding:6px;border-radius:3px;box-shadow:0 3px 10px rgba(51,64,52,.12)}
 @media (prefers-reduced-motion:reduce){.fr-shared *,.fr-shared *::before,.fr-shared *::after{transition:none!important;animation:none!important}}
+
+
+/* 登录表单布局：垂直节奏 + 主按钮全宽 */
+.fr-login form{display:flex;flex-direction:column;gap:14px}
+.fr-login form>button,.fr-login form .fr-primary{width:100%;justify-content:center}
+.fr-login form label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--fr-muted)}
+.fr-login input{margin:0}
+
+/* 顶栏账户菜单（点头像弹出） */
+.fr-account-menu{position:relative}
+.fr-account-trigger{background:none;border:none;padding:0;cursor:pointer;border-radius:50%;line-height:0}
+.fr-account-dropdown{position:absolute;right:0;top:calc(100% + 10px);min-width:210px;background:var(--fr-surface);border:1px solid var(--fr-edge);border-radius:8px;box-shadow:0 12px 40px rgba(32,46,49,.28);padding:6px;z-index:60}
+.fr-account-head{padding:10px 12px 8px;border-bottom:1px solid var(--fr-edge);margin-bottom:4px}
+.fr-account-head b{display:block;font-size:13px;font-weight:600}
+.fr-account-head small{font-size:11px;color:var(--fr-muted)}
+.fr-account-dropdown>button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--ink,#202e31);font-size:12.5px;padding:8px 12px;border-radius:6px;cursor:pointer}
+.fr-account-dropdown>button:hover{background:var(--fr-accent);color:#fff}
+.fr-account-dropdown>button.danger:hover{background:#b3423a}
+.fr-account-edit{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--fr-edge);margin-top:4px}
+.fr-account-edit input{flex:1;min-width:0;border:1px solid var(--fr-edge);border-radius:6px;padding:7px 10px;font-size:12.5px;background:var(--fr-surface)}
+.fr-account-edit button{border:1px solid var(--fr-edge);border-radius:6px;background:none;padding:7px 10px;font-size:12px;cursor:pointer}
+.fr-account-edit button:hover{background:#e2edef}

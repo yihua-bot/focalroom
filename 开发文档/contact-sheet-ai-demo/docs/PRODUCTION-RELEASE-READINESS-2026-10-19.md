@@ -1,5 +1,7 @@
 # FocalRoom 官网客户端首发检查
 
+**交接末尾更新**：本机后续已到f582ed2，存在v1.0.2 release和官网下载，本轮codesign strict/Gatekeeper Notarized Developer ID接受、HTTPS ZIP SHA核验通过；stapler validate因Apple TLS退出68待复验。邮箱验证入口已有源码修复，官网config已接工作区和下载。真实AI/正式新环境/容量及真人门槛未关；具体新问题与证据见[交接第12节](DEVELOPER-HANDOFF-2026-10-19.md#12-交接末尾最新发行增量优先于前文历史状态)。下方“未打正式包/未公证/无下载/缺验证字段”保留为早期快照，不能继续作当前结论。
+
 同日审计复核更正：公开仓库[yihua-bot/focalroom](https://github.com/yihua-bot/focalroom)及根workflow实际存在，本机没有remote不等于没有远端；已读run39224541729日志，确因Web预览/Shared入口断言不符失败，桌面构建跳过。最新交接与修复顺序见[第11节](DEVELOPER-HANDOFF-2026-10-19.md#11-外部审计逐项核对与第一批修复单)，不再沿用下方“缺少根workflow”的旧判断。
 
 最新增量：账户AI本地实现已补（[本地报告](V2-HOSTED-AI-TEST-REPORT.md)、ADR0044）；随后用户批准生产发布，API/Web与0014/0015已部署，真实验证码Resend delivered、网页登录/刷新/API重启保持/退出通过，API迁移凭据已隔离。From暂为已验证openyc.vip，用户已确认邮件进入收件箱。DeepSeek真实调用未执行、服务关闭/额度0；正式客户端/公证/官网分发和容量灾备门槛仍开。以 [生产报告](V2-HOSTED-AI-PRODUCTION-DEPLOYMENT-REPORT.md) 为最新事实。下方保留先前只读快照，其中“尚未部署/无邮件”不是最新状态。

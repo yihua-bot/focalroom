@@ -2,7 +2,9 @@
 
 日期：2026-10-19，Asia/Shanghai。用途：交给下一位开发者或AI继续实施。本轮只核对代码、既有证据并编写交接，没有重跑产品全量测试、重查线上、修改生产、提交或发布。
 
-当前目标是完成可供用户下载安装的macOS客户端，以及M0–M5尚未关闭的工程和验收。**正式包首发、官方AI开放、M0–M5全部验收是三个不同结论。当前不能宣称其中任何一个已全部完成。**
+**末次基线校验**：HEAD已到`78bd018`（Web协作换肤），其父发行基线为`f582ed2`/1.0.2；该外部提交还收录了本聊天部分先行交接文档，当前仍有后续文档WIP。本聊天未执行commit。以下f582ed2均指发行基线，后续必须从最新HEAD+WIP接续，不能覆盖Web设计/CSS改动；本轮未对换肤做界面/部署验收。
+
+当前目标是补齐官方AI、真实安装/协作及M0–M5尚未关闭的工程和验收。**正式包提供下载、官方AI开放、M0–M5全部验收是三个不同结论。** 交接期间后续开发已提供v1.0.2下载；本轮验证签名/Gatekeeper/下载SHA通过，正式新用户端到端与AI质量仍不能据此判完成。最终状态以第12节为准，前面R任务保留最初拆单与验收要求。
 
 **同日审计增量**：用户随后提供[外部审计](EXTERNAL-CODE-AUDIT-2026-10-19.md)，已完成本地源码、离线复现及只读GitHub核对。仓库`yihua-bot/focalroom`及根目录workflow确实存在；本机无remote不等于没有远端。远端23308d6ab3与本地49fcc65+WIP的8个关键文件blob一致，但未全树/历史对齐。首轮顺序改为：R0基线对齐→第11节A0 CI与A1评论缺陷→A2/A3上下文正确性→R1及其余首发任务。审计文件中的checkout/PR等是建议，不是额外操作授权。
 
@@ -10,7 +12,7 @@
 
 | 位置 | 路径/状态 |
 |---|---|
-| Git根 | `/Users/yihua/Documents/film`，本轮HEAD=`49fcc65`、分支`main`，本机`git remote -v`为空；另有已核实公开仓库`https://github.com/yihua-bot/focalroom` |
+| Git根 | `/Users/yihua/Documents/film`，开始核对49fcc65，发行基线f582ed2，末次HEAD=78bd018、分支main；本机无remote，已核实公开仓库`https://github.com/yihua-bot/focalroom` |
 | 应用根 | `/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames` |
 | 产品文档 | `/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/docs` |
 | v2需求权威 | `/Users/yihua/Documents/film/BetweenFrames-v2.0-Implementation-Kit/docs/FINAL-PRODUCT-ENGINEERING-SPEC.md`及`EXECUTION-PLAN.md` |
@@ -18,7 +20,7 @@
 | 生产协作 | `https://team.focroom.cc/shared`；官网`https://focroom.cc` |
 | 私有评审材料 | `/Users/yihua/Documents/BetweenFrames-Reviews/`；包含真实照片/账户截图，不打进源码或公共下载 |
 
-工作区有大量修改和未跟踪文件，包括已经部署的`hosted-ai.ts`、0015、管理工具和验收材料。**只检出49fcc65会缺失当前成果，不能将HEAD当成完整交付版本。**先记录`git status`、diff和源码摘要，再处理任务；保留别人和历史轮次的改动。不要reset、clean、覆盖目录或删除旧失败记录。提交/推送须按用户AGENTS取得明确批准，官网以前的提交授权不等于产品仓库的提交授权。
+开始核对时工作区大量WIP，随后c83f55f/a5d2f07等提交已收录核心源码及报告，当前f582ed2后仍有本轮文档和外部shared.css改动。**只检出49fcc65会丢当前成果，远端23308d6ab3也未证明包含最新本地发行提交。**重新记录`git status`、diff和源码摘要再接续，保留所有正常改动，不reset/clean/覆盖历史。其他进程已发生提交和发布，本聊天没有执行这些操作，也不把其他进程的授权当本聊天新操作的批准。
 
 用户已确认暂停其他AI写入，由本聊天统一收口。接手前重新确认单一写入者；本交接不授权启动其他会话、向其他AI发消息或创建并行写入任务。
 
@@ -49,7 +51,7 @@
 | Promotion/Web协作 | 本地实际Rust→Nest/Postgres冻结/上传/确认/只读；Web评论/草案/审批/版本/WS/Presence/撤权有独立本地旅程 | 生产真实双人协作、R2/多实例/慢网规模验收完成 |
 | 模型/记忆 | 质量记录、路由排序、关键词/本地Apple向量及有界缓存；Anthropic/Gemini文本适配；本地作者记忆 | 完整多供应商视觉/授权fallback、全图库观察、云作者记忆/真实Creator隔离完成 |
 | 云Worker | `workers/agent`有PostgreSQL领取/租约/重试和评论汇总实现及测试 | 已按Redis+BullMQ规格验收、已接官方token账本或生产可启用 |
-| 分发 | Developer ID Application有效，Team=`KXSFCZF4S3` | 最新debug评审包已签名公证、已有官网下载包 |
+| 分发 | 最新本地1.0.2 app严格签名通过、runtime/stapled标志、Gatekeeper接受，公网ZIP与本地SHA一致，详第12节 | 独立干净机器/正式数据升级/真实AI全流程、stapler TLS失败的复验已完成 |
 
 最近本地报告记录257前端、71PG、224Rust（15 ignored）及严格检查通过；最后部分改动另有定向复验。交接编写轮没有重新跑这些套件，不能把它们写成接手轮测试。生产7关键文件SHA与本地相符，证据见production-final.json。人工收件是后续独立证据，原服务器输出中待确认字段保留，最新`validation.json`与`human-inbox-confirmation.json`已补确认。
 
@@ -87,7 +89,7 @@
 
 ### R1 · 修正已验证账户的重复验证入口
 
-**已定位**：`apps/web/src/shared-api.ts`的Session没有邮箱验证状态；`apps/web/src/shared/AccountRecovery.tsx`的VerificationRequest始终渲染按钮；`apps/api/src/server.ts`的/auth/me未返回验证状态。生产已验证账户仍显示“发送邮箱验证邮件”。
+**已由后续ab65a96补代码，转回归验收**：当前Session有emailVerified，/auth/me返回数据库状态，VerificationRequest已在验证时返回null。旧生产观察与初始定位保留为问题来源，不要再次重做相同字段；核对登录首次响应、刷新及已部署版本的回归证据。
 
 **任务**：从后端权威邮箱状态输出最小字段，经登录/刷新Session解析到Web，已验证时隐藏发送入口或呈现必要状态；不把浏览器自报状态当鉴权。按当前四语机制同步，不额外加说明卡。
 
@@ -115,7 +117,7 @@
 
 **入口**：`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/src/lib.rs`、`src-tauri/src/login_guard.rs`、`package.json`。
 
-- 主配置仍为0.1.0、`studio.betweenframes.desktop`、仅app目标。确认发布版本及架构，建议先只交付已实际验证的macOS Apple Silicon；其他平台不能因Tauri支持就放下载。
+- 主配置已由后续提交升级1.0.2、`studio.betweenframes.desktop`、app+dmg；签名/entitlements/runtime也已配置。本轮核实了arm64 release与公开ZIP，后续重点是可复现构建和系统版本/生产全流程回归，别重做旧0.1.0配置。
 - 增加可审查的正式打包配置/脚本，明确app及DMG/ZIP、签名身份、Hardened Runtime、时间戳、必要entitlements、最低系统版本。最低版本需从实际构建/原生API依赖验证，不凭空承诺。
 - **生产构建不能带integration-harness**、评审配置/标识或`FOCALROOM_LOGIN_REVIEW_ORIGIN`的编译期覆盖。默认入口已使用`https://team.focroom.cc`与托管引擎；保留它，不改回from_env或Mock。
 - 保留正式标识/现有数据及Keychain兼容；多个评审包争抢`focalroom://`已实际发生，不能靠修改本机默认关联冒充干净机器协议验收。
@@ -127,7 +129,7 @@
 
 **已证实**：Developer ID Application有效，Team KXSFCZF4S3，指纹`EFB01585E32370F1DBCF77907FF4782DBCEB847B`。不需要重新申请证书。
 
-**未就绪**：2026-10-19默认钥匙串中查询FOCALROOM_NOTARY及BETWEENFRAMES_NOTARY均退出69/找不到条目，见[证据](evidence/production-release-readiness-20261019/notary-profile-check.json)。不排除自定义钥匙串，但没有收到路径。用户粘贴了创建方法，尚未回复已创建，不能当成执行成功。
+**历史凭据检查不再等于当前发行阻塞**：早先默认钥匙串两个profile退出69的[证据](evidence/production-release-readiness-20261019/notary-profile-check.json)保留。后续发行已发生，本轮实际1.0.2签名/Gatekeeper接受，不能继续说“没有profile所以从未公证”。profile具体创建方式和可复用配置仍需从发行操作者接续，既有Accepted包不需要为证明profile存在重复上传。
 
 由用户本机交互创建/提供profile或ASC Key路径；不要索要聊天明文密码。省略`--password`，让notarytool安全提示输入。钥匙串/安全代理授权弹窗由用户操作；工具禁止SecurityAgent操作时必须交接，不能绕过。
 
@@ -152,6 +154,8 @@
 ### R6 · 官网真实下载入口
 
 **入口**：独立官网`dist/config.js`、`dist/app.js`、`dist/index.html`、`locales/messages.tsv`、`scripts/`。本轮本地config的workspaceUrl仍为空；线上空值来自此前生产审计，发布前再核实。
+
+**后续已完成入口并实查下载**：最终config工作区为https://team.focroom.cc/shared、下载v1.0.2；公网ZIP摘要匹配，见第12节。上段空值是交接开始时快照，后续不再列为完全缺失；改为校验系统要求、更新记录、干净安装和四语信息一致。
 
 在真实工作区HTTPS及合格安装包具备后接入：四语工作区/下载入口、版本/日期/架构/最低系统、更新记录、SHA256、实际下载对象。公开安装包与私有摄影预览分开访问策略；大包选择合适对象存储，核对现有托管限制，不能盲目塞进静态托管。
 
@@ -256,9 +260,9 @@ E2E/原生构建按顺序跑，避免共享Vite端口/target锁/前端dist互相
 
 ## 10. 可直接复制给下一位AI的接手指令
 
-> 请接手FocalRoom当前工作区，先读`/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/docs/DEVELOPER-HANDOFF-2026-10-19.md`和应用AGENTS，再按其阅读顺序核对源码及证据。Git根是film，HEAD49fcc65不包含全部成果，保留全部已修改/未跟踪文件；不要清理、reset、提交推送或自动部署。用户目标是完成官方DeepSeek服务、正式macOS客户端/官网下载链路，并补齐M0–M5；不进入M6/M7。
+> 请接手FocalRoom当前工作区，先读`/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/docs/DEVELOPER-HANDOFF-2026-10-19.md`的末次基线与第12节，再读其余章节和应用AGENTS。Git根film，末次HEAD78bd018，发行f582ed2/1.0.2；初始49fcc65及远端23308d6ab3不能直接覆盖当前源码，保留换肤及所有WIP，不清理/reset/提交推送/自动部署。目标为官方DeepSeek及M0–M5收口；已有1.0.2签名公证下载，不把发行入口列为完全没做，不进入M6/M7。
 >
-> 第一轮先记录本机49fcc65+WIP与已知GitHub23308d6ab3的基线差异；按第11节A0/A1修CI和评论prompt/task_type，补会在旧代码失败的离线/PG/Web回归；接着按A2/A3修上下文照片证据和token估算，再处理R1验证入口及R2/R3/R4首发准备。不得按审计建议直接checkout远端快照覆盖WIP。真实邮件登录和人工收件已通过，不重复发信。Developer ID有效，但常见公证profile尚未在默认钥匙串找到，不要说证书缺失或假定profile已创建。
+> 第一轮先核对最新本机、已知GitHub与实际生产版本；按第11节A0/A1修CI和评论prompt/task_type，补会在旧代码失败的离线/PG/Web回归；接着A2/A3上下文/估算。R1验证入口已有源码修复，转验收；1.0.2签名/Gatekeeper/下载SHA已验证，不重做或重复上传。另复现第12节seed软删重启问题、修系统版本说明并补正式新环境流程。真实邮件/人工收件已通过，不重复发信。
 >
 > 生产已有API/Web和0014/0015，当前用hosted-ai-20261019私有runtime配置，不能用旧base全栈重建；AI关闭/额度0、Worker关闭。云作者记忆文件未正确接线，Worker已有Postgres队列但与账户账本分离；分别按第6节收口，不误报为已完成或完全没写。缺资源时继续离线可验证任务，真人/模拟分开记录。每轮给出实际完成、测试证据、未完成和下一任务；生产变更/真实付费调用/公证上传/公共下载前按具体产物取得确认。
 
@@ -316,3 +320,28 @@ E2E/原生构建按顺序跑，避免共享Vite端口/target锁/前端dist互相
 materialize确有两字词/重复支持的规则假设，证据、纠正、排除、墓碑的机制保留；已有Apple语义检索不等于语境化偏好提取。增结构化抽取时保留人工证据、项目/作者scope、不确定性和反例，不把Agent草案当作者偏好，并结合第7节首次/第三次真人任务测记忆增益。
 
 审计关于专业色彩、高位深、Web字体/布局、统一视觉工作台及商业成熟度是重要验收/产品判断；当前没有渲染现场、目标设备和专家实验，不能将每一项定性意见写成已复现崩溃。先做对应场景测量，再决定必要实现。自动更新、M6/M7仍不能因审计列出就升成首包必须开发的新范围。
+
+## 12. 交接末尾最新发行增量（优先于前文历史状态）
+
+交接过程中本机HEAD从49fcc65推进到f582ed2：c83f55f源码冻结、a5d2f07文档冻结、ab65a96验证入口、dc9910e 1.0.0发行、ac90388资料/账户/导出/AI界面修复、9caf850 1.0.1、f582ed2 1.0.2含12张演示照片。本聊天未执行这些提交和发布；只读核实当前代码/产物，保留外部shared.css改动。此前八文件远端对照是较早快照，不代表当前全树未改变。
+
+### 已实际补验
+
+- Tauri主配置1.0.2、正式旧identifier、app+dmg、Developer ID/runtime/Entitlements；资源内置12JPEG，lib启动执行seed_if_empty。
+- 本地release app：`src-tauri/target/release/bundle/macos/FocalRoom.app`，版本1.0.2、arm64；codesign strict/deep退出0，Authority=Developer ID Application、runtime标志、Notarization Ticket=stapled。
+- spctl退出0：accepted / source=Notarized Developer ID。不是只看提交说明认定公证。
+- 官网config实际工作区已正确，ZIP可经HTTPS下载，8,557,296 bytes，SHA256=`810990bfcb62f61709688bd72c712ad646b2396e6fb8026d409250c2fdfcc8c5`，与本地ZIP和公开config一致；ZIP的16个实际app文件与本地app相同（AppleDouble元数据另计）。
+- 邮箱验证状态源码链已补；其他资料编辑/导出/AI界面新增按新提交重新验收，不能把之前257/71/224计数自动覆盖这些新改动。
+
+证据为`evidence/handoff-20261019/release-verification.json`、`release-local.json`、`release-public.json`。
+
+### 现在的具体待办
+
+1. **继续A0/A1与A2/A3**：本轮未修CI、评论两缺陷、context或估算；新增发行不会自动修好它们。远端实际最新状态需接手时再查。
+2. **系统要求需纠正**：官网/Info.plist写10.15，实际arm64 Mach-O的LC_BUILD_VERSION minos=11.0；至少消除这一不一致，再按原生依赖和目标设备确定真实支持范围，四语/打包配置一起同步。不要继续宣称10.15可运行该二进制。
+3. **stapler复验**：本轮validate退出68，原因是Apple CloudKit TLS(-1200/-9816)，未完成校验；与spctl接受和已携带ticket并列保留，不能写成staple票据已判无效或本轮validate已通过。换正常网络后重验，不关闭TLS或系统保护。
+4. **新增演示seed边界**：目前固定项目ID=demo-first-walk，判断仅看未删除项目数；ArchiveProject为软删。需要复现“唯一演示项目归档→退出重开”：count=0但固定ID行仍在时INSERT可能主键冲突，错误由lib.setup向上传播。加持久的首次初始化/用户删除状态、幂等/部分失败恢复，不能每次空库重建或破坏用户删除意图。本轮仅静态路径确认，未启动用户应用或复现GUI故障；未找到对应seed测试。
+5. **正式新用户全旅程仍待验**：签名/公网ZIP不等于新Mac首次安装、正式scheme、Keychain、演示删除/重启、源图保护、真实托管AI/共享协作都通过。按R7操作，缺资源如实留待。
+6. **生产最新指针待核**：9caf850提交称更新API/Web，但本轮没有SSH核实其当前镜像/运行配置/配额。第4节hosted-ai-20261019为之前已验证部署，不保证仍是唯一最新指针；先只读定位当前Compose label与角色/迁移，再制定变更，不能强制回退旧部署。官方AI最后已验证状态为关闭/0额度，后续环境有无启用需重新核对，不能从代码或提交标题推断。
+
+已存在正式签名和下载，应把剩余工作描述为“缺陷修复、真实AI/容量/新环境/真人验收及发行可复现性”，而不是继续宣称“尚无任何安装包/官网入口/公证”。

@@ -1,0 +1,49 @@
+{
+  "apps": [
+    {
+      "path": "/Users/yihua/Documents/film/\u5f00\u53d1\u6587\u6863/contact-sheet-ai-demo/between-frames/src-tauri/target/release/bundle/macos/FocalRoom.app",
+      "version": "1.0.2",
+      "identifier": "studio.betweenframes.desktop",
+      "executable": "between-frames",
+      "min_os": "10.15"
+    }
+  ],
+  "zip": {
+    "path": "/Users/yihua/Documents/film/focalroom-website/dist/download/FocalRoom-1.0.2-macos-arm64.zip",
+    "bytes": 8557296,
+    "sha256": "810990bfcb62f61709688bd72c712ad646b2396e6fb8026d409250c2fdfcc8c5",
+    "app_info_paths": [
+      "FocalRoom.app/Contents/Info.plist"
+    ],
+    "version": "1.0.2",
+    "identifier": "studio.betweenframes.desktop",
+    "matches_local_app_files": 16,
+    "different_local_app_files": [
+      "FocalRoom.app/Contents/_CodeSignature/._CodeResources",
+      "FocalRoom.app/Contents/.__CodeSignature",
+      "FocalRoom.app/Contents/MacOS/._between-frames",
+      "FocalRoom.app/Contents/._MacOS",
+      "FocalRoom.app/Contents/Resources/._icon.icns",
+      "FocalRoom.app/Contents/Resources/resources/demo/._bc2c8ec3571f49907e1d97e5086ce29b.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._1f79ef4993078bcee372b1e5b076a5d3.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._3c294229a0904892d6256cabd010eab8.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._bb51e84f362b60149ba6fe2cceb7db1f.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._a4dd4b0b98f09261f81265682c999030.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._621714a58d22a435ccac85c4d7521a95.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._1788b7204ffc38c8d0a25cbdc43a14de.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._de8e495d2bb25e883540fde388d0b3fd.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._3e46f7b186b81c32414f0f56105249b5.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._81e85ec39aede2c79f322aa6b6a84c61.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._68f626f749fa122995221fea3b59e3c7.jpg",
+      "FocalRoom.app/Contents/Resources/resources/demo/._3ae51eca91395225a4b3abbeeac1f94f.jpg",
+      "FocalRoom.app/Contents/Resources/resources/._demo",
+      "FocalRoom.app/Contents/Resources/._resources",
+      "FocalRoom.app/Contents/._Resources",
+      "FocalRoom.app/Contents/._Info.plist",
+      "FocalRoom.app/._Contents"
+    ],
+    "actual_bundle_files_checked": 16,
+    "actual_bundle_file_differences": [],
+    "appledouble_metadata_excluded": true
+  }
+}

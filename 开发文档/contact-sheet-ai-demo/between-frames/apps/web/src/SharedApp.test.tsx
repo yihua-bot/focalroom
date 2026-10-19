@@ -22,7 +22,9 @@ it("已有浏览器会话进入桌面确认页，不跳到项目列表且不自�
  vi.mocked(request).mockResolvedValue(account);
  render(<SharedApp/>);
  expect(await screen.findByRole("heading",{name:"登录桌面端"})).toBeVisible();
- expect(screen.getAllByText(account.email)).toHaveLength(2);
+ expect(screen.getByText(account.email)).toBeVisible();
+ fireEvent.click(screen.getByRole("button",{name:"账户菜单"}));
+ expect(screen.getByRole("menu")).toHaveTextContent(account.email);
  expect(screen.queryByText("项目列表")).not.toBeInTheDocument();
  expect(request).toHaveBeenCalledTimes(1);
 });

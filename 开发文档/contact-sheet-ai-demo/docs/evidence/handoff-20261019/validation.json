@@ -1,0 +1,22 @@
+{
+  "markdown_relative_links_checked": 139,
+  "json_valid": true,
+  "earlier_production_source_comparison": {
+    "apps/api/src/hosted-ai.ts": true,
+    "apps/api/src/server.ts": false,
+    "apps/api/src/service.ts": false,
+    "apps/api/src/database.ts": true,
+    "apps/api/migrations/0015_hosted_ai.sql": true,
+    "apps/api/tools/ai-credit.ts": true,
+    "apps/api/tools/ai-reconcile.ts": true
+  },
+  "remote_eight_blobs_match_at_audit_check": true,
+  "external_audit_copy_matches_user_file": true,
+  "credential_pattern_scan_passed": true,
+  "product_code_changed_by_this_chat_for_handoff": false,
+  "external_commits_arrived_during_handoff": true,
+  "existing_release_codesign_and_gatekeeper_pass": true,
+  "stapler_validate": "TLS failure; inconclusive",
+  "public_zip_sha_matches_local": true,
+  "full_product_tests_run": false
+}
