@@ -680,7 +680,10 @@ pub async fn cloud_login_profile(
     display_name: Option<String>,
     avatar_url: Option<String>,
 ) -> Result<crate::cloud_auth::CloudStatus> {
-    state.cloud_auth.update_profile(display_name, avatar_url).await
+    state
+        .cloud_auth
+        .update_profile(display_name, avatar_url)
+        .await
 }
 #[tauri::command]
 pub async fn cloud_login_logout(app: AppHandle, state: State<'_, Backend>) -> Result<bool> {
