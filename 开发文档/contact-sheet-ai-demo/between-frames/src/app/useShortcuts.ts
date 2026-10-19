@@ -19,6 +19,8 @@ export function useShortcuts({ shortcuts, photos, activeId, view, blocked, onCom
         return;
       }
       const target = event.target instanceof HTMLElement ? event.target : null;
+      // 序列拖拽进行中：所有按键让位给 dnd-kit（含 Space 放置与方向键移动），避免全局动作（如 space=放大）抢占。
+      if (document.querySelector('.sequence-card.dragging')) return;
       if (!blocked && !event.defaultPrevented && !event.repeat && !event.isComposing && target?.closest('.ai-drawer') && eventToShortcut(event) === shortcuts.toggleAgent) {
         event.preventDefault(); onAgent(); return;
       }
