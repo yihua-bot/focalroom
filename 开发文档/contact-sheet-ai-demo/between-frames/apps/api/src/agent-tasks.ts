@@ -81,12 +81,8 @@ export async function summarizeProjectComments(
     body: JSON.stringify({
       model: MODEL_NAME(),
       messages: [
-        {
-          role: "system",
-          content:
-            "你是摄影项目的审稿助手。只汇总人类评论，不添加自己的审美判断。用中文简洁输出。",
-        },
-        { role: "user", content: prompt },
+        { role: "system", content: prompt.system },
+        { role: "user", content: prompt.user },
       ],
       max_tokens: 500,
     }),
@@ -124,12 +120,13 @@ export async function storeTaskResult(
   projectId: string,
   createdBy: string,
   result: SummarizeResult,
+  kind: CommentKind = "summarize_comments",
 ): Promise<string> {
   const row = (
     await pool.query(
       `INSERT INTO fr_agent_task_results
        (project_id, created_by, task_type, model_id, summary, comment_count, tokens_in, tokens_out, cost_estimate_minor_usd, provenance)
-       VALUES ($1, $2, 'summarize_comments', $3, $4, $5, $6, $7, $8, $9::jsonb)
+       VALUES ($1, $2, $10, $3, $4, $5, $6, $7, $8, $9::jsonb)
        RETURNING id`,
       [
         projectId,
@@ -145,6 +142,7 @@ export async function storeTaskResult(
           permits_model_upload: false,
           creates_author_memory: false,
         }),
+        kind,
       ],
     )
   ).rows[0];

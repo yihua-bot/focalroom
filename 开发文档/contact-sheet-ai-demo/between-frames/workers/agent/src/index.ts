@@ -94,7 +94,7 @@ export async function runWorkerOnce(pool: Pool): Promise<WorkerRunResult> {
     const resultId = await storeTaskResult(pool, job.project_id, job.created_by, {
       ...result,
       comment_count: result.comment_count,
-    });
+    }, job.kind);
     await pool.query(
       `UPDATE fr_agent_jobs SET status='COMPLETED', result_id=$2::text,
               checkpoint=jsonb_build_object('comment_count', $3::int, 'result_id', $2::text),

@@ -144,6 +144,25 @@ test('M4 无显式授权时入队被拒；授权/任务/取消/撤权全链路',
   assert.equal(modelCalls.length, 2, '分歧分析未执行，模型仍只被调过 2 次');
 });
 
+test('M4 分歧分析：消息体为 system/user 字符串且 task_type 落库为分歧', async () => {
+  const consent = await call(`/projects/${project}/model-consents`, 'POST', owner.token, { scope: 'summarize_disagreement', max_tasks: 5 });
+  await call(`/projects/${project}/agent-tasks/summarize`, 'POST', owner.token, { kind: 'summarize_disagreement', consent_id: consent.consent_id });
+  const run = await runWorkerOnce(pool);
+  assert.equal(run.status, 'COMPLETED');
+  const last = modelCalls.at(-1);
+  assert.ok(last, '分歧任务应发起模型调用');
+  const messages = JSON.parse(last.body).messages;
+  // 回归：旧代码把 {system,user} 对象直接塞进 content，且 system 固定为汇总提示。
+  assert.equal(typeof messages[0].content, 'string', 'system content 必须是字符串');
+  assert.ok(messages[0].content.includes('分歧'), '分歧模式的 system 提示应包含分歧策略');
+  assert.equal(typeof messages[1].content, 'string', 'user content 必须是字符串，不能是 prompt 对象');
+  assert.ok(messages[1].content.includes('[Reviewer]') || messages[1].content.includes('['), 'user 提示应包含评论列表');
+  // 回归：旧代码 storeTaskResult 硬编码 summarize_comments，分歧结果在 Web 端永远不可见。
+  const tasks = await call(`/projects/${project}/agent-tasks`, 'GET', owner.token);
+  const kinds = tasks.tasks.map((t) => t.task_type);
+  assert.ok(kinds.includes('summarize_disagreement'), `分歧 task_type 应落库，实际: ${JSON.stringify(kinds)}`);
+});
+
 test('M4 崩溃恢复：租约过期的 RUNNING 任务被重新领取并完成', async () => {
   const consent = await call(`/projects/${project}/model-consents`, 'POST', owner.token, { scope: 'summarize_comments', max_tasks: 5 });
   const job = await call(`/projects/${project}/agent-tasks/summarize`, 'POST', owner.token, { kind: 'summarize_comments', consent_id: consent.consent_id });
