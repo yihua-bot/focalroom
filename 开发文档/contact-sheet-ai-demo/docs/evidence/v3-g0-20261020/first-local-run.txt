@@ -1,0 +1,1265 @@
+
+> between-frames@0.1.0 verify:v2
+> bash scripts/verify-v2-m0.sh
+
+
+> between-frames@0.1.0 build:workspaces
+> npm run typecheck && npm run build --workspaces --if-present
+
+
+> between-frames@0.1.0 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+
+
+> @betweenframes/desktop@0.0.0 build
+> vite build
+
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 1842 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.51 kB │ gzip:   0.31 kB
+dist/assets/index-kGQ_wPiX.css   45.24 kB │ gzip:  10.18 kB
+dist/assets/index-CPMht1id.js   680.95 kB │ gzip: 213.39 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../src/i18n/locales/zh.json is dynamically imported by ../../src/i18n/index.tsx but also statically imported by ../../src/app/copy.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../src/i18n/locales/en.json is dynamically imported by ../../src/i18n/index.tsx but also statically imported by ../../src/app/copy.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../src/i18n/locales/ja.json is dynamically imported by ../../src/i18n/index.tsx but also statically imported by ../../src/app/copy.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../src/i18n/locales/ko.json is dynamically imported by ../../src/i18n/index.tsx but also statically imported by ../../src/app/copy.ts, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../node_modules/@tauri-apps/api/event.js is dynamically imported by ../../src/features/ai-editor/AIPanel.tsx but also statically imported by ../../src/services/TauriAgentRepository.ts, ../../src/services/TauriCloudAuthRepository.ts, ../../src/services/TauriRepository.ts, dynamic import will not move module into another chunk.
+
+✓ built in 222ms
+
+> @betweenframes/web@0.0.0 build
+> vite build
+
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 170 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.53 kB │ gzip:   0.35 kB
+dist/assets/index-Bd1EKTTn.css   17.75 kB │ gzip:   4.74 kB
+dist/assets/index-CpKQl7Vg.js   479.34 kB │ gzip: 149.21 kB
+
+✓ built in 84ms
+
+> between-frames@0.1.0 test:web
+> playwright test --config playwright.web.config.ts
+
+[WebServer] (node:63587) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:63589) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/v2-foundation.spec.ts:5:1 › v2 Web 共享入口渲染登录并保持零外发 (603ms)
+
+  1 passed (2.0s)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+
+[1m== 契约检查（GUI + Agent） ==[0m
+
+> between-frames@0.1.0 contracts:check
+> node scripts/generate-command-contracts.mjs --check && node scripts/generate-v2-contracts.mjs --check
+
+M1 command contracts: OK
+Agent contracts: OK
+Memory contracts: OK
+PASS: v2 JSON Schema / Rust kind 映射一致（9 commands）
+
+[1m== 前端类型检查 ==[0m
+
+> between-frames@0.1.0 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+
+
+[1m== 前端 Lint ==[0m
+
+> between-frames@0.1.0 lint
+> eslint . --max-warnings 0
+
+
+[1m== 前端单元测试 ==[0m
+
+> between-frames@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.11 /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames
+
+(node:63857) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  38 passed (38)
+      Tests  265 passed (265)
+   Start at  18:37:30
+   Duration  7.04s (transform 1.82s, setup 4.76s, import 6.51s, tests 19.69s, environment 22.52s)
+
+
+[1m== 浏览器预览 E2E ==[0m
+
+> between-frames@0.1.0 test:e2e
+> playwright test
+
+[WebServer] (node:63993) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 18 tests using 1 worker
+
+(node:63994) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 e2e/chat-drawer.spec.ts:5:1 › 工作台对话抽屉保留选区、输入和关闭焦点，不增加 AI 导航 (1.8s)
+  ✓   2 e2e/chat-drawer.spec.ts:37:1 › 账户入口集中语言、帮助与联系作者，收起侧栏后仍可访问 (789ms)
+  ✓   3 e2e/gui-v1.spec.ts:13:1 › 多选、明确 K/X/U、批量人工评分和输入焦点隔离 (752ms)
+  ✓   4 e2e/gui-v1.spec.ts:44:1 › 大图适合屏幕、100% 缓存像素、平移、翻片与关闭焦点 (851ms)
+  ✓   5 e2e/gui-v1.spec.ts:74:1 › 选中两张比较，同步与独立缩放平移不会改写状态 (867ms)
+  ✓   6 e2e/gui-v1.spec.ts:103:1 › 搜索快捷键、当前视图全选、面板折叠和双尺寸可用性 (1.0s)
+  ✓   7 e2e/history-v1.spec.ts:11:1 › 多选一次撤销，重做与新编辑分支；备注输入不触发项目撤销 (671ms)
+  ✓   8 e2e/history-v1.spec.ts:31:1 › 版本保存、范围预览、恢复与撤销恢复 (862ms)
+  ✓   9 e2e/workspace.spec.ts:20:1 › 实际运行原始 standalone Demo 并核对主要交互 (441ms)
+  ✓  10 e2e/workspace.spec.ts:36:1 › 工作台与检查器截图，完整构图、密度切换和面板收起 (922ms)
+  ✓  11 e2e/workspace.spec.ts:65:1 › 比较截图、焦点陷阱、Esc 与偏好不会改写选片 (753ms)
+  ✓  12 e2e/workspace.spec.ts:82:1 › 作品序列截图，鼠标拖拽与键盘上下移动一致 (1.7s)
+  ✓  13 e2e/workspace.spec.ts:112:1 › 序列把手支持 Space 与方向键拖放，不与全局快捷键冲突 (811ms)
+  ✓  14 e2e/workspace.spec.ts:132:1 › 序列把手处理单次合并移动事件，Escape 取消后顺序不变 (766ms)
+  ✓  15 e2e/workspace.spec.ts:163:1 › 新建项目的空状态截图与项目导航 (706ms)
+  ✓  16 e2e/workspace.spec.ts:178:1 › 备注编辑不会触发 K/X；刷新明确重置内存预览 (939ms)
+  ✓  17 e2e/workspace.spec.ts:192:1 › AI、导入和导出边界明示；没有外部请求 (715ms)
+  ✓  18 e2e/workspace.spec.ts:207:1 › 390px 窄屏能导航、选片和查看检查器，无横向溢出 (582ms)
+
+  18 passed (16.9s)
+
+[1m== Rust 测试（target-v1） ==[0m
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.22s
+     Running unittests src/lib.rs (src-tauri/target-v1/debug/deps/between_frames_lib-888646b9721fb45b)
+
+running 29 tests
+test agent::context::tests::layer_budgets_split_total_context_across_layers ... ok
+test agent::semantic::tests::cosine_rejects_invalid_vectors_and_keeps_signed_similarity ... ok
+test agent::pricing::tests::rates_are_integer_rounded_versioned_and_endpoint_bound ... ok
+test agent::memory_search::hybrid_tests::hybrid_includes_semantic_only_hits ... ok
+test agent::memory_search::hybrid_tests::hybrid_blends_keyword_and_semantic_equally ... ok
+test agent::memory_search::hybrid_tests::hybrid_falls_back_to_keyword_without_semantics ... ok
+test agent::context::tests::old_tool_results_are_summarized_but_recent_kept_whole ... ok
+test agent::context::tests::repeated_tool_results_are_superseded_not_dropped ... ok
+test agent::memory_search::hybrid_tests::equal_scores_normalize_without_division_by_zero ... ok
+test agent::semantic::tests::native_chinese_and_english_rank_real_sentence_vectors ... ignored, 需本机已有 Apple 中英文句向量；显式执行，不下载资产
+test agent::semantic::tests::native_reuses_vectors_only_for_current_language_revision_and_dimensions ... ignored, 需本机已有 Apple 句向量；精确验证真实缓存复用，不下载资产
+test agent::semantic::tests::invalid_or_empty_requests_skip_native_work_explicitly ... ok
+test cloud_auth::avatar_cache_tests::cache_requires_trusted_url_valid_bounded_pixels_and_url_bound_path ... ok
+test agent::semantic_index::tests::refuses_linked_cache_file_and_directory_without_touching_target ... ok
+test agent::semantic_index::tests::corrupt_or_oversized_cache_is_a_miss_and_invalid_vectors_cannot_replace_file ... ok
+test diagnostics::tests::scan_limit_is_reported_without_claiming_zero_usage ... ok
+test login_guard::tests::auth_origins_are_exact_and_pending_survives_serialization ... ok
+test login_guard::tests::callback_binds_state_path_fields_and_expiry ... ok
+test product_links::tests::only_known_public_destinations ... ok
+test shared_cloud::review_link_tests::browser_link_requires_completed_bound_project_and_safe_origin ... ok
+test agent::semantic_index::tests::persists_incrementally_replaces_changed_photo_and_bounds_old_entries ... ok
+test agent::semantic_index::tests::purge_failure_keeps_observations_and_receipt_unchanged ... ok
+test agent::photo_search::tests::prepared_scores_revalidate_payload_scope_and_call_then_cancellation_stops_writes ... ok
+test agent::semantic_index::tests::database_project_isolation_and_purge_command_clear_derived_vectors ... ok
+test cr2_preview::tests::extracts_only_declared_primary_jpeg_without_changing_source_bytes ... ok
+test cr2_preview::tests::rejects_invalid_ranges_counts_duplicate_tags_and_pixel_limits ... ok
+test cr2_preview::tests::conflicting_existing_exif_falls_back_instead_of_guessing ... ok
+test cr2_preview::tests::rejects_non_jpeg_payload_and_metadata_dimension_mismatch ... ok
+test cr2_preview::tests::carries_all_eight_orientations_and_preserves_pixel_and_icc_segments ... ok
+
+test result: ok. 27 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.50s
+
+     Running unittests src/main.rs (src-tauri/target-v1/debug/deps/between_frames-f00fbacbb3b968dd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_evaluate.rs (src-tauri/target-v1/debug/deps/agent_evaluate-3ff218c0971410fd)
+
+running 3 tests
+test without_observations_only_hash_and_human_hints ... ok
+test stale_hash_observation_is_ignored ... ok
+test structured_evaluation_reports_duplicates_similarity_and_metrics ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/agent_memory.rs (src-tauri/target-v1/debug/deps/agent_memory-8bdb3f0373181091)
+
+running 19 tests
+test batch_decisions_keep_all_participants_and_do_not_invent_past_explanations ... ok
+test cross_project_memory_authorization_controls_visibility ... ok
+test deleted_hypothesis_stays_dead_when_evidence_count_changes ... ok
+test ag11_correction_stops_retrieval_and_does_not_revive ... ok
+test delete_evidence_unlinks_hypotheses_and_purges_cache ... ok
+test evidence_is_deduplicated_and_hypotheses_are_deterministic ... ok
+test correction_survives_growing_evidence_legacy_duplicates_and_restart ... ok
+test controls_are_idempotent_reversible_and_leave_formal_edit_history_unchanged ... ok
+test excluded_evidence_updates_support_counters_retrieval_and_survives_restart ... ok
+test growing_support_updates_the_same_hypothesis_and_preserves_disabled_state ... ok
+test memory_scope_schema_and_receipt_fault_rollback_are_enforced ... ok
+test memory_changes_pause_tasks_and_require_new_context_instead_of_old_history ... ok
+test physical_delete_hypothesis_writes_tombstone_and_never_revives ... ok
+test fts_search_is_scoped_and_goal_relevance_precedes_confirmation ... ok
+test memory_exclusion_discards_a_model_reply_already_in_flight ... ok
+test version_eight_upgrade_backs_up_committed_wal_before_new_schema ... ok
+test v2_baseline_preserves_pre_keyword_tombstones ... ok
+test retrieve_preferences_tool_returns_evidence_backed_and_rejects_cross_project ... ok
+test agent_drafts_are_not_evidence_until_human_applies ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.25s
+
+     Running tests/agent_quality.rs (src-tauri/target-v1/debug/deps/agent_quality-6998a507e7727bc1)
+
+running 1 test
+test quality_scores_round_trip_with_validation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/agent_runtime.rs (src-tauri/target-v1/debug/deps/agent_runtime-6a2f83e703576cd1)
+
+running 13 tests
+test ag07_receipt_replay_does_not_duplicate_draft_even_after_timeout_and_restart ... ok
+test draft_and_receipt_fault_are_one_transaction_and_m1_upgrade_has_backup ... ok
+test ag05_06_13_14_security_schema_injection_and_invalid_final_are_rejected ... ok
+test in_flight_wait_is_charged_once_on_pause_and_interruption ... ok
+test ag10_backend_caps_model_tools_context_time_and_retry_failures ... ok
+test ag08_15_stale_rebase_partial_apply_and_undo_preserve_unapproved_state ... ok
+test formal_edit_during_loop_survives_and_completed_drafts_are_stale ... ok
+test ag09_pause_restart_resume_and_pending_calls_retain_protocol_links ... ok
+test human_feedback_and_cancel_are_persistent_without_formal_writes ... ok
+test two_hundred_scope_two_twenty_five_drafts_fit_default_context_without_losing_linkage ... ok
+test ag01_different_human_facts_change_search_path_and_formal_state_is_untouched ... ok
+test ag03_reorder_scope_avoids_whole_project_reads_for_two_orders ... ok
+test ag02_duplicate_annotation_drives_revision_not_fixed_tool_order ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.83s
+
+     Running tests/agent_vision.rs (src-tauri/target-v1/debug/deps/agent_vision-b489c7f835d57314)
+
+running 44 tests
+test distinct_roles_share_original_image_budget_before_observer_http ... ok
+test archived_project_and_generic_positive_consents_cannot_be_created ... ok
+test distinct_roles_send_pixels_only_to_observer_and_finish_reviewable_draft ... ok
+test consented_vision_uploads_once_then_cache_hits_without_reupload ... ok
+test cloud_image_budget_cap_pauses_task_before_any_upload ... ok
+test ag04_without_consent_no_image_leaves_formal_state_untouched ... ok
+test cloud_search_reads_only_current_bound_endpoint_facts_without_image_transfers ... ok
+test curator_consent_cannot_authorize_observer_explicit_or_implicit_upload ... ok
+test consent_isolated_by_endpoint_and_model_before_any_request_with_wrong_explicit_grant ... ok
+test crashed_in_flight_upload_keeps_reservation_and_cannot_retransmit_on_resume ... ok
+test hallucinated_photo_ids_are_dropped_and_quota_charged_for_real_transfer ... ok
+test http_redirect_does_not_forward_preview_or_authorization_to_another_service ... ok
+test independent_role_capability_files_are_frozen_and_never_inherit_other_model_profiles ... ok
+test observation_roles_refuse_other_endpoints_without_network ... ok
+test invalid_cached_observations_require_fresh_authorized_upload ... ok
+test invalid_observations_never_enter_cache_and_uploads_remain_charged ... ok
+test legacy_binding_without_capability_fingerprint_requires_new_delegation ... ok
+test legacy_unbound_consent_is_not_upgraded_or_used_by_new_tasks ... ok
+test recipient_identity_preserves_key_rotation_and_is_specific_to_destination_and_model ... ok
+test legacy_unbound_executed_task_requires_redelegation_without_any_http ... ok
+test malformed_model_batches_and_incomplete_responses_execute_no_tools ... ok
+test malformed_vision_response_keeps_upload_reservation_instead_of_free_retry ... ok
+test observation_cache_is_scoped_to_endpoint_even_when_model_alias_matches ... ok
+test observation_model_environment_is_optional_and_frozen_until_engine_recreation ... ok
+test obsolete_queued_checkpoint_fails_once_and_releases_the_project_for_redelegation ... ok
+test paused_upload_settles_and_replays_after_restart_without_retransmission ... ok
+test provider_error_bodies_cannot_leak_credentials_into_task_records ... ok
+test real_http_loop_receives_task_identity_and_finishes_reviewable_draft ... ok
+test recipient_receipt_replay_conflicts_and_replacement_failure_are_atomic ... ok
+test remaining_budget_reduces_request_output_without_raising_task_budget ... ok
+test reported_tokens_settle_reservations_and_excess_usage_stops_before_tools ... ok
+test role_cache_and_search_follow_observer_across_new_curators ... ok
+test role_observer_capabilities_never_fall_back_to_vision_capable_curator ... ok
+test role_pair_and_profiles_are_immutable_on_reopen_but_keys_may_rotate ... ok
+test runtime_router_keeps_offline_task_local_when_cloud_adapter_is_available ... ok
+test runtime_router_rejects_region_budget_and_missing_provider_before_http ... ok
+test stale_recipient_ui_cannot_grant_and_deny_works_without_a_usable_provider ... ok
+test task_binding_survives_restart_rejects_endpoint_or_model_switch_and_allows_key_rotation ... ok
+test task_consent_is_bound_once_and_never_used_as_project_fallback ... ok
+test text_only_profile_cannot_upload_images_even_with_project_consent_or_direct_observe ... ok
+test timed_out_upload_is_charged_and_resume_does_not_send_it_again ... ok
+test unexpected_provider_usage_is_visible_and_stops_further_requests ... ok
+test unknown_model_profile_stops_before_any_http_or_budget_reservation ... ok
+test zero_cost_and_exhausted_tool_budget_stop_before_upload ... ok
+
+test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.88s
+
+     Running tests/author_memory.rs (src-tauri/target-v1/debug/deps/author_memory-3aeca3ab75c254a0)
+
+running 10 tests
+test author_opt_in_is_audited_idempotent_and_does_not_accept_legacy_true ... ok
+test consent_failure_rolls_back_setting_and_task_pause ... ok
+test source_note_change_discards_inflight_reply_but_settles_reported_usage ... ok
+test revoking_from_another_project_invalidates_old_history_even_after_regrant ... ok
+test source_controls_pause_consumers_and_archiving_invalidates_future_context ... ok
+test checkpoint_cannot_replace_immutable_author_binding ... ok
+test only_relevant_confirmed_local_sources_are_returned_with_provenance ... ok
+test tool_alias_remains_scoped_and_revocation_blocks_receipt_replay_and_aba_resume ... ok
+test author_scope_limits_fail_closed_but_allow_disabling ... ok
+test corrections_disabling_and_tombstones_block_duplicate_author_claims ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+     Running tests/book_marks.rs (src-tauri/target-v1/debug/deps/book_marks-d58e534565509eb0)
+
+running 2 tests
+test mark_command_roundtrip_undo_and_snapshot_restore ... ok
+test print_paging_respects_spread_marks ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/bundled_demo.rs (src-tauri/target-v1/debug/deps/bundled_demo-2aac1b254d188dbd)
+
+running 2 tests
+test missing_demo_resources_do_not_leave_an_empty_project ... ok
+test demo_is_created_once_alongside_user_projects_and_respects_archive ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.92s
+
+     Running tests/cache_quota.rs (src-tauri/target-v1/debug/deps/cache_quota-a0fbb0e2c1d4a512)
+
+running 2 tests
+test sweep_missing_cache_dir_is_noop ... ok
+test sweep_keeps_live_and_oldest_first_orphans_only ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cloud_login.rs (src-tauri/target-v1/debug/deps/cloud_login-3bb67a4a2795a41c)
+
+running 6 tests
+test native_cloud_keychain_roundtrip ... ignored, 显式使用独立随机服务名验证系统钥匙串，不触碰用户条目
+test real_pg_api_and_keychain_complete_one_desktop_session ... ignored, 需要显式启动隔离回环PG API；实际系统钥匙串与原生HTTP协议验收
+test failed_redemption_never_sets_logged_in_and_cannot_replay_uncertain_result ... ok
+test offline_status_blocks_cloud_writes_but_allows_local_logout ... ok
+test pending_survives_restart_and_cancel_prevents_late_return ... ok
+test pkce_callback_stores_only_in_vault_rejects_replay_and_reuses_session ... ok
+
+test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/command_history.rs (src-tauri/target-v1/debug/deps/command_history-a5c052d30bc04798)
+
+running 12 tests
+test generated_request_contract_round_trips_all_m1_examples_and_rejects_extra_fields ... ok
+test receipt_write_failure_rolls_back_every_projection_event_and_stack ... ok
+test database_ownership_triggers_reject_cross_project_rows ... ok
+test comparison_undo_is_logical_and_does_not_delete_evidence_rows ... ok
+test no_op_receipt_replay_keeps_its_original_history_and_revision ... ok
+test concurrent_connections_have_one_success_and_deterministic_conflict ... ok
+test project_brief_and_archive_restore_have_compensating_history ... ok
+test durable_replay_checks_fingerprint_scope_and_returns_original_result ... ok
+test batch_history_undo_redo_persists_and_new_edit_invalidates_redo_branch ... ok
+test named_version_restore_is_scoped_atomic_and_undoable ... ok
+test old_wal_database_is_backed_up_before_upgrade_and_backup_can_restore_project ... ok
+test slim_receipt_cursor_and_both_legacy_formats_replay_the_same_snapshot ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+
+     Running tests/diagnostics.rs (src-tauri/target-v1/debug/deps/diagnostics-ec982be7019377a7)
+
+running 7 tests
+test missing_cache_is_empty_but_missing_required_database_is_unknown ... ok
+test backup_health_does_not_follow_symlinks ... ok
+test unavailable_storage_is_partial_and_database_failure_is_not_zero ... ok
+test cache_and_backup_symlinks_and_nested_dirs_are_not_followed ... ok
+test diagnostics_counts_sizes_are_read_only_and_redacted ... ok
+test backup_health_checks_report_recoverability ... ok
+test v2_baseline_backup_health_rejects_symlink_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/export_v12.rs (src-tauri/target-v1/debug/deps/export_v12-e8e66162e894802f)
+
+running 3 tests
+test desktop_export_destinations_cover_every_visible_format ... ok
+test print_reference_html_has_cover_pages_and_plates ... ok
+test sidecar_export_writes_per_photo_json_and_manifest ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/gui_v2_m1.rs (src-tauri/target-v1/debug/deps/gui_v2_m1-808499c2ff24af1e)
+
+running 3 tests
+test oversized_file_is_rejected_without_touching_others ... ok
+test undo_redo_never_duplicates_sequence_positions ... ok
+test five_hundred_mixed_photos_survive_restart_with_hashes_unchanged ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.39s
+
+     Running tests/hosted_ai.rs (src-tauri/target-v1/debug/deps/hosted_ai-18f6795fc85384c8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/keychain.rs (src-tauri/target-v1/debug/deps/keychain-d479c957e276cc08)
+
+running 1 test
+test tests::rejects_empty_key ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/local_core.rs (src-tauri/target-v1/debug/deps/local_core-2c08e6ed2d30edff)
+
+running 10 tests
+test jpeg_exif_orientation_is_applied_to_cache ... ok
+test rating_migration_upgrades_old_database_without_changing_legacy_data ... ok
+test revision_conflicts_and_invalid_operations_roll_back_every_projection_and_event ... ok
+test archive_is_recoverable_and_keeps_source_and_journal ... ok
+test missing_source_keeps_cache_and_relink_requires_identical_content ... ok
+test comparisons_are_evidence_only_and_exports_are_escaped_and_read_only ... ok
+test batch_edits_are_atomic_scoped_and_repeated_status_is_a_noop ... ok
+test imports_report_duplicates_bad_files_and_cancel_without_losing_committed_data ... ok
+test two_hundred_photos_survive_restart_without_changing_sources ... ok
+test native_heic_and_canon_raw_are_decoded_without_changing_originals ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.21s
+
+     Running tests/model_routing.rs (src-tauri/target-v1/debug/deps/model_routing-7b1a48bb897e357b)
+
+running 10 tests
+test standard_tier_prefers_quality_per_cost_value ... ok
+test pro_tier_prefers_high_mean_over_cheaper_model ... ok
+test hard_fail_records_exclude_model_from_any_tier ... ok
+test without_records_fallback_keeps_default_priority_and_explains ... ok
+test routing_requires_all_protocol_capabilities_including_requested_image_input ... ok
+test unknown_residency_and_unimplemented_embedding_cannot_pass_routing_as_verified ... ok
+test configured_model_identity_is_real_unmeasured_and_credential_independent ... ok
+test capability_sets_are_canonical_frozen_and_do_not_grant_extra_privileges ... ok
+test known_profiles_and_explicit_env_override_fail_closed_without_inheriting_proxy_capabilities ... ok
+test capability_file_is_bounded_strict_and_bound_to_exact_endpoint_and_model ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/multi_provider.rs (src-tauri/target-v1/debug/deps/multi_provider-d72301117d06b0fa)
+
+running 5 tests
+test native_catalog_declares_no_vision_and_vision_tasks_are_refused ... ok
+test provider_identity_distinguishes_vendors_and_requires_new_delegation ... ok
+test anthropic_native_messages_round_trip ... ok
+test gemini_native_generate_content_round_trip ... ok
+test anthropic_text_only_maps_to_no_action_and_bad_usage_fails ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/perf_baseline.rs (src-tauri/target-v1/debug/deps/perf_baseline-cac4431147cf38e4)
+
+running 2 tests
+test long_edit_history_growth_baseline ... ignored
+test perf_baseline_200_import_and_decision_p95 ... ignored
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/photo_inspection.rs (src-tauri/target-v1/debug/deps/photo_inspection-60e634d7ec507692)
+
+running 10 tests
+test heic_original_passes_brand_check_when_fixture_exists ... ignored, requires explicit HEIC fixture at /tmp/between-frames-heic-fixture.heic
+test raw_cr2_returns_bounded_embedded_jpeg_not_full_raw ... ignored, requires explicit CR2 fixture at /tmp/between-frames-raw-fixture.CR2
+test fake_raw_and_unsupported_extensions_fail_with_clear_errors ... ok
+test icc_metadata_is_preserved_in_original_and_absent_in_preview ... ok
+test png_16bit_quantization_preserves_original_bytes ... ok
+test compact_gui_projection_preserves_audit_exports_and_idempotent_receipts ... ok
+test inspect_original_is_owned_read_only_and_larger_than_preview ... ok
+test tiff_original_is_direct_and_read_only ... ok
+test changed_missing_and_unsupported_originals_do_not_masquerade_as_full_resolution ... ok
+test renamed_large_tiff_cannot_bypass_raw_inspection_pixel_bounds ... ok
+
+test result: ok. 8 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 14.90s
+
+     Running tests/photo_search.rs (src-tauri/target-v1/debug/deps/photo_search-a01a1af8d23156d3)
+
+running 6 tests
+test semantic_tool_finds_paraphrases_with_real_local_embeddings_and_cited_scope ... ignored, 需本机已有 Apple 中英文句向量；只用合成观察，不下载、不上传
+test semantic_tool_explicitly_falls_back_without_cache_and_replays_one_receipt ... ok
+test semantic_tool_excludes_out_of_scope_and_invalid_cached_inputs_before_embedding ... ok
+test search_combines_scoped_metadata_with_cited_cached_facts_without_new_uploads ... ok
+test search_rejects_cross_scope_stale_hash_malformed_and_subjective_cache_matches ... ok
+test cache_search_at_task_limit_does_not_scan_extra_project_photos ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+     Running tests/project_tags.rs (src-tauri/target-v1/debug/deps/project_tags-b9c167a9dbdf50f7)
+
+running 1 test
+test tags_roundtrip_validation_and_no_revision_drift ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/real_model_e2e.rs (src-tauri/target-v1/debug/deps/real_model_e2e-812a24fe3de6870f)
+
+running 6 tests
+test real_model_deepseek_filename_curation ... ignored, 需要真实 API key 与网络；独立的确定性元数据任务，不替代开放选片质量
+test real_model_deepseek_full_agent_loop ... ignored, 需要真实 API key（BETWEEN_FRAMES_OPENAI_API_KEY）与网络
+test real_model_deepseek_vision_observation ... ignored, 需要真实 API key、显式端点/模型与网络；仅 Provider 视觉协议冒烟
+test real_model_lumix_authorized_agent_smoke ... ignored, 需要用户明确授权的照片目录与 preview 上传确认；最多 80 张本地导入、3 张云预览
+test real_model_lumix_exploratory_curation ... ignored, 真实探索策展：80 张授权照片，最多 12 张预览、8 张候选；仍需真人评审
+test completion_gate_rejects_interruption_missing_and_invalid_drafts ... ok
+
+test result: ok. 1 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 2.71s
+
+     Running tests/shared_export.rs (src-tauri/target-v1/debug/deps/shared_export-8a15eda31c9d31da)
+
+running 3 tests
+test shared_preview_rejects_oversize_corrupt_and_symbolic_sources ... ok
+test sharing_rejects_missing_consent_and_insecure_remote_before_freezing ... ok
+test shared_copy_export_uses_derived_previews_and_redacts_private_state ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/v2_bridge.rs (src-tauri/target-v1/debug/deps/v2_bridge-ea8ce8236ea2fac6)
+
+running 4 tests
+test revision_conflict_maps_to_409_and_cross_project_operations_rejected ... ok
+test agent_principal_cannot_write_formal_state ... ok
+test owner_selection_executes_with_idempotent_replay_and_v1_history ... ok
+test sequence_move_reorders_and_remove_leaves_keep_set ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/v2_comments.rs (src-tauri/target-v1/debug/deps/v2_comments-e8d11d0d0547255e)
+
+running 1 test
+test comments_thread_aggregate_resolve_and_agent_read ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/v2_foundation.rs (src-tauri/target-v1/debug/deps/v2_foundation-4eca6101b468afa9)
+
+running 4 tests
+test unknown_schema_constraints_fail_closed ... ok
+test ts_rust_permission_fixtures_agree_and_never_write ... ok
+test ts_rust_command_fixtures_agree ... ok
+test existing_local_schema_remains_authoritative_and_transactional ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/v2_media_links.rs (src-tauri/target-v1/debug/deps/v2_media_links-773982cf094ebda3)
+
+running 2 tests
+test revoke_project_kills_all_active_links ... ok
+test s02_revoked_link_denied_even_with_valid_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/v2_org.rs (src-tauri/target-v1/debug/deps/v2_org-4e027a34292bc0d9)
+
+running 1 test
+test seats_limit_revocation_and_owner_protection ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/v2_promotion_billing.rs (src-tauri/target-v1/debug/deps/v2_promotion_billing-69b1312e38a87924)
+
+running 6 tests
+test polar_webhook_hmac_verification_with_real_secret ... ignored, 使用真实 Polar webhook secret——验证 B01/B02 的 HMAC 与真实服务商格式一致
+test migration_seventeen_preserves_existing_promotion_records ... ok
+test b01_b02_webhook_replay_idempotent_and_forgery_rejected ... ok
+test failed_and_aborted_promotion_retry_at_same_revision_preserves_attempts ... ok
+test promotion_blocks_legacy_and_v2_writes_even_with_stale_authority ... ok
+test s01_promotion_single_authority_no_dual_master ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/v2_proposals.rs (src-tauri/target-v1/debug/deps/v2_proposals-bc29303f312e835d)
+
+running 7 tests
+test stale_base_revision_proposal_is_rejected_on_apply ... ok
+test receipt_persistence_failure_rolls_back_all_approval_side_effects ... ok
+test invalid_later_operation_rolls_back_approval_history_evidence_and_receipt ... ok
+test proposal_full_cycle_with_partial_accept_and_nonce ... ok
+test metadata_receipts_survive_restart_and_reject_conflicting_payloads ... ok
+test approval_add_honors_position_and_empty_rejection_does_not_edit_project ... ok
+test approval_moves_compose_and_whole_batch_undo_redo ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+     Running tests/v2_tools.rs (src-tauri/target-v1/debug/deps/v2_tools-afee322113b48694)
+
+running 2 tests
+test v2_router_errors_are_readable_and_scope_never_expands ... ok
+test v2_tool_names_complete_full_loop_and_m5_tools_are_rejected ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/v3_baseline.rs (src-tauri/target-v1/debug/deps/v3_baseline-a4b84911fc48d76c)
+
+running 1 test
+test legacy_v11_snapshot_upgrade_and_restore_preserve_identity_and_sources ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+   Doc-tests between_frames_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+[1m== Rust 格式检查 ==[0m
+
+[1m== Rust 严格 Clippy ==[0m
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.30s
+
+[1m== 云协议本地切片（独立 SQLite，不访问线上数据库） ==[0m
+
+> between-frames@0.1.0 verify:cloud
+> bash scripts/verify-cloud.sh
+
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling libc v0.2.190
+   Compiling cfg-if v1.0.5
+   Compiling futures-core v0.3.34
+   Compiling pin-project-lite v0.2.17
+   Compiling scopeguard v1.2.0
+   Compiling parking_lot_core v0.9.12
+   Compiling stable_deref_trait v1.2.1
+   Compiling lock_api v0.4.14
+   Compiling bytes v1.12.1
+   Compiling itoa v1.0.18
+   Compiling smallvec v1.16.3
+   Compiling core-foundation-sys v0.8.7
+   Compiling once_cell v1.21.4
+   Compiling litemap v0.8.3
+   Compiling writeable v0.6.4
+   Compiling utf8_iter v1.0.4
+   Compiling icu_normalizer_data v2.3.0
+   Compiling memchr v2.8.3
+   Compiling autocfg v1.5.1
+   Compiling icu_properties_data v2.3.0
+   Compiling version_check v0.9.5
+   Compiling tracing-core v0.1.36
+   Compiling futures-io v0.3.34
+   Compiling serde v1.0.229
+   Compiling log v0.4.34
+   Compiling percent-encoding v2.3.2
+   Compiling generic-array v0.14.7
+   Compiling futures-task v0.3.34
+   Compiling typenum v1.20.1
+   Compiling futures-sink v0.3.34
+   Compiling equivalent v1.0.3
+   Compiling form_urlencoded v1.2.2
+   Compiling hashbrown v0.17.1
+   Compiling serde_core v1.0.229
+   Compiling slab v0.4.12
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.154
+   Compiling getrandom v0.4.3
+   Compiling bitflags v2.13.2
+   Compiling mio v1.2.4
+   Compiling socket2 v0.6.5
+   Compiling syn v3.0.9
+   Compiling errno v0.3.14
+   Compiling syn v2.0.119
+   Compiling indexmap v2.14.2
+   Compiling signal-hook-registry v1.4.8
+   Compiling parking_lot v0.12.5
+   Compiling futures-util v0.3.34
+   Compiling http v1.5.0
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling crossbeam-utils v0.8.23
+   Compiling cpufeatures v0.2.17
+   Compiling num-traits v0.2.19
+   Compiling iana-time-zone v0.1.65
+   Compiling find-msvc-tools v0.1.14
+   Compiling foldhash v0.1.5
+   Compiling shlex v2.0.1
+   Compiling thiserror v2.0.21
+   Compiling ryu v1.0.23
+   Compiling allocator-api2 v0.2.21
+   Compiling cc v1.8.0
+   Compiling hashbrown v0.15.5
+   Compiling http-body v1.1.0
+   Compiling subtle v2.6.1
+   Compiling pkg-config v0.3.34
+   Compiling crc-catalog v2.5.0
+   Compiling vcpkg v0.2.15
+   Compiling parking v2.2.1
+   Compiling crc v3.4.0
+   Compiling event-listener v5.4.2
+   Compiling hashlink v0.10.0
+   Compiling crossbeam-queue v0.3.14
+   Compiling futures-channel v0.3.34
+   Compiling spin v0.9.9
+   Compiling libsqlite3-sys v0.30.1
+   Compiling tower-service v0.3.3
+   Compiling httparse v1.10.1
+   Compiling system-configuration-sys v0.6.0
+   Compiling synstructure v0.14.0
+   Compiling digest v0.10.7
+   Compiling tokio v1.53.3
+   Compiling try-lock v0.2.5
+   Compiling fnv v1.0.7
+   Compiling atomic-waker v1.1.2
+   Compiling want v0.3.2
+   Compiling sha2 v0.10.9
+   Compiling futures-intrusive v0.5.0
+   Compiling chrono v0.4.45
+   Compiling core-foundation v0.9.4
+   Compiling sync_wrapper v1.0.2
+   Compiling uuid v1.28.0
+   Compiling base64 v0.22.1
+   Compiling tower-layer v0.3.3
+   Compiling httpdate v1.0.3
+   Compiling rustix v1.1.5
+   Compiling tracing-attributes v0.1.31
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling zerovec-derive v0.11.6
+   Compiling displaydoc v0.2.7
+   Compiling serde_derive v1.0.229
+   Compiling tokio-macros v2.7.2
+   Compiling thiserror-impl v2.0.21
+   Compiling zerofrom v0.1.8
+   Compiling tracing v0.1.44
+   Compiling system-configuration v0.7.0
+   Compiling yoke v0.8.3
+   Compiling futures-executor v0.3.34
+   Compiling atoi v2.0.0
+   Compiling flume v0.11.1
+   Compiling http-body-util v0.1.5
+   Compiling rustversion v1.0.23
+   Compiling ipnet v2.12.2
+   Compiling zerovec v0.11.8
+   Compiling zerotrie v0.2.5
+   Compiling base64 v0.23.1
+   Compiling core-foundation v0.10.1
+   Compiling getrandom v0.2.17
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling security-framework-sys v2.17.0
+   Compiling icu_collections v2.3.0
+   Compiling icu_locale_core v2.3.0
+   Compiling tokio-stream v0.1.19
+   Compiling heck v0.5.0
+   Compiling fastrand v2.5.0
+   Compiling hex v0.4.3
+   Compiling native-tls v0.2.18
+   Compiling mime v0.3.17
+   Compiling dotenvy v0.15.7
+   Compiling security-framework v3.7.0
+   Compiling rand_core v0.6.4
+   Compiling tempfile v3.27.0
+   Compiling icu_provider v2.3.1
+   Compiling either v1.19.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling icu_properties v2.3.0
+   Compiling icu_normalizer v2.3.0
+   Compiling base64ct v1.8.3
+   Compiling zune-core v0.5.3
+   Compiling pxfm v0.1.30
+   Compiling encoding_rs v0.8.42
+   Compiling password-hash v0.5.0
+   Compiling zune-jpeg v0.5.15
+   Compiling axum-core v0.5.6
+   Compiling blake2 v0.10.6
+   Compiling serde_path_to_error v0.1.20
+   Compiling byteorder-lite v0.1.0
+   Compiling matchit v0.8.4
+   Compiling bytemuck v1.25.2
+   Compiling argon2 v0.5.3
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling multiversion_no_op v1.0.0
+   Compiling simdutf8 v0.1.5
+   Compiling zeroize v1.9.1
+   Compiling url v2.5.8
+   Compiling rustls-pki-types v1.15.1
+   Compiling tokio-util v0.7.20
+   Compiling tower v0.5.3
+   Compiling tokio-native-tls v0.3.1
+   Compiling sqlx-core v0.8.6
+   Compiling moxcms v0.8.1
+   Compiling h2 v0.4.20
+   Compiling tower-http v0.6.11
+   Compiling sqlx-sqlite v0.8.6
+   Compiling image v0.25.10
+   Compiling hyper v1.12.0
+   Compiling sqlx-macros-core v0.8.6
+   Compiling hyper-util v0.1.21
+   Compiling sqlx-macros v0.8.6
+   Compiling sqlx v0.8.6
+   Compiling axum v0.8.9
+   Compiling hyper-tls v0.6.0
+   Compiling reqwest v0.12.28
+   Compiling bf-cloud v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/cloud)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 36.44s
+     Running unittests src/lib.rs (cloud/target/debug/deps/bf_cloud-592079a2408074c5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (cloud/target/debug/deps/bf_cloud-d35b667679aec047)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/m5_collab.rs (cloud/target/debug/deps/m5_collab-68df30b5d1910b53)
+
+running 2 tests
+test m5_wrong_nonce_rejected ... ok
+test m5_full_collaboration_suite ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.41s
+
+     Running tests/security_boundaries.rs (cloud/target/debug/deps/security_boundaries-a4c0a85210c5c9bc)
+
+running 10 tests
+test invalid_and_oversized_registration_is_rejected_before_persistence ... ok
+test legacy_fast_hash_and_raw_sessions_are_not_accepted ... ok
+test symlink_preview_cannot_read_a_file_outside_the_preview_directory ... ok
+test malformed_database_digest_returns_error_instead_of_panicking ... ok
+test previews_require_exact_names_real_jpeg_dimensions_and_project_membership ... ok
+test unreviewed_sqlite_v2_cannot_bypass_password_or_issue_shared_authority ... ok
+test first_start_creates_database_and_process_restart_preserves_login_and_project ... ok
+test duplicate_registration_and_database_failure_do_not_leak_or_leave_orphans ... ok
+test revoke_is_scoped_to_grant_and_project_and_regrant_is_stable ... ok
+test auth_hashes_credentials_expires_sessions_and_logout_is_specific ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.85s
+
+     Running tests/v2_promotion.rs (cloud/target/debug/deps/v2_promotion-d2af419e98961e3c)
+
+running 2 tests
+test sqlite_v2_login_never_authenticates_by_email_alone ... ok
+test sqlite_v2_never_registers_uploads_or_finalizes_an_unverified_manifest ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/vertical_slice.rs (cloud/target/debug/deps/vertical_slice-c80897b2574c75ac)
+
+running 2 tests
+test auth_rejects_bad_credentials ... ok
+test s02_vertical_slice_full_flow ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s
+
+   Doc-tests bf_cloud
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking cfg-if v1.0.5
+    Checking smallvec v1.16.3
+    Checking scopeguard v1.2.0
+    Checking pin-project-lite v0.2.17
+    Checking futures-core v0.3.34
+    Checking libc v0.2.190
+    Checking bytes v1.12.1
+    Checking zerofrom v0.1.8
+   Compiling stable_deref_trait v1.2.1
+    Checking lock_api v0.4.14
+    Checking once_cell v1.21.4
+    Checking itoa v1.0.18
+    Checking core-foundation-sys v0.8.7
+    Checking futures-sink v0.3.34
+    Checking yoke v0.8.3
+    Checking log v0.4.34
+    Checking slab v0.4.12
+    Checking tracing-core v0.1.36
+    Checking serde_core v1.0.229
+    Checking zerovec v0.11.8
+   Compiling litemap v0.8.3
+   Compiling writeable v0.6.4
+    Checking memchr v2.8.3
+    Checking tracing v0.1.44
+    Checking equivalent v1.0.3
+   Compiling zerotrie v0.2.5
+    Checking futures-io v0.3.34
+   Compiling utf8_iter v1.0.4
+    Checking errno v0.3.14
+    Checking parking_lot_core v0.9.12
+    Checking mio v1.2.4
+    Checking socket2 v0.6.5
+    Checking tinystr v0.8.4
+    Checking signal-hook-registry v1.4.8
+    Checking potential_utf v0.1.6
+    Checking parking_lot v0.12.5
+    Checking bitflags v2.13.2
+    Checking icu_locale_core v2.3.0
+    Checking futures-task v0.3.34
+    Checking percent-encoding v2.3.2
+    Checking icu_collections v2.3.0
+    Checking tokio v1.53.3
+    Checking http v1.5.0
+    Checking futures-util v0.3.34
+    Checking hashbrown v0.17.1
+    Checking typenum v1.20.1
+    Checking icu_provider v2.3.1
+    Checking indexmap v2.14.2
+    Checking getrandom v0.4.3
+   Compiling icu_properties_data v2.3.0
+   Compiling icu_normalizer_data v2.3.0
+    Checking generic-array v0.14.7
+    Checking icu_properties v2.3.0
+    Checking serde v1.0.229
+    Checking icu_normalizer v2.3.0
+    Checking http-body v1.1.0
+    Checking form_urlencoded v1.2.2
+    Checking subtle v2.6.1
+    Checking crypto-common v0.1.7
+    Checking block-buffer v0.10.4
+    Checking num-traits v0.2.19
+    Checking futures-channel v0.3.34
+   Compiling allocator-api2 v0.2.21
+    Checking idna_adapter v1.2.2
+   Compiling foldhash v0.1.5
+    Checking tower-service v0.3.3
+   Compiling hashbrown v0.15.5
+   Compiling idna v1.1.0
+   Compiling iana-time-zone v0.1.65
+   Compiling digest v0.10.7
+   Compiling cpufeatures v0.2.17
+   Compiling crossbeam-utils v0.8.23
+   Compiling zmij v1.0.23
+    Checking atomic-waker v1.1.2
+    Checking try-lock v0.2.5
+    Checking fnv v1.0.7
+   Compiling crc-catalog v2.5.0
+   Compiling parking v2.2.1
+    Checking serde_json v1.0.154
+   Compiling event-listener v5.4.2
+   Compiling crc v3.4.0
+   Compiling crossbeam-queue v0.3.14
+    Checking want v0.3.2
+   Compiling hashlink v0.10.0
+   Compiling sha2 v0.10.9
+   Compiling futures-intrusive v0.5.0
+   Compiling url v2.5.8
+   Compiling chrono v0.4.45
+    Checking httparse v1.10.1
+    Checking system-configuration-sys v0.6.0
+    Checking tokio-util v0.7.20
+   Compiling either v1.19.0
+   Compiling thiserror v2.0.21
+   Compiling spin v0.9.9
+    Checking core-foundation v0.9.4
+    Checking sync_wrapper v1.0.2
+    Checking httpdate v1.0.3
+    Checking tower-layer v0.3.3
+   Compiling ryu v1.0.23
+    Checking h2 v0.4.20
+    Checking system-configuration v0.7.0
+   Compiling flume v0.11.1
+   Compiling libsqlite3-sys v0.30.1
+    Checking serde_urlencoded v0.7.1
+   Compiling atoi v2.0.0
+    Checking http-body-util v0.1.5
+    Checking base64 v0.22.1
+    Checking base64 v0.23.1
+    Checking ipnet v2.12.2
+   Compiling futures-executor v0.3.34
+    Checking tower v0.5.3
+    Checking rustix v1.1.5
+    Checking tokio-stream v0.1.19
+    Checking uuid v1.28.0
+    Checking getrandom v0.2.17
+    Checking security-framework-sys v2.17.0
+    Checking core-foundation v0.10.1
+    Checking mime v0.3.17
+    Checking fastrand v2.5.0
+   Compiling hex v0.4.3
+    Checking rand_core v0.6.4
+    Checking security-framework v3.7.0
+    Checking pxfm v0.1.30
+    Checking zune-core v0.5.3
+    Checking base64ct v1.8.3
+    Checking axum-core v0.5.6
+    Checking blake2 v0.10.6
+    Checking zune-jpeg v0.5.15
+    Checking password-hash v0.5.0
+    Checking sqlx-core v0.8.6
+    Checking tempfile v3.27.0
+    Checking serde_path_to_error v0.1.20
+    Checking matchit v0.8.4
+    Checking byteorder-lite v0.1.0
+    Checking bytemuck v1.25.2
+    Checking argon2 v0.5.3
+    Checking simdutf8 v0.1.5
+    Checking native-tls v0.2.18
+    Checking zeroize v1.9.1
+    Checking encoding_rs v0.8.42
+    Checking tokio-native-tls v0.3.1
+    Checking tower-http v0.6.11
+    Checking rustls-pki-types v1.15.1
+    Checking moxcms v0.8.1
+    Checking hyper v1.12.0
+    Checking sqlx-sqlite v0.8.6
+    Checking hyper-util v0.1.21
+    Checking axum v0.8.9
+    Checking hyper-tls v0.6.0
+    Checking reqwest v0.12.28
+    Checking image v0.25.10
+   Compiling sqlx-macros-core v0.8.6
+   Compiling sqlx-macros v0.8.6
+    Checking sqlx v0.8.6
+    Checking bf-cloud v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/cloud)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.07s
+
+[1m== 重建集成 harness（重要：integration 依赖 target-v1 的最新 harness） ==[0m
+   Compiling between-frames v0.1.0 (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.00s
+
+[1m== 真实后端集成 E2E（含 Beta 旅程） ==[0m
+
+> between-frames@0.1.0 test:integration
+> playwright test --config playwright.integration.config.ts
+
+[WebServer] (node:68180) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:68188) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 6 tests using 1 worker
+
+(node:68193) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/agent-core.spec.ts:13:1 › M2 真实后端：预算暂停、恢复、两份草案、人工冲突、局部采纳/撤销与重启 (35.8s)
+  ✓  2 e2e/beta-journey.spec.ts:14:1 › Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一致 (11.9s)
+  ✓  3 e2e/diagnostics.spec.ts:12:1 › M5 本地诊断：真实统计、查看后复制、刷新及正式状态只读 (1.4s)
+  ✓  4 e2e/local-core.spec.ts:13:1 › v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、版本恢复、私密导出与重启 (10.9s)
+  ✓  5 e2e/memory-controls.spec.ts:14:1 › M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索及重启 (14.4s)
+  ✓  6 e2e/v2-proposals.spec.ts:11:1 › v2 真实后端提案：GUI 提交、批量审批、单组撤销重做、重启与基线冲突 (7.0s)
+
+  6 passed (1.5m)
+
+[1m== M4/M5 PostgreSQL 与私有存储边界（全新临时 cluster） ==[0m
+
+> between-frames@0.1.0 test:cloud:pg
+> node apps/api/test/run.mjs
+
+✔ M4 promotion verifies media, strips EXIF, atomically commits and replays (413.307292ms)
+✔ M4 project-only invitation, email binding, one-time acceptance and isolation (18.088125ms)
+✔ M4 cookie CSRF, session hashes, unknown fields, no model authorization (8.891167ms)
+✔ M5 comment anchors, parent project isolation, provenance and Viewer denial (22.104625ms)
+✔ M5 two concurrent proposals: one atomic formal apply, other remains submitted (26.250375ms)
+✔ M5 authenticated WS, private Yjs, presence, snapshot reconnect and revoke (1113.837917ms)
+✔ M5 cross-instance presence syncs through the PostgreSQL bus (1013.148208ms)
+✔ M5 short task principals are project scoped, read-only, expiring and revocable (37.105667ms)
+✔ M4 malformed and oversized requests return safe private JSON errors (7.776042ms)
+✔ M4 invitations expire and membership never grants ordinary project access (12.009416ms)
+✔ M5 Yjs rejects formal state fields and viewer replay cannot bypass downgraded ACL (73.935584ms)
+✔ M4/M5 API restart preserves session, authoritative versions and comments (27.827875ms)
+✔ M4 workspace member removal preserves independent project grants and protects owner (9.003125ms)
+✔ M5 draft revisions are private, owned, idempotent and partially approved with complete audit (115.098ms)
+✔ M5 thread replies replay exactly and preserve an immutable original payload (18.971667ms)
+✔ M4 append-only migration upgrades 0001 without rewriting legacy receipts (113.002875ms)
+✔ M4 project authority does not authorize cloud model transmission (4.640709ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3618.089334
+✔ M4 R2 adapter signs S3 put/get against an isolated local protocol server (29.477333ms)
+✔ M4 local preview store rejects links, foreign object paths and content collisions (3.331333ms)
+✔ M4 media policy rejects oversized, PNG-disguised and corrupt sources (2.990333ms)
+✔ M4 R2 configuration requires explicit official endpoint and complete credentials (2.9035ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 258.122209
+✔ M4 explicit migrations create account/limiter tables and remain idempotent (111.96375ms)
+✔ M4 independent database clients enforce one shared hourly quota under concurrency (14.953458ms)
+✔ M4 password reset hashes match login, revoke sessions and consume every outstanding token (260.154958ms)
+✔ M4 concurrent resets with different tokens have exactly one winner (116.254583ms)
+✔ M4 invalid, expired and oversized reset inputs do not change the account (178.149958ms)
+✔ M4 forgot password normalizes email and hides account existence and email quota (177.468667ms)
+✔ M4 verification enforces session/CSRF and concurrent ten-minute delivery quota (64.09575ms)
+✔ M4 unavailable email rolls back tokens without claiming verification delivery (60.574084ms)
+✔ M4 account mail links use fragments, reject public HTTP and support the Web route (0.344541ms)
+✔ M4 quota cleanup removes expired rows without erasing longer live windows (1.29725ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1349.725375
+✔ M4 OTP migration supports legacy draft tables and repeat explicit migration (120.023708ms)
+✔ M4 OTP normalizes email and stores a challenge-bound hash, never the code (36.118708ms)
+✔ M4 OTP creates an authenticated cookie session, verified account and owner workspace (77.309875ms)
+✔ M4 OTP reuses existing accounts without changing password or duplicating workspaces (118.645084ms)
+✔ M4 OTP mail failure rejects the request and rolls back codes (59.026917ms)
+✔ M4 OTP expired codes and invalid inputs create no session (6.828041ms)
+✔ M4 OTP wrong attempts persist and revoke the code after five failures (8.969416ms)
+✔ M4 OTP resend invalidates old challenges, with one shared email quota (63.0675ms)
+✔ M4 OTP concurrent verification succeeds once and creates one session (69.689541ms)
+✔ M4 OTP session failure rolls back code consumption and new account atomically (116.739541ms)
+✔ M4 OTP failed resend preserves the previously delivered code (58.676458ms)
+✔ M4 OTP concurrent resend cannot bypass the shared delivery quota (61.197875ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1150.652083
+✔ desktop grant stores hashes, fixed return URL and real PKCE session; browser never receives bearer (167.120167ms)
+✔ authorize requires browser authentication, exact state and CSRF; malformed/external redirect rejected (65.178125ms)
+✔ wrong verifier/state/code cannot redeem or consume the legitimate grant (68.792833ms)
+✔ concurrent exchanges create only one desktop session (71.097791ms)
+✔ grant and authorization code expiry both prevent redemption (121.873666ms)
+✔ browser revocation/password reset cannot yield a new desktop credential (123.135208ms)
+✔ existing browser session may approve, retry replaces code and another account cannot take over (116.736334ms)
+✔ session creation failure rolls back code consumption, then legitimate exchange can recover (61.940875ms)
+✔ revocation and redemption share session-first lock ordering without a deadlock (109.991292ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1254.556042
+✔ Google verified profile persists and is returned immediately, by /me and subsequent OTP session (171.026208ms)
+✔ wrong audience, unverified email or self-asserted profile cannot create an identity (2.874333ms)
+✔ unsupported avatar does not replace the saved trusted image; OTP-only accounts remain null (59.98075ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 610.489875
+✔ hosted AI requires live account, verified email, correct policy and CSRF; key never returned (191.169291ms)
+✔ quota and grants are account isolated and idempotent, cannot self-top-up over HTTP (122.000916ms)
+✔ atomic reservation across two service instances rejects overspending and simultaneous duplicate IDs (216.499208ms)
+✔ confirmed upstream rejection releases reservation; unknown network/meter/result holds it and never replays (383.915875ms)
+✔ image forwarding requires consent and bounded local JPEG, strips metadata and blocks URLs/server tools (83.229ms)
+✔ disabled service is explicit and has no trial side effect; exhausted quota never calls provider (117.17425ms)
+✔ operator reconciliation needs a confirmed reference, cannot release active calls, and is atomic/idempotent (67.493584ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1537.95825
+✔ M4 角色初始化（等价 postgres-init 脚本）与迁移角色执行迁移 (73.263667ms)
+✔ M4 应用角色只能 DML：读写通过，DDL 与建角色被拒 (15.411291ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10158.292042
+✔ M4 cookie-authenticated Agent GETs need no Origin/CSRF, writes remain protected (300.582167ms)
+✔ M4 无显式授权时入队被拒；授权/任务/取消/撤权全链路 (36.176542ms)
+✔ M4 分歧分析：消息体为 system/user 字符串且 task_type 落库为分歧 (7.156917ms)
+✔ M4 崩溃恢复：租约过期的 RUNNING 任务被重新领取并完成 (8.960917ms)
+✔ M4 模型失败有限重试后 FAILED 且不外发更多请求 (8.564083ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 754.638125
+✔ M4 /metrics 暴露请求计数、延迟桶与 DB 派生指标 (91.0555ms)
+✔ M4 UUID 路由模板归一，防止标签基数爆炸 (4.468458ms)
+✔ M4 FOCALROOM_METRICS_TOKEN 未设置时开放，设置后需令牌 (3.914ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 463.990916
+Isolated PostgreSQL evidence: /var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-pg-tests-Hd5eCU
+
+[1m== M4/M5 三会话 Web 与真实 Rust Promotion ==[0m
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+ExpectError: expect(locator).toBeVisible() failed
+
+Locator: getByRole('heading', { name: '欢迎回到 FocalRoom' })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" getByRole('heading', { name: '欢迎回到 FocalRoom' }) with timeout 5000ms
+  - waiting for getByRole('heading', { name: '欢迎回到 FocalRoom' })
+
+    at captureRawStack (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/node_modules/playwright-core/lib/coreBundle.js:9282:17)
+    at callMatcherAsStep (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/node_modules/playwright/lib/matchers/expect.js:13316:57)
+    at Object.toBeVisible (/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/node_modules/playwright/lib/matchers/expect.js:13308:23)
+    at /Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/api/test/web-journey.mjs:34:129 {
+  matcherResult: {
+    message: 'expect(locator).toBeVisible() failed\n' +
+      '\n' +
+      "Locator: getByRole('heading', { name: '欢迎回到 FocalRoom' })\n" +
+      'Expected: visible\n' +
+      'Timeout: 5000ms\n' +
+      'Error: element(s) not found\n' +
+      '\n' +
+      'Call log:\n' +
+      `  - Expect "toBeVisible" getByRole('heading', { name: '欢迎回到 FocalRoom' }) with timeout 5000ms\n` +
+      "  - waiting for getByRole('heading', { name: '欢迎回到 FocalRoom' })\n",
+    pass: false,
+    actual: undefined,
+    name: 'toBeVisible',
+    expected: 'visible',
+    log: [
+      `  - Expect "toBeVisible" getByRole('heading', { name: '欢迎回到 FocalRoom' }) with timeout 5000ms`,
+      "  - waiting for getByRole('heading', { name: '欢迎回到 FocalRoom' })"
+    ],
+    timeout: 5000,
+    ariaSnapshot: '- banner:\n' +
+      '  - link "FocalRoom 标志 FocalRoom":\n' +
+      '    - /url: /shared\n' +
+      '    - img "FocalRoom 标志"\n' +
+      '    - text: FocalRoom\n' +
+      '  - text: 共享评片\n' +
+      '  - combobox "Language":\n' +
+      '    - option "🇨🇳 中文"\n' +
+      '    - option "🇺🇸 English" [selected]\n' +
+      '    - option "🇯🇵 日本語"\n' +
+      '    - option "🇰🇷 한국어"\n' +
+      '- main:\n' +
+      '  - heading "Shared review" [level=1]\n' +
+      '  - paragraph: View photos, comments and editing proposals.\n' +
+      '  - heading "Sign in to FocalRoom" [level=2]\n' +
+      '  - paragraph: Sign in with an email code.\n' +
+      '  - text: Email\n' +
+      '  - textbox "Email"\n' +
+      '  - button "Send code" [disabled]\n' +
+      '  - button "Forgot Password?"'
+  }
+}
+
+Node.js v25.8.1
+Isolated PostgreSQL evidence: /var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-pg-tests-8MgqAF

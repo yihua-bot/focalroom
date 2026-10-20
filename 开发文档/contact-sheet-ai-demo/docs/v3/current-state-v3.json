@@ -3,18 +3,43 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-20T10:41:06.096Z",
-  "sourceHead": "38e970473c7f618c571513a84535b78e8bcd498d",
+  "observedAt": "2026-10-20T11:02:53.503Z",
+  "sourceHead": "66901ca61cc962942c09adb39a99736a6656f19e",
+  "changedSources": [
+    {
+      "path": "e2e/m1-500.spec.ts",
+      "sha256": "af1b08d0de569ab15db130151ef94e7b98df89e5a7216a4f861dcb599670e9a3"
+    },
+    {
+      "path": "scripts/inventory-v3.mjs",
+      "sha256": "309d6d0087a3355e7a1f99f71b6c3cbcb76524b072ccb04bf16e8aaeb2fed6b1"
+    },
+    {
+      "path": "src-tauri/tests/v3_baseline.rs",
+      "sha256": "731bf946eab703be912d9bca72a19c3bc3ea35ba952a140fda8c1b6dff18d8e2"
+    }
+  ],
   "branch": "main",
   "clientVersion": "1.0.4",
-  "status": "LOCAL_VERIFICATION_IN_PROGRESS_REMOTE_CI_PENDING",
+  "ciWorkflow": {
+    "path": "../../../.github/workflows/betweenframes-v2.yml",
+    "sha256": "1aa6a0bf29fc4607cb7572b209a2754eb5c950a8717e1c0456a8eeaafb3f80af"
+  },
+  "status": "LOCAL_G0_PASS_REMOTE_LATEST_DELTA_PENDING",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
     "realModelCalls": 0,
     "historicalMigrationsChanged": false
   },
+  "migrationDeltaFromBaseline": [],
   "modules": [
+    {
+      "id": "ai-drawer",
+      "path": "src/features/ai-editor/AISelectionDrawer.tsx",
+      "sha256": "0589b2f64de66646840624941dd98b5b52e04ba0958ec90ea8b58a85de815122",
+      "boundary": "workspace conversation drawer; nested Escape guarded"
+    },
     {
       "id": "desktop-ui",
       "path": "src/app/AppController.tsx",
@@ -180,12 +205,13 @@
           "sha256": "550236612d22164102880640340f56804e316f82acd14bd672911b6878e8e37d"
         }
       ],
-      "backupSha256": "2c84c02cf5f352795e5297fafce1a0107017140ad7eb42f6574d6d1682f7bdd3",
+      "backupSha256": "9ebfe579bd9b8bcbc7017fbe168c4e0b2f918167436c9842fc7db5e94622c090",
       "fixture": "generated JPEG and legacy v11 SQLite; no user data",
+      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmpq1hlAv",
       "foreignKeyViolations": 0,
       "legacyMigrations": 11,
       "restoredProjectionMatches": true,
-      "snapshotSha256": "17f8353fd12056aa84f8454cfa6b69b9b908f9976fd6170d73ea5433891cacc8",
+      "snapshotSha256": "beef76161dcfffb4664a33ebe31c3487eb8a2e173035e80a13d77d6e6726f074",
       "snapshotUnchanged": true,
       "sourceSha256": "ddcce3e7c64670e2b67b55522783440118049c8107e958be51a5299df4b0709a",
       "sourceUnchanged": true,
@@ -246,6 +272,7 @@
       "versionCommentRowsPreserved": true
     },
     "postgresql": {
+      "serverVersion": "15.17 (Homebrew)",
       "fixture": "new isolated runner PostgreSQL; no production data",
       "tables": [
         "fr_acl_audit",
@@ -381,11 +408,141 @@
       ]
     }
   },
-  "tests": [],
+  "authority": {
+    "local": {
+      "source": "src-tauri/src/command_handler.rs",
+      "formalWriter": "trusted human/system CommandHandler",
+      "agent": "Draft-only",
+      "promotion": "freezes local formal writes"
+    },
+    "shared": {
+      "source": "apps/api/src/authority.ts",
+      "formalWriter": "PostgreSQL command transaction",
+      "checks": [
+        "workspace/project identity",
+        "active membership/grant",
+        "can_approve/can_edit_formal",
+        "expected revision",
+        "idempotency",
+        "audit"
+      ]
+    },
+    "models": {
+      "source": "src-tauri/src/agent/policy.rs",
+      "boundaries": [
+        "task resource scope",
+        "recipient-bound preview consent",
+        "budget",
+        "no automatic cross-provider switch"
+      ]
+    }
+  },
+  "runtimeModes": {
+    "browserPreview": "MockRepository memory demo; no real local file or Agent execution",
+    "desktop": "Tauri/Rust/SQLite; local or configured hosted model; G0 only uses isolated fixtures",
+    "webReview": "NestJS/PostgreSQL; G0 uses temporary cluster and in-memory email delivery",
+    "legacyCloud": "cloud/ retained protocol test slice; not the production shared authority"
+  },
+  "tests": [
+    {
+      "id": "full-local-gate",
+      "command": "npm run verify:v2",
+      "result": "PASS",
+      "evidence": "evidence/v3-g0-20261020/final-verify.txt"
+    },
+    {
+      "id": "frontend",
+      "result": "PASS",
+      "tests": 265,
+      "files": 38
+    },
+    {
+      "id": "rust",
+      "result": "PASS",
+      "tests": 223,
+      "ignored": 15,
+      "filteredKeychain": 1
+    },
+    {
+      "id": "legacy-cloud-protocol",
+      "result": "PASS",
+      "tests": 16
+    },
+    {
+      "id": "preview-e2e",
+      "result": "PASS",
+      "tests": 18
+    },
+    {
+      "id": "local-integration-e2e",
+      "result": "PASS",
+      "tests": 6
+    },
+    {
+      "id": "api-postgresql",
+      "result": "PASS",
+      "tests": 72
+    },
+    {
+      "id": "shared-web-real-postgresql",
+      "result": "PASS",
+      "users": 3,
+      "realEmailSent": 0,
+      "evidence": "evidence/v3-g0-20261020/web-journey.txt"
+    },
+    {
+      "id": "rust-promotion-real-postgresql",
+      "result": "PASS",
+      "sourcePhotos": 2,
+      "evidence": "evidence/v3-g0-20261020/promotion.txt"
+    },
+    {
+      "id": "500-generated-file-gui",
+      "result": "PASS",
+      "tests": 4,
+      "photos": 500,
+      "caveat": "250 JPEG + 250 PNG generated from repository references; not 500 independent professional photographs"
+    },
+    {
+      "id": "legacy-v11-copy-upgrade-restore",
+      "result": "PASS",
+      "sourceUnchanged": true,
+      "snapshotUnchanged": true,
+      "commentAnchorsPreserved": true,
+      "evidence": "evidence/v3-g0-20261020/legacy-snapshot.json"
+    },
+    {
+      "id": "contracts-types-lint-fmt-clippy",
+      "result": "PASS"
+    },
+    {
+      "id": "desktop-review-build",
+      "result": "PASS",
+      "signed": false,
+      "artifact": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/FocalRoom V2 Review.app",
+      "bundleIdentifier": "studio.betweenframes.v2foundation",
+      "version": "1.0.4",
+      "binarySha256": "8f868f1f0cab913156c27a2a6fb2227996564fbbfd847ae4372f60d3e7830a73",
+      "nativeGuiAcceptance": "NOT_TESTED_IN_G0",
+      "evidence": "evidence/v3-g0-20261020/desktop-build.txt"
+    }
+  ],
   "remaining": [
-    "Remote CI for the corrected commit",
-    "G1/G2 API/data/color design review",
-    "No v3 Asset/Canvas/Color/Bridge/Publishing implementation in this gate",
-    "Human/device/supplier/production acceptance remains separate"
-  ]
+    "Latest local G0 follow-up changes require commit/push and green remote CI",
+    "G1/G2 API/data/color design review before implementation",
+    "Real user database compatibility not tested; only isolated old-format fixture",
+    "Device/human/supplier/production acceptance remains separate"
+  ],
+  "remoteCI": {
+    "conclusion": "",
+    "databaseId": 39410438284,
+    "headSha": "66901ca61cc962942c09adb39a99736a6656f19e",
+    "status": "in_progress",
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/39410438284"
+  },
+  "evidence": {
+    "legacySnapshot": "evidence/v3-g0-20261020/legacy-snapshot.json",
+    "postgresql": "evidence/v3-g0-20261020/postgres-inventory.json",
+    "drawerEscapeScreenshot": "evidence/v3-g0-20261020/drawer-after-escape.png"
+  }
 }

@@ -80,8 +80,8 @@ test('M1：500 张 PNG/JPEG 的完整 GUI 编辑、离线重启、导出与性�
   expect(new Set(hashes.map(([, hash]) => hash)).size).toBe(500);
   await page.goto('/');
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
-  await page.getByRole('textbox', { name: '项目名称' }).fill('M1 · 500 张混合集');
-  await page.getByRole('textbox', { name: '你希望这组照片表达什么？' }).fill('不使用 AI，完成 500 张照片的人工编辑与导出。');
+  await page.locator('#project-title').fill('M1 · 500 张混合集');
+  await page.getByRole('textbox', { name: '创作意图' }).fill('不使用 AI，完成 500 张照片的人工编辑与导出。');
   await page.getByRole('button', { name: '创建并打开' }).click();
   await expect(page.getByRole('heading', { name: '暂无照片' })).toBeVisible();
   const projectId = new URL(page.url()).hash.split('/').pop()!;
@@ -97,7 +97,10 @@ test('M1：500 张 PNG/JPEG 的完整 GUI 编辑、离线重启、导出与性�
   const imported = await rpc<StoredProject>('get_project', { projectId });
   expect(imported.photos).toHaveLength(500);
   expect(imported.photos.every(photo => photo.width === 1200 && photo.height === 800)).toBe(true);
-  expect(await rpc<{ ready: boolean }>('get_ai_config')).toHaveProperty('ready', false);
+  // 集成 harness 的 Mock 可执行，但此人工旅程不得调用模型或具备视觉外发能力。
+  const model = await rpc<{ providerId: string; capabilities: string[] }>('get_ai_config');
+  expect(model.providerId).toBe('mock');
+  expect(model.capabilities).not.toContain('vision');
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Performance.enable');
   const beforeScroll = await cdp.send('Performance.getMetrics');
@@ -228,20 +231,24 @@ test('M1：500 张 PNG/JPEG 的完整 GUI 编辑、离线重启、导出与性�
   await page.getByRole('button', { name: '作品序列', exact: true }).click();
   await snapshot(page, 'sequence-restarted');
   await page.getByRole('button', { name: '导出 ↗' }).click();
-  for (const name of ['项目 JSON', '选片 CSV', '接触印相']) {
-    await page.getByRole('button', { name, exact: true }).click();
-    await expect(page.locator('.export-receipt')).toContainText('已导出：');
-    const path = (await page.locator('.export-receipt p').innerText()).replace('已导出：', '');
-    const bytes = await readFile(path);
-    await expect(page.locator('.export-receipt')).toContainText(createHash('sha256').update(bytes).digest('hex'));
+  // 正式界面只展示面向摄影用户的输出；兼容 JSON/CSV 继续验证后端契约。
+  for (const format of ['json', 'csv'] as const) {
+    const receipt = await rpc<{ path: string; sha256: string }>('export_project', { projectId, format, includePaths: false });
+    const bytes = await readFile(receipt.path);
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(receipt.sha256);
     expect(bytes.toString()).not.toContain(before.photos[0].originalPath);
-    if (name === '项目 JSON') {
+    if (format === 'json') {
       const data = JSON.parse(bytes.toString());
       expect(data.photos).toHaveLength(500); expect(data.sequence).toEqual(before.sequence); expect(data.includesLocalPaths).toBe(false);
-    }
-    if (name === '选片 CSV') expect(bytes.toString().split('\r\n')).toHaveLength(502);
-    if (name === '接触印相') expect(bytes.toString().match(/<figure>/g)).toHaveLength(25);
+    } else expect(bytes.toString().split('\r\n')).toHaveLength(502);
   }
+  await page.getByRole('button', { name: '照片总览', exact: true }).click();
+  await expect(page.locator('.export-receipt')).toContainText('已导出：');
+  const exportedPath = (await page.locator('.export-receipt p').innerText()).replace('已导出：', '');
+  const exportedBytes = await readFile(exportedPath);
+  await expect(page.locator('.export-receipt')).toContainText(createHash('sha256').update(exportedBytes).digest('hex'));
+  expect(exportedBytes.toString()).not.toContain(before.photos[0].originalPath);
+  expect(exportedBytes.toString().match(/<figure>/g)).toHaveLength(25);
   await page.keyboard.press('Escape');
   expect(await rpc<string[][]>('test_fixture_checksums')).toEqual(hashes);
   const projection = await rpc<{ tasks: unknown[] }>('get_agent_projection', { projectId });

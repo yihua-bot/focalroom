@@ -1,0 +1,83 @@
+{
+  "serverVersion": "15.17 (Homebrew)",
+  "fixture": "new isolated runner PostgreSQL; no production data",
+  "tables": [
+    "fr_acl_audit",
+    "fr_agent_jobs",
+    "fr_agent_scopes",
+    "fr_agent_task_results",
+    "fr_ai_accounts",
+    "fr_ai_grants",
+    "fr_ai_reconciliations",
+    "fr_ai_requests",
+    "fr_commands",
+    "fr_comments",
+    "fr_desktop_logins",
+    "fr_drafts",
+    "fr_email_verify_tokens",
+    "fr_events",
+    "fr_grants",
+    "fr_invitations",
+    "fr_magic_login_codes",
+    "fr_memberships",
+    "fr_migrations",
+    "fr_model_consents",
+    "fr_password_reset_tokens",
+    "fr_presence",
+    "fr_previews",
+    "fr_projects",
+    "fr_proposals",
+    "fr_rate_limits",
+    "fr_sessions",
+    "fr_tickets",
+    "fr_users",
+    "fr_versions",
+    "fr_workspaces"
+  ],
+  "migrations": [
+    {
+      "version": "0001",
+      "sha256": "bee9cec8bb2b90dbe20538fbb7de84acd8f5aae4d33810dc1e61bcbb2b4b5d04"
+    },
+    {
+      "version": "0002",
+      "sha256": "613949828f2508cb097bdf45a7f80505ef5296fd11d33642fab2caaf5620e7ae"
+    },
+    {
+      "version": "0006",
+      "sha256": "95cc3281db6b53ee016e799ca4db5c6f33abc8f15e882ae20e01d0758a90c59a"
+    },
+    {
+      "version": "0008",
+      "sha256": "ed24d431cba967eab47ae3f8339227c78385851774b02df3145068c6485931b7"
+    },
+    {
+      "version": "0009",
+      "sha256": "15656ef57f26bfac7d9f1c579fa87e63d8697555a22f13d9951461e29d3f27d6"
+    },
+    {
+      "version": "0010",
+      "sha256": "76f0aae430c3888e873dd209ad70b8ca70249ac574e24c562b2bb7f3b9bef61d"
+    },
+    {
+      "version": "0011",
+      "sha256": "1376add9d0d5cb9e406d3a81c7c227f7545c5d70ba72930f690159b2afac0858"
+    },
+    {
+      "version": "0012",
+      "sha256": "fa724d7c1010de876dc3ae6cecc543aadf3c9015350627f90e80d7dac9335191"
+    },
+    {
+      "version": "0013",
+      "sha256": "9a5485ef80bf857938c351de679f7ecf9cf7f5c1f7f4de54af6ec84baee76c20"
+    },
+    {
+      "version": "0014",
+      "sha256": "0f6b9d5fa2ff4b925aa40caae833b185d301bb89af6e96239f45b82c01a54158"
+    },
+    {
+      "version": "0015",
+      "sha256": "61cbbcee7df864631b3b84bc98e498a5059547b908fc8b49a027c56e7f1bb324"
+    }
+  ]
+}

@@ -15,13 +15,13 @@ async fn rows(pool: &SqlitePool) -> Value {
             .fetch_one(pool)
             .await
             .unwrap();
-    let comment = sqlx::query("SELECT thread_id,body,author FROM comments")
+    let comment = sqlx::query("SELECT c.thread_id,c.body,c.author,t.anchor_json,t.project_id,t.state FROM comments c JOIN comment_threads t ON t.id=c.thread_id")
         .fetch_one(pool)
         .await
         .unwrap();
     json!({
         "version": [version.get::<String,_>("id"),version.get::<String,_>("label"),version.get::<i64,_>("based_on_revision").to_string(),version.get::<String,_>("snapshot_json")],
-        "comment": [comment.get::<String,_>("thread_id"),comment.get::<String,_>("body"),comment.get::<String,_>("author")]
+        "comment": [comment.get::<String,_>("thread_id"),comment.get::<String,_>("body"),comment.get::<String,_>("author"),comment.get::<String,_>("anchor_json"),comment.get::<String,_>("project_id"),comment.get::<String,_>("state")]
     })
 }
 #[tokio::test]

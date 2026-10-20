@@ -33,7 +33,8 @@ const modules = [
 const localSnapshot = JSON.parse(await readFile(snapshotFile, 'utf8'));
 const cloud = JSON.parse(await readFile(cloudFile, 'utf8'));
 const git = args => execFileSync('git', args, {cwd:root,encoding:'utf8'}).trim().split('\n').filter(Boolean);
-const changed = [...new Set([...git(['diff','--name-only','--relative','--','src','src-tauri','apps','scripts','README.md']),...git(['ls-files','--others','--exclude-standard','--','src','src-tauri','apps','scripts'])])];
+const changed = [...new Set([...git(['diff','--name-only','--relative','--','src','src-tauri','apps','scripts','e2e','README.md']),...git(['ls-files','--others','--exclude-standard','--','src','src-tauri','apps','scripts','e2e'])])];
+const migrationDelta = git(['diff','--name-status','38e9704','--','src-tauri/migrations','apps/api/migrations']);
 const result = {
  schemaVersion: 1, product: 'FocalRoom', target: 'v3.0', gate: 'G0', observedAt: new Date().toISOString(),
  sourceHead: execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),
@@ -41,12 +42,24 @@ const result = {
  branch: execFileSync('git',['branch','--show-current'],{cwd:root,encoding:'utf8'}).trim(),
  clientVersion: JSON.parse(await readFile(resolve(root,'src-tauri/tauri.conf.json'),'utf8')).version,
  ciWorkflow: await source('../../../.github/workflows/betweenframes-v2.yml'),
- status: 'LOCAL_VERIFICATION_IN_PROGRESS_REMOTE_CI_PENDING',
- scope: { userDataOpened:false, productionChanged:false, realModelCalls:0, historicalMigrationsChanged:false },
+ status: 'INVENTORY_ONLY_TEST_EVIDENCE_REQUIRED',
+ scope: { userDataOpened:false, productionChanged:false, realModelCalls:0, historicalMigrationsChanged:migrationDelta.some(line => !line.startsWith('A\t')) },
+ migrationDeltaFromBaseline: migrationDelta,
  modules: await Promise.all(modules.map(async ([id,path,boundary]) => ({id,...await source(relative(root,resolve(root,path))),boundary}))),
  database: {
   sqlite: { migrationFiles: await Promise.all(localFiles.map(name=>source('src-tauri/migrations/'+name))), ...localSnapshot },
   postgresql: { ...cloud, registeredFiles:await Promise.all(registered.map(name=>source('apps/api/migrations/'+name))), unregisteredDesignFiles:allCloud.filter(name=>!registered.includes(name)) }
+ },
+ authority: {
+  local: {source:'src-tauri/src/command_handler.rs',formalWriter:'trusted human/system CommandHandler',agent:'Draft-only',promotion:'freezes local formal writes'},
+  shared: {source:'apps/api/src/authority.ts',formalWriter:'PostgreSQL command transaction',checks:['workspace/project identity','active membership/grant','can_approve/can_edit_formal','expected revision','idempotency','audit']},
+  models: {source:'src-tauri/src/agent/policy.rs',boundaries:['task resource scope','recipient-bound preview consent','budget','no automatic cross-provider switch']}
+ },
+ runtimeModes: {
+  browserPreview:'MockRepository memory demo; no real local file or Agent execution',
+  desktop:'Tauri/Rust/SQLite; local or configured hosted model; G0 only uses isolated fixtures',
+  webReview:'NestJS/PostgreSQL; G0 uses temporary cluster and in-memory email delivery',
+  legacyCloud:'cloud/ retained protocol test slice; not the production shared authority'
  },
  tests: [],
  remaining: ['Remote CI for the corrected commit','G1/G2 API/data/color design review','No v3 Asset/Canvas/Color/Bridge/Publishing implementation in this gate','Human/device/supplier/production acceptance remains separate']

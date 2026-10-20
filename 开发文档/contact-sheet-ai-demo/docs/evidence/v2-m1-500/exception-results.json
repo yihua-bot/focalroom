@@ -1,14 +1,14 @@
 {
   "cancelled": {
     "total": 500,
-    "processed": 14,
-    "committed": 14,
+    "processed": 11,
+    "committed": 11,
     "status": "cancelled"
   },
   "restartSnapshotEqual": true,
   "processRestart": {
-    "previousPid": 89581,
-    "pid": 89729
+    "previousPid": 78666,
+    "pid": 78867
   },
   "failures": [
     {

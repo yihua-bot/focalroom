@@ -1,0 +1,584 @@
+foundation	M0 与既有能力回归	﻿2026-10-20T10:31:56.5183700Z ##[group]Run npm run verify:v2
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.5184030Z ^[[36;1mnpm run verify:v2^[[0m
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.5280620Z shell: /bin/bash -e {0}
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.5281250Z env:
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.5281710Z   BETWEEN_FRAMES_OPENAI_API_KEY: 
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.5282980Z   CI: true
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.5283400Z   RUSTUP_TOOLCHAIN: 1.94.0
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.5283950Z ##[endgroup]
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.7346480Z 
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.7347560Z > between-frames@0.1.0 verify:v2
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.7348390Z > bash scripts/verify-v2-m0.sh
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.7348810Z 
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.8742170Z 
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.8843380Z > between-frames@0.1.0 build:workspaces
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.8944930Z > npm run typecheck && npm run build --workspaces --if-present
+foundation	M0 与既有能力回归	2026-10-20T10:31:56.9045610Z 
+foundation	M0 与既有能力回归	2026-10-20T10:31:57.0348410Z 
+foundation	M0 与既有能力回归	2026-10-20T10:31:57.0349020Z > between-frames@0.1.0 typecheck
+foundation	M0 与既有能力回归	2026-10-20T10:31:57.0349760Z > tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+foundation	M0 与既有能力回归	2026-10-20T10:31:57.0350070Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.1042890Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.1044700Z > @betweenframes/desktop@0.0.0 build
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.1045070Z > vite build
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.1045190Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.3594150Z ^[[36mvite v8.3.4 ^[[32mbuilding client environment for production...^[[36m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.3656840Z transforming...
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.5772230Z ✓ 1842 modules transformed.
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.6403660Z rendering chunks...
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7102390Z computing gzip size...
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7192940Z dist/index.html                   0.51 kB │ gzip:   0.31 kB
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7193500Z dist/assets/index-kGQ_wPiX.css   45.24 kB │ gzip:  10.18 kB
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7194020Z dist/assets/index-DBeL0xuz.js   680.90 kB │ gzip: 213.37 kB
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7194270Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7207840Z ^[[33m[plugin builtin:vite-reporter] 
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7208700Z (!) Some chunks are larger than 500 kB after minification. Consider:
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7211710Z - Using dynamic import() to code-split the application
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7213060Z - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7214800Z - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7216570Z ^[[33m^[[33m[INEFFECTIVE_DYNAMIC_IMPORT] ^[[0m../../src/i18n/locales/zh.json is dynamically imported by ../../src/i18n/index.tsx but also statically imported by ../../src/app/copy.ts, dynamic import will not move module into another chunk.
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7217480Z ^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7218670Z ^[[33m^[[33m[INEFFECTIVE_DYNAMIC_IMPORT] ^[[0m../../src/i18n/locales/en.json is dynamically imported by ../../src/i18n/index.tsx but also statically imported by ../../src/app/copy.ts, dynamic import will not move module into another chunk.
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7219480Z ^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7220640Z ^[[33m^[[33m[INEFFECTIVE_DYNAMIC_IMPORT] ^[[0m../../src/i18n/locales/ja.json is dynamically imported by ../../src/i18n/index.tsx but also statically imported by ../../src/app/copy.ts, dynamic import will not move module into another chunk.
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7221450Z ^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7222530Z ^[[33m^[[33m[INEFFECTIVE_DYNAMIC_IMPORT] ^[[0m../../src/i18n/locales/ko.json is dynamically imported by ../../src/i18n/index.tsx but also statically imported by ../../src/app/copy.ts, dynamic import will not move module into another chunk.
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7223360Z ^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7225140Z ^[[33m^[[33m[INEFFECTIVE_DYNAMIC_IMPORT] ^[[0m../../node_modules/@tauri-apps/api/event.js is dynamically imported by ../../src/features/ai-editor/AIPanel.tsx but also statically imported by ../../src/services/TauriAgentRepository.ts, ../../src/services/TauriCloudAuthRepository.ts, ../../src/services/TauriRepository.ts, dynamic import will not move module into another chunk.
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7226330Z ^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7226660Z ^[[32m✓ built in 362ms^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7493650Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7494260Z > @betweenframes/web@0.0.0 build
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7494540Z > vite build
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.7495390Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.8750640Z ^[[36mvite v8.3.4 ^[[32mbuilding client environment for production...^[[36m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.8804030Z transforming...
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.9354300Z ✓ 170 modules transformed.
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.9540310Z rendering chunks...
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.9900030Z computing gzip size...
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.9956100Z dist/index.html                   0.53 kB │ gzip:   0.35 kB
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.9956620Z dist/assets/index-Bd1EKTTn.css   17.75 kB │ gzip:   4.74 kB
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.9957130Z dist/assets/index-CpKQl7Vg.js   479.34 kB │ gzip: 149.21 kB
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.9957370Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:03.9961180Z ^[[32m✓ built in 121ms^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:04.1112180Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:04.1112920Z > between-frames@0.1.0 test:web
+foundation	M0 与既有能力回归	2026-10-20T10:32:04.1113640Z > playwright test --config playwright.web.config.ts
+foundation	M0 与既有能力回归	2026-10-20T10:32:04.1114000Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:05.0434440Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:05.0535740Z Running 1 test using 1 worker
+foundation	M0 与既有能力回归	2026-10-20T10:32:06.9246710Z ·
+foundation	M0 与既有能力回归	2026-10-20T10:32:06.9282510Z   1 passed (2.3s)
+foundation	M0 与既有能力回归	2026-10-20T10:32:07.2770160Z     Updating crates.io index
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.3399300Z  Downloading crates ...
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.3889630Z   Downloaded alloc-stdlib v0.3.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.3947570Z   Downloaded flume v0.11.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.4108370Z   Downloaded same-file v1.0.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.4332260Z   Downloaded indexmap v2.14.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.4659730Z   Downloaded mime v0.3.17
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.4890010Z   Downloaded tracing-attributes v0.1.31
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.5086850Z   Downloaded tower-http v0.6.11
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.5388380Z   Downloaded futures-task v0.3.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.5502420Z   Downloaded hashbrown v0.12.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.5671620Z   Downloaded futures-util v0.3.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.5996190Z   Downloaded hyper-rustls v0.27.10
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6068110Z   Downloaded itoa v1.0.18
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6136500Z   Downloaded lazy_static v1.5.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6216600Z   Downloaded jsonptr v0.7.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6288430Z   Downloaded num-bigint-dig v0.8.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6393860Z   Downloaded parking v2.2.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6425250Z   Downloaded objc2-quartz-core v0.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6486800Z   Downloaded parking_lot v0.12.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6536850Z   Downloaded num-traits v0.2.19
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6598920Z   Downloaded miniz_oxide v0.9.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6643160Z   Downloaded objc2-core-graphics v0.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6730760Z   Downloaded hkdf v0.12.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6771220Z   Downloaded muda v0.20.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6859680Z   Downloaded hashbrown v0.17.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.6958230Z   Downloaded objc2-web-kit v0.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.7267900Z   Downloaded objc2-core-foundation v0.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.7414850Z   Downloaded moxcms v0.8.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.7595310Z   Downloaded icu_properties_data v2.3.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.7774080Z   Downloaded regex-automata v0.4.18
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.7986060Z   Downloaded hyper v1.12.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.8097490Z   Downloaded once_cell v1.21.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.8137550Z   Downloaded objc2 v0.6.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.8307660Z   Downloaded hashbrown v0.15.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.8381720Z   Downloaded objc2-foundation v0.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.8690400Z   Downloaded objc2-exception-helper v0.1.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.8706470Z   Downloaded objc2-encode v4.1.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.8730730Z   Downloaded libc v0.2.190
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.9471650Z   Downloaded pxfm v0.1.30
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.9871730Z   Downloaded num-integer v0.1.47
+foundation	M0 与既有能力回归	2026-10-20T10:32:08.9897680Z   Downloaded icu_normalizer v2.3.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.0026570Z   Downloaded num-conv v0.2.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.0033040Z   Downloaded hyper-util v0.1.21
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.0137720Z   Downloaded regex-syntax v0.8.11
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.0277780Z   Downloaded option-ext v0.2.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.0311070Z   Downloaded objc2-app-kit v0.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1034510Z   Downloaded objc2-io-surface v0.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1056820Z   Downloaded num-iter v0.1.46
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1072090Z   Downloaded new_debug_unreachable v1.0.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1087250Z   Downloaded mio v1.2.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1184940Z   Downloaded miniz_oxide v0.8.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1219980Z   Downloaded icu_collections v2.3.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1310350Z   Downloaded libm v0.2.16
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1498650Z   Downloaded json-patch v4.2.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1514100Z   Downloaded jiff v0.2.38
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1730200Z   Downloaded image v0.25.10
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1869110Z   Downloaded icu_properties v2.3.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.1910770Z   Downloaded http v1.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.2025290Z   Downloaded html5ever v0.39.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.2335820Z   Downloaded rustls v0.23.45
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.2511120Z   Downloaded idna v1.1.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.2557240Z   Downloaded icu_normalizer_data v2.3.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.2585610Z   Downloaded icu_locale_core v2.3.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.3032880Z   Downloaded ico v0.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.3077610Z   Downloaded tauri v2.12.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.3303480Z   Downloaded keyboard-types v0.8.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.3347730Z   Downloaded jiff-core v0.1.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.3397670Z   Downloaded image-webp v0.2.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.3432460Z   Downloaded icu_provider v2.3.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.3474660Z   Downloaded iana-time-zone v0.1.65
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.3526880Z   Downloaded syn v3.0.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.3959500Z   Downloaded syn v2.0.119
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.4237230Z   Downloaded indexmap v1.9.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.4291130Z   Downloaded ident_case v1.0.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.4307680Z   Downloaded httparse v1.10.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.4354010Z   Downloaded http-body-util v0.1.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.4391440Z   Downloaded hmac v0.12.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.4431340Z   Downloaded hashlink v0.10.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.4800500Z   Downloaded window-vibrancy v0.8.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.4984230Z   Downloaded unicode-normalization v0.1.25
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.5050740Z   Downloaded ring v0.17.14
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.6136010Z   Downloaded typenum v1.20.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.6200230Z   Downloaded tao v0.37.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.6436810Z   Downloaded http-range v0.1.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.6472940Z   Downloaded http-body v1.1.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.6514280Z   Downloaded home v0.5.12
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.6696050Z   Downloaded hex v0.4.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.6741600Z   Downloaded heck v0.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.6765340Z   Downloaded zerocopy v0.8.62
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.7351820Z   Downloaded zune-jpeg v0.5.15
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.7414590Z   Downloaded zlib-rs v0.6.8
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.7527660Z   Downloaded zerovec v0.11.8
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.7679080Z   Downloaded zerocopy-derive v0.8.62
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.7934500Z   Downloaded wry v0.57.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.8083280Z   Downloaded winnow v1.0.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.8297230Z   Downloaded webpki-roots v1.0.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.8344470Z   Downloaded tray-icon v0.25.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.8404060Z   Downloaded tracing-core v0.1.36
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.8467410Z   Downloaded serde_with v3.24.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.8771040Z   Downloaded half v2.7.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.8827320Z   Downloaded glob v0.3.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.8855970Z   Downloaded getrandom v0.4.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.8932570Z   Downloaded getrandom v0.3.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9002230Z   Downloaded getrandom v0.2.17
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9073930Z   Downloaded generic-array v0.14.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9115900Z   Downloaded zune-core v0.5.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9157970Z   Downloaded zerotrie v0.2.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9240470Z   Downloaded zerofrom v0.1.8
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9272660Z   Downloaded unicode-properties v0.1.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9322070Z   Downloaded unicode-ident v1.0.27
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9375730Z   Downloaded unicode-bidi v0.3.18
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9419030Z   Downloaded typeid v1.0.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9451580Z   Downloaded tauri-utils v2.10.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9536630Z   Downloaded sqlx v0.8.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9844020Z   Downloaded serde_json v1.0.154
+foundation	M0 与既有能力回归	2026-10-20T10:32:09.9996580Z   Downloaded reqwest v0.12.28
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0093730Z   Downloaded regex v1.13.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0204200Z   Downloaded zmij v1.0.23
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0241160Z   Downloaded zerovec-derive v0.11.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0283020Z   Downloaded zeroize v1.9.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0311440Z   Downloaded zerofrom-derive v0.1.8
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0325450Z   Downloaded yoke-derive v0.8.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0346250Z   Downloaded yoke v0.8.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0380990Z   Downloaded writeable v0.6.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0422340Z   Downloaded whoami v1.6.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0461410Z   Downloaded weezl v0.1.12
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0509810Z   Downloaded web_atoms v0.2.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0534960Z   Downloaded web-time v1.1.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0563030Z   Downloaded want v0.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0579600Z   Downloaded walkdir v2.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0616430Z   Downloaded version_check v0.9.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.0641190Z   Downloaded vcpkg v0.2.15
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.1723210Z   Downloaded uuid v1.28.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.1771990Z   Downloaded utf8_iter v1.0.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.1789010Z   Downloaded urlpattern v0.6.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.1833250Z   Downloaded url v2.5.8
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.1884690Z   Downloaded untrusted v0.9.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.1912520Z   Downloaded try-lock v0.2.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.1930030Z   Downloaded tracing v0.1.44
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.2196320Z   Downloaded tokio v1.53.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.3088380Z   Downloaded memchr v2.8.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.3207720Z   Downloaded tauri-plugin-fs v2.7.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.3339780Z   Downloaded tauri-plugin-dialog v2.8.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.3419390Z   Downloaded sqlx-sqlite v0.8.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.3501800Z   Downloaded sqlx-postgres v0.8.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.3691410Z   Downloaded sqlx-core v0.8.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.3848170Z   Downloaded security-framework v3.7.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.3933850Z   Downloaded rsa v0.9.10
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.4057420Z   Downloaded quinn-proto v0.11.19
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.4495070Z   Downloaded quick-xml v0.42.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.4590270Z   Downloaded tower v0.5.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.4779390Z   Downloaded toml v1.1.8+spec-1.1.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.4853250Z   Downloaded time-macros v0.2.32
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.4904270Z   Downloaded time v0.3.55
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5172810Z   Downloaded tiff v0.11.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5244330Z   Downloaded tendril v0.5.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5277860Z   Downloaded png v0.18.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5337690Z   Downloaded png v0.17.16
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5397680Z   Downloaded plist v1.10.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5463610Z   Downloaded pkcs1 v0.7.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5504020Z   Downloaded pin-project-lite v0.2.17
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5629910Z   Downloaded phf v0.13.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5650530Z   Downloaded log v0.4.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5692330Z   Downloaded tauri-runtime-wry v2.12.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5729820Z   Downloaded tauri-plugin-deep-link v2.6.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5790490Z   Downloaded sqlx-mysql v0.8.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5901980Z   Downloaded socket2 v0.6.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.5946650Z   Downloaded serde_derive v1.0.229
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6005660Z   Downloaded serde_core v1.0.229
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6046300Z   Downloaded serde v1.0.229
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6096270Z   Downloaded selectors v0.38.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6139520Z   Downloaded schemars v1.2.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6434920Z   Downloaded schemars v0.9.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6671480Z   Downloaded ryu v1.0.23
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6719300Z   Downloaded rustls-webpki v0.103.15
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6763430Z   Downloaded rfd v0.16.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6853060Z   Downloaded quinn v0.11.12
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6923740Z   Downloaded tower-service v0.3.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6937210Z   Downloaded tower-layer v0.3.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.6953830Z   Downloaded toml_writer v1.1.3+spec-1.1.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7001930Z   Downloaded toml_parser v1.1.5+spec-1.1.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7012930Z   Downloaded toml_datetime v1.1.2+spec-1.1.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7032340Z   Downloaded tokio-stream v0.1.19
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7126350Z   Downloaded tokio-rustls v0.26.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7153930Z   Downloaded tokio-macros v2.7.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7177170Z   Downloaded tinyvec v1.13.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7238010Z   Downloaded tinystr v0.8.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7274490Z   Downloaded time-core v0.1.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7296530Z   Downloaded thiserror-impl v2.0.21
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7320500Z   Downloaded thiserror v2.0.21
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7454860Z   Downloaded tauri-winres v0.3.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7482020Z   Downloaded pkg-config v0.3.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7507540Z   Downloaded pkcs8 v0.10.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7556340Z   Downloaded phf_shared v0.13.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7571570Z   Downloaded phf_macros v0.13.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7587320Z   Downloaded phf_generator v0.13.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7605410Z   Downloaded phf_codegen v0.13.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7618430Z   Downloaded percent-encoding v2.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7631460Z   Downloaded pem-rfc7468 v0.7.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7661960Z   Downloaded parking_lot_core v0.9.12
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7706240Z   Downloaded markup5ever v0.39.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7729660Z   Downloaded lock_api v0.4.14
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7753680Z   Downloaded litemap v0.8.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7790350Z   Downloaded tauri-runtime v2.12.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7817760Z   Downloaded tauri-plugin v2.7.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7835070Z   Downloaded tauri-macros v2.7.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7859390Z   Downloaded tauri-codegen v2.7.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7884330Z   Downloaded tauri-build v2.7.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7909260Z   Downloaded swift-rs v1.0.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7942590Z   Downloaded stringprep v0.1.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7963420Z   Downloaded string_cache v0.9.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.7986120Z   Downloaded sqlx-macros-core v0.8.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8024100Z   Downloaded spki v0.7.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8052570Z   Downloaded spin v0.9.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8088690Z   Downloaded smallvec v1.16.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8109570Z   Downloaded slab v0.4.12
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8129860Z   Downloaded simd-adler32 v0.3.10
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8159080Z   Downloaded sha2 v0.10.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8199120Z   Downloaded serde_with_macros v3.24.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8226740Z   Downloaded serde_urlencoded v0.7.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8254850Z   Downloaded serde_derive_internals v0.29.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8278000Z   Downloaded semver v1.0.28
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8315460Z   Downloaded security-framework-sys v2.17.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8351000Z   Downloaded schemars_derive v0.8.22
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8374710Z   Downloaded schemars v0.8.22
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8694790Z   Downloaded rustls-pki-types v1.15.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8768560Z   Downloaded proc-macro2 v1.0.107
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8835570Z   Downloaded flate2 v1.1.10
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.8955720Z   Downloaded erased-serde v0.4.10
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.9001030Z   Downloaded dom_query v0.28.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.9106890Z   Downloaded der v0.7.10
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.9220070Z   Downloaded defmt v1.1.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.9385450Z   Downloaded darling_core v0.24.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.9542090Z   Downloaded darling v0.24.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.9874740Z   Downloaded crossbeam-channel v0.5.17
+foundation	M0 与既有能力回归	2026-10-20T10:32:10.9957040Z   Downloaded core-graphics v0.25.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0012950Z   Downloaded cookie v0.18.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0075300Z   Downloaded chrono v0.4.45
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0204990Z   Downloaded cfb v0.14.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0308960Z   Downloaded cc v1.8.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0392780Z   Downloaded cargo_toml v1.0.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0418630Z   Downloaded cargo_metadata v0.19.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0459300Z   Downloaded cargo-platform v0.1.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0486080Z   Downloaded bytes v1.12.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0588710Z   Downloaded byteorder v1.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0641220Z   Downloaded md-5 v0.10.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0676980Z   Downloaded lru-slab v0.1.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0696460Z   Downloaded ipnet v2.12.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0734390Z   Downloaded infer v0.22.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0783870Z   Downloaded idna_adapter v1.2.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0807870Z   Downloaded synstructure v0.14.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0833670Z   Downloaded subtle v2.6.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0857200Z   Downloaded strsim v0.11.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0888010Z   Downloaded string_cache_codegen v0.6.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0913240Z   Downloaded stable_deref_trait v1.2.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0934930Z   Downloaded signature v2.2.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0965620Z   Downloaded shlex v2.0.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.0995190Z   Downloaded sha1 v0.10.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1038570Z   Downloaded serialize-to-javascript-impl v0.1.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1059170Z   Downloaded serialize-to-javascript v0.1.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1393570Z   Downloaded serde_spanned v1.1.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1418250Z   Downloaded serde_repr v0.1.21
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1467880Z   Downloaded serde-untagged v0.1.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1501130Z   Downloaded scopeguard v1.2.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1526260Z   Downloaded rustc_version v0.4.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1550890Z   Downloaded rustc-hash v2.1.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1579770Z   Downloaded ref-cast-impl v1.0.27
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1598810Z   Downloaded raw-window-handle v0.6.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1640910Z   Downloaded rand v0.10.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1738990Z   Downloaded rand v0.8.8
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1806410Z   Downloaded quinn-udp v0.5.16
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.1840900Z   Downloaded quick-error v2.0.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2175180Z   Downloaded ppv-lite86 v0.2.21
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2253150Z   Downloaded futures-macro v0.3.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2253850Z   Downloaded futures-channel v0.3.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2287230Z   Downloaded foreign-types-shared v0.3.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2311990Z   Downloaded foreign-types-macros v0.2.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2321550Z   Downloaded foldhash v0.1.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2342180Z   Downloaded fnv v1.0.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2358070Z   Downloaded find-msvc-tools v0.1.14
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2394130Z   Downloaded fdeflate v0.3.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2435660Z   Downloaded fastrand v2.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2458170Z   Downloaded event-listener v5.4.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2488170Z   Downloaded equivalent v1.0.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2503690Z   Downloaded embed-resource v3.0.12
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2532520Z   Downloaded either v1.19.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2558040Z   Downloaded dunce v1.0.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2573830Z   Downloaded dtoa-short v0.3.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2588310Z   Downloaded dtoa v1.0.11
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2921260Z   Downloaded dotenvy v0.15.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.2982520Z   Downloaded displaydoc v0.2.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3022610Z   Downloaded dispatch2 v0.3.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3064020Z   Downloaded dirs v7.0.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3083790Z   Downloaded digest v0.10.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3110180Z   Downloaded derive_more v2.1.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3401290Z   Downloaded deranged v0.5.8
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3431550Z   Downloaded defmt-parser v1.0.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3444140Z   Downloaded defmt-macros v1.1.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3506000Z   Downloaded cssparser-macros v0.7.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3519030Z   Downloaded crossbeam-utils v0.8.23
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3576360Z   Downloaded crc-catalog v2.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3609030Z   Downloaded core-foundation v0.10.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3650910Z   Downloaded const-oid v0.9.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3694290Z   Downloaded chacha20 v0.10.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3745020Z   Downloaded cfg_aliases v0.2.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3764340Z   Downloaded cfg-if v1.0.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3809670Z   Downloaded camino v1.2.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3846260Z   Downloaded bytemuck v1.25.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3934500Z   Downloaded bs58 v0.5.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.3988980Z   Downloaded autocfg v1.5.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.4030750Z   Downloaded allocator-api2 v0.2.21
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.4080010Z   Downloaded sync_wrapper v1.0.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.4091800Z   Downloaded sqlx-macros v0.8.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.4105220Z   Downloaded libsqlite3-sys v0.30.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5007060Z   Downloaded siphasher v1.0.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5049310Z   Downloaded servo_arc v0.4.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5064680Z   Downloaded rand_core v0.10.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5100720Z   Downloaded rand_core v0.6.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5135760Z   Downloaded quote v1.0.47
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5218260Z   Downloaded precomputed-hash v0.1.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5228810Z   Downloaded potential_utf v0.1.6
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5249370Z   Downloaded futures-io v0.3.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5263390Z   Downloaded futures-intrusive v0.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5373240Z   Downloaded futures-executor v0.3.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5425910Z   Downloaded futures-core v0.3.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5459800Z   Downloaded form_urlencoded v1.2.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5476540Z   Downloaded foreign-types v0.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5495620Z   Downloaded foldhash v0.2.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5519400Z   Downloaded fax v0.2.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5579090Z   Downloaded embed_plist v1.2.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5602800Z   Downloaded dyn-clone v1.0.20
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5646480Z   Downloaded dpi v0.1.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5673910Z   Downloaded dirs-sys v0.5.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5688510Z   Downloaded derive_more-impl v2.1.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5781070Z   Downloaded darling_macro v0.24.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5792910Z   Downloaded ctor v1.0.13
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5835550Z   Downloaded cssparser v0.37.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5889900Z   Downloaded crypto-common v0.1.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5915850Z   Downloaded crossbeam-queue v0.3.14
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5939330Z   Downloaded crc32fast v1.5.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5971100Z   Downloaded crc v3.4.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.5998330Z   Downloaded cpufeatures v0.2.17
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6019250Z   Downloaded core-graphics-types v0.2.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6031350Z   Downloaded core-foundation-sys v0.8.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6101110Z   Downloaded byteorder-lite v0.1.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6116620Z   Downloaded brotli-decompressor v6.0.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6227710Z   Downloaded brotli v9.0.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6496430Z   Downloaded block-buffer v0.10.4
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6514700Z   Downloaded bitflags v1.3.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6851260Z   Downloaded bit-vec v0.8.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6873640Z   Downloaded bit-set v0.8.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6894240Z   Downloaded base64 v0.23.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.6962460Z   Downloaded base64 v0.22.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7032560Z   Downloaded base64 v0.21.7
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7090220Z   Downloaded atomic-waker v1.1.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7113420Z   Downloaded atoi v2.0.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7156160Z   Downloaded anyhow v1.0.104
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7336300Z   Downloaded alloc-no-stdlib v3.0.0
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7392370Z   Downloaded aho-corasick v1.1.5
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7565100Z   Downloaded ref-cast v1.0.27
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7627940Z   Downloaded rand_pcg v0.10.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7691580Z   Downloaded rand_chacha v0.3.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7732970Z   Downloaded powerfmt v0.2.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7776500Z   Downloaded futures-sink v0.3.34
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7831980Z   Downloaded block2 v0.6.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.7900960Z   Downloaded bitflags v2.13.2
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.8046800Z   Downloaded base64ct v1.8.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.8107510Z   Downloaded adler2 v2.0.1
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.8809830Z    Compiling proc-macro2 v1.0.107
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.8811690Z    Compiling unicode-ident v1.0.27
+foundation	M0 与既有能力回归	2026-10-20T10:32:11.8812410Z    Compiling quote v1.0.47
+foundation	M0 与既有能力回归	2026-10-20T10:32:12.3232000Z    Compiling serde_core v1.0.229
+foundation	M0 与既有能力回归	2026-10-20T10:32:15.4640200Z    Compiling zmij v1.0.23
+foundation	M0 与既有能力回归	2026-10-20T10:32:15.6796500Z    Compiling serde_json v1.0.154
+foundation	M0 与既有能力回归	2026-10-20T10:32:15.7973840Z    Compiling serde v1.0.229
+foundation	M0 与既有能力回归	2026-10-20T10:32:16.2869780Z     Checking itoa v1.0.18
+foundation	M0 与既有能力回归	2026-10-20T10:32:16.3600110Z    Compiling syn v3.0.9
+foundation	M0 与既有能力回归	2026-10-20T10:32:16.3652190Z     Checking memchr v2.8.3
+foundation	M0 与既有能力回归	2026-10-20T10:32:18.9684700Z    Compiling serde_derive v1.0.229
+foundation	M0 与既有能力回归	2026-10-20T10:32:20.7149630Z     Checking betweenframes-local-domain v0.0.0 (/Users/runner/work/focalroom/focalroom/开发文档/contact-sheet-ai-demo/between-frames/crates/local-domain)
+foundation	M0 与既有能力回归	2026-10-20T10:32:20.8752440Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.73s
+foundation	M0 与既有能力回归	2026-10-20T10:32:20.9743260Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:20.9745330Z ^[[1m== 契约检查（GUI + Agent） ==^[[0m
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.0785980Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.0787280Z > between-frames@0.1.0 contracts:check
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.0789040Z > node scripts/generate-command-contracts.mjs --check && node scripts/generate-v2-contracts.mjs --check
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.0799380Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.1465020Z M1 command contracts: OK
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.1481170Z Agent contracts: OK
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.1488360Z Memory contracts: OK
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.2491650Z PASS: v2 JSON Schema / Rust kind 映射一致（9 commands）
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.2542990Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.2543840Z ^[[1m== 前端类型检查 ==^[[0m
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.3595670Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.3596550Z > between-frames@0.1.0 typecheck
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.3597480Z > tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+foundation	M0 与既有能力回归	2026-10-20T10:32:21.3597990Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:27.4255680Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:27.4257570Z ^[[1m== 前端 Lint ==^[[0m
+foundation	M0 与既有能力回归	2026-10-20T10:32:27.5499530Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:27.5500370Z > between-frames@0.1.0 lint
+foundation	M0 与既有能力回归	2026-10-20T10:32:27.5501540Z > eslint . --max-warnings 0
+foundation	M0 与既有能力回归	2026-10-20T10:32:27.5502030Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:34.3025260Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:34.3026920Z ^[[1m== 前端单元测试 ==^[[0m
+foundation	M0 与既有能力回归	2026-10-20T10:32:34.4528770Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:34.4529750Z > between-frames@0.1.0 test
+foundation	M0 与既有能力回归	2026-10-20T10:32:34.4530420Z > vitest run
+foundation	M0 与既有能力回归	2026-10-20T10:32:34.4530740Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:34.7222450Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:34.7223870Z ^[[1m^[[30m^[[46m RUN ^[[49m^[[39m^[[22m ^[[36mv4.1.11 ^[[39m^[[90m/Users/runner/work/focalroom/focalroom/开发文档/contact-sheet-ai-demo/between-frames^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:34.7224510Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:37.4281400Z  ^[[32m✓^[[39m tools/agent-eval/evaluation.test.ts ^[[2m(^[[22m^[[2m14 tests^[[22m^[[2m)^[[22m^[[33m 2332^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:37.4350520Z      ^[[33m^[[2m✓^[[22m^[[39m CLI persists partial reports, never overwrites outputs, and freezes review inputs ^[[33m 1019^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:37.4453630Z      ^[[33m^[[2m✓^[[22m^[[39m CLI imports exported simulated reviews with the original key without editing frozen source data ^[[33m 951^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:37.6546360Z  ^[[32m✓^[[39m src/features/ai-editor/AIPanel.test.tsx ^[[2m(^[[22m^[[2m22 tests^[[22m^[[2m)^[[22m^[[33m 1090^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:39.4237330Z  ^[[32m✓^[[39m src/features/preference-memory/PreferencePanel.test.tsx ^[[2m(^[[22m^[[2m11 tests^[[22m^[[2m)^[[22m^[[33m 1012^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:40.5109400Z (node:2984) Warning: `--localstorage-file` was provided without a valid path
+foundation	M0 与既有能力回归	2026-10-20T10:32:40.5110350Z (Use `node --trace-warnings ...` to show where the warning was created)
+foundation	M0 与既有能力回归	2026-10-20T10:32:42.2112190Z  ^[[32m✓^[[39m tools/agent-eval/review.test.ts ^[[2m(^[[22m^[[2m1 test^[[22m^[[2m)^[[22m^[[33m 2218^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:42.2218650Z    ^[[33m^[[2m✓^[[22m^[[39m offline blind review requires photos and human scores, exports alias-only records without network ^[[33m 2216^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:43.0299260Z  ^[[32m✓^[[39m src/services/TauriAgentRepository.test.ts ^[[2m(^[[22m^[[2m9 tests^[[22m^[[2m)^[[22m^[[32m 16^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:43.1979340Z  ^[[32m✓^[[39m src/test/App.test.tsx ^[[2m(^[[22m^[[2m8 tests^[[22m^[[2m)^[[22m^[[33m 3898^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:43.1985710Z      ^[[33m^[[2m✓^[[22m^[[39m 切换语言后，项目导航和 AI 标题立即同步更新 ^[[33m 1199^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:43.2100550Z      ^[[33m^[[2m✓^[[22m^[[39m 比较支持不确定，关闭后状态保持原样 ^[[33m 313^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:43.2177040Z      ^[[33m^[[2m✓^[[22m^[[39m 项目列表不显示上一个项目的功能，打开项目后 AI 仅从工作台呼出 ^[[33m 1042^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:43.2178340Z      ^[[33m^[[2m✓^[[22m^[[39m AI 目标按项目隔离，切换项目不会带入上一个项目的输入 ^[[33m 598^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:44.2931550Z  ^[[32m✓^[[39m apps/web/src/shared/ProjectReview.test.tsx ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[32m 300^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:44.4390210Z  ^[[32m✓^[[39m src/features/cloud-login/CloudLoginView.test.tsx ^[[2m(^[[22m^[[2m8 tests^[[22m^[[2m)^[[22m^[[33m 382^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:45.5699540Z  ^[[32m✓^[[39m apps/web/src/shared/AccountRecovery.test.tsx ^[[2m(^[[22m^[[2m6 tests^[[22m^[[2m)^[[22m^[[33m 353^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:45.5902530Z  ^[[32m✓^[[39m src/components/shared/PhotoViewport.test.tsx ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[32m 277^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:46.4034530Z  ^[[32m✓^[[39m src/services/MockRepository.test.ts ^[[2m(^[[22m^[[2m8 tests^[[22m^[[2m)^[[22m^[[32m 8^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:46.4635410Z  ^[[32m✓^[[39m src/services/TauriRepository.test.ts ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[32m 25^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:47.4959120Z  ^[[32m✓^[[39m apps/web/src/shared/MagicLogin.test.tsx ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[32m 283^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:47.5599810Z  ^[[32m✓^[[39m apps/web/src/SharedApp.test.tsx ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[32m 232^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:48.2948310Z  ^[[32m✓^[[39m src/app/shortcutConfig.test.ts ^[[2m(^[[22m^[[2m8 tests^[[22m^[[2m)^[[22m^[[32m 17^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:48.8125560Z  ^[[32m✓^[[39m src/features/project/VersionsDialog.test.tsx ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 476^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:49.5784550Z  ^[[32m✓^[[39m src/features/proposals/ProposalsPanel.test.tsx ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[33m 384^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:50.0611170Z  ^[[32m✓^[[39m src/features/project/ActivityDialog.test.tsx ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[33m 347^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:50.4651250Z  ^[[32m✓^[[39m packages/contracts/src/contracts.test.ts ^[[2m(^[[22m^[[2m73 tests^[[22m^[[2m)^[[22m^[[32m 20^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:51.2154590Z  ^[[32m✓^[[39m src/services/TauriMemoryRepository.test.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[32m 12^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:51.4486840Z  ^[[32m✓^[[39m src/features/diagnostics/DiagnosticsDialog.test.tsx ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 506^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:52.2110590Z  ^[[32m✓^[[39m apps/web/src/shared/AgentAnalysis.test.tsx ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[32m 138^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:52.4128310Z  ^[[32m✓^[[39m apps/web/src/shared/DesktopApproval.test.tsx ^[[2m(^[[22m^[[2m3 tests^[[22m^[[2m)^[[22m^[[32m 177^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:53.4238320Z  ^[[32m✓^[[39m src/features/export/SharingControls.test.tsx ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[32m 233^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:53.5393440Z  ^[[32m✓^[[39m src/features/quick-start/QuickStartModal.test.tsx ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[33m 399^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:54.4586510Z  ^[[32m✓^[[39m src/features/project/ProjectList.test.tsx ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[32m 279^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:54.6079210Z  ^[[32m✓^[[39m src/components/inspector/Lightbox.test.tsx ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 313^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:55.2396700Z  ^[[32m✓^[[39m packages/contracts/src/foundation.test.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[32m 11^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:55.3983080Z  ^[[32m✓^[[39m src/services/TauriProposalsRepository.test.ts ^[[2m(^[[22m^[[2m3 tests^[[22m^[[2m)^[[22m^[[32m 9^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:56.0899890Z  ^[[32m✓^[[39m src/services/TauriDiagnosticsRepository.test.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[32m 8^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:56.1836880Z  ^[[32m✓^[[39m src/domain/grouping.test.ts ^[[2m(^[[22m^[[2m6 tests^[[22m^[[2m)^[[22m^[[32m 29^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:57.3315400Z  ^[[32m✓^[[39m src/components/shared/AccountAvatar.test.tsx ^[[2m(^[[22m^[[2m3 tests^[[22m^[[2m)^[[22m^[[32m 178^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:57.5194260Z  ^[[32m✓^[[39m src/app/CommandPalette.test.tsx ^[[2m(^[[22m^[[2m3 tests^[[22m^[[2m)^[[22m^[[32m 261^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:58.3071920Z  ^[[32m✓^[[39m packages/contracts/src/cloud.test.ts ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[32m 9^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:58.5070510Z  ^[[32m✓^[[39m src/features/project/ProjectDialog.test.tsx ^[[2m(^[[22m^[[2m3 tests^[[22m^[[2m)^[[22m^[[33m 312^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.1286070Z  ^[[32m✓^[[39m src/components/shared/SharedReviewLink.test.tsx ^[[2m(^[[22m^[[2m1 test^[[22m^[[2m)^[[22m^[[32m 113^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.1692240Z  ^[[32m✓^[[39m src/domain/selection.test.ts ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[32m 3^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.7865280Z  ^[[32m✓^[[39m src/services/TauriCloudAuthRepository.test.ts ^[[2m(^[[22m^[[2m1 test^[[22m^[[2m)^[[22m^[[32m 5^[[2mms^[[22m^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.7913610Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.7941360Z ^[[2m Test Files ^[[22m ^[[1m^[[32m38 passed^[[39m^[[22m^[[90m (38)^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.7943270Z ^[[2m      Tests ^[[22m ^[[1m^[[32m265 passed^[[39m^[[22m^[[90m (265)^[[39m
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.7945900Z ^[[2m   Start at ^[[22m 10:32:34
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.7948050Z ^[[2m   Duration ^[[22m 25.05s^[[2m (transform 1.36s, setup 3.91s, import 4.99s, tests 16.66s, environment 19.41s)^[[22m
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.7949320Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.8435530Z 
+foundation	M0 与既有能力回归	2026-10-20T10:32:59.8462910Z ^[[1m== 浏览器预览 E2E ==^[[0m
+foundation	M0 与既有能力回归	2026-10-20T10:33:00.0001770Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:00.0002660Z > between-frames@0.1.0 test:e2e
+foundation	M0 与既有能力回归	2026-10-20T10:33:00.0003450Z > playwright test
+foundation	M0 与既有能力回归	2026-10-20T10:33:00.0003720Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:01.3303640Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:01.3304300Z Running 18 tests using 1 worker
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4858390Z F·················
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4863120Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4873160Z   1) e2e/chat-drawer.spec.ts:5:1 › 工作台对话抽屉保留选区、输入和关闭焦点，不增加 AI 导航 ───────────────────────────────────
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4873630Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4873940Z     Error: expect(locator).toBeVisible() failed
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4874250Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4875170Z     Locator: getByRole('dialog', { name: 'AI 智能选片', exact: true })
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4875760Z     Expected: visible
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4876170Z     Timeout: 5000ms
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4876540Z     Error: element(s) not found
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4876790Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4876950Z     Call log:
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4877580Z       - Expect "toBeVisible" getByRole('dialog', { name: 'AI 智能选片', exact: true }) with timeout 5000ms
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4880400Z       - waiting for getByRole('dialog', { name: 'AI 智能选片', exact: true })
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4881350Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4881770Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4882030Z       24 |  await page.keyboard.press('Escape');
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4882560Z       25 |  await expect(settings).toHaveCount(0);
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4883050Z     > 26 |  await expect(drawer).toBeVisible();
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4884650Z          |                       ^
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4886300Z       27 |  await mkdir(evidence, { recursive: true });
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4887720Z       28 |  await page.screenshot({ path: resolve(evidence, 'conversation.png') });
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4889210Z       29 |  await page.keyboard.press('Escape');
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4892050Z         at /Users/runner/work/focalroom/focalroom/开发文档/contact-sheet-ai-demo/between-frames/e2e/chat-drawer.spec.ts:26:23
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4893360Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4898380Z     Error Context: test-results/preview/chat-drawer-工作台对话抽屉保留选区、输入和关闭焦点，不增加-AI-导航/error-context.md
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4898930Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4899480Z     attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4900320Z     test-results/preview/chat-drawer-工作台对话抽屉保留选区、输入和关闭焦点，不增加-AI-导航/trace.zip
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4900740Z     Usage:
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4900890Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4901710Z         npx playwright show-trace test-results/preview/chat-drawer-工作台对话抽屉保留选区、输入和关闭焦点，不增加-AI-导航/trace.zip
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4902190Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4902620Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4902910Z 
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4903040Z   1 failed
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4903610Z     e2e/chat-drawer.spec.ts:5:1 › 工作台对话抽屉保留选区、输入和关闭焦点，不增加 AI 导航 ────────────────────────────────────
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.4904070Z   17 passed (35.9s)
+foundation	M0 与既有能力回归	2026-10-20T10:33:36.5316930Z ##[error]Process completed with exit code 1.

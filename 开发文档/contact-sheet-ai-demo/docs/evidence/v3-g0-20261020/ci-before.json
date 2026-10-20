@@ -1,0 +1,6 @@
+{
+  "runId": 39408494029,
+  "headSha": "38e970473c7f618c571513a84535b78e8bcd498d",
+  "conclusion": "failure",
+  "failure": "chat-drawer.spec.ts:26: settings Escape also closed the outer drawer"
+}

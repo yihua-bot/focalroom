@@ -1,0 +1,2 @@
+{"passed":true,"users":3,"browser_contexts":3,"real_postgres":true,"images":54,"paging_project":51,"maximum_grid_nodes":48,"actual_ai_calls":0,"original_uploads":0,"page_errors":[],"remote_origins":[],"flows":["login","preview-copy-import","invitation","photo-anchor","private-draft-save","owned-draft-revision","reviewer-proposal","partial-owner-approval","immutable-history","Yjs-private-note-reload","Viewer-readonly","live-revocation","51-photo-pagination"]}
+Isolated PostgreSQL evidence: /var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-pg-tests-rayzD0

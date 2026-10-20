@@ -1,0 +1,4 @@
+6:45:26 PM [vite] (client) Re-optimizing dependencies because vite config has changed
+6:45:27 PM [vite] (client) [optimizer] bundling dependencies...
+{"passed":true,"runtime":"real Rust harness + NestJS + temporary PostgreSQL","source_photos":2,"source_hashes_unchanged":true,"actual_ai_calls":0,"flows":["preview-copy-export","desktop-sharing-form-1440","desktop-readonly-1280","single-authority-promotion","local-write-denial","commit-response-loss","native-process-restart","endpoint-rebind-denial","committed-cancel-denial","receipt-original-revision","safe-staging-abort"]}
+Isolated PostgreSQL evidence: /var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-pg-tests-CfYAaF
