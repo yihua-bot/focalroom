@@ -775,3 +775,29 @@ pub async fn canvas_delete_node(
         )
         .await
 }
+
+#[tauri::command]
+pub async fn canvas_add_annotation(
+    state: State<'_, Backend>,
+    project_id: String,
+    cmd: crate::canvas::AddAnnotationCommand,
+) -> Result<crate::canvas::BoardAnnotation> {
+    state.store.add_annotation(&project_id, &cmd).await
+}
+
+#[tauri::command]
+pub async fn canvas_resolve_annotation(
+    state: State<'_, Backend>,
+    project_id: String,
+    cmd: crate::canvas::ResolveAnnotationCommand,
+) -> Result<()> {
+    state.store.resolve_annotation(&project_id, &cmd).await
+}
+
+#[tauri::command]
+pub async fn canvas_get_annotations(
+    state: State<'_, Backend>,
+    board_id: String,
+) -> Result<Vec<crate::canvas::BoardAnnotation>> {
+    state.store.get_annotations(&board_id).await
+}

@@ -526,3 +526,153 @@ impl Store {
         CommandHandler::new(self).delete_node(project, cmd).await
     }
 }
+
+// ── Board Annotations（画布评论）──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoardAnnotation {
+    pub id: String,
+    pub board_id: String,
+    pub anchor_type: String,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub node_id: Option<String>,
+    pub nx: Option<f64>,
+    pub ny: Option<f64>,
+    pub author: String,
+    pub body: String,
+    pub resolved: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddAnnotationCommand {
+    pub board_id: String,
+    pub x: f64,
+    pub y: f64,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveAnnotationCommand {
+    pub annotation_id: String,
+    pub resolved: bool,
+}
+
+impl CommandHandler<'_> {
+    /// 添加画布评论（锚定 board 坐标）。
+    pub async fn add_annotation(
+        &self,
+        project: &str,
+        cmd: &AddAnnotationCommand,
+    ) -> Result<BoardAnnotation> {
+        let body = cmd.body.trim();
+        if body.is_empty() || body.chars().count() > 2000 {
+            return Err(AppError::new("VALIDATION_ERROR", "评论须为 1–2000 字符"));
+        }
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let board: Option<String> =
+            sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
+                .bind(&cmd.board_id)
+                .bind(project)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if board.is_none() {
+            return Err(AppError::new("NOT_FOUND", "画布不存在"));
+        }
+        let id = domain::id();
+        let now = domain::timestamp();
+        sqlx::query(
+            "INSERT INTO board_annotations(id,board_id,anchor_type,x,y,author,body,resolved,created_at) VALUES(?,?,'board',?,?,?,'',?,0,?)",
+        )
+        .bind(&id).bind(&cmd.board_id).bind(cmd.x).bind(cmd.y).bind(body).bind(&now)
+        .execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(BoardAnnotation {
+            id,
+            board_id: cmd.board_id.clone(),
+            anchor_type: "board".to_owned(),
+            x: Some(cmd.x),
+            y: Some(cmd.y),
+            node_id: None,
+            nx: None,
+            ny: None,
+            author: String::new(),
+            body: body.to_owned(),
+            resolved: false,
+            created_at: now,
+        })
+    }
+
+    /// 解决/重开评论。
+    pub async fn resolve_annotation(
+        &self,
+        project: &str,
+        cmd: &ResolveAnnotationCommand,
+    ) -> Result<()> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let result = sqlx::query(
+            "UPDATE board_annotations SET resolved=? WHERE id=? AND EXISTS(SELECT 1 FROM boards WHERE id=board_annotations.board_id AND project_id=?)",
+        )
+        .bind(if cmd.resolved { 1 } else { 0 })
+        .bind(&cmd.annotation_id).bind(project)
+        .execute(&mut *tx).await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::new("NOT_FOUND", "评论不存在"));
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// 查询画布评论。
+    pub async fn get_annotations(&self, board_id: &str) -> Result<Vec<BoardAnnotation>> {
+        let rows = sqlx::query(
+            "SELECT id, board_id, anchor_type, x, y, node_id, nx, ny, author, body, resolved, created_at FROM board_annotations WHERE board_id=? ORDER BY created_at",
+        )
+        .bind(board_id)
+        .fetch_all(&self.store.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|row| BoardAnnotation {
+                id: row.get("id"),
+                board_id: row.get("board_id"),
+                anchor_type: row.get("anchor_type"),
+                x: row.get("x"),
+                y: row.get("y"),
+                node_id: row.get("node_id"),
+                nx: row.get("nx"),
+                ny: row.get("ny"),
+                author: row.get("author"),
+                body: row.get("body"),
+                resolved: row.get::<i64, _>("resolved") != 0,
+                created_at: row.get("created_at"),
+            })
+            .collect())
+    }
+}
+
+impl Store {
+    pub async fn add_annotation(
+        &self,
+        project: &str,
+        cmd: &AddAnnotationCommand,
+    ) -> Result<BoardAnnotation> {
+        CommandHandler::new(self).add_annotation(project, cmd).await
+    }
+    pub async fn resolve_annotation(
+        &self,
+        project: &str,
+        cmd: &ResolveAnnotationCommand,
+    ) -> Result<()> {
+        CommandHandler::new(self)
+            .resolve_annotation(project, cmd)
+            .await
+    }
+    pub async fn get_annotations(&self, board_id: &str) -> Result<Vec<BoardAnnotation>> {
+        CommandHandler::new(self).get_annotations(board_id).await
+    }
+}

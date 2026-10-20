@@ -30,6 +30,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [annotations, setAnnotations] = useState<AnnotationInfo[]>([]);
   const dragStart = useRef<{ x: number; y: number; nodeX: number; nodeY: number } | null>(null);
   const panning = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,6 +55,9 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
     if (repository && activeBoard) {
       repository.canvas.getNodes(activeBoard).then(ns => {
         if (active) setNodes(ns);
+      }).catch(() => {});
+      repository.canvas.getAnnotations(activeBoard).then(ans => {
+        if (active) setAnnotations(ans);
       }).catch(() => {});
     }
     return () => { active = false; };
@@ -168,6 +172,20 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
     panning.current = null;
   };
 
+  const onContextMenu = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!repository || !activeBoard) return;
+    const input = prompt('添加评论：');
+    if (!input?.trim()) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const bx = (e.clientX - rect.left - pan.x) / zoom;
+    const by = (e.clientY - rect.top - pan.y) / zoom;
+    await repository.canvas.addAnnotation(projectId, activeBoard, bx, by, input.trim());
+    const ans = await repository.canvas.getAnnotations(activeBoard);
+    setAnnotations(ans);
+  };
+
   if (!repository) {
     return <div className="canvas-empty"><p>画布功能需要桌面版。</p></div>;
   }
@@ -194,6 +212,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
+        onContextMenu={e => void onContextMenu(e)}
       >
         <div
           className="canvas-board"
@@ -223,6 +242,12 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
               style={{ left: node.x, top: node.y, width: node.width, height: node.height, zIndex: node.zOrder, background: color }}
             >{content}</div>;
           })}
+          {annotations.map(a => !a.resolved && (
+            <div key={a.id} className="canvas-annotation-pin" title={a.body}
+              style={{ left: a.x ?? 0, top: a.y ?? 0 }}>
+              💬
+            </div>
+          ))}
           {nodes.length === 0 && activeBoard && (
             <div className="canvas-hint" style={{ left: -pan.x / zoom + 40, top: -pan.y / zoom + 40 }}>
               从工具栏选照片放置到画布
@@ -242,4 +267,13 @@ export interface CanvasRepository {
   moveNodes(projectId: string, boardId: string, nodeIds: string[], dx: number, dy: number): Promise<void>;
   addText(projectId: string, boardId: string, nodeType: string, x: number, y: number, w: number, h: number, content: string, color?: string): Promise<CanvasNodeInfo>;
   deleteNode(projectId: string, boardId: string, nodeId: string): Promise<void>;
+  addAnnotation(projectId: string, boardId: string, x: number, y: number, body: string): Promise<void>;
+  resolveAnnotation(projectId: string, annotationId: string, resolved: boolean): Promise<void>;
+  getAnnotations(boardId: string): Promise<AnnotationInfo[]>;
+}
+
+export interface AnnotationInfo {
+  id: string; boardId: string; anchorType: string;
+  x: number | null; y: number | null;
+  author: string; body: string; resolved: boolean; createdAt: string;
 }
