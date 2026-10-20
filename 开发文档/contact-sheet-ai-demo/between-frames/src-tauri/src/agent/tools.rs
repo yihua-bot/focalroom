@@ -18,6 +18,9 @@ pub(crate) async fn execute(
     let canonical = super::policy::ToolRegistry::canonical(&call.name);
     let name = canonical.as_deref().unwrap_or(call.name.as_str());
     match name {
+        "create_board_draft" | "place_photos_on_board" | "get_board" => {
+            return execute_canvas_tool(tx, name, &call.args, task).await;
+        }
         "get_project_context" => {
             let row = sqlx::query("SELECT brief,revision FROM projects WHERE id=?")
                 .bind(&task.project_id)
@@ -466,4 +469,90 @@ fn validate_items(items: &[DraftItem]) -> Result<()> {
 pub(crate) async fn photos(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<Vec<Value>> {
     let rows=sqlx::query("SELECT p.id,p.filename,d.status,d.rating,d.user_note FROM photos p JOIN photo_decisions d ON d.photo_id=p.id AND d.project_id=p.project_id WHERE p.project_id=? ORDER BY d.rating DESC,p.import_index").bind(&task.project_id).fetch_all(&mut **tx).await?;
     Ok(rows.iter().filter(|r|task.allowed_photo_ids.contains(&r.get::<String,_>("id"))).map(|r|json!({"photo_id":r.get::<String,_>("id"),"name":r.get::<String,_>("filename").chars().take(80).collect::<String>(),"status":r.get::<String,_>("status"),"rating":r.get::<i64,_>("rating"),"note":r.get::<String,_>("user_note").chars().take(160).collect::<String>()})).collect())
+}
+
+// ── G4 Agent Canvas Tools ──
+
+pub async fn execute_canvas_tool(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    name: &str,
+    args: &Value,
+    task: &super::types::Task,
+) -> Result<Value> {
+    match name {
+        "create_board_draft" => {
+            let title = args["title"].as_str().unwrap_or("Agent 草案").trim();
+            if title.is_empty() || title.chars().count() > 200 {
+                return Err(crate::domain::AppError::new(
+                    "VALIDATION_ERROR",
+                    "标题须为 1–200 字符",
+                ));
+            }
+            let id = crate::domain::id();
+            let now = crate::domain::timestamp();
+            sqlx::query("INSERT INTO boards(id,project_id,title,state,created_at,updated_at) VALUES(?,?,?,'draft',?,?)")
+                .bind(&id).bind(&task.project_id).bind(title).bind(&now).bind(&now)
+                .execute(&mut **tx).await?;
+            Ok(json!({"board_id": id, "title": title, "state": "draft"}))
+        }
+        "place_photos_on_board" => {
+            let board_id = args["board_id"].as_str().unwrap_or("");
+            let board_exists: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM boards WHERE id=? AND project_id=?")
+                    .bind(board_id)
+                    .bind(&task.project_id)
+                    .fetch_one(&mut **tx)
+                    .await?;
+            if board_exists == 0 {
+                return Err(crate::domain::AppError::new("NOT_FOUND", "画布不存在"));
+            }
+            let placements = args["placements"].as_array().cloned().unwrap_or_default();
+            let mut placed = Vec::new();
+            let now = crate::domain::timestamp();
+            for p in &placements {
+                let photo_id = p["photo_id"].as_str().unwrap_or("");
+                // 通过 alias 解析 asset_id
+                let asset_id: Option<String> = sqlx::query_scalar(
+                    "SELECT id FROM source_assets WHERE id=? OR id=(SELECT asset_id FROM asset_aliases WHERE photo_id=?)",
+                )
+                .bind(photo_id).bind(photo_id)
+                .fetch_optional(&mut **tx).await?;
+                let Some(asset) = asset_id else { continue };
+                let x = p["x"].as_f64().unwrap_or(0.0);
+                let y = p["y"].as_f64().unwrap_or(0.0);
+                let w = p["width"].as_f64().unwrap_or(220.0);
+                let h = p["height"].as_f64().unwrap_or(160.0);
+                let node_id = crate::domain::id();
+                let z: i64 = sqlx::query_scalar(
+                    "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
+                )
+                .bind(board_id)
+                .fetch_one(&mut **tx)
+                .await?;
+                sqlx::query("INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,asset_id,created_at,updated_at) VALUES(?,?, 'photo',?,?,?,?,0,?,?,?,?)")
+                    .bind(&node_id).bind(board_id).bind(x).bind(y).bind(w).bind(h)
+                    .bind(z).bind(&asset).bind(&now).bind(&now)
+                    .execute(&mut **tx).await?;
+                placed.push(json!({"node_id": node_id, "photo_id": photo_id, "x": x, "y": y}));
+            }
+            Ok(json!({"board_id": board_id, "placed_count": placed.len(), "nodes": placed}))
+        }
+        "get_board" => {
+            let board_id = args["board_id"].as_str().unwrap_or("");
+            let nodes = sqlx::query(
+                "SELECT id, node_type, x, y, width, height, z_order, asset_id FROM canvas_nodes WHERE board_id=? AND visible=1 ORDER BY z_order",
+            )
+            .bind(board_id)
+            .fetch_all(&mut **tx).await?;
+            use sqlx::Row;
+            let result: Vec<Value> = nodes.iter().map(|r| {
+                json!({"id": r.get::<String,_>("id"), "type": r.get::<String,_>("node_type"), "x": r.get::<f64,_>("x"), "y": r.get::<f64,_>("y"), "width": r.get::<f64,_>("width"), "height": r.get::<f64,_>("height"), "z": r.get::<i64,_>("z_order"), "asset_id": r.get::<Option<String>,_>("asset_id")})
+            }).collect();
+            Ok(json!({"board_id": board_id, "node_count": result.len(), "nodes": result}))
+        }
+        _ => Err(crate::domain::AppError::new(
+            "PERMISSION_DENIED",
+            format!("未知画布工具 {name}"),
+        )),
+    }
 }
