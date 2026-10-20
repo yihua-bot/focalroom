@@ -1,6 +1,6 @@
 import { CloudAccount } from "../features/cloud-login/CloudLoginView";
 import type { CloudAuthRepository } from "../domain/cloud-auth";
-import { Grid2X2, ListOrdered, FolderOpen, Gem, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Grid2X2, LayoutGrid, ListOrdered, FolderOpen, Gem, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useUIStore } from '../stores/uiStore';
 import type { Project, WorkspaceView } from '../domain/models';
 import type { SharingStatus } from '../domain/sharing';
@@ -32,6 +32,7 @@ export function SideNav({ project, page, view, onView, onProjects, onMemory, onH
       <nav aria-label={project.title}>
         <button className={`nav ${ui.panel === 'photo' && view === 'grid' ? 'current' : ''}`} aria-current={ui.panel === 'photo' && view === 'grid' ? 'page' : undefined} aria-label={zh.workspace} onClick={() => onView('grid')}><Grid2X2 size={17} /><span>{zh.workspace}</span></button>
         <button className={`nav ${ui.panel === 'photo' && view === 'sequence' ? 'current' : ''}`} aria-current={ui.panel === 'photo' && view === 'sequence' ? 'page' : undefined} aria-label={zh.sequence} onClick={() => onView('sequence')}><ListOrdered size={17} /><span>{zh.sequence}</span></button>
+        <button className={`nav ${view === 'canvas' ? 'current' : ''}`} aria-current={view === 'canvas' ? 'page' : undefined} aria-label="叙事画布" onClick={() => onView('canvas')}><LayoutGrid size={17} /><span>叙事画布</span></button>
         <button className={`nav ${ui.panel === 'memory' ? 'current' : ''}`} aria-current={ui.panel === 'memory' ? 'page' : undefined} aria-label={zh.memory} onClick={onMemory}><Gem size={17} /><span>{zh.memory}</span></button>
       </nav>
     </>}
