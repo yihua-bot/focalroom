@@ -30,7 +30,8 @@ export interface CloudCanvasNode {
 }
 
 export class BoardService {
-  constructor(private pool: Pool) {}
+  private pool: Pool;
+  constructor(pool: Pool) { this.pool = pool; }
 
   async list(projectId: string): Promise<CloudBoard[]> {
     const rows = await this.pool.query(
