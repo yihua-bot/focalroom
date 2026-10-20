@@ -39,6 +39,8 @@ jobs:
         run: echo "RUSTUP_TOOLCHAIN=1.94.0" >> "$GITHUB_ENV"
       - name: 安装锁定依赖与 Chromium
         run: |
+          brew install postgresql@15
+          echo "/opt/homebrew/opt/postgresql@15/bin" >> "$GITHUB_PATH"
           npm ci
           npx playwright install chromium
       - name: 记录实际工具链
