@@ -1,0 +1,20 @@
+-- FocalRoom Info.plist for Lightroom Classic plugin
+-- 放到 Lightroom 的 Modules 目录后，重启 Lightroom 生效。
+
+{
+    CfBundleName = "FocalRoom Round-trip",
+    CfBundleShortVersionString = "1.0",
+    CfBundleVersion = "1.0.0",
+    CfBundleIdentifier = "cc.focroom.lightroom.roundtrip",
+    LrPluginInfo = {
+        LrSDKVersion = 9.0,
+        LrPluginName = "FocalRoom Round-trip",
+        LrExportFilterProvider = {
+            file = "FocalRoomExport.lua",
+            id = "com.focalroom.export.roundtrip",
+            title = "FocalRoom Round-trip",
+        },
+    },
+    LrMinimalVersion = "9.0",
+    LrSupportedCountries = "all",
+}

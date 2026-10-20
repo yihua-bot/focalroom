@@ -14,6 +14,7 @@ pub mod domain;
 mod edit_commands;
 mod edit_state;
 pub mod export;
+pub mod external_edit;
 pub mod image_pipeline;
 pub mod importer;
 pub mod keychain;
