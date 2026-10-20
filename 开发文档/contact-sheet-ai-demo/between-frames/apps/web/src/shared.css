@@ -199,15 +199,15 @@
   flex-direction: column;
   gap: 7px;
   font-size: 12px;
-  color: #b9c6d2;
+  color: var(--fr-muted);
 }
 .fr-shared input:not([type="checkbox"]),
 .fr-shared textarea,
 .fr-shared select {
   width: 100%;
   padding: 9px 11px;
-  color: #e2edef;
-  background: #10161c;
+  color: var(--ink, #202e31);
+  background: var(--fr-surface);
   border: 1px solid #39434f;
   border-radius: 5px;
   min-width: 0;
