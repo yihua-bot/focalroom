@@ -3,29 +3,16 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-20T11:02:53.503Z",
-  "sourceHead": "66901ca61cc962942c09adb39a99736a6656f19e",
-  "changedSources": [
-    {
-      "path": "e2e/m1-500.spec.ts",
-      "sha256": "af1b08d0de569ab15db130151ef94e7b98df89e5a7216a4f861dcb599670e9a3"
-    },
-    {
-      "path": "scripts/inventory-v3.mjs",
-      "sha256": "309d6d0087a3355e7a1f99f71b6c3cbcb76524b072ccb04bf16e8aaeb2fed6b1"
-    },
-    {
-      "path": "src-tauri/tests/v3_baseline.rs",
-      "sha256": "731bf946eab703be912d9bca72a19c3bc3ea35ba952a140fda8c1b6dff18d8e2"
-    }
-  ],
+  "observedAt": "2026-10-20T12:05:08.199Z",
+  "sourceHead": "65767f90619d0b676e142738c9e4ef4257e79f41",
+  "changedSources": [],
   "branch": "main",
   "clientVersion": "1.0.4",
   "ciWorkflow": {
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "1aa6a0bf29fc4607cb7572b209a2754eb5c950a8717e1c0456a8eeaafb3f80af"
   },
-  "status": "LOCAL_G0_PASS_REMOTE_LATEST_DELTA_PENDING",
+  "status": "LOCAL_G0_PASS_REMOTE_CI_PENDING",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -448,7 +435,25 @@
       "id": "full-local-gate",
       "command": "npm run verify:v2",
       "result": "PASS",
-      "evidence": "evidence/v3-g0-20261020/final-verify.txt"
+      "evidence": "evidence/v3-g0-20261020/final-verify.txt",
+      "sourceState": {
+        "head": "66901ca61cc962942c09adb39a99736a6656f19e",
+        "changedSources": [
+          {
+            "path": "e2e/m1-500.spec.ts",
+            "sha256": "af1b08d0de569ab15db130151ef94e7b98df89e5a7216a4f861dcb599670e9a3"
+          },
+          {
+            "path": "scripts/inventory-v3.mjs",
+            "sha256": "309d6d0087a3355e7a1f99f71b6c3cbcb76524b072ccb04bf16e8aaeb2fed6b1"
+          },
+          {
+            "path": "src-tauri/tests/v3_baseline.rs",
+            "sha256": "731bf946eab703be912d9bca72a19c3bc3ea35ba952a140fda8c1b6dff18d8e2"
+          }
+        ],
+        "note": "Full local gate before 65767f9; all recorded module hashes remain identical. m1-500 selector change reverified separately at 65767f9."
+      }
     },
     {
       "id": "frontend",
@@ -525,20 +530,30 @@
       "binarySha256": "8f868f1f0cab913156c27a2a6fb2227996564fbbfd847ae4372f60d3e7830a73",
       "nativeGuiAcceptance": "NOT_TESTED_IN_G0",
       "evidence": "evidence/v3-g0-20261020/desktop-build.txt"
+    },
+    {
+      "id": "500-gui-at-65767f9",
+      "command": "npm run test:m1-gui",
+      "result": "PASS",
+      "tests": 4,
+      "sourceHead": "65767f90619d0b676e142738c9e4ef4257e79f41",
+      "evidence": "evidence/v3-g0-20261020/500-at-65767f9.txt"
     }
   ],
   "remaining": [
-    "Latest local G0 follow-up changes require commit/push and green remote CI",
+    "Verify the complete remote workflow for the G0 evidence follow-up push",
     "G1/G2 API/data/color design review before implementation",
     "Real user database compatibility not tested; only isolated old-format fixture",
     "Device/human/supplier/production acceptance remains separate"
   ],
   "remoteCI": {
     "conclusion": "",
-    "databaseId": 39410438284,
-    "headSha": "66901ca61cc962942c09adb39a99736a6656f19e",
+    "databaseId": 39417317897,
+    "headSha": "65767f90619d0b676e142738c9e4ef4257e79f41",
     "status": "in_progress",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/39410438284"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/39417317897",
+    "observedAt": "2026-10-20T12:05:08.199Z",
+    "note": "Observed status at report commit preparation; the evidence-only follow-up push triggers a new complete workflow. Final outcome must be checked on GitHub."
   },
   "evidence": {
     "legacySnapshot": "evidence/v3-g0-20261020/legacy-snapshot.json",

@@ -1,0 +1,20 @@
+
+> between-frames@0.1.0 test:m1-gui
+> bash "scripts/verify-m1-gui.sh"
+
+    Finished `release` profile [optimized] target(s) in 0.61s
+[WebServer] (node:87200) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:87213) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 4 tests using 1 worker
+
+(node:87226) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/m1-500.spec.ts:74:1 › M1：500 张 PNG/JPEG 的完整 GUI 编辑、离线重启、导出与性能采样 (17.1s)
+  ✓  2 e2e/m1-500.spec.ts:272:1 › M1 异常 GUI：重复、损坏、编码异常、超大图、取消保留已提交和失联重连 (3.4s)
+  ✓  3 e2e/m1-500.spec.ts:328:3 › Retina 原图检视 › M1 原图：2400px JPEG/PNG 按需检视、同步对比、失联回退与原图不变 (2.5s)
+  ✓  4 e2e/m1-500.spec.ts:386:1 › M1 RAW 格式边界：派生预览有界且不冒充原图或嵌入预览 (1.4s)
+
+  4 passed (29.6s)
