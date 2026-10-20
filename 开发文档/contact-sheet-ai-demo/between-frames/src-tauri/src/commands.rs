@@ -810,3 +810,15 @@ pub async fn canvas_add_arrow(
 ) -> Result<crate::canvas::CanvasNode> {
     state.store.add_arrow(&project_id, &cmd).await
 }
+
+#[tauri::command]
+pub async fn canvas_undo(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+) -> Result<bool> {
+    state
+        .store
+        .undo_canvas(&project_id, &crate::canvas::UndoCanvasCommand { board_id })
+        .await
+}

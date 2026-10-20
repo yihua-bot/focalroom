@@ -96,6 +96,15 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
     await loadBoards();
   };
 
+  const undoCanvas = async () => {
+    if (!repository || !activeBoard) return;
+    const did = await repository.canvas.undo(projectId, activeBoard);
+    if (did) {
+      const ns = await repository.canvas.getNodes(activeBoard);
+      setNodes(ns);
+    }
+  };
+
   const addSticky = async () => {
     if (!repository || !activeBoard) return;
     const x = -pan.x / zoom + 60;
@@ -218,6 +227,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
         </Button>
         <Button size="small" disabled={!activeBoard} onClick={() => void addSticky()}>📝 便签</Button>
         <Button size="small" disabled={!activeBoard} onClick={() => setLinking(l => l ? null : l)}>{linking ? '🔗 点击目标...' : '🔗 连接'}</Button>
+        <Button size="small" disabled={!activeBoard} onClick={() => void undoCanvas()}>Undo</Button>
         <span className="canvas-zoom-label">{Math.round(zoom * 100)}%</span>
       </div>
       <div
@@ -303,6 +313,7 @@ export interface CanvasRepository {
   resolveAnnotation(projectId: string, annotationId: string, resolved: boolean): Promise<void>;
   getAnnotations(boardId: string): Promise<AnnotationInfo[]>;
   addArrow(projectId: string, boardId: string, fromNodeId: string, toNodeId: string, color?: string): Promise<void>;
+  undo(projectId: string, boardId: string): Promise<boolean>;
 }
 
 export interface AnnotationInfo {
