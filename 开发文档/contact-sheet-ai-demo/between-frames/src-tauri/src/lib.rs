@@ -21,6 +21,7 @@ pub mod keychain;
 pub mod login_guard;
 pub mod photo_inspection;
 pub mod product_links;
+pub mod publishing;
 mod resource_commands;
 pub mod seed_demo;
 pub mod shared_cloud;
