@@ -564,3 +564,4 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .canvas-annotation-pin{position:absolute;font-size:16px;cursor:pointer;transform:translate(-50%,-100%);filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));pointer-events:auto}
 .canvas-annotation-pin:hover{transform:translate(-50%,-100%) scale(1.2)}
 .canvas-photo-node.link-target{outline:2px dashed var(--accent,#6c5ce7);outline-offset:2px}
+.canvas-surface.ink-mode{cursor:crosshair}

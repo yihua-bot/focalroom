@@ -822,3 +822,12 @@ pub async fn canvas_undo(
         .undo_canvas(&project_id, &crate::canvas::UndoCanvasCommand { board_id })
         .await
 }
+
+#[tauri::command]
+pub async fn canvas_add_ink(
+    state: State<'_, Backend>,
+    project_id: String,
+    cmd: crate::canvas::AddInkCommand,
+) -> Result<crate::canvas::CanvasNode> {
+    state.store.add_ink(&project_id, &cmd).await
+}

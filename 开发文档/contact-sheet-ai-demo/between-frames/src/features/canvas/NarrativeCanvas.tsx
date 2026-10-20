@@ -33,6 +33,8 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
   const [dragging, setDragging] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationInfo[]>([]);
   const [linking, setLinking] = useState<string | null>(null);
+  const [inkMode, setInkMode] = useState(false);
+  const [inkPoints, setInkPoints] = useState<Array<{x:number;y:number}>>([]);
   const dragStart = useRef<{ x: number; y: number; nodeX: number; nodeY: number } | null>(null);
   const panning = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -145,6 +147,16 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (inkMode && e.button === 0) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const bx = (e.clientX - rect.left - pan.x) / zoom;
+        const by = (e.clientY - rect.top - pan.y) / zoom;
+        setInkPoints([{ x: bx, y: by }]);
+      }
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      return;
+    }
     if (e.button === 1 || e.button === 0) {
       const target = e.target as HTMLElement;
       const nodeEl = (target as HTMLElement).closest('[data-node-id]');
@@ -163,6 +175,15 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (inkMode && inkPoints.length > 0) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const bx = (e.clientX - rect.left - pan.x) / zoom;
+        const by = (e.clientY - rect.top - pan.y) / zoom;
+        setInkPoints(prev => [...prev, { x: bx, y: by }]);
+      }
+      return;
+    }
     if (dragging && dragStart.current) {
       const dx = (e.clientX - dragStart.current.x) / zoom;
       const dy = (e.clientY - dragStart.current.y) / zoom;
@@ -180,6 +201,19 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
   };
 
   const onPointerUp = async () => {
+    if (inkMode && inkPoints.length > 1 && repository && activeBoard) {
+      const xs = inkPoints.map(p => p.x);
+      const ys = inkPoints.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      await repository.canvas.addInk(projectId, activeBoard,
+        minX, minY, maxX - minX, maxY - minY, inkPoints);
+      setInkPoints([]);
+      const ns = await repository.canvas.getNodes(activeBoard);
+      setNodes(ns);
+      return;
+    }
+    setInkPoints([]);
     if (dragging && dragStart.current && repository && activeBoard) {
       const node = nodes.find(n => n.id === dragging);
       const start = dragStart.current;
@@ -228,11 +262,12 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
         <Button size="small" disabled={!activeBoard} onClick={() => void addSticky()}>📝 便签</Button>
         <Button size="small" disabled={!activeBoard} onClick={() => setLinking(l => l ? null : l)}>{linking ? '🔗 点击目标...' : '🔗 连接'}</Button>
         <Button size="small" disabled={!activeBoard} onClick={() => void undoCanvas()}>Undo</Button>
+        <Button size="small" disabled={!activeBoard} onClick={() => setInkMode(!inkMode)}>{inkMode ? '✏️ Drawing' : '✏️ Brush'}</Button>
         <span className="canvas-zoom-label">{Math.round(zoom * 100)}%</span>
       </div>
       <div
         ref={containerRef}
-        className="canvas-surface"
+        className={`canvas-surface ${inkMode ? "ink-mode" : ""}`}
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -268,6 +303,22 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
               className={`canvas-sticky-node ${dragging === node.id ? 'dragging' : ''}`}
               style={{ left: node.x, top: node.y, width: node.width, height: node.height, zIndex: node.zOrder, background: color }}
             >{content}</div>;
+          })}
+          {inkPoints.length > 1 && (() => {
+            const d = inkPoints.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(' ');
+            return <svg style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999, overflow: 'visible' }}>
+              <path d={d} fill="none" stroke="#ff6b6b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>;
+          })()}
+          {nodes.filter(n => n.nodeType === 'ink').map(ink => {
+            const pts = ink.contentJson ? (() => { try { return (JSON.parse(ink.contentJson!).points ?? []) as Array<{x:number;y:number}>; } catch { return []; } })() : [];
+            if (pts.length < 2) return null;
+            const d = pts.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(' ');
+            const color = ink.styleJson ? (() => { try { return JSON.parse(ink.styleJson!).color ?? '#ff6b6b'; } catch { return '#ff6b6b'; } })() : '#ff6b6b';
+            const sw = ink.styleJson ? (() => { try { return JSON.parse(ink.styleJson!).strokeWidth ?? 2; } catch { return 2; } })() : 2;
+            return <svg key={ink.id} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: ink.zOrder, overflow: 'visible' }}>
+              <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>;
           })}
           {nodes.filter(n => n.nodeType === 'arrow').map(arrow => {
             const ids = arrow.childrenJson ? (() => { try { return JSON.parse(arrow.childrenJson!) as string[]; } catch { return null; } })() : null;
@@ -314,6 +365,7 @@ export interface CanvasRepository {
   getAnnotations(boardId: string): Promise<AnnotationInfo[]>;
   addArrow(projectId: string, boardId: string, fromNodeId: string, toNodeId: string, color?: string): Promise<void>;
   undo(projectId: string, boardId: string): Promise<boolean>;
+  addInk(projectId: string, boardId: string, x: number, y: number, w: number, h: number, points: Array<{x:number;y:number;pressure?:number}>, color?: string, strokeWidth?: number): Promise<void>;
 }
 
 export interface AnnotationInfo {

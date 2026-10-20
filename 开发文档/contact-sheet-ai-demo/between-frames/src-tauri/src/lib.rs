@@ -186,7 +186,8 @@ pub fn run() {
             commands::canvas_resolve_annotation,
             commands::canvas_get_annotations,
             commands::canvas_add_arrow,
-            commands::canvas_undo
+            commands::canvas_undo,
+            commands::canvas_add_ink
         ])
         .run(tauri::generate_context!())
         .expect("无法启动 FocalRoom 桌面应用");

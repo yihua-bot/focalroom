@@ -875,3 +875,100 @@ impl Store {
         CommandHandler::new(self).undo_canvas(project, cmd).await
     }
 }
+
+// ── Ink（画笔/涂鸦）──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddInkCommand {
+    pub board_id: String,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    /// 矢量路径点（Board 坐标系）：[{x,y,pressure}, ...]
+    pub points: Vec<InkPoint>,
+    pub color: Option<String>,
+    pub stroke_width: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InkPoint {
+    pub x: f64,
+    pub y: f64,
+    pub pressure: Option<f64>,
+}
+
+impl CommandHandler<'_> {
+    /// 添加画笔笔迹（矢量路径点，存储在 Board 坐标系）。
+    pub async fn add_ink(&self, project: &str, cmd: &AddInkCommand) -> Result<CanvasNode> {
+        if cmd.points.is_empty() || cmd.points.len() > 10_000 {
+            return Err(AppError::new("VALIDATION_ERROR", "笔迹须为 1–10000 个点"));
+        }
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let board: Option<String> =
+            sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
+                .bind(&cmd.board_id)
+                .bind(project)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if board.is_none() {
+            return Err(AppError::new("NOT_FOUND", "画布不存在"));
+        }
+        let id = domain::id();
+        let now = domain::timestamp();
+        let z: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
+        )
+        .bind(&cmd.board_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        // content_json 存路径点；style_json 存颜色/线宽
+        let content = serde_json::to_string(&serde_json::json!({
+            "points": cmd.points,
+        }))
+        .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+        let style = serde_json::to_string(&serde_json::json!({
+            "color": cmd.color.clone().unwrap_or_else(|| "#ff6b6b".to_owned()),
+            "strokeWidth": cmd.stroke_width.unwrap_or(2.0),
+        }))
+        .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+        sqlx::query(
+            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,style_json,created_at,updated_at) VALUES(?,?, 'ink',?,?,?,?,?,0,?,?,?,?)",
+        )
+        .bind(&id).bind(&cmd.board_id)
+        .bind(cmd.x).bind(cmd.y).bind(cmd.width).bind(cmd.height)
+        .bind(z).bind(&content).bind(&style)
+        .bind(&now).bind(&now)
+        .execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(CanvasNode {
+            id,
+            board_id: cmd.board_id.clone(),
+            node_type: "ink".to_owned(),
+            x: cmd.x,
+            y: cmd.y,
+            width: cmd.width,
+            height: cmd.height,
+            rotation: 0.0,
+            z_order: z,
+            asset_id: None,
+            rendition_ref: None,
+            content_json: Some(content),
+            style_json: Some(style),
+            children_json: None,
+            locked: false,
+            visible: true,
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+}
+
+impl Store {
+    pub async fn add_ink(&self, project: &str, cmd: &AddInkCommand) -> Result<CanvasNode> {
+        CommandHandler::new(self).add_ink(project, cmd).await
+    }
+}
