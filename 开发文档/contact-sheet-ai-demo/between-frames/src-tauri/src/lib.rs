@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod canvas;
 pub mod cloud_auth;
 pub mod cloud_credentials;
 pub mod color_engine;
