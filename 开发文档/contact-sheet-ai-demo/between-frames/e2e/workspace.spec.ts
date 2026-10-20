@@ -119,7 +119,11 @@ test('序列把手支持 Space 与方向键拖放，不与全局快捷键冲突'
   // dnd-kit 激活后在下一帧测量可放置区域，等待真实渲染生命周期。
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await page.keyboard.press('ArrowRight');
-  await expect.poll(() => page.locator('.sequence-card.dragging').evaluate(element => getComputedStyle(element).transform)).not.toBe('matrix(1, 0, 0, 1, 0, 0)');
+  // 等待真实换位量级的位移（≥ 卡宽一半），慢机上微小抖动不算——否则 Space 原地放置导致顺序不变。
+  await expect.poll(() => page.locator('.sequence-card.dragging').evaluate(element => {
+    const m = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    return Math.abs(m.m41) >= (element.getBoundingClientRect().width / 2) ? 'swapped' : 'pending';
+  }), { timeout: 10_000 }).toBe('swapped');
   await page.keyboard.press('Space');
   await expect(page.getByTestId('sequence-card').nth(1)).toContainText('某个上午');
   await expect(page.getByTestId('sequence-card')).toHaveCount(3);
