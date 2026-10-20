@@ -1,5 +1,6 @@
 import { requestMagicCode, verifyMagicCode, type MagicEmailDelivery } from "./magic-login.ts";
 import { loginWithGoogle } from "./google-login.ts";
+import { BoardService } from "./boards.ts";
 import { DesktopLoginService } from "./desktop-login.ts";
 import { HostedAiService, type HostedAiConfig, type HostedAiTransport } from "./hosted-ai.ts";
 import { AccountRecoveryService, type AccountEmailDelivery } from "./account-recovery.ts";
@@ -35,6 +36,7 @@ export class CloudService {
   readonly store: PreviewStore;
   readonly accounts: AccountRecoveryService;
   readonly desktop: DesktopLoginService;
+  readonly boards: BoardService;
   readonly ai: HostedAiService;
   private readonly magicEmail?: MagicEmailDelivery;
   constructor(pool: Pool, origin: string, store: PreviewStore, email?: AccountEmailDelivery, magicEmail?: MagicEmailDelivery, hostedAi?: {config?:HostedAiConfig;transport?:HostedAiTransport}) {

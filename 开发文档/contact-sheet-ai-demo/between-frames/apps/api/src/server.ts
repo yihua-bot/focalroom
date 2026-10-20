@@ -99,6 +99,18 @@ class ApiController {
       res.setHeader("Set-Cookie", s.auth.cookie(response.token));
       return response;
     }
+    if (path === "/boards" && req.method === "GET") {
+      const u = await s.auth.authenticate(headers, false);
+      return s.boards.list(new URL(req.url ?? "", `http://${req.headers.host}`).searchParams.get("project") ?? "");
+    }
+    if (path === "/boards" && req.method === "POST") {
+      const u = await s.auth.authenticate(headers, true);
+      return s.boards.create(u.id, String(req.body?.projectId ?? ""), String(req.body?.title ?? ""));
+    }
+    if (path === "/boards/annotations" && req.method === "POST") {
+      const u = await s.auth.authenticate(headers, true);
+      return { id: await s.boards.annotate(u.id, String(req.body?.boardId ?? ""), Number(req.body?.x ?? 0), Number(req.body?.y ?? 0), String(req.body?.body ?? "")) };
+    }
     if (path === "/auth/profile" && req.method === "PATCH") {
       const u = await s.auth.authenticate(headers, true);
       return s.updateProfile(u, req.body);
