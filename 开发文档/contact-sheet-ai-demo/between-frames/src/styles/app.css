@@ -565,3 +565,22 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .canvas-annotation-pin:hover{transform:translate(-50%,-100%) scale(1.2)}
 .canvas-photo-node.link-target{outline:2px dashed var(--accent,#6c5ce7);outline-offset:2px}
 .canvas-surface.ink-mode{cursor:crosshair}
+
+/* G7 Publication Panel */
+.publication-panel{display:flex;flex-direction:column;gap:16px;padding:20px}
+.publication-panel h3{margin:0}
+.publication-create{display:flex;gap:8px}
+.publication-create input{flex:1;background:var(--bg-secondary,#14141f);border:1px solid var(--border,#2a2a40);border-radius:6px;color:var(--text,#e8e8f0);font-size:13px;padding:8px 12px}
+.publication-card{background:var(--bg-secondary,#1a1a28);border:1px solid var(--border,#2a2a40);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.publication-card-head{display:flex;justify-content:space-between;align-items:center}
+.publication-state{font-size:11px;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px}
+.publication-state.draft{background:rgba(108,92,231,.2);color:#a29bfe}
+.publication-state.in_review{background:rgba(253,121,168,.2);color:#fd79a8}
+.publication-state.finalized{background:rgba(46,204,113,.2);color:#2ecc71}
+.publication-state.delivered{background:rgba(52,152,219,.2);color:#3498db}
+.publication-card-meta{font-size:12px;color:var(--text2,#888)}
+.publication-actions{display:flex;gap:8px;align-items:center}
+.publication-actions select{background:var(--bg-secondary,#14141f);color:var(--text,#e8e8f0);border:1px solid var(--border,#2a2a40);border-radius:4px;padding:4px 8px;font-size:12px}
+.publication-hint{color:var(--text2,#888);font-size:13px;text-align:center;padding:24px 0}
+.publication-notice{color:#2ecc71;font-size:13px}
+.publication-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2,#888)}
