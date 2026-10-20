@@ -37,6 +37,7 @@ async function migrations() {
       "0013_desktop_login.sql",
       "0014_user_avatar.sql",
       "0015_hosted_ai.sql",
+      "0017_cloud_asset_domain.sql",
     ].map(
       async (name) => {
         const sql = await readFile(
