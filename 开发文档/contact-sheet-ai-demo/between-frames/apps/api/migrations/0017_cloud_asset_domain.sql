@@ -4,7 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS fr_source_assets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id UUID NOT NULL REFERENCES fr_projects(id) ON DELETE CASCADE,
+    project_id TEXT NOT NULL REFERENCES fr_projects(id) ON DELETE CASCADE,
     photo_id TEXT NOT NULL,                    -- 桌面端 source_asset id（与本地同值）
     content_sha256 TEXT NOT NULL,
     original_locator JSONB NOT NULL DEFAULT '[]',
@@ -21,7 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_fr_source_assets_project ON fr_source_assets(proj
 CREATE TABLE IF NOT EXISTS fr_asset_aliases (
     photo_id TEXT PRIMARY KEY,
     asset_id UUID NOT NULL REFERENCES fr_source_assets(id) ON DELETE CASCADE,
-    project_id UUID NOT NULL REFERENCES fr_projects(id) ON DELETE CASCADE
+    project_id TEXT NOT NULL REFERENCES fr_projects(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_fr_asset_aliases_asset ON fr_asset_aliases(asset_id);
 
