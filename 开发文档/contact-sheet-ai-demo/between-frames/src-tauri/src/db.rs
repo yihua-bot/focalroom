@@ -95,6 +95,8 @@ impl Store {
             .run(&pool)
             .await
             .map_err(|error| AppError::new("MIGRATION", error.to_string()))?;
+        // G1 回填：photos → source_assets + alias + representations（幂等：已回填跳过）。
+        Self::backfill_asset_domain(&pool).await?;
         Ok(Self { pool })
     }
 
@@ -409,4 +411,96 @@ pub(crate) async fn write_sequence(
             .await?;
     }
     Ok(())
+}
+
+impl Store {
+    /// G1 expand→backfill：把 photos 行提取到资产域五张表。
+    /// 幂等：photo id 已在 source_assets 中则跳过；不修改 photos 任何列。
+    async fn backfill_asset_domain(pool: &SqlitePool) -> Result<()> {
+        let migrated: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM source_assets")
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0);
+        let photos: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photos")
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0);
+        if migrated >= photos {
+            return Ok(());
+        }
+        let rows = sqlx::query(
+            "SELECT id, project_id, content_sha256, original_path, file_size, width, height, thumbnail_path, preview_path, created_at FROM photos",
+        )
+        .fetch_all(pool)
+        .await?;
+        let now = crate::domain::timestamp();
+        for row in rows {
+            let id: String = row.get("id");
+            // 已迁移（部分回填后重跑）
+            let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM source_assets WHERE id=?")
+                .bind(&id)
+                .fetch_one(pool)
+                .await
+                .unwrap_or(0);
+            if exists > 0 {
+                continue;
+            }
+            let project_id: String = row.get("project_id");
+            let hash: String = row.get("content_sha256");
+            let original_path: String = row.get("original_path");
+            let file_size: i64 = row.get("file_size");
+            let width: i64 = row.get("width");
+            let height: i64 = row.get("height");
+            let thumbnail: String = row.get("thumbnail_path");
+            let preview: String = row.get("preview_path");
+            let created_at: String = row.get("created_at");
+            let locator = format!(
+                r#"[{{"path":{path},"kind":"file"}}]"#,
+                path = serde_json::json!(original_path)
+            );
+            let format = original_path
+                .rsplit('.')
+                .next()
+                .unwrap_or("")
+                .to_lowercase();
+            let format = if format.len() > 10 {
+                "unknown".to_owned()
+            } else {
+                format
+            };
+            let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+            sqlx::query(
+                "INSERT INTO source_assets(id, project_id, content_sha256, original_locator, file_size, width, height, format, source_profile_digest, source_hash_verified_at, created_at) VALUES(?,?,?,?,?,?,?,?,NULL,NULL,?)",
+            )
+            .bind(&id).bind(&project_id).bind(&hash).bind(&locator)
+            .bind(file_size).bind(width).bind(height).bind(&format).bind(&created_at)
+            .execute(&mut *tx).await?;
+            sqlx::query("INSERT INTO asset_aliases(photo_id, asset_id) VALUES(?,?)")
+                .bind(&id)
+                .bind(&id)
+                .execute(&mut *tx)
+                .await?;
+            // 默认编辑变体（原名）
+            let variant_id = crate::domain::id();
+            sqlx::query(
+                "INSERT INTO edit_variants(id, asset_id, name, external_software, external_variant_id, is_current, created_at) VALUES(?,?,?,NULL,NULL,1,?)",
+            )
+            .bind(&variant_id).bind(&id).bind("original").bind(&now)
+            .execute(&mut *tx).await?;
+            // 两条 representation：thumbnail + display_proxy
+            for (kind, path) in [("thumbnail", &thumbnail), ("display_proxy", &preview)] {
+                let size = std::fs::metadata(path.as_str())
+                    .map(|m| m.len() as i64)
+                    .unwrap_or(0);
+                sqlx::query(
+                    "INSERT INTO asset_representations(id, asset_id, kind, algorithm, width, height, file_path, file_size, profile_digest, created_at) VALUES(?,?,?,?,?,?,?,?,NULL,?)",
+                )
+                .bind(crate::domain::id()).bind(&id).bind(kind).bind("image_pipeline_v1")
+                .bind(width / 4).bind(height / 4).bind(path.as_str()).bind(size).bind(&now)
+                .execute(&mut *tx).await?;
+            }
+            tx.commit().await?;
+        }
+        Ok(())
+    }
 }
