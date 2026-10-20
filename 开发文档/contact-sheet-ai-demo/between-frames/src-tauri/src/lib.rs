@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod cloud_auth;
 pub mod cloud_credentials;
+pub mod color_engine;
 mod command_audit;
 pub mod command_handler;
 mod commands;
