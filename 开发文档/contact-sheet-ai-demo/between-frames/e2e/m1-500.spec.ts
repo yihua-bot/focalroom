@@ -52,13 +52,7 @@ async function restartProcess(page: Page, beforeRestart?: () => Promise<void>) {
   // 关闭页面轮询后退出测试子进程，再以同一临时目录启动全新的 Rust 进程。
   await page.goto('about:blank');
   const inFlight = beforeRestart?.();
-  // 慢机上服务端重启窗口可能瞬态拒绝（空错误/ restarting），有限重试不掩盖逻辑失败。
-  let restarted: { previousPid: number; pid: number; pendingAtRestart: number } | null = null;
-  for (let attempt = 0; attempt < 3 && !restarted; attempt++) {
-    try { restarted = await rpc<{ previousPid: number; pid: number; pendingAtRestart: number }>('test_process_restart'); }
-    catch { await page.waitForTimeout(2500); }
-  }
-  if (!restarted) throw new Error('test_process_restart 重试后仍失败');
+  const restarted = await rpc<{ previousPid: number; pid: number; pendingAtRestart: number }>('test_process_restart');
   await inFlight;
   expect(restarted.pid).not.toBe(restarted.previousPid);
   await page.goto(url);
