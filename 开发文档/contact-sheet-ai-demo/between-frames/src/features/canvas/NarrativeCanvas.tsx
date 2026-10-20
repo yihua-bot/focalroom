@@ -13,6 +13,8 @@ export interface CanvasNodeInfo {
 
 interface CanvasPhoto extends CanvasNodeInfo {
   thumbnailPath?: string;
+  contentJson?: string | null;
+  styleJson?: string | null;
 }
 
 /** 无限画布：拖拽平移 + 滚轮缩放 + 照片节点拖拽放置。 */
@@ -85,6 +87,14 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
       await repository.canvas.placePhoto(projectId, activeBoard, selectedPhotoIds[i],
         startX + i * 240, 50, 220, 160);
     }
+    await loadBoards();
+  };
+
+  const addSticky = async () => {
+    if (!repository || !activeBoard) return;
+    const x = -pan.x / zoom + 60;
+    const y = -pan.y / zoom + 60;
+    await repository.canvas.addText(projectId, activeBoard, 'sticky', x, y, 200, 120, '双击编辑…', '#ffe082');
     await loadBoards();
   };
 
@@ -173,6 +183,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
         <Button size="small" disabled={!activeBoard || selectedPhotoIds.length === 0} onClick={() => void placeSelected()}>
           放入选中照片（{selectedPhotoIds.length}）
         </Button>
+        <Button size="small" disabled={!activeBoard} onClick={() => void addSticky()}>📝 便签</Button>
         <span className="canvas-zoom-label">{Math.round(zoom * 100)}%</span>
       </div>
       <div
@@ -204,6 +215,14 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
                 : <div className="canvas-photo-placeholder">📷</div>}
             </div>
           ))}
+          {nodes.filter(n => n.nodeType === 'sticky' || n.nodeType === 'text').map(node => {
+            const content = node.contentJson ? (() => { try { return JSON.parse(node.contentJson!).text ?? ''; } catch { return ''; } })() : '';
+            const color = node.styleJson ? (() => { try { return JSON.parse(node.styleJson!).color ?? '#ffe082'; } catch { return '#ffe082'; } })() : '#ffe082';
+            return <div key={node.id} data-node-id={node.id}
+              className={`canvas-sticky-node ${dragging === node.id ? 'dragging' : ''}`}
+              style={{ left: node.x, top: node.y, width: node.width, height: node.height, zIndex: node.zOrder, background: color }}
+            >{content}</div>;
+          })}
           {nodes.length === 0 && activeBoard && (
             <div className="canvas-hint" style={{ left: -pan.x / zoom + 40, top: -pan.y / zoom + 40 }}>
               从工具栏选照片放置到画布
@@ -221,4 +240,6 @@ export interface CanvasRepository {
   getNodes(boardId: string): Promise<CanvasPhoto[]>;
   placePhoto(projectId: string, boardId: string, assetId: string, x: number, y: number, w: number, h: number): Promise<CanvasNodeInfo>;
   moveNodes(projectId: string, boardId: string, nodeIds: string[], dx: number, dy: number): Promise<void>;
+  addText(projectId: string, boardId: string, nodeType: string, x: number, y: number, w: number, h: number, content: string, color?: string): Promise<CanvasNodeInfo>;
+  deleteNode(projectId: string, boardId: string, nodeId: string): Promise<void>;
 }

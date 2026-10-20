@@ -406,3 +406,123 @@ mod tests {
         assert!(result.is_err());
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddTextNodeCommand {
+    pub board_id: String,
+    pub node_type: String, // "text" | "sticky" | "shape"
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub content: String,
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteNodeCommand {
+    pub board_id: String,
+    pub node_id: String,
+}
+
+impl CommandHandler<'_> {
+    /// 添加文本/便签/形状节点。
+    pub async fn add_text_node(
+        &self,
+        project: &str,
+        cmd: &AddTextNodeCommand,
+    ) -> Result<CanvasNode> {
+        if !matches!(cmd.node_type.as_str(), "text" | "sticky" | "shape") {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "节点类型须为 text/sticky/shape",
+            ));
+        }
+        if cmd.content.len() > 5000 {
+            return Err(AppError::new("VALIDATION_ERROR", "内容不超过 5000 字符"));
+        }
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let board: Option<String> =
+            sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
+                .bind(&cmd.board_id)
+                .bind(project)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if board.is_none() {
+            return Err(AppError::new("NOT_FOUND", "画布不存在"));
+        }
+        let id = domain::id();
+        let now = domain::timestamp();
+        let z: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
+        )
+        .bind(&cmd.board_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let content_json = serde_json::to_string(&serde_json::json!({"text": cmd.content}))
+            .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+        let style_json = cmd.color.as_ref().map(|c| format!("{{\"color\":\"{c}\"}}"));
+        sqlx::query(
+            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,style_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,0,?,?,?,?)",
+        )
+        .bind(&id).bind(&cmd.board_id).bind(&cmd.node_type)
+        .bind(cmd.x).bind(cmd.y).bind(cmd.width).bind(cmd.height)
+        .bind(z).bind(&content_json).bind(&style_json)
+        .bind(&now).bind(&now)
+        .execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(CanvasNode {
+            id,
+            board_id: cmd.board_id.clone(),
+            node_type: cmd.node_type.clone(),
+            x: cmd.x,
+            y: cmd.y,
+            width: cmd.width,
+            height: cmd.height,
+            rotation: 0.0,
+            z_order: z,
+            asset_id: None,
+            rendition_ref: None,
+            content_json: Some(content_json),
+            style_json,
+            children_json: None,
+            locked: false,
+            visible: true,
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
+    /// 删除节点（软删——visible=0，保留历史关联）。
+    pub async fn delete_node(&self, project: &str, cmd: &DeleteNodeCommand) -> Result<()> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let result = sqlx::query(
+            "UPDATE canvas_nodes SET visible=0, updated_at=? WHERE id=? AND board_id=? AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+        )
+        .bind(domain::timestamp())
+        .bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
+        .execute(&mut *tx).await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::new("NOT_FOUND", "节点不存在"));
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+}
+
+impl Store {
+    pub async fn add_text_node(
+        &self,
+        project: &str,
+        cmd: &AddTextNodeCommand,
+    ) -> Result<CanvasNode> {
+        CommandHandler::new(self).add_text_node(project, cmd).await
+    }
+    pub async fn delete_node(&self, project: &str, cmd: &DeleteNodeCommand) -> Result<()> {
+        CommandHandler::new(self).delete_node(project, cmd).await
+    }
+}

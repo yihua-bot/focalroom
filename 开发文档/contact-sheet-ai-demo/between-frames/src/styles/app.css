@@ -559,3 +559,5 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .canvas-photo-placeholder{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:2rem;color:var(--text2,#555)}
 .canvas-hint{position:absolute;color:var(--text2,#666);font-size:13px;pointer-events:none}
 .canvas-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2,#888)}
+.canvas-sticky-node{position:absolute;padding:12px;border-radius:8px;font-size:13px;line-height:1.5;box-shadow:0 4px 12px rgba(0,0,0,.25);cursor:move;user-select:none;overflow:hidden;word-wrap:break-word}
+.canvas-sticky-node.dragging{box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:.9;z-index:9999!important}

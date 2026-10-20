@@ -715,27 +715,9 @@ pub async fn canvas_list_boards(
 pub async fn canvas_place_photo(
     state: State<'_, Backend>,
     project_id: String,
-    board_id: String,
-    asset_id: String,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
+    cmd: crate::canvas::PlacePhotoNodeCommand,
 ) -> Result<crate::canvas::CanvasNode> {
-    state
-        .store
-        .place_photo_node(
-            &project_id,
-            &crate::canvas::PlacePhotoNodeCommand {
-                board_id,
-                asset_id,
-                x,
-                y,
-                width,
-                height,
-            },
-        )
-        .await
+    state.store.place_photo_node(&project_id, &cmd).await
 }
 
 #[tauri::command]
@@ -767,4 +749,29 @@ pub async fn canvas_get_nodes(
     board_id: String,
 ) -> Result<Vec<crate::canvas::CanvasNode>> {
     state.store.get_board_nodes(&board_id).await
+}
+
+#[tauri::command]
+pub async fn canvas_add_text(
+    state: State<'_, Backend>,
+    project_id: String,
+    cmd: crate::canvas::AddTextNodeCommand,
+) -> Result<crate::canvas::CanvasNode> {
+    state.store.add_text_node(&project_id, &cmd).await
+}
+
+#[tauri::command]
+pub async fn canvas_delete_node(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+    node_id: String,
+) -> Result<()> {
+    state
+        .store
+        .delete_node(
+            &project_id,
+            &crate::canvas::DeleteNodeCommand { board_id, node_id },
+        )
+        .await
 }
