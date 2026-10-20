@@ -174,7 +174,12 @@ pub fn run() {
             commands::cloud_login_profile,
             commands::cloud_login_cancel,
             commands::cloud_login_logout,
-            commands::share_project
+            commands::share_project,
+            commands::canvas_create_board,
+            commands::canvas_list_boards,
+            commands::canvas_place_photo,
+            commands::canvas_move_nodes,
+            commands::canvas_get_nodes
         ])
         .run(tauri::generate_context!())
         .expect("无法启动 FocalRoom 桌面应用");

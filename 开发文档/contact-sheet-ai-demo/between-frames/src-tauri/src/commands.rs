@@ -691,3 +691,80 @@ pub async fn cloud_login_logout(app: AppHandle, state: State<'_, Backend>) -> Re
     let _ = app.emit("cloud-login-updated", ());
     result
 }
+
+// ── G3 Narrative Canvas IPC ──
+
+#[tauri::command]
+pub async fn canvas_create_board(
+    state: State<'_, Backend>,
+    project_id: String,
+    title: String,
+) -> Result<crate::canvas::Board> {
+    state.store.create_board(&project_id, &title).await
+}
+
+#[tauri::command]
+pub async fn canvas_list_boards(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<Vec<crate::canvas::Board>> {
+    state.store.list_boards(&project_id).await
+}
+
+#[tauri::command]
+pub async fn canvas_place_photo(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+    asset_id: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<crate::canvas::CanvasNode> {
+    state
+        .store
+        .place_photo_node(
+            &project_id,
+            &crate::canvas::PlacePhotoNodeCommand {
+                board_id,
+                asset_id,
+                x,
+                y,
+                width,
+                height,
+            },
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn canvas_move_nodes(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+    node_ids: Vec<String>,
+    dx: f64,
+    dy: f64,
+) -> Result<()> {
+    state
+        .store
+        .move_nodes(
+            &project_id,
+            &crate::canvas::MoveNodesCommand {
+                board_id,
+                node_ids,
+                dx,
+                dy,
+            },
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn canvas_get_nodes(
+    state: State<'_, Backend>,
+    board_id: String,
+) -> Result<Vec<crate::canvas::CanvasNode>> {
+    state.store.get_board_nodes(&board_id).await
+}
