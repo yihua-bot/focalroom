@@ -17,33 +17,39 @@ function startHarness() {
   const worker = spawn(resolve('src-tauri', process.env.CARGO_TARGET_DIR || 'target', buildProfile, 'm1-harness'), [root, fixtureProfile], { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, BETWEEN_FRAMES_OPENAI_API_KEY: '' } });
   createInterface({ input: worker.stdout }).on('line', line => {
     const result = JSON.parse(line);
-    pending.get(result.id)?.(result); pending.delete(result.id);
+    const request = pending.get(result.id);
+    pending.delete(result.id);
+    request?.resolve(result);
   });
   worker.on('exit', () => { if (!restarting) { server.close(); process.exit(); } });
   return worker;
 }
 let child = startHarness();
 async function restartHarness() {
-  if (pending.size || restarting) throw new Error('test harness is busy');
+  if (restarting) throw new Error('test harness is restarting');
   restarting = true;
   const previousPid = child.pid;
+  const pendingAtRestart = pending.size;
   originalGrants.clear();
   try {
+    // 页面关闭会取消浏览器请求，但已进入 stdio 的 RPC 仍需完成再关闭旧进程。
+    await Promise.all([...pending.values()].map(request => request.promise));
     const stopped = new Promise(resolve => child.once('exit', resolve));
     child.stdin.end();
     await stopped;
     child = startHarness();
     const ready = await rpc('test_fixture_info', {});
     if (!ready.ok) throw new Error('restarted fixtures not ready');
-    return { previousPid, pid: child.pid };
+    return { previousPid, pid: child.pid, pendingAtRestart };
   } finally { restarting = false; }
 }
 function rpc(command, args) {
-  return new Promise(resolve => {
-    const id = ++sequence;
-    pending.set(id, resolve);
-    child.stdin.write(JSON.stringify({ id, command, args }) + '\n');
-  });
+  const id = ++sequence;
+  let complete;
+  const promise = new Promise(resolve => { complete = resolve; });
+  pending.set(id, { promise, resolve: complete });
+  child.stdin.write(JSON.stringify({ id, command, args }) + '\n');
+  return promise;
 }
 const server = createServer(async (request, response) => {
   const origin = request.headers.origin;
@@ -54,7 +60,10 @@ const server = createServer(async (request, response) => {
   if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return; }
   try {
     const url = new URL(request.url, 'http://localhost:1422');
-    if (url.pathname === '/health') { const ready = await rpc('test_fixture_info', {}); if (!ready.ok) throw new Error('test fixtures not ready'); response.end('ready'); return; }
+    if (url.pathname === '/health') {
+      if (restarting) { response.writeHead(503); response.end('test harness restarting'); return; }
+      const ready = await rpc('test_fixture_info', {}); if (!ready.ok) throw new Error('test fixtures not ready'); response.end('ready'); return;
+    }
     if (url.pathname === '/asset') {
       const path = resolve(url.searchParams.get('path') || '');
       if (!(path.startsWith(root + '/cache/') && path.endsWith('.jpg')) && !originalGrants.has(path)) { response.writeHead(403); response.end(); return; }
@@ -63,13 +72,13 @@ const server = createServer(async (request, response) => {
     if (url.pathname !== '/rpc' || request.method !== 'POST' || request.headers['content-type'] !== 'application/json') { response.writeHead(404); response.end(); return; }
     let body = ''; for await (const chunk of request) { body += chunk; if (body.length > 100_000) throw new Error('request too large'); }
     const { command, args } = JSON.parse(body);
-    if (restarting) { response.writeHead(503); response.end('test harness restarting'); return; }
+    if (restarting) { response.writeHead(503, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ ok: false, error: { message: 'test harness restarting' } })); return; }
     const result = command === 'test_process_restart'
       ? { ok: true, value: await restartHarness() }
       : await rpc(command, args);
     if (command === 'get_original_photo' && result.ok) originalGrants.add(result.value.path ?? result.value);
     response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(result));
-  } catch (error) { response.writeHead(500); response.end(JSON.stringify({ error: String(error) })); }
+  } catch (error) { response.writeHead(500, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ ok: false, error: { message: String(error) } })); }
 });
 server.listen(1422, '127.0.0.1', () => process.stdout.write(`测试服务 http://localhost:1422（${root}）\n`));
 process.on('SIGTERM', () => { child.kill(); server.close(); });

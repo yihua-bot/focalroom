@@ -1,0 +1,17 @@
+
+> between-frames@0.1.0 test:m1-gui
+> bash "scripts/verify-m1-gui.sh" --grep 异常 GUI
+
+    Finished `release` profile [optimized] target(s) in 0.19s
+[WebServer] (node:92190) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:92192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:92197) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/m1-500.spec.ts:274:1 › M1 异常 GUI：重复、损坏、编码异常、超大图、取消保留已提交和失联重连 (3.9s)
+
+  1 passed (7.9s)

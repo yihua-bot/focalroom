@@ -47,11 +47,19 @@ async function startImport(page: Page, folder = true) {
   await page.getByRole('button', { name: '导入照片', exact: true }).first().click();
   await page.getByRole('button', { name: folder ? '选择文件夹' : '选择照片', exact: true }).click();
 }
-async function restartProcess(page: Page) {
+async function restartProcess(page: Page, beforeRestart?: () => Promise<void>) {
   const url = page.url();
   // 关闭页面轮询后退出测试子进程，再以同一临时目录启动全新的 Rust 进程。
   await page.goto('about:blank');
-  const restarted = await rpc<{ previousPid: number; pid: number }>('test_process_restart');
+  const inFlight = beforeRestart?.();
+  // 慢机上服务端重启窗口可能瞬态拒绝（空错误/ restarting），有限重试不掩盖逻辑失败。
+  let restarted: { previousPid: number; pid: number; pendingAtRestart: number } | null = null;
+  for (let attempt = 0; attempt < 3 && !restarted; attempt++) {
+    try { restarted = await rpc<{ previousPid: number; pid: number; pendingAtRestart: number }>('test_process_restart'); }
+    catch { await page.waitForTimeout(2500); }
+  }
+  if (!restarted) throw new Error('test_process_restart 重试后仍失败');
+  await inFlight;
   expect(restarted.pid).not.toBe(restarted.previousPid);
   await page.goto(url);
   return restarted;
@@ -285,7 +293,11 @@ test('M1 异常 GUI：重复、损坏、编码异常、超大图、取消保留�
   await page.getByRole('button', { name: '完成', exact: true }).click();
   const partial = await rpc<StoredProject>('get_project', { projectId: project.id });
   expect(partial.photos).toHaveLength(cancelled.imported);
-  const processRestart = await restartProcess(page);
+  // 同时保留真实 RPC 在途，验证重启等待旧请求结束而非拒绝 busy。
+  const processRestart = await restartProcess(page, async () => {
+    expect(await rpc<string[][]>('test_fixture_checksums')).toEqual(hashes);
+  });
+  expect(processRestart.pendingAtRestart).toBeGreaterThan(0);
   expect(await rpc<StoredProject>('get_project', { projectId: project.id })).toEqual(partial);
   // 素材 000 已提交，异常组中同内容文件须跳过；其余三张逐张说明失败。
   await page.evaluate(() => { (globalThis as TestHost).__M1_FIXTURE_SET__ = 'failures'; });
