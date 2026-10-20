@@ -41,6 +41,7 @@ export class CloudService {
   private readonly magicEmail?: MagicEmailDelivery;
   constructor(pool: Pool, origin: string, store: PreviewStore, email?: AccountEmailDelivery, magicEmail?: MagicEmailDelivery, hostedAi?: {config?:HostedAiConfig;transport?:HostedAiTransport}) {
     this.pool = pool;
+    this.boards = new BoardService(pool);
     this.magicEmail = magicEmail;
     this.auth = new AuthService(pool, origin);
     this.ai = new HostedAiService(pool,this.auth,hostedAi?.config,hostedAi?.transport);

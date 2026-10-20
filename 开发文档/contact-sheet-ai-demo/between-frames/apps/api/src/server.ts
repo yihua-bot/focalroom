@@ -100,7 +100,7 @@ class ApiController {
       return response;
     }
     if (path === "/boards" && req.method === "GET") {
-      const u = await s.auth.authenticate(headers, false);
+      await s.auth.authenticate(headers, false);
       return s.boards.list(new URL(req.url ?? "", `http://${req.headers.host}`).searchParams.get("project") ?? "");
     }
     if (path === "/boards" && req.method === "POST") {
