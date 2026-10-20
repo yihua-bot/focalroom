@@ -21,6 +21,9 @@ pub(crate) async fn execute(
         "create_board_draft" | "place_photos_on_board" | "get_board" => {
             return execute_canvas_tool(tx, name, &call.args, task).await;
         }
+        "group_nodes" | "create_sequence_draft" | "evaluate_sequence" => {
+            return execute_canvas_tool_extended(tx, name, &call.args, task).await;
+        }
         "get_project_context" => {
             let row = sqlx::query("SELECT brief,revision FROM projects WHERE id=?")
                 .bind(&task.project_id)
@@ -553,6 +556,139 @@ pub async fn execute_canvas_tool(
         _ => Err(crate::domain::AppError::new(
             "PERMISSION_DENIED",
             format!("未知画布工具 {name}"),
+        )),
+    }
+}
+
+// G4 补充：group_nodes / create_sequence_draft / evaluate_sequence
+pub async fn execute_canvas_tool_extended(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    name: &str,
+    args: &Value,
+    task: &super::types::Task,
+) -> Result<Value> {
+    match name {
+        "group_nodes" => {
+            let board_id = args["board_id"].as_str().unwrap_or("");
+            let node_ids: Vec<String> = args["node_ids"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let label = args["label"].as_str().unwrap_or("分组");
+            if node_ids.is_empty() {
+                return Err(crate::domain::AppError::new(
+                    "VALIDATION_ERROR",
+                    "至少需要一个节点",
+                ));
+            }
+            let now = crate::domain::timestamp();
+            let group_id = crate::domain::id();
+            sqlx::query("INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,children_json,created_at,updated_at) VALUES(?,?, 'group',0,0,0,0,0,0,?,?,?,?)")
+                .bind(&group_id).bind(board_id)
+                .bind(serde_json::json!({"label": label}).to_string())
+                .bind(serde_json::json!(node_ids).to_string())
+                .bind(&now).bind(&now)
+                .execute(&mut **tx).await?;
+            Ok(json!({"group_id": group_id, "label": label, "node_count": node_ids.len()}))
+        }
+        "create_sequence_draft" => {
+            let photo_ids: Vec<String> = args["photo_ids"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let title = args["title"].as_str().unwrap_or("Agent 序列草案");
+            if photo_ids.is_empty() {
+                return Err(crate::domain::AppError::new(
+                    "VALIDATION_ERROR",
+                    "至少需要一张照片",
+                ));
+            }
+            // 验证照片都在 scope 内
+            for id in &photo_ids {
+                if !task.allowed_photo_ids.contains(id) {
+                    return Err(crate::domain::AppError::new(
+                        "PERMISSION_DENIED",
+                        format!("照片 {id} 不在任务范围内"),
+                    ));
+                }
+            }
+            // 创建草案（复用现有 draft 系统）
+            let draft_id = crate::domain::id();
+            let now = crate::domain::timestamp();
+            sqlx::query(
+                "INSERT INTO drafts(id,project_id,title,created_at,updated_at) VALUES(?,?,?,?,?)",
+            )
+            .bind(&draft_id)
+            .bind(&task.project_id)
+            .bind(title)
+            .bind(&now)
+            .bind(&now)
+            .execute(&mut **tx)
+            .await?;
+            for (pos, photo_id) in photo_ids.iter().enumerate() {
+                sqlx::query("INSERT INTO draft_items(draft_id,photo_id,position,action) VALUES(?,?,?,'keep')")
+                    .bind(&draft_id).bind(photo_id).bind(pos as i64)
+                    .execute(&mut **tx).await?;
+            }
+            Ok(json!({"draft_id": draft_id, "title": title, "photo_count": photo_ids.len()}))
+        }
+        "evaluate_sequence" => {
+            let ids: Vec<String> = sqlx::query_scalar(
+                "SELECT photo_id FROM sequence_items WHERE project_id=? ORDER BY position",
+            )
+            .bind(&task.project_id)
+            .fetch_all(&mut **tx)
+            .await?;
+            if ids.is_empty() {
+                return Ok(json!({"empty": true, "message": "作品序列为空"}));
+            }
+            // 读取照片元数据做基本评估
+            let photos = super::tools::photos(tx, task).await?;
+            let total = ids.len();
+            let rated: Vec<&Value> = photos
+                .iter()
+                .filter(|p| p["rating"].as_i64().unwrap_or(0) > 0)
+                .collect();
+            let avg_rating = if !rated.is_empty() {
+                rated
+                    .iter()
+                    .map(|p| p["rating"].as_f64().unwrap_or(0.0))
+                    .sum::<f64>()
+                    / rated.len() as f64
+            } else {
+                0.0
+            };
+            // 相邻同名检测（简化重复性）
+            let names: Vec<String> = ids
+                .iter()
+                .filter_map(|id| {
+                    photos
+                        .iter()
+                        .find(|p| p["photo_id"] == *id)
+                        .and_then(|p| p["name"].as_str().map(String::from))
+                })
+                .collect();
+            let duplicates = names.windows(2).filter(|w| w[0] == w[1]).count();
+            Ok(json!({
+                "total_photos": total,
+                "avg_rating": (avg_rating * 10.0).round() / 10.0,
+                "adjacent_duplicates": duplicates,
+                "rated_count": rated.len(),
+                "diversity_score": if total > 1 { 1.0 - (duplicates as f64 / total as f64) } else { 1.0 },
+                "note": "基于元数据的结构化评估；视觉节奏需人工判断"
+            }))
+        }
+        _ => Err(crate::domain::AppError::new(
+            "PERMISSION_DENIED",
+            format!("未知扩展工具 {name}"),
         )),
     }
 }
