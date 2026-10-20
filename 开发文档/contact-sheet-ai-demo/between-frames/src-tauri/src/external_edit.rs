@@ -240,3 +240,111 @@ mod tests {
         assert!(parse_manifest(&path).is_err());
     }
 }
+
+// ── G5 Watcher：监控目录检测 Lightroom/C1 回流文件 ──
+
+/// 扫描目录中的 .focalroom-manifest.json 文件。
+pub fn find_manifests(directory: &Path) -> Vec<std::path::PathBuf> {
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(directory) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_manifest = path.is_file()
+                && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                    n == ".focalroom-manifest.json" || n.ends_with(".focalroom-manifest.json")
+                });
+            if is_manifest {
+                results.push(path);
+            }
+        }
+    }
+    results
+}
+
+/// 处理一个 manifest：解析 → 匹配 → 创建 Rendition。
+pub async fn process_manifest(store: &Store, manifest_path: &Path) -> Result<ProcessSummary> {
+    let manifest = parse_manifest(manifest_path)?;
+    let mut summary = ProcessSummary {
+        batch_id: manifest.transfer_batch_id.clone(),
+        provider: manifest.provider.clone(),
+        matched: 0,
+        ambiguous: 0,
+        unmatched: 0,
+        errors: Vec::new(),
+    };
+
+    for item in &manifest.items {
+        match store.match_manifest_item(item).await {
+            MatchResult::Matched {
+                asset_id: _,
+                variant_id,
+            } => {
+                // 计算 SHA-256（如果 manifest 提供了）
+                let sha = item.render_sha256.clone().unwrap_or_default();
+                let file_path = manifest_path
+                    .parent()
+                    .unwrap_or(Path::new("."))
+                    .join(&item.render_filename);
+                let size = std::fs::metadata(&file_path)
+                    .map(|m| m.len() as i64)
+                    .unwrap_or(0);
+                if !sha.is_empty() && size > 0 {
+                    let source_type = match manifest.provider.as_str() {
+                        "LIGHTROOM_CLASSIC" => "external_lightroom",
+                        "CAPTURE_ONE" => "external_capture_one",
+                        _ => "external_unknown",
+                    };
+                    let input = RenditionInput {
+                        variant_id: variant_id.clone(),
+                        sha256: sha,
+                        file_path: file_path.to_string_lossy().to_string(),
+                        width: item.width.unwrap_or(0),
+                        height: item.height.unwrap_or(0),
+                        bit_depth: item.bit_depth.unwrap_or(8),
+                        icc_digest: item.render_icc_sha256.clone(),
+                        source_type: source_type.to_owned(),
+                        source_ref: Some(manifest.transfer_batch_id.clone()),
+                        file_size: size,
+                    };
+                    match store.record_rendition(&input).await {
+                        Ok(_) => summary.matched += 1,
+                        Err(e) => summary
+                            .errors
+                            .push(format!("{}: {}", item.render_filename, e.message)),
+                    }
+                } else {
+                    summary.errors.push(format!(
+                        "{}: 缺少 SHA-256 或文件不存在",
+                        item.render_filename
+                    ));
+                }
+            }
+            MatchResult::Ambiguous { candidates } => {
+                summary.ambiguous += 1;
+                summary.errors.push(format!(
+                    "{}: 多个候选资产 ({})，需人工确认",
+                    item.render_filename,
+                    candidates.join(", ")
+                ));
+            }
+            MatchResult::Unmatched => {
+                summary.unmatched += 1;
+                summary
+                    .errors
+                    .push(format!("{}: 无法匹配到任何资产", item.render_filename));
+            }
+        }
+    }
+
+    Ok(summary)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProcessSummary {
+    pub batch_id: String,
+    pub provider: String,
+    pub matched: usize,
+    pub ambiguous: usize,
+    pub unmatched: usize,
+    pub errors: Vec<String>,
+}

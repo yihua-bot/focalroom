@@ -831,3 +831,31 @@ pub async fn canvas_add_ink(
 ) -> Result<crate::canvas::CanvasNode> {
     state.store.add_ink(&project_id, &cmd).await
 }
+
+// ── G7 Publishing IPC ──
+
+#[tauri::command]
+pub async fn pub_create(
+    state: State<'_, Backend>,
+    project_id: String,
+    cmd: crate::publishing::CreatePublicationCommand,
+) -> Result<crate::publishing::Publication> {
+    state.store.create_publication(&project_id, &cmd).await
+}
+
+#[tauri::command]
+pub async fn pub_list(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<Vec<crate::publishing::Publication>> {
+    state.store.list_publications(&project_id).await
+}
+
+#[tauri::command]
+pub async fn pub_generate(
+    state: State<'_, Backend>,
+    project_id: String,
+    cmd: crate::publishing::GenerateFromSequenceCommand,
+) -> Result<i64> {
+    state.store.generate_from_sequence(&project_id, &cmd).await
+}
