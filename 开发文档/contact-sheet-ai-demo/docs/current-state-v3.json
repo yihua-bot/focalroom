@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "generated": "2026-10-20T18:00:00+08:00",
+  "gate": "G0",
+  "git_head": "8ac1a214d263fe833b48dc3a65c7379b3131873d",
+  "ci": {
+    "latest_run": 39427817340,
+    "conclusion": "success",
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/39427817340"
+  },
+  "test_baseline": {
+    "frontend_vitest": 265,
+    "rust_cargo": 223,
+    "cloud_pg_suites": 10,
+    "e2e_preview": 16,
+    "e2e_integration": "passed via CI",
+    "clippy_strict": "clean",
+    "typecheck": "clean",
+    "lint": "clean"
+  },
+  "databases": {
+    "desktop_sqlite_tables": 51,
+    "desktop_migrations": 19,
+    "cloud_pg_tables": 31,
+    "cloud_pg_migrations_registered": 11,
+    "cloud_pg_migration_files": 16,
+    "note": "migration files > registered: includes unregistered drafts 0003-0005, 0007, 0009_magic_login, 0010_author_memory"
+  },
+  "production": {
+    "official_website": "https://focroom.cc",
+    "web_collaboration": "https://team.focroom.cc/shared",
+    "desktop_version": "1.0.4",
+    "desktop_size_mb": 6.9,
+    "desktop_sha256": "9c9f51a9f85430c7173640f5a2af369ac10531d11c6a356f0316b9a5d50fb6c6",
+    "notarization": "Accepted + stapled + Gatekeeper accepted",
+    "ci_gatekeeper": "green",
+    "server": "1.13.251.21",
+    "ai_enabled": true,
+    "ai_initial_tokens": 250000,
+    "worker_enabled": false
+  },
+  "modules": {
+    "contact_sheet": { "status": "production", "notes": "虚拟化网格/批量标记/评分/筛选" },
+    "sequence": { "status": "production", "notes": "拖拽排序/章节/键盘/dnd-kit" },
+    "agent_runtime": { "status": "production_mock_only", "notes": "工具循环/草案/预算/检查点；真实模型走云端托管代理" },
+    "agent_hosted_ai": { "status": "deployed_key_configured", "notes": "DeepSeek 代理+token 账本；真实调用待用户首次试用" },
+    "memory": { "status": "production_v1", "notes": "词频假设+证据链+纠正/排除/恢复；v3 需升级为多模态语境化" },
+    "shared_review": { "status": "production", "notes": "登录/评论/提案/版本/WS Presence/撤权" },
+    "cloud_worker": { "status": "code_complete_disabled", "notes": "PG 队列+评论汇总；未接账户 token 账本" },
+    "desktop_login": { "status": "production", "notes": "PKCE 浏览器借道+Keychain+头像/资料" },
+    "seed_demo": { "status": "production", "notes": "12 张照片正式导入链路首启动" },
+    "export": { "status": "production_v1", "notes": "共享预览包/照片总览/印刷参考 HTML；v3 需专业印前引擎" }
+  },
+  "gaps_to_v3": {
+    "narrative_canvas": "完全不存在——v3 核心差异化功能",
+    "color_engine": "1400px 8-bit JPEG 代理；无 ICC/16-bit/原生瓦片",
+    "external_editors": "Lightroom/Capture One 插件不存在",
+    "publishing_studio": "无摄影书/展览/印前/软打样",
+    "agent_canvas_tools": "Agent 无 Board/序列/画布操作工具",
+    "multi_modal_memory": "记忆是两字词频；需升级为多模态证据链",
+    "web_board": "Web 端无自由画布（仅列表+评论+提案）",
+    "xmp_sidecar": "自定义 JSON 而非标准 XMP"
+  },
+  "g0_exit_criteria": {
+    "ci_green": "PASS",
+    "head_frozen": "PASS",
+    "old_data_isolated": "PASS",
+    "this_report": "PASS"
+  }
+}
