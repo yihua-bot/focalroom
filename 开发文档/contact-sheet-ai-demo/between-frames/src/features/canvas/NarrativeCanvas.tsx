@@ -15,6 +15,7 @@ interface CanvasPhoto extends CanvasNodeInfo {
   thumbnailPath?: string;
   contentJson?: string | null;
   styleJson?: string | null;
+  childrenJson?: string | null;
 }
 
 /** 无限画布：拖拽平移 + 滚轮缩放 + 照片节点拖拽放置。 */
@@ -31,6 +32,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationInfo[]>([]);
+  const [linking, setLinking] = useState<string | null>(null);
   const dragStart = useRef<{ x: number; y: number; nodeX: number; nodeY: number } | null>(null);
   const panning = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -120,6 +122,19 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
   };
 
   // ── 交互：空格/中键平移 + 节点拖拽 ──
+  const onNodeClick = async (nodeId: string) => {
+    if (linking && linking !== nodeId) {
+      if (repository && activeBoard) {
+        await repository.canvas.addArrow(projectId, activeBoard, linking, nodeId);
+        const ns = await repository.canvas.getNodes(activeBoard);
+        setNodes(ns);
+      }
+      setLinking(null);
+    } else if (!linking) {
+      setLinking(nodeId);
+    }
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button === 1 || e.button === 0) {
       const target = e.target as HTMLElement;
@@ -202,6 +217,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
           放入选中照片（{selectedPhotoIds.length}）
         </Button>
         <Button size="small" disabled={!activeBoard} onClick={() => void addSticky()}>📝 便签</Button>
+        <Button size="small" disabled={!activeBoard} onClick={() => setLinking(l => l ? null : l)}>{linking ? '🔗 点击目标...' : '🔗 连接'}</Button>
         <span className="canvas-zoom-label">{Math.round(zoom * 100)}%</span>
       </div>
       <div
@@ -223,6 +239,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
               key={node.id}
               data-node-id={node.id}
               className={`canvas-photo-node ${dragging === node.id ? 'dragging' : ''}`}
+              onClick={() => void onNodeClick(node.id)}
               style={{
                 left: node.x, top: node.y, width: node.width, height: node.height,
                 zIndex: node.zOrder,
@@ -241,6 +258,21 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds }: {
               className={`canvas-sticky-node ${dragging === node.id ? 'dragging' : ''}`}
               style={{ left: node.x, top: node.y, width: node.width, height: node.height, zIndex: node.zOrder, background: color }}
             >{content}</div>;
+          })}
+          {nodes.filter(n => n.nodeType === 'arrow').map(arrow => {
+            const ids = arrow.childrenJson ? (() => { try { return JSON.parse(arrow.childrenJson!) as string[]; } catch { return null; } })() : null;
+            if (!ids || ids.length !== 2) return null;
+            const from = nodes.find(n => n.id === ids[0]);
+            const to = nodes.find(n => n.id === ids[1]);
+            if (!from || !to) return null;
+            const x1 = from.x + from.width / 2;
+            const y1 = from.y + from.height / 2;
+            const x2 = to.x + to.width / 2;
+            const y2 = to.y + to.height / 2;
+            return <svg key={arrow.id} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: arrow.zOrder, overflow: 'visible' }}>
+              <defs><marker id={"ah-" + arrow.id} markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6c5ce7" /></marker></defs>
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#6c5ce7" strokeWidth={2} markerEnd={"url(#ah-" + arrow.id + ")"} />
+            </svg>;
           })}
           {annotations.map(a => !a.resolved && (
             <div key={a.id} className="canvas-annotation-pin" title={a.body}
@@ -270,6 +302,7 @@ export interface CanvasRepository {
   addAnnotation(projectId: string, boardId: string, x: number, y: number, body: string): Promise<void>;
   resolveAnnotation(projectId: string, annotationId: string, resolved: boolean): Promise<void>;
   getAnnotations(boardId: string): Promise<AnnotationInfo[]>;
+  addArrow(projectId: string, boardId: string, fromNodeId: string, toNodeId: string, color?: string): Promise<void>;
 }
 
 export interface AnnotationInfo {

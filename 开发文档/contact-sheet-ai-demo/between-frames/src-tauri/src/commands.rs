@@ -801,3 +801,12 @@ pub async fn canvas_get_annotations(
 ) -> Result<Vec<crate::canvas::BoardAnnotation>> {
     state.store.get_annotations(&board_id).await
 }
+
+#[tauri::command]
+pub async fn canvas_add_arrow(
+    state: State<'_, Backend>,
+    project_id: String,
+    cmd: crate::canvas::AddArrowCommand,
+) -> Result<crate::canvas::CanvasNode> {
+    state.store.add_arrow(&project_id, &cmd).await
+}

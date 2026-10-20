@@ -676,3 +676,90 @@ impl Store {
         CommandHandler::new(self).get_annotations(board_id).await
     }
 }
+
+// ── Arrow Connector（箭头连接）──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddArrowCommand {
+    pub board_id: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub color: Option<String>,
+}
+
+impl CommandHandler<'_> {
+    /// 添加箭头连接（from → to，节点移动时端点跟随）。
+    pub async fn add_arrow(&self, project: &str, cmd: &AddArrowCommand) -> Result<CanvasNode> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let board: Option<String> =
+            sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
+                .bind(&cmd.board_id)
+                .bind(project)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if board.is_none() {
+            return Err(AppError::new("NOT_FOUND", "画布不存在"));
+        }
+        // 验证两端节点存在于同一画布
+        for node_id in [&cmd.from_node_id, &cmd.to_node_id] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM canvas_nodes WHERE id=? AND board_id=? AND visible=1",
+            )
+            .bind(node_id)
+            .bind(&cmd.board_id)
+            .fetch_one(&mut *tx)
+            .await?;
+            if exists == 0 {
+                return Err(AppError::new("NOT_FOUND", format!("节点 {node_id} 不存在")));
+            }
+        }
+        let id = domain::id();
+        let now = domain::timestamp();
+        let z: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
+        )
+        .bind(&cmd.board_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        // 箭头的 children_json 存 [from_id, to_id]；style_json 存颜色
+        let children =
+            serde_json::to_string(&serde_json::json!([cmd.from_node_id, cmd.to_node_id]))
+                .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+        let style = cmd.color.as_ref().map(|c| format!("{{\"color\":\"{c}\"}}"));
+        sqlx::query(
+            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,style_json,children_json,created_at,updated_at) VALUES(?,?, 'arrow',0,0,0,0,0,?,?,?,?)",
+        )
+        .bind(&id).bind(&cmd.board_id).bind(z).bind(&style).bind(&children)
+        .bind(&now).bind(&now)
+        .execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(CanvasNode {
+            id,
+            board_id: cmd.board_id.clone(),
+            node_type: "arrow".to_owned(),
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 0.0,
+            rotation: 0.0,
+            z_order: z,
+            asset_id: None,
+            rendition_ref: None,
+            content_json: None,
+            style_json: style,
+            children_json: Some(children),
+            locked: false,
+            visible: true,
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+}
+
+impl Store {
+    pub async fn add_arrow(&self, project: &str, cmd: &AddArrowCommand) -> Result<CanvasNode> {
+        CommandHandler::new(self).add_arrow(project, cmd).await
+    }
+}
