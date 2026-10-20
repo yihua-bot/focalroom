@@ -59,21 +59,27 @@ impl CommandHandler<'_> {
         } else {
             format
         };
+        // G2：读取源 ICC profile digest（无嵌入 profile 时为 NULL）
+        let profile_digest = crate::color_engine::read_source_profile(&prepared.path)
+            .ok()
+            .flatten()
+            .filter(|p| p.valid)
+            .map(|p| p.digest);
         sqlx::query(
-            "INSERT OR IGNORE INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,source_profile_digest,source_hash_verified_at,created_at) VALUES(?,?,?,?,?,?,?,?,NULL,NULL,?)",
+            "INSERT INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,source_profile_digest,source_hash_verified_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,NULL,?)",
         )
         .bind(&id).bind(project).bind(&prepared.hash).bind(&locator)
         .bind(prepared.size as i64).bind(prepared.width as i64).bind(prepared.height as i64)
-        .bind(&format).bind(&now)
+        .bind(&format).bind(&profile_digest).bind(&now)
         .execute(&mut *tx).await?;
-        sqlx::query("INSERT OR IGNORE INTO asset_aliases(photo_id,asset_id) VALUES(?,?)")
+        sqlx::query("INSERT INTO asset_aliases(photo_id,asset_id) VALUES(?,?)")
             .bind(&id)
             .bind(&id)
             .execute(&mut *tx)
             .await?;
         let variant_id = domain::id();
         sqlx::query(
-            "INSERT OR IGNORE INTO edit_variants(id,asset_id,name,external_software,external_variant_id,is_current,created_at) VALUES(?,?,?,NULL,NULL,1,?)",
+            "INSERT INTO edit_variants(id,asset_id,name,external_software,external_variant_id,is_current,created_at) VALUES(?,?,?,NULL,NULL,1,?)",
         )
         .bind(&variant_id).bind(&id).bind("original").bind(&now)
         .execute(&mut *tx).await?;
@@ -93,7 +99,7 @@ impl CommandHandler<'_> {
         ] {
             let rep_size = std::fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
             sqlx::query(
-                "INSERT OR IGNORE INTO asset_representations(id,asset_id,kind,algorithm,width,height,file_path,file_size,profile_digest,created_at) VALUES(?,?,?,?,?,?,?,?,NULL,?)",
+                "INSERT INTO asset_representations(id,asset_id,kind,algorithm,width,height,file_path,file_size,profile_digest,created_at) VALUES(?,?,?,?,?,?,?,?,NULL,?)",
             )
             .bind(domain::id()).bind(&id).bind(kind).bind("image_pipeline_v1")
             .bind(w).bind(h).bind(path.to_string_lossy().as_ref()).bind(rep_size).bind(&now)
