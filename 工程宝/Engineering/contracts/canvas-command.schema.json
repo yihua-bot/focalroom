@@ -1,0 +1,284 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focroom.cc/schemas/v3/canvas-command.schema.json",
+  "type": "object",
+  "title": "FocalRoom v3 Canvas Semantic Command Envelope",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "commandId",
+    "idempotencyKey",
+    "projectId",
+    "boardId",
+    "baseRevision",
+    "operations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 3
+    },
+    "commandId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "projectId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "boardId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "baseRevision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 300,
+      "items": {
+        "$ref": "#/$defs/operation"
+      }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "opId",
+            "nodeId",
+            "assetId",
+            "rect"
+          ],
+          "properties": {
+            "op": {
+              "const": "canvas.node.placePhoto"
+            },
+            "opId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "nodeId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "assetId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "renditionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "rect": {
+              "$ref": "#/$defs/rect"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "opId",
+            "nodeIds",
+            "delta"
+          ],
+          "properties": {
+            "op": {
+              "const": "canvas.nodes.move"
+            },
+            "opId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "nodeIds": {
+              "type": "array",
+              "uniqueItems": true,
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "delta": {
+              "$ref": "#/$defs/point"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "opId",
+            "nodeId",
+            "rect"
+          ],
+          "properties": {
+            "op": {
+              "const": "canvas.node.resize"
+            },
+            "opId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "nodeId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "rect": {
+              "$ref": "#/$defs/rect"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "opId",
+            "strokeId",
+            "points",
+            "brush"
+          ],
+          "properties": {
+            "op": {
+              "const": "canvas.ink.add"
+            },
+            "opId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "strokeId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "points": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 20000,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "pressure": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            },
+            "brush": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "color",
+                "width"
+              ],
+              "properties": {
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "width": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "opId",
+            "nodeId"
+          ],
+          "properties": {
+            "op": {
+              "const": "canvas.node.remove"
+            },
+            "opId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "nodeId": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

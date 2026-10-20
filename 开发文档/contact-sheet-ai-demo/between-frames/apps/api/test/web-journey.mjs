@@ -17,7 +17,8 @@ const evidence = resolve(root, '../docs/evidence/v2-m4-m5-postgres'); await mkdi
 const port = await new Promise(resolve => { const s = netServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); }); });
 const origin = `http://127.0.0.1:${port}`;
 const pool = new Pool({ connectionString: process.env.FOCALROOM_TEST_DATABASE_URL }); await migrate(pool);
-const api = await createApi({ pool, store: new LocalPreviewStore(join(process.env.FOCALROOM_TEST_DIRECTORY, 'web-previews')), origin }); await api.app.listen(0, '127.0.0.1');
+const deliveredCodes = new Map();
+const api = await createApi({ magicEmail: async (email, code) => { deliveredCodes.set(email, code); return true; }, pool, store: new LocalPreviewStore(join(process.env.FOCALROOM_TEST_DIRECTORY, 'web-previews')), origin }); await api.app.listen(0, '127.0.0.1');
 const base = await api.app.getUrl();
 const vite = await createServer(mergeConfig(workspaceConfig(resolve(root, 'apps/web'), port), { configFile: false, server: { proxy: { '/api/v2': { target: base, ws: true } } } })); await vite.listen();
 const browser = await chromium.launch(); const contexts = []; const errors = [], remotes = [];
@@ -29,9 +30,17 @@ try {
   for (const [i, color] of ['#286179', '#b48453', '#596b51'].entries()) { const path = join(process.env.FOCALROOM_TEST_DIRECTORY, `photo-${i + 1}.preview.jpg`); await sharp({ create: { width: 1000, height: i === 1 ? 1400 : 700, channels: 3, background: color } }).composite([{ input: Buffer.from(`<svg width="1000" height="700"><text x="60" y="180" fill="white" font-size="88">FOCALROOM 0${i + 1}</text><circle cx="640" cy="420" r="160" fill="white" opacity=".16"/></svg>`), top: 0, left: 0 }]).jpeg().toFile(path); jpegPaths.push(path); }
   const manifest = { workspace_id: workspace, local_project_id: 'local-journey', promotion_id: randomUUID(), title: '海岸的间隙', from_revision: 0, snapshot: { photos: [1,2,3].map(n => ({ id: `photo-${n}`, filename: `Coast_${n}.jpg`, source_sha256: 'a'.repeat(64), selection: 'UNDECIDED' })), sequences: [{ id: 'sequence', title: '作品序列', items: [{ id: 'item-1', photo_id: 'photo-1' }] }] }, media_policy: { previews_only: true, strip_gps: true, max_long_edge: 2048, ai_upload_authorized: false } };
   const manifestPath = join(process.env.FOCALROOM_TEST_DIRECTORY, 'manifest.json'); await writeFile(manifestPath, JSON.stringify(manifest));
-  const newPage = async () => { const context = await browser.newContext({ viewport: { width: 1440, height: 960 } }); contexts.push(context); const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message)); page.on('request', req => { const url = new URL(req.url()); if (['http:', 'https:'].includes(url.protocol) && url.hostname !== '127.0.0.1') remotes.push(url.origin); }); return page; };
-  const login = async (page, email, url = '/shared') => { await page.goto(origin + url); await page.getByLabel('邮箱', { exact: true }).fill(email); await page.getByLabel('密码', { exact: true }).fill('web-password-123'); await page.getByRole('button', { name: '登录', exact: true }).click(); };
-  const a = await newPage(); await a.goto(origin + '/shared'); await expect(a.getByRole('heading', { name: '欢迎回到 FocalRoom' })).toBeVisible(); await a.screenshot({ path: join(evidence, 'login-1440.png'), fullPage: true });
+  const newPage = async () => { const context = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1440, height: 960 } }); contexts.push(context); const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message)); page.on('request', req => { const url = new URL(req.url()); if (['http:', 'https:'].includes(url.protocol) && url.hostname !== '127.0.0.1') remotes.push(url.origin); }); return page; };
+  const login = async (page, email, url = '/shared') => {
+    await page.goto(origin + url);
+    await page.getByLabel('邮箱', { exact: true }).fill(email);
+    await page.getByRole('button', { name: '发送验证码', exact: true }).click();
+    await expect(page.getByLabel('验证码', { exact: true })).toBeVisible();
+    assert.match(deliveredCodes.get(email) ?? '', /^\d{6}$/);
+    await page.getByLabel('验证码', { exact: true }).fill(deliveredCodes.get(email));
+    await page.getByRole('button', { name: '验证并登录', exact: true }).click();
+  };
+  const a = await newPage(); await a.goto(origin + '/shared'); await expect(a.getByRole('heading', { name: '登录 FocalRoom' })).toBeVisible(); await a.screenshot({ path: join(evidence, 'login-1440.png'), fullPage: true });
   await login(a, 'photographer@web.test'); await a.getByRole('button', { name: '导入共享预览包' }).click(); await a.getByLabel('manifest.json').setInputFiles(manifestPath); await a.getByLabel('2048px JPEG 预览').setInputFiles(jpegPaths); await a.getByRole('checkbox').check(); await a.getByRole('button', { name: '建立共享副本' }).click(); await expect(a.getByRole('heading', { name: '海岸的间隙' })).toBeVisible(); await expect(a.getByText('实时连接', { exact: true })).toBeVisible();
   await expect.poll(() => a.getByRole('img', { name: '检查 Coast_1.jpg' }).evaluate(img => img.naturalWidth)).toBe(1000);
   await a.getByRole('button', { name: '权限', exact: true }).click(); await a.getByLabel('受邀邮箱').fill('editor@web.test'); await a.getByRole('button', { name: '生成私密邀请' }).click(); const inviteUrl = await a.getByLabel('邀请链接').inputValue();
@@ -58,7 +67,7 @@ try {
   await a.goto(origin+"/shared#project="+large.project_id);await expect(a.getByRole("heading",{name:"分页边界演练",exact:true})).toBeVisible();await expect(a.locator(".fr-photo-grid button")).toHaveCount(48);await a.getByRole("button",{name:"下一页照片",exact:true}).click();await expect(a.locator(".fr-photo-grid button")).toHaveCount(3);await expect(a.getByRole("button",{name:"查看 Grid_51.jpg",exact:true})).toBeVisible();await expect.poll(() => a.getByRole("img", { name: "检查 Grid_1.jpg", exact: true }).evaluate(img => img.naturalWidth)).toBe(1000);await expect.poll(() => a.getByRole("img", { name: "Grid_51.jpg", exact: true }).evaluate(img => img.naturalWidth)).toBe(1000);await a.screenshot({path:join(evidence,"grid-page-1280.png"),fullPage:true});
   await expect(a).toHaveURL(origin + '/shared#project=' + large.project_id);
   await a.getByRole('button', { name: '← 项目', exact: true }).click();
-  await expect(a.getByRole('heading', { name: '你的共享项目', exact: true })).toBeVisible();
+  await expect(a.getByRole('heading', { name: '共享项目', exact: true })).toBeVisible();
   await expect(a).toHaveURL(origin + '/shared');
   await a.goBack(); await expect(a.getByRole('heading', { name: '分页边界演练', exact: true })).toBeVisible();
   await a.reload(); await expect(a.getByRole('heading', { name: '分页边界演练', exact: true })).toBeVisible();

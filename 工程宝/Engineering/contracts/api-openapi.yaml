@@ -1,0 +1,216 @@
+openapi: 3.1.0
+info:
+  title: FocalRoom v3 Domain API - Blueprint
+  version: 3.0.0-design
+  description: >
+    Target contract only. Auth is cookie/session or scoped native credentials;
+    every endpoint is subject to server-side tenant ACL, asset permission, consent and auditing.
+servers:
+  - url: https://team.focroom.cc/api/v3
+security:
+  - sessionAuth: []
+paths:
+  /projects/{projectId}/snapshot:
+    get:
+      operationId: getProjectSnapshot
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      responses:
+        '200':
+          description: Server-authoritative project projection
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projectId, formalRevision, boards, sequences, publications]
+                properties:
+                  projectId: { type: string, format: uuid }
+                  formalRevision: { type: integer, minimum: 0 }
+                  boards: { type: array, items: { type: object } }
+                  sequences: { type: array, items: { type: object } }
+                  publications: { type: array, items: { type: object } }
+  /projects/{projectId}/commands:
+    post:
+      operationId: submitDomainCommand
+      description: Server validates schema, formal authority, ACL, idempotency and expected revision.
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommandEnvelope' }
+      responses:
+        '200':
+          description: Idempotent command receipt, may reflect an already accepted prior command
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommandReceipt' }
+        '403': { description: Role or resource permission rejected }
+        '409': { description: Revision conflict; supply latest projection and explicit diff }
+  /projects/{projectId}/events:
+    get:
+      operationId: listEvents
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: ACL-filtered ordered event batch and next cursor
+  /projects/{projectId}/boards:
+    post:
+      operationId: createBoardDraft
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, idempotencyKey]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 200 }
+                idempotencyKey: { type: string, minLength: 1, maxLength: 160 }
+      responses:
+        '201': { description: Board draft created }
+  /projects/{projectId}/agent/tasks:
+    post:
+      operationId: createAgentTask
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [goal, scope, consentId, idempotencyKey]
+              properties:
+                goal: { type: string, minLength: 1, maxLength: 4000 }
+                scope:
+                  type: object
+                  required: [type, ids]
+                  properties:
+                    type: { type: string, enum: [PROJECT, SELECTION, BOARD, SEQUENCE, PUBLICATION] }
+                    ids: { type: array, items: { type: string, format: uuid }, maxItems: 10000 }
+                consentId: { type: string }
+                idempotencyKey: { type: string }
+      responses:
+        '202': { description: Queued authorized, resumable task }
+        '403': { description: Missing data/model consent }
+  /projects/{projectId}/external-edit/batches:
+    post:
+      operationId: createExternalEditBatch
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, assetIds, idempotencyKey]
+              properties:
+                provider: { type: string, enum: [LIGHTROOM_CLASSIC, CAPTURE_ONE] }
+                assetIds: { type: array, minItems: 1, items: { type: string, format: uuid } }
+                idempotencyKey: { type: string }
+      responses:
+        '202': { description: Authorized export/bridge batch prepared }
+  /projects/{projectId}/external-edit/renditions:
+    post:
+      operationId: submitExternalRenditionManifest
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [manifest, idempotencyKey]
+              properties:
+                manifest: { type: object }
+                idempotencyKey: { type: string }
+      responses:
+        '202': { description: Manifest verification queued; not yet accepted into project }
+        '409': { description: Ambiguous source/variant mismatch }
+  /projects/{projectId}/publications/{publicationId}/proof-jobs:
+    post:
+      operationId: createProofJob
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - $ref: '#/components/parameters/publicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OutputJobRequest' }
+      responses:
+        '202': { description: Proof render job enqueued }
+  /projects/{projectId}/publications/{publicationId}/press-jobs:
+    post:
+      operationId: createPrintJob
+      parameters:
+        - $ref: '#/components/parameters/projectId'
+        - $ref: '#/components/parameters/publicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OutputJobRequest' }
+      responses:
+        '202': { description: Verified print request enqueued }
+        '422': { description: Preflight blocking issues }
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: focalroom_session
+      description: Mutation endpoints also require Origin/CSRF protection.
+  parameters:
+    projectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    publicationId:
+      name: publicationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    CommandEnvelope:
+      type: object
+      additionalProperties: false
+      required: [commandId, idempotencyKey, projectId, baseRevision, kind, payload]
+      properties:
+        commandId: { type: string, format: uuid }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 160 }
+        projectId: { type: string, format: uuid }
+        baseRevision: { type: integer, minimum: 0 }
+        kind: { type: string }
+        payload: { type: object }
+        schemaVersion: { type: integer, const: 3 }
+    CommandReceipt:
+      type: object
+      required: [commandId, projectId, resultingRevision, applied]
+      properties:
+        commandId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        resultingRevision: { type: integer, minimum: 0 }
+        applied: { type: boolean }
+        diff: { type: object }
+    OutputJobRequest:
+      type: object
+      additionalProperties: false
+      required: [editionSnapshotHash, printContractId, idempotencyKey]
+      properties:
+        editionSnapshotHash: { type: string }
+        printContractId: { type: string, format: uuid }
+        idempotencyKey: { type: string }
+        approvedBy: { type: string, format: uuid, description: Server must verify authenticated approver, not trust body alone }

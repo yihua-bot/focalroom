@@ -1,42 +1,29 @@
-# 序间 · BETWEEN FRAMES — v1.0 M1
+# FocalRoom
 
-Tauri v2 + React + TypeScript + Vite + Rust/sqlx/SQLite。离线选片核心之上已完成唯一 CommandHandler、严格生成命令契约、幂等/冲突、持久化 Undo/Redo、命名版本和默认私密导出。**v1.0 M1 已测试，停止等待评审。** AI Runtime、Provider、Draft、ContextBuilder 与记忆引擎留在后续里程碑。
+摄影项目工作台：本地选片、比较、作品序列、可审阅的 AI 方案，以及 Web 私密协作。当前客户端配置版本为 **1.0.4**；v3.0 是下一阶段目标方案，按 G0–G8 验收推进，G9 为可选专业服务。
 
-## 启动
+v3 首轮范围为 **G0 基线核对与修复**。自由画布、专业 ICC/高位深显示、Lightroom/Capture One 往返与摄影书印前引擎尚未交付。当前状态和后续迁移设计见：
 
-需要 Node.js 22.12+、npm、Rust stable、Xcode 工具链。首次安装需下载依赖，依赖就绪后本地工作流不依赖网络。
+- [G0 代码与测试快照](../docs/v3/current-state-v3.json)
+- [v3 迁移计划](../docs/v3/migrations-plan-v3.md)
+- [G0 验收记录](../docs/v3/G0-BASELINE-2026-10-20.md)
+- [使用说明](../docs/FOCALROOM-USER-MANUAL.md)
+
+## 工程入口
+
+Tauri 2 / Rust / SQLite 提供本地领域命令、导入、缓存、历史、Agent 与导出；React / TypeScript / Vite 提供界面。`apps/web` 为共享审稿入口，`apps/api` 的 NestJS / PostgreSQL 为共享项目正式权威。`cloud/` 是保留的历史协议测试切片，不能代替正式共享 API。
+
+Node 版本见 `.node-version`（25.8.1），Rust 与 Xcode 工具链需满足当前锁文件。安装依赖后：
 
 ```bash
-cd "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames"
 npm ci
-CARGO_TARGET_DIR="target-v1" npm run tauri dev -- --config "tauri.m1-review.conf.json"
+npm run dev
+npm run dev:web
 ```
 
-`npm run dev` 提供浏览器内存示例预览；真实文件导入、存档和导出必须使用桌面版。桌面默认打开项目列表，不注入示例项目。
+浏览器工作台提供内存演示。真实文件导入、SQLite 持久化和本地 Agent 使用桌面客户端；桌面首次启动可创建内置演示项目。开发验收使用独立的 Tauri review 标识与生成素材，不启动用户正式资料目录。
 
-本机存在的 Debug 应用：
-
-```text
-src-tauri/target-v1/debug/bundle/macos/Between Frames M1 Review.app
-```
-
-本轮 Review 数据库与缓存：`~/Library/Application Support/studio.betweenframes.m1review/BetweenFrames/`。省略此 config 使用旧 `studio.betweenframes.desktop` 数据目录，启动会应用 M1 migration；本轮未升级用户原 DB 或 M0 Review DB。旧日志保留，升级前操作不生成追溯撤销栈。原图保留在系统选择器授权的原目录，失联可按相同指纹重新定位。
-
-## 本地编辑
-
-1. 创建项目、写创作意图，导入照片或文件夹。
-2. 支持 JPEG/PNG/WebP/TIFF；macOS HEIC 与相机 RAW 取决于系统解码器。失败逐张列明，可重试；同一项目的完全相同文件会跳过。
-3. 导入显示进度，可取消。取消等待当前照片解码结束，已经提交的部分保留。
-4. `K` 保留、`X` 淘汰、`U` 待定，重复设置不切换；`0–5` 人工评分。Cmd/Ctrl 点选切换多选、Shift 点选/方向键连选；Cmd/Ctrl+A 选中当前视图。`← / →` 翻片，`G/S` 切换网格/序列，Cmd/Ctrl+F 搜索文件名/备注；输入时隔离快捷键。
-5. 备注草稿可随照片切换保留，点击保存后写入 SQLite。关闭应用前请保存草稿。
-6. Space 或检查器大图按钮打开 Loupe，fit/100% 缓存像素、缩放、平移、前后导航，Esc 关闭。选两张后 `C` 比较，支持同步/独立缩放平移与理由；左、右或不确定仅记录偏好，不自动保留/淘汰。
-7. 作品序列支持把手拖拽、键盘拖放、上移/下移和 `↑ / ↓`。顺序自动持久化。
-8. Cmd/Ctrl+Z 撤销一组人工编辑，Cmd/Ctrl+Shift+Z 重做，重启后历史保留。新有效编辑使 redo 分支失效，审计不删除；导入/重链不通过 Undo 删除照片。
-9. 保存命名版本，包含选片、评分、已保存备注和顺序。恢复前预览影响范围，恢复是可撤销的新编辑；版本后导入的照片留在项目中，选片恢复为待定。
-10. JSON/CSV 默认省略已知资源路径字段；迁移用途需显式勾选包含本地路径，自填备注路径仍原文保留。接触印相 HTML 含小尺寸缓存，可打开打印。只创建新文件，不覆盖已有文件。
-11. 项目可编辑意图、归档与恢复；归档不删除原图、备注或日志。
-
-100 张以上采用虚拟网格；检查器和比较使用最长边 1400px 编辑预览，网格仅使用 320px 缓存。100% 指缓存预览像素，不代表原图逐像素。导航、检查器与 Filmstrip 可折叠；Cmd/Ctrl+Shift+A 切换 AI 占位面板，不启动模型。
+AI 从选片工作台顶部打开对话抽屉；左下角头像菜单提供登录、设置、语言、帮助和联系作者。仅发送消息才产生任务；AI 方案须经人工采纳才改变正式作品。
 
 ## 验证
 
@@ -44,31 +31,24 @@ src-tauri/target-v1/debug/bundle/macos/Between Frames M1 Review.app
 npm run contracts:check
 npm run typecheck
 npm run lint
-npm run test
-npx playwright install chromium
+npm test
 npm run test:e2e
-cargo test --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --test command_history --test local_core -- --nocapture
-cargo fmt --manifest-path "src-tauri/Cargo.toml" -- --check
-cargo clippy --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --all-targets --features integration-harness -- -D warnings
-CARGO_TARGET_DIR="target-v1" npm run tauri build -- --debug --config "tauri.m1-review.conf.json"
+npm run verify:v2
 ```
 
-真实 Rust/SQLite 驱动的浏览器旅程：
+`verify:v2` 串联工作区构建、Web 入口、前端/Rust/旧云协议、本地真实后端、临时 PostgreSQL、共享 Web/Promotion 及 500 图 GUI 测试。原生打包与浏览器验收须顺序执行。完整验证前需安装 Playwright Chromium 和 PostgreSQL 测试工具，CI 配置见仓库根 `.github/workflows/betweenframes-v2.yml`。
+
+G0 旧库副本升级与恢复证据：
 
 ```bash
-cargo build --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --features integration-harness --bin m1-harness
-CARGO_TARGET_DIR="target-v1" npm run test:integration
+FOCALROOM_G0_EVIDENCE_FILE="/tmp/focalroom-g0-snapshot.json" cargo test --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --test v3_baseline
+node "apps/api/test/run.mjs" "apps/api/tools/g0-inventory.mjs"
 ```
 
-测试生成自己的数据库和图库，不读取生产项目；失联测试只移动测试生成的照片。集成 harness 不包含在正常 Tauri 产物中。Rust 的原生 HEIC/CR2 用例需要先准备报告中注明的测试夹具，否则明确输出 SKIP。
+这些命令只创建临时数据库和生成图片。真实模型、真实摄影质量、校准设备与印厂验收各自保留独立门槛。
 
-本机 crates.io 网络受限时，可对 Cargo 命令追加以下参数（不修改全局配置）：
+## 数据边界
 
-```text
---config 'source.crates-io.replace-with="m0-mirror"'
---config 'source.m0-mirror.registry="sparse+https://rsproxy.cn/index/"'
-```
+原图保持只读；预览/缓存与原件分别保存。当前缩略图 320px、编辑预览 1400px、RGB8 JPEG；受限原图检视不等于专业 ICC/16-bit 全流程。CSV/JSON/侧车为现有兼容输出，印刷参考为 HTML 校样，不能称为 XMP 双向集成或 PDF/X 印前文件。
 
-已下载依赖可再加 `--offline`。Tauri build/dev 将这些参数放在第二个 `--` 之后，具体复现命令见父目录 `docs/TEST-REPORT.md`。
-
-架构保持 UI 状态（Zustand）、仓库快照（TanStack Query）、校验 IPC（Zod）、业务事务（CommandHandler）、投影查询（Store）、图像流水线、导入任务与导出服务的职责边界。完整变更、测试结果和阶段限制见父目录 `docs/`。
+历史迁移字节保持不变。SQLite 由 `Store::open` 备份后升级；PostgreSQL 仅执行 `apps/api/src/database.ts` 登记的迁移，不能遍历 SQL 目录全部执行。共享正式写入须经过权限、版本、幂等和审计；Agent 只能创建待审方案。

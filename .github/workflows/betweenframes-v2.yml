@@ -52,7 +52,7 @@ jobs:
       - name: M0 与既有能力回归
         run: npm run verify:v2
       - name: 独立桌面应用构建（不运行）
-        run: CARGO_TARGET_DIR=target-v1 npm run tauri -- build --debug --config src-tauri/tauri.v2-review.conf.json
+        run: CARGO_TARGET_DIR=target-v1 npm run tauri -- build --debug --no-sign --bundles app --config src-tauri/tauri.v2-review.conf.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

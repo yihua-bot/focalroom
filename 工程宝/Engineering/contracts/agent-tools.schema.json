@@ -1,0 +1,14 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://focroom.cc/schemas/v3/agent-tools.schema.json",
+ "title": "FocalRoom v3 AI Tool Envelope",
+ "type": "object", "additionalProperties": false,
+ "required": ["taskId","callId","tool","scope","args"],
+ "properties": {
+  "taskId": {"type":"string","format":"uuid"},
+  "callId": {"type":"string","minLength":1,"maxLength":160},
+  "tool": {"type":"string","enum":["search_assets","retrieve_project_context","inspect_assets","compare_assets","inspect_render_variants","get_sequence","get_board_graph","get_comments","retrieve_preference_evidence","create_board_draft","place_assets","move_nodes","group_nodes","create_connector","add_editorial_note","create_sequence_draft","evaluate_sequence","propose_layout","compare_layout_drafts","request_human_feedback","summarize_review_disagreement","compare_color_versions","plan_external_edit_batch","read_output_preflight","finish_task"]},
+  "scope": {"type":"object","additionalProperties":false,"required":["projectId","authorizedAssetIds","allowedBoardIds","memoryScopeRevision"],"properties":{"projectId":{"type":"string","format":"uuid"},"authorizedAssetIds":{"type":"array","uniqueItems":true,"items":{"type":"string","format":"uuid"}},"allowedBoardIds":{"type":"array","uniqueItems":true,"items":{"type":"string","format":"uuid"}},"memoryScopeRevision":{"type":"integer","minimum":0}}},
+  "args": {"type":"object"}
+ }
+}

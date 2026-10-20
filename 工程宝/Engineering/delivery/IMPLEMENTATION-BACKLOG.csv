@@ -1,0 +1,54 @@
+﻿task_id,gate,area,task,implementation,acceptance,priority,status
+FR3-001,G0,QA,核对Git HEAD/当前代码,源代码、配置、迁移、CI 的真实快照,基线报告和SHA,P0,NOT_STARTED_TARGET
+FR3-002,G0,QA,修复共享Web E2E title,统一当前标题与稳定语义选择器,E2E全绿,P0,NOT_STARTED_TARGET
+FR3-003,G0,API,隔离集成测试服务,自动启动API/PG测试夹具并验证端口,CI完整跑通,P0,NOT_STARTED_TARGET
+FR3-004,G0,Security,旧用户数据隔离,迁移只针对备份和fixture,旧源hash不变,P0,NOT_STARTED_TARGET
+FR3-005,G0,Docs,现有架构映射,命令/数据库/渲染/Agent/共享权威审查,架构表,P0,NOT_STARTED_TARGET
+FR3-006,G1,DB,SourceAsset建模,源身份、sha256、mime、ICC、尺寸/位深,多路径locator测试,P0,NOT_STARTED_TARGET
+FR3-007,G1,DB,Variant/Rendition建模,不可变渲染与关联关系,多版本互不覆盖,P0,NOT_STARTED_TARGET
+FR3-008,G1,DB,Board/CanvasNode模型,物理资产与呈现实例解耦,可重复引用,P0,NOT_STARTED_TARGET
+FR3-009,G1,DB,ExternalEditLink和TransferJob,稳定外部照片及变体身份,重复幂等,P0,NOT_STARTED_TARGET
+FR3-010,G1,DB,增量旧Photo映射,旧photo_id alias和双读切换,数据无孤儿,P0,NOT_STARTED_TARGET
+FR3-011,G1,Native,SecurityBookmark及多locator,原图移动/离线/重连,可核验hash,P0,NOT_STARTED_TARGET
+FR3-012,G1,API,v3命令协议和版本校验,统一端到端命令和回执,Rust/TS语义一致,P0,NOT_STARTED_TARGET
+FR3-013,G2,Native,ICC解析验证,v2/v4/缺失/无效profile处理,参考样本通过,P0,NOT_STARTED_TARGET
+FR3-014,G2,Native,ColorSync图像管线,保留16-bit/float和目标profile转换,颜色测试门槛,P0,NOT_STARTED_TARGET
+FR3-015,G2,Native,高分辨率瓦片引擎,100MP与巨幅TIFF局部解码,无OOM和可测延迟,P0,NOT_STARTED_TARGET
+FR3-016,G2,Native,专业Viewer,Fit/100%/AB/多屏/软打样状态,显示质量真实标签,P0,NOT_STARTED_TARGET
+FR3-017,G2,Native,RAW来源链路,embedded/derived/native/external分类,绝不假称原像素,P0,NOT_STARTED_TARGET
+FR3-018,G2,Web,Web proxy质量声明,透明色彩限制与ICC/代理标示,跨浏览器检查,P0,NOT_STARTED_TARGET
+FR3-019,G2,QA,校准显示器验证,ColorSync及P3/AdobeRGB/ProPhoto对照,ΔE报告,P0,NOT_STARTED_TARGET
+FR3-020,G3,Frontend,Canvas逻辑坐标渲染,zoom/pan/culling/100+节点,拖拽精度通过,P0,NOT_STARTED_TARGET
+FR3-021,G3,Frontend,Canvas选择与编辑,框选、多选、缩放、锁定、分组,Undo/redo通过,P0,NOT_STARTED_TARGET
+FR3-022,G3,Frontend,Ink/Arrow/Notes,矢量笔迹和锚定连接符,DPR下不漂移,P0,NOT_STARTED_TARGET
+FR3-023,G3,Frontend,对象评论,局部点位/节点/board的线程,历史可追溯,P0,NOT_STARTED_TARGET
+FR3-024,G3,Frontend,Canvas-Sequence转换,探索画布提取叙事排序,不改原board,P0,NOT_STARTED_TARGET
+FR3-025,G3,UX,统一主工作台导航,图库/画布/序列/出版物/Agent,可用性任务完成,P0,NOT_STARTED_TARGET
+FR3-026,G3,Native,Canvas高保真合成,与Color Engine复用真实ICC渲染,画面一致性,P0,NOT_STARTED_TARGET
+FR3-027,G4,AI,Board草案写工具,place/move/group/arrow/note draft ops,越权0,P0,NOT_STARTED_TARGET
+FR3-028,G4,AI,完整上下文证据,同名工具异素材观察不丢,长链回归,P0,NOT_STARTED_TARGET
+FR3-029,G4,AI,动态质量路由,质量/区域/授权/能力/成本,阈值与回退可解释,P0,NOT_STARTED_TARGET
+FR3-030,G4,AI,审美记忆升级,多模态证据/反例/纠正/授权,有效个人化改善,P0,NOT_STARTED_TARGET
+FR3-031,G4,AI,Agent UI Diff overlay,逐项审阅应用/拒绝,不改正式版,P0,NOT_STARTED_TARGET
+FR3-032,G4,AI,真人摄影质量评测,30任务和10位摄影师盲评,独立门槛签字,P0,NOT_STARTED_TARGET
+FR3-033,G5,Bridge,Lightroom Classic Lua插件,选集同步/Publish/外部ID,30片全链路,P0,NOT_STARTED_TARGET
+FR3-034,G5,Bridge,Capture One Plugin/Recipe,Session/Catalog与变体回流,实际版本验证,P0,NOT_STARTED_TARGET
+FR3-035,G5,Native,回流watcher/manifest,稳定文件检测/hash/ICC/关联,零误匹配,P0,NOT_STARTED_TARGET
+FR3-036,G5,UX,外部版本对比,调色前后和多变体选择,明确版本语义,P0,NOT_STARTED_TARGET
+FR3-037,G5,DB,锁定版不自动刷新,Edition/Board指定Rendition策略,出版物不暗改,P0,NOT_STARTED_TARGET
+FR3-038,G6,Cloud,Board实时协议,协作draft增量和server正式审查,断线/重放,P1,NOT_STARTED_TARGET
+FR3-039,G6,Cloud,角色权限,Board/comment/original/approve/press单独授权,越权0,P1,NOT_STARTED_TARGET
+FR3-040,G6,Web,统一Web协作界面,共有命令/Design Tokens/辅助操作,真人异地项目,P1,NOT_STARTED_TARGET
+FR3-041,G6,API,跨实例Presence,数据总线+重复连接清理,多实例一致,P1,NOT_STARTED_TARGET
+FR3-042,G6,QA,多人同时操作,5组真人双人项目,无丢写入,P1,NOT_STARTED_TARGET
+FR3-043,G7,Frontend,Photobook Studio,书籍/跨页/母版/网格/文字,32页真实书,P1,NOT_STARTED_TARGET
+FR3-044,G7,Frontend,Exhibition Studio,实体尺/安装图/墙面编排,尺寸可复核,P1,NOT_STARTED_TARGET
+FR3-045,G7,Native,高位深print render,印刷取母版而非AI JPEG,像素/ICC正确,P1,NOT_STARTED_TARGET
+FR3-046,G7,API,PrintContract+Preflight,字体/PPI/出血/ICC/OutputIntent,错误能阻断,P1,NOT_STARTED_TARGET
+FR3-047,G7,QA,真实供应商验收,PDF/X和微喷TIFF,样书/样片通过,P1,NOT_STARTED_TARGET
+FR3-048,G8,Release,Mac签名与公证,正式包和差分更新,Gatekeeper通过,P1,NOT_STARTED_TARGET
+FR3-049,G8,SRE,灾备/可观测性,RPO/RTO监控及报警,恢复演练,P1,NOT_STARTED_TARGET
+FR3-050,G8,Security,隐私/权限审计,共享代理、原图可选上传,撤权和泄漏测试,P1,NOT_STARTED_TARGET
+FR3-051,G8,Ops,真正商业账户,团队付费、额度、发票与售后,运营验收,P1,NOT_STARTED_TARGET
+FR3-052,G8,E2E,整链路毕业项目,500素材到书/展览/输出,验收全部证据,P1,NOT_STARTED_TARGET
+FR3-053,G9,Marketplace,专家身份与审稿服务,真实约稿/合同/交付/验收,首真实交易,P1,NOT_STARTED_TARGET

@@ -1,0 +1,33 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"https://focroom.cc/schemas/v3/external-rendition-manifest.schema.json",
+ "title":"FocalRoom External Editor Render Manifest",
+ "type":"object", "additionalProperties":false,
+ "required":["schemaVersion","transferBatchId","provider","catalogFingerprint","items"],
+ "properties":{
+   "schemaVersion":{"const":3},
+   "transferBatchId":{"type":"string","format":"uuid"},
+   "provider":{"enum":["LIGHTROOM_CLASSIC","CAPTURE_ONE"]},
+   "catalogFingerprint":{"type":"string","minLength":4},
+   "issuedAt":{"type":"string","format":"date-time"},
+   "items":{"type":"array","minItems":1,"maxItems":10000,"items":{"type":"object","additionalProperties":false,
+     "required":["assetId","sourceSha256","externalPhotoId","variantId","renderId","renderFilename","renderSha256","width","height","bitDepth","mediaFormat"],
+     "properties":{
+       "assetId":{"type":"string","format":"uuid"},
+       "sourceSha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+       "externalPhotoId":{"type":"string","minLength":1},
+       "externalVariantId":{"type":["string","null"]},
+       "variantId":{"type":"string","format":"uuid"},
+       "renderId":{"type":"string","format":"uuid"},
+       "renderFilename":{"type":"string","minLength":1},
+       "renderSha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+       "width":{"type":"integer","minimum":1},"height":{"type":"integer","minimum":1},
+       "bitDepth":{"type":"integer","enum":[8,10,12,14,16,32]},
+       "sourceIccSha256":{"type":["string","null"]},
+       "renderIccSha256":{"type":["string","null"]},
+       "mediaFormat":{"type":"string","enum":["JPEG","TIFF","PNG","PSD","DNG"]},
+       "recipeId":{"type":["string","null"]},
+       "externalEditVersion":{"type":["string","null"]}
+     }}}
+ }
+}

@@ -1,0 +1,391 @@
+{
+  "schemaVersion": 1,
+  "product": "FocalRoom",
+  "target": "v3.0",
+  "gate": "G0",
+  "observedAt": "2026-10-20T10:41:06.096Z",
+  "sourceHead": "38e970473c7f618c571513a84535b78e8bcd498d",
+  "branch": "main",
+  "clientVersion": "1.0.4",
+  "status": "LOCAL_VERIFICATION_IN_PROGRESS_REMOTE_CI_PENDING",
+  "scope": {
+    "userDataOpened": false,
+    "productionChanged": false,
+    "realModelCalls": 0,
+    "historicalMigrationsChanged": false
+  },
+  "modules": [
+    {
+      "id": "desktop-ui",
+      "path": "src/app/AppController.tsx",
+      "sha256": "dd9e823e1736b2bf1969e7d05e683abbebf1d08cd00d5b58955db40f5b07b0ad",
+      "boundary": "working selection workspace; no free-coordinate Board"
+    },
+    {
+      "id": "local-authority",
+      "path": "src-tauri/src/command_handler.rs",
+      "sha256": "f5ae4b62f8a784e369b2352553065a40529b02e8b3de8dd525de23a4607c0dc6",
+      "boundary": "validated formal local commands, revision, idempotency, audit"
+    },
+    {
+      "id": "sqlite",
+      "path": "src-tauri/src/db.rs",
+      "sha256": "8749acc80ed07eb69a3635b456ff4f9c37b48fe1eb5c0022ddaf7554169ea06e",
+      "boundary": "backup-before-upgrade and SQLx migrations"
+    },
+    {
+      "id": "image-preview",
+      "path": "src-tauri/src/image_pipeline.rs",
+      "sha256": "0096d02901a2ab068e7774732f98fb07068ed31beeed5ea5e1667c18afd35358",
+      "boundary": "320/1400px RGB8 JPEG; not high-bit-depth professional rendering"
+    },
+    {
+      "id": "original-inspection",
+      "path": "src-tauri/src/photo_inspection.rs",
+      "sha256": "1308f3f9e5e22dfdf8c88010ba249ad1cbb87e84987a3e38dcd984944c94514d",
+      "boundary": "bounded original/embedded/derived source; not 100MP native tiles"
+    },
+    {
+      "id": "agent",
+      "path": "src-tauri/src/agent/runtime.rs",
+      "sha256": "f9a2ab23594e4a9cfa2992ba417e3cd21a065312773b7c39fa890f4b7317ceff",
+      "boundary": "local task/tool/checkpoint runtime; model writes drafts"
+    },
+    {
+      "id": "agent-policy",
+      "path": "src-tauri/src/agent/policy.rs",
+      "sha256": "d9f6f572776090c8926714b8c9f8cdf5d6e7d244fbc43c568ce1a1a1e02b2545",
+      "boundary": "resource scope, budgets and tool boundaries"
+    },
+    {
+      "id": "memory",
+      "path": "src-tauri/src/agent/memory.rs",
+      "sha256": "43a2fe10dc446cbbe01350838d1db7df9cd891e5f96015a91d1466e505a193d3",
+      "boundary": "evidence/hypotheses/correction; not professionally validated multimodal preference learning"
+    },
+    {
+      "id": "sequence",
+      "path": "src/components/sequence/SequenceBoard.tsx",
+      "sha256": "3d554f6a6c291d5f4554221656b580fd0a6644997d3cb0a9e462baf85acb5c57",
+      "boundary": "linear sequence; distinct from future Narrative Canvas"
+    },
+    {
+      "id": "shared-api",
+      "path": "apps/api/src/authority.ts",
+      "sha256": "d342deb2cb63c575f7106ab667b446a7aec3070ebb0e9b81e03c9ce42db74797",
+      "boundary": "PostgreSQL shared formal state and approved commands"
+    },
+    {
+      "id": "cloud-worker",
+      "path": "apps/api/src/agent-tasks.ts",
+      "sha256": "76efccc2c2605e77cd04d5f31c0fbbfffeebfbc74b5f162ac277a3f7d8537838",
+      "boundary": "comment summary/disagreement; not full Canvas Agent"
+    },
+    {
+      "id": "web-review",
+      "path": "apps/web/src/shared/ProjectReview.tsx",
+      "sha256": "29c8047b60b4710cb83c81214021b64665ad8db6ba8c91ca75c37ed15fb257d3",
+      "boundary": "shared photo review; no v3 Board UI"
+    },
+    {
+      "id": "export",
+      "path": "src-tauri/src/export.rs",
+      "sha256": "35649caf7960f94eb3f2911053ccd5502849d893bde0214a8f5306112d053ecc",
+      "boundary": "compatibility CSV/JSON/custom sidecar/HTML proof; not PDF/X"
+    },
+    {
+      "id": "contracts",
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "bcc99b8316e9e65cafbb619cf697ee607d70f493c8a30171ff50888300e55210",
+      "boundary": "current v2 semantic contracts; v3 blueprints not runtime"
+    }
+  ],
+  "database": {
+    "sqlite": {
+      "migrationFiles": [
+        {
+          "path": "src-tauri/migrations/0001_local_core.sql",
+          "sha256": "6e2caa7a39ec1e4f5bb428f596a1dd7c9c3e2b5c9793a31b863dceb2e46aae0b"
+        },
+        {
+          "path": "src-tauri/migrations/0002_manual_rating.sql",
+          "sha256": "8efb3506581e6a79c932cbbdb57020d94800495f87a9bc0b89978917a9dd8d39"
+        },
+        {
+          "path": "src-tauri/migrations/0003_command_history.sql",
+          "sha256": "37ca31504b42914cf9eef279bdd89ec97ff053ea03772b244294f02f3442718a"
+        },
+        {
+          "path": "src-tauri/migrations/0004_mock_runtime.sql",
+          "sha256": "c5c05f19dc33dbcb7aa44a1c65789f04ac60d3c3e1d293f340c49b8d88f4aee7"
+        },
+        {
+          "path": "src-tauri/migrations/0005_vision_consent.sql",
+          "sha256": "a265c16c445f0dc993590fc59d2eed763296b5badad141c66f08c304baf3b09e"
+        },
+        {
+          "path": "src-tauri/migrations/0006_preference_memory.sql",
+          "sha256": "47487580f39d32afe9c49f9c16791e93cb2b1a5e3a8475e4388bb1db4db0b257"
+        },
+        {
+          "path": "src-tauri/migrations/0007_project_tags.sql",
+          "sha256": "6457b427d5dfe73601d72e8d211cc54c91e5f20cb2fa440a7cb2f40e64075ae2"
+        },
+        {
+          "path": "src-tauri/migrations/0008_book_marks.sql",
+          "sha256": "361e9484a9c0a9b8af08e84322faa38be6c97e94e81b37dceb16906bea259842"
+        },
+        {
+          "path": "src-tauri/migrations/0009_memory_controls.sql",
+          "sha256": "a47a0a3965e954aea63e263b422335b97ceeb5efb83e7f5a12da782d4e22401b"
+        },
+        {
+          "path": "src-tauri/migrations/0010_memory_tombstones.sql",
+          "sha256": "ae162be7c62479232dc4da24f10b1cc4702dc47204d49751b779bfb156d39bee"
+        },
+        {
+          "path": "src-tauri/migrations/0011_comment_threads.sql",
+          "sha256": "0af1ec92b3c6ba623a85f872f630a19587db48ccb7caf338ee1538ffd93cfd1b"
+        },
+        {
+          "path": "src-tauri/migrations/0012_proposals.sql",
+          "sha256": "c8a0828960a8724d23b82105d34b7a64dba17123170ac2b5d934eee228f46c68"
+        },
+        {
+          "path": "src-tauri/migrations/0013_org_skeleton.sql",
+          "sha256": "1cae2f880377e1f7ee4640f28d06f17a853fb1486f2ec02e5d6ea1ffabb1b99d"
+        },
+        {
+          "path": "src-tauri/migrations/0014_promotions.sql",
+          "sha256": "91abbd8ec9def2000337975e14bb39291819a6bdd8e684b50cb0b55b4be34494"
+        },
+        {
+          "path": "src-tauri/migrations/0015_billing.sql",
+          "sha256": "c6a0e4858d55a4a09b7ff6b91990382aded1f28e0831895a051e43b969278592"
+        },
+        {
+          "path": "src-tauri/migrations/0016_media_grants.sql",
+          "sha256": "2a466565d077ef30aa82a695080e0ab1669c8852ae61d990f6ec5cd01a7009d2"
+        },
+        {
+          "path": "src-tauri/migrations/0017_v2_command_receipts.sql",
+          "sha256": "6fc54976fdc26238e5fe16c8fbf51e72daa9df2d57980e25769512c902e5aeef"
+        },
+        {
+          "path": "src-tauri/migrations/0018_memory_scope.sql",
+          "sha256": "d9376d7f305c321e3fc05e9632432c2c901c545d01d0d6ba702da7b2224e60b9"
+        },
+        {
+          "path": "src-tauri/migrations/0019_model_quality.sql",
+          "sha256": "550236612d22164102880640340f56804e316f82acd14bd672911b6878e8e37d"
+        }
+      ],
+      "backupSha256": "2c84c02cf5f352795e5297fafce1a0107017140ad7eb42f6574d6d1682f7bdd3",
+      "fixture": "generated JPEG and legacy v11 SQLite; no user data",
+      "foreignKeyViolations": 0,
+      "legacyMigrations": 11,
+      "restoredProjectionMatches": true,
+      "snapshotSha256": "17f8353fd12056aa84f8454cfa6b69b9b908f9976fd6170d73ea5433891cacc8",
+      "snapshotUnchanged": true,
+      "sourceSha256": "ddcce3e7c64670e2b67b55522783440118049c8107e958be51a5299df4b0709a",
+      "sourceUnchanged": true,
+      "tables": [
+        "_sqlx_migrations",
+        "agent_checkpoints",
+        "agent_request_receipts",
+        "agent_steps",
+        "agent_tasks",
+        "command_events",
+        "command_history",
+        "command_receipt_aliases",
+        "comment_threads",
+        "comments",
+        "comparison_events",
+        "comparison_state",
+        "consent_receipts",
+        "decision_events",
+        "draft_items",
+        "drafts",
+        "history_heads",
+        "memory_commands",
+        "memory_evidence_state",
+        "memory_scope_settings",
+        "memory_search",
+        "memory_search_config",
+        "memory_search_content",
+        "memory_search_data",
+        "memory_search_docsize",
+        "memory_search_idx",
+        "memory_tombstones",
+        "model_quality_scores",
+        "model_usage",
+        "photo_decisions",
+        "photo_observations",
+        "photos",
+        "preference_evidence",
+        "preference_hypotheses",
+        "privacy_consents",
+        "projects",
+        "proposal_operations",
+        "proposals",
+        "sequence_items",
+        "sequence_versions",
+        "sqlite_sequence",
+        "task_messages",
+        "tool_calls",
+        "v2_billing_events",
+        "v2_command_receipts",
+        "v2_creators",
+        "v2_media_grants",
+        "v2_memberships",
+        "v2_orders",
+        "v2_promotions",
+        "v2_workspace_audit",
+        "v2_workspaces"
+      ],
+      "versionCommentRowsPreserved": true
+    },
+    "postgresql": {
+      "fixture": "new isolated runner PostgreSQL; no production data",
+      "tables": [
+        "fr_acl_audit",
+        "fr_agent_jobs",
+        "fr_agent_scopes",
+        "fr_agent_task_results",
+        "fr_ai_accounts",
+        "fr_ai_grants",
+        "fr_ai_reconciliations",
+        "fr_ai_requests",
+        "fr_commands",
+        "fr_comments",
+        "fr_desktop_logins",
+        "fr_drafts",
+        "fr_email_verify_tokens",
+        "fr_events",
+        "fr_grants",
+        "fr_invitations",
+        "fr_magic_login_codes",
+        "fr_memberships",
+        "fr_migrations",
+        "fr_model_consents",
+        "fr_password_reset_tokens",
+        "fr_presence",
+        "fr_previews",
+        "fr_projects",
+        "fr_proposals",
+        "fr_rate_limits",
+        "fr_sessions",
+        "fr_tickets",
+        "fr_users",
+        "fr_versions",
+        "fr_workspaces"
+      ],
+      "migrations": [
+        {
+          "version": "0001",
+          "sha256": "bee9cec8bb2b90dbe20538fbb7de84acd8f5aae4d33810dc1e61bcbb2b4b5d04"
+        },
+        {
+          "version": "0002",
+          "sha256": "613949828f2508cb097bdf45a7f80505ef5296fd11d33642fab2caaf5620e7ae"
+        },
+        {
+          "version": "0006",
+          "sha256": "95cc3281db6b53ee016e799ca4db5c6f33abc8f15e882ae20e01d0758a90c59a"
+        },
+        {
+          "version": "0008",
+          "sha256": "ed24d431cba967eab47ae3f8339227c78385851774b02df3145068c6485931b7"
+        },
+        {
+          "version": "0009",
+          "sha256": "15656ef57f26bfac7d9f1c579fa87e63d8697555a22f13d9951461e29d3f27d6"
+        },
+        {
+          "version": "0010",
+          "sha256": "76f0aae430c3888e873dd209ad70b8ca70249ac574e24c562b2bb7f3b9bef61d"
+        },
+        {
+          "version": "0011",
+          "sha256": "1376add9d0d5cb9e406d3a81c7c227f7545c5d70ba72930f690159b2afac0858"
+        },
+        {
+          "version": "0012",
+          "sha256": "fa724d7c1010de876dc3ae6cecc543aadf3c9015350627f90e80d7dac9335191"
+        },
+        {
+          "version": "0013",
+          "sha256": "9a5485ef80bf857938c351de679f7ecf9cf7f5c1f7f4de54af6ec84baee76c20"
+        },
+        {
+          "version": "0014",
+          "sha256": "0f6b9d5fa2ff4b925aa40caae833b185d301bb89af6e96239f45b82c01a54158"
+        },
+        {
+          "version": "0015",
+          "sha256": "61cbbcee7df864631b3b84bc98e498a5059547b908fc8b49a027c56e7f1bb324"
+        }
+      ],
+      "registeredFiles": [
+        {
+          "path": "apps/api/migrations/0001_shared_authority.sql",
+          "sha256": "bee9cec8bb2b90dbe20538fbb7de84acd8f5aae4d33810dc1e61bcbb2b4b5d04"
+        },
+        {
+          "path": "apps/api/migrations/0002_audit_envelopes.sql",
+          "sha256": "613949828f2508cb097bdf45a7f80505ef5296fd11d33642fab2caaf5620e7ae"
+        },
+        {
+          "path": "apps/api/migrations/0006_rate_limits.sql",
+          "sha256": "95cc3281db6b53ee016e799ca4db5c6f33abc8f15e882ae20e01d0758a90c59a"
+        },
+        {
+          "path": "apps/api/migrations/0008_account_services.sql",
+          "sha256": "ed24d431cba967eab47ae3f8339227c78385851774b02df3145068c6485931b7"
+        },
+        {
+          "path": "apps/api/migrations/0010_presence_bus.sql",
+          "sha256": "76f0aae430c3888e873dd209ad70b8ca70249ac574e24c562b2bb7f3b9bef61d"
+        },
+        {
+          "path": "apps/api/migrations/0011_agent_worker.sql",
+          "sha256": "1376add9d0d5cb9e406d3a81c7c227f7545c5d70ba72930f690159b2afac0858"
+        },
+        {
+          "path": "apps/api/migrations/0009_min_privilege_grants.sql",
+          "sha256": "15656ef57f26bfac7d9f1c579fa87e63d8697555a22f13d9951461e29d3f27d6"
+        },
+        {
+          "path": "apps/api/migrations/0012_magic_login.sql",
+          "sha256": "fa724d7c1010de876dc3ae6cecc543aadf3c9015350627f90e80d7dac9335191"
+        },
+        {
+          "path": "apps/api/migrations/0013_desktop_login.sql",
+          "sha256": "9a5485ef80bf857938c351de679f7ecf9cf7f5c1f7f4de54af6ec84baee76c20"
+        },
+        {
+          "path": "apps/api/migrations/0014_user_avatar.sql",
+          "sha256": "0f6b9d5fa2ff4b925aa40caae833b185d301bb89af6e96239f45b82c01a54158"
+        },
+        {
+          "path": "apps/api/migrations/0015_hosted_ai.sql",
+          "sha256": "61cbbcee7df864631b3b84bc98e498a5059547b908fc8b49a027c56e7f1bb324"
+        }
+      ],
+      "unregisteredDesignFiles": [
+        "0003_agent_tasks.sql",
+        "0004_password_reset.sql",
+        "0005_email_verify.sql",
+        "0009_magic_login.sql",
+        "0010_author_memory.sql"
+      ]
+    }
+  },
+  "tests": [],
+  "remaining": [
+    "Remote CI for the corrected commit",
+    "G1/G2 API/data/color design review",
+    "No v3 Asset/Canvas/Color/Bridge/Publishing implementation in this gate",
+    "Human/device/supplier/production acceptance remains separate"
+  ]
+}
