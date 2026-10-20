@@ -528,6 +528,8 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .memory-panel .info-card h4 { margin: 0 0 10px; }
 .memory-panel .info-card p { line-height: 1.7; }
 .memory-panel .memory-search { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 9px; margin: 0; }
+.memory-panel .memory-search > * { align-self: end; margin-top: 0; margin-bottom: 0; }
+.memory-panel .memory-search .button, .memory-panel .memory-search button { align-self: end; margin: 0; }
 .memory-panel .memory-search label { display: grid; gap: 8px; min-width: 0; }
 .memory-panel .memory-search input { width: 100%; min-width: 0; margin: 0; height: 38px; }
 .memory-panel .memory-search .button { height: 38px; white-space: nowrap; }
