@@ -4,6 +4,7 @@ import type { Photo, PhotoFilter, PhotoStatus, Project } from '../domain/models'
 import { groupPhotos, type GridGrouping } from '../domain/grouping';
 import { useUIStore } from '../stores/uiStore';
 import { NarrativeCanvas } from '../features/canvas/NarrativeCanvas';
+import { PublicationPanel } from '../features/publishing/PublicationPanel';
 import { zh } from './copy';
 import { ProjectHeader } from '../features/project/ProjectHeader';
 import { ContactSheetGrid } from '../components/contact-sheet/ContactSheetGrid';
@@ -58,10 +59,11 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
         {onAIOrder && <Button size="small" disabled={busy} onClick={onAIOrder} title="把选区交给AI 智能选片，生成两版顺序方案">生成两版顺序</Button>}
         <Button size="small" variant="quiet" onClick={ui.clearSelection}>清除选区</Button></div>}
     </div>
-    <div className="canvas-area"><div className="workspace-scroll"><div className="canvas-label"><span>{ui.view === 'grid' ? 'CONTACT SHEET' : ui.view === 'canvas' ? 'NARRATIVE CANVAS' : 'SEQUENCE BOARD'}</span>
+    <div className="canvas-area"><div className="workspace-scroll"><div className="canvas-label"><span>{ui.view === 'grid' ? 'CONTACT SHEET' : ui.view === 'canvas' ? 'NARRATIVE CANVAS' : ui.view === 'publication' ? 'PUBLICATIONS' : 'SEQUENCE BOARD'}</span>
       <span>{ui.view === 'grid' ? `${visible.length} 张` : `${kept.length} 张`}</span>
       {ui.view === 'sequence' && kept.length > 0 && <Button size="small" disabled={busy} onClick={onCopyPlan} title="把当前作品序列保存为独立的方案副本，可在作品版本中对比与恢复"><Copy size={13} /> 复制序列方案</Button>}</div>
       {!local && <div className="preview-banner">{zh.preview}</div>}
+      {ui.view === 'publication' && <PublicationPanel projectId={project.id} sequenceCount={kept.length} />}
       {ui.view === 'canvas' && <NarrativeCanvas projectId={project.id} selectedPhotoIds={selectedIds} />}
             {ui.view === 'grid' ? (visible.length ? <div className="grid-groups">
         {groupPhotos(visible, ui.grouping).map(group => group.label ? <section key={group.key} className="grid-group" aria-label={`分组 ${group.label}`}>
