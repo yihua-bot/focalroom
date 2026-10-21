@@ -12,6 +12,7 @@ import {
 import { useRealtime } from "./useRealtime";
 import { AccessPanel, HistoryPanel } from "./ReviewPanels";
 import { AgentAnalysis } from "./AgentAnalysis";
+import { BoardViewer } from "./BoardViewer";
 
 type CommentTarget =
   | { kind: "photo" }
@@ -32,7 +33,7 @@ export function ProjectReview({
     [revoked, setRevoked] = useState(false),
     [selected, setSelected] = useState(""),
     [images, setImages] = useState<Record<string, string>>({}),
-    [tab, setTab] = useState<"comments" | "proposals" | "access" | "history">(
+    [tab, setTab] = useState<"comments" | "proposals" | "boards" | "access" | "history">(
       "comments",
     );
   const [body, setBody] = useState(""),
@@ -624,6 +625,18 @@ export function ProjectReview({
               批注
             </button>
             <button
+              aria-pressed={tab === "boards"}
+              onClick={() => setTab("boards")}
+            >
+              批注
+            </button>
+            <button
+              aria-pressed={tab === "boards"}
+              onClick={() => setTab("boards")}
+            >
+              画布
+            </button>
+            <button
               aria-pressed={tab === "proposals"}
               onClick={() => setTab("proposals")}
             >
@@ -722,6 +735,9 @@ export function ProjectReview({
               </label>
               {canApprove && <AgentAnalysis id={id} session={session} />}
             </div>
+          )}
+          {tab === "boards" && (
+            <BoardViewer session={session} projectId={id} onBack={() => setTab("comments")} />
           )}
           {tab === "proposals" && (
             <div className="fr-panel">

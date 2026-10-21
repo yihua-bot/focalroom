@@ -24,6 +24,7 @@ export function BoardViewer({ session, projectId, onBack }: {
   const [activeBoard, setActiveBoard] = useState<string | null>(null);
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationInfo[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(0.7);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,7 +44,20 @@ export function BoardViewer({ session, projectId, onBack }: {
     let active = true;
     // 获取节点和评论
     request<NodeInfo[]>(`/boards/${activeBoard}/nodes`, session, 'GET')
-      .then(ns => { if (active) setNodes(ns ?? []); }).catch(() => {});
+      .then(async ns => {
+        if (!active || !ns) return;
+        setNodes(ns);
+        // 加载照片节点的预览 URL
+        const assetIds = ns.filter(n => n.node_type === 'photo' && n.asset_id).map(n => n.asset_id!);
+        const urls: Record<string, string> = {};
+        for (const assetId of assetIds.slice(0, 50)) {
+          try {
+            const resp = await request<{url?: string}>(`/assets/${assetId}/preview-url`, session, 'GET').catch(() => null);
+            if (resp?.url) urls[assetId] = resp.url;
+          } catch { /* 逐张容错 */ }
+        }
+        if (active) setPreviewUrls(urls);
+      }).catch(() => {});
     request<AnnotationInfo[]>(`/boards/${activeBoard}/annotations`, session, 'GET')
       .then(ans => { if (active) setAnnotations(ans ?? []); }).catch(() => {});
     return () => { active = false; };
@@ -116,7 +130,9 @@ export function BoardViewer({ session, projectId, onBack }: {
           <div key={node.id} className="board-photo" style={{
             left: node.x, top: node.y, width: node.width, height: node.height, zIndex: node.z_order,
           }}>
-            <div className="board-photo-placeholder">📷</div>
+            {node.asset_id && previewUrls[node.asset_id]
+              ? <img src={previewUrls[node.asset_id]} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'2px'}} />
+              : <div className="board-photo-placeholder">📷</div>}
           </div>
         ))}
         {nodes.filter(n => n.node_type === 'sticky' || n.node_type === 'text').map(node => {

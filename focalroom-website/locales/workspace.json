@@ -1,0 +1,470 @@
+[
+  [
+    "FocalRoom — 摄影创作工作空间，从念头到作品",
+    "FocalRoom — A creative workspace for photography",
+    "FocalRoom — 写真のアイデアを作品へつなぐワークスペース",
+    "FocalRoom — 아이디어에서 작품까지, 사진 창작 공간"
+  ],
+  [
+    "FocalRoom 是面向摄影创作者的 AI 原生工作空间，以项目串联选片、视觉编辑、叙事与共同评审。了解当前功能，以及研究参考板、调色往返和摄影书的产品方向。",
+    "FocalRoom is an AI-native creative workspace for photography. Connect photo selection, visual editing, sequencing and private review in a project. Explore current features and the roadmap for research, editing round-trips and photobooks.",
+    "FocalRoomは写真創作者のためのAIネイティブなワークスペース。プロジェクトを軸にセレクト、ビジュアル編集、構成、講評をつなぎます。現在の機能と、リサーチ、外部現像との往復、写真集への展望をご覧ください。",
+    "FocalRoom은 사진 창작자를 위한 AI 네이티브 작업 공간입니다. 프로젝트 안에서 사진 선별, 비주얼 편집, 시퀀스와 리뷰를 연결합니다. 현재 기능과 리서치, 외부 보정 왕복, 포토북 계획을 살펴보세요."
+  ],
+  [
+    "从第一个念头，",
+    "From the first idea,",
+    "最初のアイデアから、",
+    "첫 아이디어에서,"
+  ],
+  [
+    "到最终的作品",
+    "to the final work",
+    "ひとつの作品へ",
+    "완성된 작품까지"
+  ],
+  [
+    "摄影创作工作空间",
+    "A creative workspace for photography",
+    "写真創作のためのワークスペース",
+    "사진 창작을 위한 작업 공간"
+  ],
+  [
+    "围绕一个项目，选择影像、寻找联系、与编辑交换看法。",
+    "Select images, discover connections and exchange ideas with an editor, all around one project.",
+    "ひとつのプロジェクトを軸に、写真を選び、つながりを見つけ、編集者と意見を交わす。",
+    "하나의 프로젝트 안에서 사진을 고르고, 연결을 찾고, 편집자와 의견을 나누세요."
+  ],
+  [
+    "从构思到呈现，让每一次取舍接得上。",
+    "Keep your creative decisions connected, from idea to presentation.",
+    "構想から発表まで、一つひとつの判断をつなぐ。",
+    "구상에서 발표까지, 창작의 선택을 이어갑니다."
+  ],
+  [
+    "创作工作流",
+    "Creative workflow",
+    "創作の流れ",
+    "창작 워크플로"
+  ],
+  [
+    "当前与未来",
+    "Available & upcoming",
+    "現在の機能と今後",
+    "현재 기능과 앞으로의 계획"
+  ],
+  [
+    "一个项目，可以反复回来。",
+    "A project you can keep returning to.",
+    "何度でも立ち戻れるプロジェクト。",
+    "언제든 다시 돌아올 수 있는 프로젝트."
+  ],
+  [
+    "作品往往在重新选片、调色和讨论中成形。FocalRoom 围绕这个循环设计，让不同方案有各自的位置。",
+    "Work takes shape through reselection, editing and discussion. FocalRoom is designed around that cycle, with room for different directions.",
+    "作品は、選び直し、現像し、語り合う中で形になります。FocalRoomはその往復を中心に、異なる方向を試せる場をつくります。",
+    "작품은 다시 고르고, 보정하고, 이야기하는 과정에서 형태를 갖춥니다. FocalRoom은 이 순환을 중심으로 여러 방향을 탐색할 공간을 만듭니다."
+  ],
+  [
+    "研究与构思",
+    "Research & ideas",
+    "リサーチと構想",
+    "리서치와 구상"
+  ],
+  [
+    "记录主题、参考影像和想表达的内容。Research & Moodboard 正在规划中。",
+    "Collect themes, visual references and what you want to express. Research & Moodboard is planned.",
+    "テーマや参考写真、伝えたいことをまとめる。Research & Moodboardは今後の予定です。",
+    "주제, 참고 이미지, 표현하고 싶은 내용을 모읍니다. Research & Moodboard는 계획 중입니다."
+  ],
+  [
+    "图库与选片",
+    "Library & selection",
+    "ライブラリとセレクト",
+    "라이브러리와 사진 선별"
+  ],
+  [
+    "导入照片、比较与保留。技术质量和照片在作品中的作用，可以分别判断。",
+    "Import, compare and keep images. Judge technical quality separately from an image’s role in the work.",
+    "写真を取り込み、比較し、残す。技術的な品質と作品の中での役割を分けて考えられます。",
+    "사진을 가져와 비교하고 남깁니다. 기술적 품질과 작품 안에서의 역할은 따로 판단할 수 있습니다."
+  ],
+  [
+    "叙事与编排",
+    "Narrative & sequencing",
+    "物語と構成",
+    "서사와 시퀀스"
+  ],
+  [
+    "在现有作品序列中寻找节奏；自由画布的并置、分组与标注正在完善。",
+    "Find rhythm in the existing sequence view. Free-form canvas juxtaposition, grouping and annotation are in development.",
+    "現在のシーケンス機能でリズムを探す。自由なキャンバスでの並置、グループ化、注記は開発中です。",
+    "현재 제공되는 시퀀스에서 리듬을 찾습니다. 자유 캔버스의 병치, 그룹화와 주석 기능은 개발 중입니다."
+  ],
+  [
+    "调色与共同编辑",
+    "Develop & review",
+    "現像と共同編集",
+    "보정과 공동 편집"
+  ],
+  [
+    "通过 Web 邀请编辑评片；Lightroom Classic / Capture One 的版本往返仍在开发。",
+    "Invite an editor to review on the web. Version round-trips with Lightroom Classic and Capture One are still in development.",
+    "Webで編集者を招いて講評。Lightroom Classic / Capture Oneとのバージョン往復は開発中です。",
+    "웹에서 편집자를 초대해 리뷰합니다. Lightroom Classic / Capture One 버전 왕복 기능은 개발 중입니다."
+  ],
+  [
+    "作品呈现",
+    "Present the work",
+    "作品を届ける",
+    "작품 발표"
+  ],
+  [
+    "摄影书、展览与印前交付是产品方向，尚未作为完整制作能力发布。",
+    "Photobooks, exhibitions and print delivery are part of the roadmap, not a complete production feature today.",
+    "写真集、展示、印刷入稿は今後の方向性であり、完成した制作機能としては未提供です。",
+    "포토북, 전시와 인쇄 납품은 제품의 방향이며, 완성된 제작 기능으로 출시되지는 않았습니다."
+  ],
+  [
+    "查看完整创作循环与功能边界 ↗",
+    "Explore the workflow and feature boundaries ↗",
+    "創作の流れと機能の範囲を見る ↗",
+    "전체 창작 흐름과 기능 범위 보기 ↗"
+  ],
+  [
+    "你的选择，不止一个分数。",
+    "Your choices go beyond a score.",
+    "選択は、点数だけでは決まらない。",
+    "선택은 점수만으로 정해지지 않습니다."
+  ],
+  [
+    "一张安静的过渡，也可能让整组照片成立。比较、编排、再判断，给作品留出形成的空间。",
+    "A quiet transition may hold a whole sequence together. Compare, arrange and reconsider, giving the work room to emerge.",
+    "静かな一枚が、全体をつなぐこともある。比較し、並べ、考え直すことで、作品が生まれる余地を残します。",
+    "조용한 전환의 한 장이 시퀀스 전체를 이어 줄 수도 있습니다. 비교하고, 배열하고, 다시 판단하며 작품이 만들어질 여지를 남깁니다."
+  ],
+  [
+    "macOS 11+ · Apple Silicon · 现有版本 1.0.4",
+    "macOS 11+ · Apple Silicon · Current release 1.0.4",
+    "macOS 11以降 · Apple Silicon · 現行版1.0.4",
+    "macOS 11 이상 · Apple Silicon · 현재 버전 1.0.4"
+  ],
+  [
+    "下载现有 macOS 版",
+    "Download for macOS",
+    "macOS版をダウンロード",
+    "macOS 버전 다운로드"
+  ],
+  [
+    "创作工作流与产品方向 · FocalRoom",
+    "Photography workflow & roadmap · FocalRoom",
+    "写真創作の流れと今後の方向性 · FocalRoom",
+    "사진 창작 워크플로와 제품 방향 · FocalRoom"
+  ],
+  [
+    "了解 FocalRoom 如何围绕项目连接选片、视觉编辑与协作，以及研究参考板、外部调色、叙事画布和作品出版的开发方向。",
+    "See how FocalRoom connects photo selection, visual editing and review around a project, with a clear roadmap for research moodboards, external editing, narrative canvas and publishing.",
+    "FocalRoomがプロジェクトを軸に写真のセレクト、ビジュアル編集、講評をどうつなぐか。参考ボード、外部現像、叙事キャンバス、出版の開発方針も紹介します。",
+    "FocalRoom이 프로젝트를 중심으로 사진 선별, 비주얼 편집과 리뷰를 연결하는 방식을 알아보세요. 리서치 보드, 외부 보정, 서사 캔버스와 출판 계획도 소개합니다."
+  ],
+  [
+    "从构思开始，围绕作品往返。",
+    "Begin with an idea. Return to the work.",
+    "構想から始め、作品へ何度も立ち戻る。",
+    "구상에서 시작해, 작품으로 다시 돌아오세요."
+  ],
+  [
+    "FocalRoom 是面向摄影创作者的 AI 原生创作工作空间。它关注照片如何共同构成作品，以项目连接人工判断、叙事与共同评审；最终决定由创作者作出。",
+    "FocalRoom is an AI-native creative workspace for photography. It focuses on how images become a body of work, connecting human judgment, narrative and review around a project. The creator makes the final decisions.",
+    "FocalRoomは写真創作者のためのAIネイティブなワークスペースです。複数の写真がどう作品になるかに向き合い、プロジェクトの中で判断、物語、講評をつなぎます。最後の決定は創作者が行います。",
+    "FocalRoom은 사진 창작자를 위한 AI 네이티브 작업 공간입니다. 여러 사진이 하나의 작품이 되는 과정에 집중하며, 프로젝트 안에서 판단과 서사, 리뷰를 연결합니다. 최종 결정은 창작자가 내립니다."
+  ],
+  [
+    "摄影创作的三个层次",
+    "Three layers of photographic work",
+    "写真創作の三つの層",
+    "사진 창작의 세 가지 층위"
+  ],
+  [
+    "影像处理",
+    "Image processing",
+    "画像処理",
+    "이미지 처리"
+  ],
+  [
+    "显影、调色与精修交给你熟悉的软件。FocalRoom 不替代 Lightroom、Capture One 或 Photoshop。",
+    "Keep developing, color grading and retouching in the tools you know. FocalRoom does not replace Lightroom, Capture One or Photoshop.",
+    "現像、色調整、レタッチは使い慣れたソフトで。FocalRoomはLightroom、Capture One、Photoshopの代替ではありません。",
+    "현상, 색 보정과 리터칭은 익숙한 도구로 진행하세요. FocalRoom은 Lightroom, Capture One, Photoshop을 대체하지 않습니다."
+  ],
+  [
+    "创作性编辑",
+    "Creative editing",
+    "創作的な編集",
+    "창작적 편집"
+  ],
+  [
+    "判断哪些影像可以一起构成作品：比较、并置、取舍、顺序与节奏，是 FocalRoom 的核心方向。",
+    "Decide which images belong together. Comparison, juxtaposition, selection, order and rhythm are at the heart of FocalRoom.",
+    "どの写真が一緒に作品をつくるかを考える。比較、並置、取捨、順序、リズムがFocalRoomの中心です。",
+    "어떤 사진이 함께 작품을 이루는지 판단합니다. 비교, 병치, 선택, 순서와 리듬이 FocalRoom의 핵심입니다."
+  ],
+  [
+    "作品出版与呈现",
+    "Publishing & presentation",
+    "出版と発表",
+    "출판과 발표"
+  ],
+  [
+    "将叙事连接到摄影书、展览与作品集；专业版式、色彩和印前输出仍需逐项完成验收。",
+    "Connect the narrative to photobooks, exhibitions and portfolios. Professional layout, color and print output still require development and validation.",
+    "物語を写真集、展示、ポートフォリオへ。専門的な組版、色管理、印刷出力は、開発と検証を進めています。",
+    "서사를 포토북, 전시와 포트폴리오로 연결합니다. 전문 레이아웃, 색 관리와 인쇄 출력은 개발 및 검증이 더 필요합니다."
+  ],
+  [
+    "同一个项目，保留不同方向",
+    "One project, different directions",
+    "ひとつのプロジェクト、複数の方向",
+    "하나의 프로젝트, 여러 방향"
+  ],
+  [
+    "可以先调色再选片，也可以在排版时重新找回一张照片。阶段用于组织工作，不限制你何时返回；完整跨工具、跨版本闭环仍在建设。",
+    "Develop before selecting, or rediscover an image while laying out a book. Stages organize work without locking you into an order. The full cross-tool and versioned workflow is still being built.",
+    "現像してから選んでも、組版中に写真を見直してもよい。段階は整理のためで、順序を強制しません。ツールとバージョンをまたぐ完全な連携は構築中です。",
+    "먼저 보정한 뒤 고르거나 책을 편집하며 사진을 다시 찾을 수 있습니다. 단계는 작업을 정리할 뿐 순서를 강제하지 않습니다. 도구와 버전을 잇는 전체 흐름은 구축 중입니다."
+  ],
+  [
+    "当前可用与开发方向",
+    "What is available and what is next",
+    "現在使えること、これからのこと",
+    "현재 가능한 것과 개발 방향"
+  ],
+  [
+    "可用功能以下载版本和工作区实际提供的入口为准。以下将现有能力与开发方向分开，不代表所有规划已随安装包交付。",
+    "Availability depends on the installed release and workspace. Existing capabilities and planned work are listed separately; the download does not include every roadmap feature.",
+    "利用できる機能はインストール版とワークスペースによります。現在の機能と開発予定を分けて記載しており、すべての予定がダウンロード版に含まれるわけではありません。",
+    "사용 가능한 기능은 설치 버전과 워크스페이스에 따라 다릅니다. 기존 기능과 개발 계획을 구분하며, 다운로드에 모든 계획 기능이 포함되는 것은 아닙니다."
+  ],
+  [
+    "现有功能",
+    "Existing capabilities",
+    "現在の機能",
+    "기존 기능"
+  ],
+  [
+    "项目与照片导入、人工选片与比较、作品序列、版本记录、演示项目，以及 Web 登录和私密评片。",
+    "Projects and photo import, manual selection and comparison, sequences, version history, a demo project, plus web sign-in and private review.",
+    "プロジェクトと写真の取り込み、手動セレクトと比較、シーケンス、履歴、デモプロジェクト、Webログインと非公開の講評。",
+    "프로젝트와 사진 가져오기, 수동 선별과 비교, 시퀀스, 버전 기록, 데모 프로젝트, 웹 로그인과 프라이빗 리뷰."
+  ],
+  [
+    "AI 选片草案",
+    "AI selection drafts",
+    "AIによるセレクト案",
+    "AI 사진 선별 초안"
+  ],
+  [
+    "先导入照片，再告诉 AI 创作目标。真实分析依赖可用服务、账户额度与本次任务范围；草案经你采纳才改变正式选片。官网演示使用预设建议。",
+    "Import photos, then give AI a creative goal. Real analysis depends on service availability, account allowance and task scope. Drafts change the selection only when accepted. The website demo uses preset suggestions.",
+    "写真を取り込み、AIに創作目標を伝えます。実際の分析には利用可能なサービス、アカウント残量、タスク範囲が必要です。採用した案だけが正式な選択に反映されます。サイトのデモは事前設定の提案です。",
+    "사진을 가져온 뒤 AI에게 창작 목표를 전달합니다. 실제 분석은 서비스 가용성, 계정 사용량과 작업 범위에 따라 달라집니다. 채택한 초안만 정식 선별에 반영됩니다. 웹 데모는 미리 준비된 제안을 사용합니다."
+  ],
+  [
+    "正在开发",
+    "In development",
+    "開発中",
+    "개발 중"
+  ],
+  [
+    "叙事画布、完整的画布 Agent、Lightroom Classic / Capture One 往返、共享画布，以及摄影书和专业色彩输出。",
+    "Narrative canvas, a complete canvas Agent, Lightroom Classic / Capture One round-trips, shared boards, photobooks and professional color output.",
+    "叙事キャンバス、キャンバスAgentの完成、Lightroom Classic / Capture Oneとの往復、共有ボード、写真集、専門的な色管理と出力。",
+    "서사 캔버스, 완성된 캔버스 Agent, Lightroom Classic / Capture One 왕복, 공유 보드, 포토북과 전문 색상 출력."
+  ],
+  [
+    "规划中",
+    "Planned",
+    "今後の予定",
+    "계획 중"
+  ],
+  [
+    "Research & Moodboard：允许从无照片项目开始，整理创作意图、参考来源与研究板，并与后续编辑上下文连接。",
+    "Research & Moodboard: start a project before importing photos, organize intent and reference sources, and connect a research board to later editing context.",
+    "Research & Moodboard：写真の取り込み前にプロジェクトを始め、意図や参考資料をまとめ、リサーチボードをその後の編集につなぎます。",
+    "Research & Moodboard: 사진을 가져오기 전 프로젝트를 시작하고, 의도와 참고 출처를 정리해 리서치 보드를 이후 편집 맥락에 연결합니다."
+  ],
+  [
+    "参考资料与作品照片分开",
+    "Keep references distinct from your photographs",
+    "参考資料と作品写真を分ける",
+    "참고 자료와 작품 사진의 구분"
+  ],
+  [
+    "参考图用于研究与讨论，不能自动成为作者作品或进入正式出版文件。规划中的参考板会记录来源；保存链接也不等于获得下载、再发布或发送给 AI 的权利。",
+    "Reference images support research and discussion; they must not automatically become your work or enter publication files. Planned reference boards will record sources. Saving a link does not grant rights to download, republish or send it to AI.",
+    "参考画像は調査と対話のためのもの。作者の作品や出版データに自動で含めません。予定する参考ボードでは出典を記録します。リンクの保存は、ダウンロード、再公開、AIへの送信権を意味しません。",
+    "참고 이미지는 연구와 토론을 위한 자료이며, 자동으로 작가의 작품이나 출판 파일에 포함되지 않습니다. 계획 중인 참고 보드는 출처를 기록합니다. 링크 저장은 다운로드, 재게시 또는 AI 전송 권한을 뜻하지 않습니다."
+  ],
+  [
+    "谁适合使用 FocalRoom？",
+    "Who is FocalRoom for?",
+    "FocalRoomは誰のためのもの？",
+    "FocalRoom은 누구를 위한 도구인가요?"
+  ],
+  [
+    "希望整理长期项目、编辑组照或与编辑共同评片的摄影创作者。艺术摄影师、摄影书作者、摄影编辑和工作室可以从现有选片与序列功能开始；完整出版制作仍在开发。",
+    "Photographers developing long-term projects, editing bodies of work or reviewing with an editor. Art photographers, photobook authors, photo editors and studios can start with selection and sequencing; complete publishing production is still in development.",
+    "長期プロジェクトをまとめ、組写真を編集し、編集者と講評したい写真創作者へ。アート写真家、写真集制作者、写真編集者、スタジオは現行のセレクトと構成から始められます。完全な出版制作は開発中です。",
+    "장기 프로젝트를 정리하거나 연작을 편집하고 편집자와 리뷰하려는 사진 창작자에게 적합합니다. 예술 사진가, 포토북 작가, 사진 편집자와 스튜디오는 현재 선별과 시퀀스 기능부터 사용할 수 있습니다. 완전한 출판 제작은 개발 중입니다."
+  ],
+  [
+    "FocalRoom 能替代 Lightroom 或 Capture One 吗？",
+    "Does FocalRoom replace Lightroom or Capture One?",
+    "LightroomやCapture Oneの代わりになりますか？",
+    "Lightroom이나 Capture One을 대체하나요?"
+  ],
+  [
+    "不能。FocalRoom 专注选片、视觉编辑、叙事与评审。继续用熟悉的软件显影、调色和精修；两者之间的自动版本往返仍在开发。",
+    "No. FocalRoom focuses on selection, visual editing, sequencing and review. Keep using your preferred tools for developing, color and retouching. Automatic version round-trips are still in development.",
+    "いいえ。FocalRoomはセレクト、ビジュアル編集、構成、講評に集中します。現像、色調整、レタッチには使い慣れたソフトをお使いください。自動バージョン往復は開発中です。",
+    "아니요. FocalRoom은 선별, 비주얼 편집, 시퀀스와 리뷰에 집중합니다. 현상, 색 보정과 리터칭은 기존 도구를 사용하세요. 자동 버전 왕복 기능은 개발 중입니다."
+  ],
+  [
+    "Research、画布和摄影书现在都能用吗？",
+    "Are research boards, canvas and photobooks available now?",
+    "リサーチボードやキャンバス、写真集は今使えますか？",
+    "리서치 보드, 캔버스와 포토북을 지금 사용할 수 있나요?"
+  ],
+  [
+    "尚未完整发布。研究参考板属于规划；画布、外部调色往返、共享画布与摄影书正在开发和验证。现有下载版与官网演示不代表完整创作闭环已经交付。",
+    "Not as a complete release. Research boards are planned; canvas, external editing round-trips, shared boards and photobooks are being developed and validated. The current download and website demo do not represent the complete workflow.",
+    "完成版としては未提供です。リサーチボードは計画段階、キャンバス、外部現像との往復、共有ボード、写真集は開発・検証中です。現行のダウンロード版やサイトのデモが全工程に対応しているわけではありません。",
+    "완성된 기능으로 모두 출시되지는 않았습니다. 리서치 보드는 계획 중이며, 캔버스, 외부 보정 왕복, 공유 보드와 포토북은 개발 및 검증 중입니다. 현재 다운로드와 웹 데모가 전체 창작 흐름을 제공하는 것은 아닙니다."
+  ],
+  [
+    "获取与联系",
+    "Download & contact",
+    "ダウンロードと連絡先",
+    "다운로드와 연락처"
+  ],
+  [
+    "现有 macOS 版本可从首页下载，Web 评片使用独立账户。产品问题可通过邮箱或 Instagram 联系作者。",
+    "Download the current macOS release from the homepage. Web review uses a separate sign-in. Contact the author by email or Instagram for product questions.",
+    "現行のmacOS版はホームからダウンロードできます。Web講評にはログインが必要です。製品についてはメールまたはInstagramで作者へご連絡ください。",
+    "현재 macOS 버전은 홈페이지에서 다운로드할 수 있습니다. 웹 리뷰는 별도 로그인이 필요합니다. 제품 문의는 이메일이나 Instagram으로 제작자에게 연락하세요."
+  ],
+  [
+    "联系作者",
+    "Contact the author",
+    "作者へ連絡",
+    "제작자에게 연락"
+  ],
+  [
+    "产品方向",
+    "Product direction",
+    "製品の方向性",
+    "제품 방향"
+  ],
+  [
+    "登录",
+    "Sign in",
+    "ログイン",
+    "로그인"
+  ],
+  [
+    "打开团队评片 ↗",
+    "Open team review ↗",
+    "チーム講評を開く ↗",
+    "팀 리뷰 열기 ↗"
+  ],
+  [
+    "在浏览器中登录，进入你有权限访问的项目。",
+    "Sign in in your browser to open projects you have access to.",
+    "ブラウザでログインし、アクセス権のあるプロジェクトを開きます。",
+    "브라우저에서 로그인해 접근 권한이 있는 프로젝트를 여세요."
+  ],
+  [
+    "AI 的建议从你的目标开始；使用前确认本次分析范围和可用额度。",
+    "AI suggestions start with your goal. Check the analysis scope and available allowance before starting.",
+    "AIの提案はあなたの目標から。開始前に分析範囲と利用可能な残量を確認してください。",
+    "AI의 제안은 창작 목표에서 시작합니다. 시작 전 분석 범위와 사용 가능한 잔여량을 확인하세요."
+  ],
+  [
+    "进入选片工作台，点击「AI 智能选片」，在对话中说明创作目标。张数和处理范围按任务选择，开始前核对本次将分析的照片。",
+    "Open the selection workspace and choose AI selection. Describe your creative goal in the conversation, choose the count and scope, and check which photos will be analyzed before starting.",
+    "セレクト画面からAIセレクトを開き、対話で創作目標を伝えます。枚数と範囲を選び、分析される写真を確認して開始してください。",
+    "선별 작업 공간에서 AI 사진 선별을 열고 대화로 창작 목표를 설명하세요. 사진 수와 범위를 선택하고 분석할 사진을 확인한 뒤 시작하세요."
+  ],
+  [
+    "AI 功能依赖账户额度和当前可用服务。任务可能只观察部分照片；请根据实际覆盖和草案理由判断，不要把建议视为最终结论。",
+    "AI features depend on account allowance and service availability. A task may inspect only part of a project. Check coverage and draft reasoning rather than treating suggestions as final decisions.",
+    "AI機能はアカウント残量とサービスの利用状況に依存します。一部の写真だけを観察する場合もあります。確認範囲と提案理由を見て判断してください。",
+    "AI 기능은 계정 잔여량과 서비스 가용성에 따라 달라집니다. 작업이 일부 사진만 관찰할 수 있으므로 실제 관찰 범위와 초안의 이유를 확인하고 판단하세요."
+  ],
+  [
+    "官网展示与当前版本",
+    "The website and current release",
+    "サイトの紹介と現行版",
+    "웹사이트 소개와 현재 버전"
+  ],
+  [
+    "研究参考板、叙事画布、调色往返和出版制作的状态，请查看产品方向页；这里的快速指南不把规划中的功能当作已发布步骤。",
+    "See the product direction page for the status of research boards, narrative canvas, editing round-trips and publishing. This guide does not present planned features as released steps.",
+    "参考ボード、叙事キャンバス、現像往復、出版制作の状況は製品の方向性をご覧ください。本ガイドでは予定機能を提供済みの手順として扱いません。",
+    "리서치 보드, 서사 캔버스, 보정 왕복과 출판 제작의 상태는 제품 방향 페이지에서 확인하세요. 이 가이드는 계획 기능을 출시된 단계로 소개하지 않습니다."
+  ],
+  [
+    "官网页面可直接阅读，无需开启 JavaScript；交互演示需要 JavaScript。",
+    "The website is readable without JavaScript. The interactive demo requires JavaScript.",
+    "紹介ページはJavaScriptなしでも読めます。操作デモにはJavaScriptが必要です。",
+    "웹사이트의 글은 JavaScript 없이도 읽을 수 있습니다. 인터랙티브 데모에는 JavaScript가 필요합니다."
+  ],
+  [
+    "更新日期：2026 年 10 月 21 日。本页说明官网演示、现有产品与规划功能的数据边界；规划中的资料处理尚未作为已上线服务提供。",
+    "Updated October 21, 2026. This page explains data boundaries for the website demo, existing product and planned features. Planned reference-material processing is not a live service.",
+    "更新：2026年10月21日。サイトのデモ、現行製品、予定機能のデータ範囲を説明します。予定する参考資料の処理はまだ提供されていません。",
+    "업데이트: 2026년 10월 21일. 웹 데모, 기존 제품과 계획 기능의 데이터 범위를 설명합니다. 계획 중인 참고 자료 처리는 아직 제공되지 않습니다."
+  ],
+  [
+    "真实 AI 任务会根据本次范围向所示服务发送目标和必要上下文，可能包括文件名与备注；人工选片无需调用模型。服务端凭据不由官网收集。",
+    "Real AI tasks send the goal and necessary context to the indicated service within the task scope, potentially including filenames and notes. Manual selection does not require a model. The website does not collect service credentials.",
+    "実際のAIタスクは指定範囲で目標と必要な文脈を表示されたサービスへ送信します。ファイル名やメモを含む場合があります。手動セレクトにモデルは不要です。サイトはサービス認証情報を収集しません。",
+    "실제 AI 작업은 지정된 범위에서 목표와 필요한 맥락을 표시된 서비스로 보냅니다. 파일명과 메모가 포함될 수 있습니다. 수동 선별은 모델이 필요하지 않으며, 웹사이트는 서비스 자격 증명을 수집하지 않습니다."
+  ],
+  [
+    "参考资料与 AI",
+    "Reference materials and AI",
+    "参考資料とAI",
+    "참고 자료와 AI"
+  ],
+  [
+    "规划中的研究板会将参考素材与作品照片区分。保存参考不等于允许上传到 AI、分享给成员或用于出版；这些范围需要在功能实现时分别校验。",
+    "Planned research boards will distinguish reference material from your photographs. Saving a reference does not authorize AI uploads, member sharing or publication; each scope must be checked when the feature is implemented.",
+    "予定するリサーチボードでは参考資料と作品写真を分けます。参考の保存はAI送信、メンバー共有、出版を許可するものではなく、実装時にそれぞれの範囲を確認します。",
+    "계획 중인 리서치 보드는 참고 자료와 작품 사진을 구분합니다. 참고 자료 저장은 AI 업로드, 구성원 공유 또는 출판을 허용하는 것이 아니며, 구현 시 각 범위를 별도로 확인해야 합니다."
+  ],
+  [
+    "支持 macOS 11 及以上的 Apple Silicon Mac。现有下载版为 1.0.4；Intel Mac 和其他桌面平台尚未完成发行验收。Web 评片可通过浏览器访问，完整 v3 规划不包含在现有安装包中。",
+    "The current 1.0.4 download supports Apple Silicon Macs running macOS 11 or later. Intel Macs and other desktop platforms have not completed release validation. Web review runs in a browser. The current package does not include the full v3 roadmap.",
+    "現行の1.0.4はmacOS 11以降のApple Silicon Mac向けです。Intel Macや他のデスクトップ環境はリリース検証未完了です。Web講評はブラウザで利用でき、現行パッケージにv3の全計画は含まれません。",
+    "현재 1.0.4 다운로드는 macOS 11 이상의 Apple Silicon Mac을 지원합니다. Intel Mac과 다른 데스크톱 플랫폼은 출시 검증이 완료되지 않았습니다. 웹 리뷰는 브라우저로 이용하며, 현재 패키지에 전체 v3 계획은 포함되지 않습니다."
+  ],
+  [
+    "可以。桌面的导入、保留与淘汰、评分、比较、序列、版本和导出可以独立使用。",
+    "Yes. Desktop import, keep/reject, ratings, comparison, sequencing, versions and export work independently.",
+    "はい。取り込み、採否、評価、比較、構成、バージョン、書き出しは単独で利用できます。",
+    "네. 데스크톱 가져오기, 유지와 제외, 별점, 비교, 시퀀스, 버전과 내보내기는 독립적으로 사용할 수 있습니다."
+  ],
+  [
+    "产品方向 ↗",
+    "Product direction ↗",
+    "製品の方向性 ↗",
+    "제품 방향 ↗"
+  ],
+  [
+    "撤回授权阻止后续发送，无法收回已经发出的内容；清空本机观察缓存不等于删除服务商的记录。",
+    "Revoking permission stops future sends but cannot recall content already sent. Clearing local observation caches does not delete the provider’s records.",
+    "許可の撤回は以後の送信を止めますが、送信済みの内容は取り戻せません。ローカルの観察キャッシュを消しても、サービス側の記録は削除されません。",
+    "권한 철회는 이후 전송을 막지만 이미 보낸 내용을 회수하지는 못합니다. 로컬 관찰 캐시를 비워도 서비스 제공자의 기록이 삭제되는 것은 아닙니다."
+  ]
+]

@@ -9,11 +9,11 @@ const source = await fs.readFile(path.join(root, 'i18n.js'), 'utf8');
 const catalog = await fs.readFile(path.join(root, 'locales.js'), 'utf8');
 
 // 仅测试语言解析和存储失败边界，不操作真实浏览器或用户数据。
-function load({ query = '', remembered, languages = ['en-US'], storageBlocked = false, historyBlocked = false } = {}) {
+function load({ query = '', remembered, languages = ['en-US'], storageBlocked = false, historyBlocked = false, pageLocale, page = 'home' } = {}) {
   const stored = new Map(remembered ? [['focalroom.locale', remembered]] : []);
   const events = [];
   const urls = [];
-  const document = { documentElement: { lang: '' }, createTreeWalker: () => ({ nextNode: () => false }), querySelectorAll: () => [] };
+  const document = { documentElement: { lang: '', dataset: { pageLocale, page } }, createTreeWalker: () => ({ nextNode: () => false }), querySelectorAll: () => [] };
   const window = { dispatchEvent: event => events.push(event), history: { replaceState: (_, __, url) => { if (historyBlocked) throw new Error('blocked'); urls.push(url); } } };
   const context = vm.createContext({
     window, document, URL, location: { href: 'https://example.test/index.html' + query },
@@ -39,10 +39,19 @@ test('switch persists only a supported language, retaining URL hash', () => {
   const state = load({ query: '?campaign=photo#playground' });
   state.api.setLanguage('ko');
   assert.equal(state.stored.get('focalroom.locale'), 'ko');
-  assert.equal(state.urls.at(-1), '/index.html?campaign=photo&lang=ko#playground');
+  assert.equal(state.urls.at(-1), '/ko/?campaign=photo#playground');
   state.api.setLanguage('invalid');
   assert.equal(state.api.language, 'ko');
   assert.equal(state.events.at(-1).detail.language, 'ko');
+});
+test('a static language route overrides remembered and browser preferences', () => {
+  assert.equal(load({ pageLocale: 'ja', remembered: 'en', languages: ['ko'] }).api.language, 'ja');
+  assert.equal(load({ pageLocale: 'zh', remembered: 'ko', languages: ['en'] }).api.language, 'zh');
+});
+test('language switches retain the current document and remove legacy lang parameters', () => {
+  const state = load({ query: '?lang=ja&campaign=book#availability', pageLocale: 'en', page: 'workflow' });
+  state.api.setLanguage('ko');
+  assert.equal(state.urls.at(-1), '/ko/workflow/?campaign=book#availability');
 });
 test('blocked storage and history do not prevent language switching', () => {
   const state = load({ storageBlocked: true, historyBlocked: true });

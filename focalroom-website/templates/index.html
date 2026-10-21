@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ee">
+  <title>FocalRoom — 摄影创作工作空间，从念头到作品</title>
+  <meta name="description" content="FocalRoom 是面向摄影创作者的 AI 原生工作空间，以项目串联选片、视觉编辑、叙事与共同评审。了解当前功能，以及研究参考板、调色往返和摄影书的产品方向。">
+  <meta property="og:title" content="FocalRoom — 摄影创作工作空间，从念头到作品">
+  <meta property="og:description" content="选片、编排、交流。让每一次选择都有来处。">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/png" href="assets/focalroom-mark.png">
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="languages.css"><script src="locales.js" defer></script><script src="i18n.js" defer></script>
+  <script src="config.js" defer></script>
+  <script src="app.js" defer></script>
+<link rel="alternate" hreflang="zh-CN" href="index.html?lang=zh"><link rel="alternate" hreflang="en" href="index.html?lang=en"><link rel="alternate" hreflang="ja" href="index.html?lang=ja"><link rel="alternate" hreflang="ko" href="index.html?lang=ko"><link rel="alternate" hreflang="x-default" href="index.html?lang=zh"></head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <header class="site-header">
+    <div class="header-inner wrap">
+      <a class="brand" href="#top" aria-label="FocalRoom 首页"><img src="assets/focalroom-mark.png" alt="" width="34" height="34"><span>Focal<span class="brand-room">Room</span></span></a>
+      <nav class="main-nav" id="main-nav" aria-label="主导航">
+        <a href="workflow.html">创作工作流</a><a href="#approach">工作方式</a><a href="#playground">体验选片</a><a href="#collaboration">共同评片</a><a href="#faq">常见问题</a><a class="text-button mobile-login" href="https://team.focroom.cc/shared">登录</a>
+      </nav>
+      <div class="header-actions"><label class="language-control"><span class="language-icon" aria-hidden="true">◎</span><select data-language-select aria-label="选择语言" data-no-translate><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></label><a class="text-button login-button" href="https://team.focroom.cc/shared">登录 <span aria-hidden="true">↗</span></a><a class="button button-small button-dark" href="#playground">开始体验 <span aria-hidden="true">↗</span></a><button id="menu-toggle" class="menu-toggle" aria-label="展开导航" aria-expanded="false" aria-controls="main-nav"><span></span><span></span></button></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" id="top" aria-labelledby="hero-title">
+      <div class="hero-topline"><span><i class="live-dot" aria-hidden="true"></i> 为摄影创作者，留一间工作室</span><span class="mono">A SPACE FOR YOUR VISION.</span></div>
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">摄影创作工作空间</p>
+          <h1 id="hero-title">从第一个念头，<br><span class="hero-accent">到最终的作品<span class="accent-line" aria-hidden="true"></span></span>。</h1>
+          <p class="hero-description">围绕一个项目，选择影像、寻找联系、与编辑交换看法。<br>从构思到呈现，让每一次取舍接得上。</p>
+          <div class="hero-buttons"><a class="button button-dark" href="download/FocalRoom-1.0.4-macos-arm64.zip" download>下载现有 macOS 版 <span aria-hidden="true">↓</span></a><a class="quiet-link" href="#playground">体验选片工作台 <span aria-hidden="true">↗</span></a></div>
+          <div class="hero-note"><span class="small-icon" aria-hidden="true">⌘</span> macOS 11+ · Apple Silicon · 现有版本 1.0.4 <span class="dot-separator">·</span> Web 私密评片</div>
+        </div>
+        <div class="hero-art">
+          <div class="art-note"><span class="tiny-cross" aria-hidden="true">+</span> 不只是留下好照片。是让它们成为一组作品。</div>
+          <div class="editor-window" aria-label="FocalRoom 作品序列界面示意">
+            <div class="window-chrome"><div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div><span>海岸边的六个片刻</span><span class="window-local"><i></i> 本地项目</span></div>
+            <div class="editor-inner">
+              <div class="editor-sidebar" aria-hidden="true"><img src="assets/focalroom-mark.png" alt=""><span class="editor-nav active">▦</span><span class="editor-nav">▤</span><span class="editor-nav">◇</span><span class="sidebar-bottom-icon">⌘</span></div>
+              <div class="editor-main"><div class="editor-heading"><div><span class="mini-label">THE EDITING ROOM</span><h2>慢一点，看见更多。</h2></div><span class="editor-export">导出 ↗</span></div>
+                <div class="editor-tabs"><span class="active">全部 <b>6</b></span><span>已保留 <b>3</b></span><span>待定 <b>3</b></span><span class="editor-view">▦</span></div>
+                <div class="hero-photo-grid">
+                  <div class="mini-frame keep"><div class="photo-art photo-0" role="img" aria-label="海岸上的独坐者"></div><span><b>01</b><i>◇ 已保留</i></span></div>
+                  <div class="mini-frame"><div class="photo-art photo-1" role="img" aria-label="海面光影"></div><span><b>02</b><small>待定</small></span></div>
+                  <div class="mini-frame keep"><div class="photo-art photo-2" role="img" aria-label="通向海边的街巷"></div><span><b>03</b><i>◇ 已保留</i></span></div>
+                  <div class="mini-frame"><div class="photo-art photo-3" role="img" aria-label="阳光下的椅子"></div><span><b>04</b><small>待定</small></span></div>
+                  <div class="mini-frame keep"><div class="photo-art photo-4" role="img" aria-label="海岸草地与小屋"></div><span><b>05</b><i>◇ 已保留</i></span></div>
+                  <div class="mini-frame"><div class="photo-art photo-5" role="img" aria-label="通向海里的石阶"></div><span><b>06</b><small>待定</small></span></div>
+                </div>
+                <div class="editor-bottom"><span>你的判断，始终在场。</span><span class="mono">K 保留 · X 淘汰</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="floating-note"><span class="note-symbol" aria-hidden="true">✳</span><div><strong>让 AI 提出建议。</strong><span>把最后的判断，留给你。</span></div><span class="note-check" aria-hidden="true">↗</span></div>
+          <p class="art-caption">界面为产品交互示意 · 本页样片由 AI 生成</p>
+        </div>
+      </div>
+      <div class="hero-footer"><span>为每一种认真观看而设计</span><div><span>独立摄影</span><span>家庭影像</span><span>旅行叙事</span><span>作品集编辑</span><span>摄影书初选</span></div><a href="#approach" aria-label="继续了解工作方式">↓</a></div>
+    </section>
+
+    <section class="creative-journey section-pad wrap" id="creative-workflow" aria-labelledby="journey-title"><div class="journey-intro"><p class="eyebrow">PROJECT / EXPLORE / RETURN</p><h2 id="journey-title">一个项目，可以反复回来。</h2><p>作品往往在重新选片、调色和讨论中成形。FocalRoom 围绕这个循环设计，让不同方案有各自的位置。</p></div><ol class="journey-stages"><li><span class="mono" aria-hidden="true">01</span><h3>研究与构思</h3><p>记录主题、参考影像和想表达的内容。Research & Moodboard 正在规划中。</p></li><li><span class="mono" aria-hidden="true">02</span><h3>图库与选片</h3><p>导入照片、比较与保留。技术质量和照片在作品中的作用，可以分别判断。</p></li><li><span class="mono" aria-hidden="true">03</span><h3>叙事与编排</h3><p>在现有作品序列中寻找节奏；自由画布的并置、分组与标注正在完善。</p></li><li><span class="mono" aria-hidden="true">04</span><h3>调色与共同编辑</h3><p>通过 Web 邀请编辑评片；Lightroom Classic / Capture One 的版本往返仍在开发。</p></li><li><span class="mono" aria-hidden="true">05</span><h3>作品呈现</h3><p>摄影书、展览与印前交付是产品方向，尚未作为完整制作能力发布。</p></li></ol><a class="quiet-link" href="workflow.html">查看完整创作循环与功能边界 ↗</a></section>
+
+    <section class="approach-section section-pad" id="approach" aria-labelledby="approach-title">
+      <div class="wrap">
+        <div class="section-heading"><p class="eyebrow">01 / A MORE CONSIDERED EDIT</p><h2 id="approach-title">你的选择，不止一个分数。</h2><p>一张安静的过渡，也可能让整组照片成立。比较、编排、再判断，给作品留出形成的空间。</p></div>
+        <div class="approach-grid">
+          <article class="approach-card"><div class="card-top"><span class="mono">01 — SELECT</span><span aria-hidden="true">↗</span></div><div class="selection-illustration" aria-hidden="true"><div class="sample-print back"><div class="photo-art photo-1"></div></div><div class="sample-print front"><div class="photo-art photo-0"></div><span>◇ 留下这一刻</span></div><div class="keyboard-tag">K</div></div><h3>认真看，再决定。</h3><p>完整构图、两图比较、人工评分与判断备注。用熟悉的快捷键，找到值得留下的画面。</p></article>
+          <article class="approach-card"><div class="card-top"><span class="mono">02 — SEQUENCE</span><span aria-hidden="true">↗</span></div><div class="sequence-illustration" aria-hidden="true"><div class="photo-art photo-2"></div><span>→</span><div class="photo-art photo-0"></div><span>→</span><div class="photo-art photo-4"></div><div class="sequence-rule"><span>开场</span><span>转折</span><span>余韵</span></div></div><h3>让画面彼此回应。</h3><p>拖动编排，寻找叙事与呼吸。保存不同版本，比较取舍，随时回看自己的创作路径。</p></article>
+          <article class="approach-card"><div class="card-top"><span class="mono">03 — REFLECT</span><span aria-hidden="true">↗</span></div><div class="memory-illustration"><span class="memory-kind">来自你的人工判断</span><p>“保留这张，因为人物与环境<br>之间留出了呼吸。”</p><div><span>查看证据 ↗</span><span>可纠正 · 可停用</span></div></div><h3>偏好，有迹可循。</h3><p>把带理由的选择留作证据。查看和纠正偏好假设，让建议逐渐贴近你的表达。</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="playground-section section-pad wrap" id="playground" aria-labelledby="playground-title">
+      <div class="section-heading horizontal"><div><p class="eyebrow">02 / TRY A SMALL EDIT</p><h2 id="playground-title">先选几张，感受一下。</h2></div><p>点选你想留下的画面。也可以看看一份示例草案，<br>再决定，哪些建议适合你的作品。</p></div>
+      <div class="playground">
+        <div class="playground-bar"><div><span class="project-dot" aria-hidden="true"></span><strong>海岸的六个片刻</strong><span class="demo-badge">交互演示</span></div><button class="demo-reset" id="demo-reset">重置演示 <span aria-hidden="true">↺</span></button></div>
+        <div class="playground-layout">
+          <div class="playground-workspace">
+            <div class="demo-toolbar"><div class="demo-filters" role="group" aria-label="演示照片筛选"><button class="active" data-filter="all" aria-pressed="true">全部 <span>6</span></button><button data-filter="kept" aria-pressed="false">已保留 <span id="kept-count">0</span></button></div><span class="micro">点击照片，保留或取消</span></div>
+            <div class="demo-grid" id="demo-grid" aria-label="交互选片演示"></div>
+            <p class="demo-empty" id="demo-empty" hidden>还没有保留照片。回到「全部」，留下你的第一张。</p>
+            <div class="demo-sequence"><div class="demo-sequence-heading"><strong>你的作品序列</strong><output id="sequence-count" aria-live="polite">0 张</output><button id="demo-undo" disabled>撤销</button></div><div class="sequence-strip" id="sequence-strip"><p>你的选择，会在这里慢慢成形。</p></div></div>
+          </div>
+          <aside class="demo-agent" aria-label="选片草案演示"><div class="agent-eyebrow"><span aria-hidden="true">✳</span> 编辑建议</div><h3>先说说，<br>你想表达什么。</h3><label for="demo-intent">选择一个示例创作方向</label><select id="demo-intent"><option value="narrative">旅行叙事 · 由远及近</option><option value="quiet">安静日常 · 光线与留白</option><option value="coast">海岸组照 · 形状与节奏</option></select><p id="intent-description" class="intent-description">选 3 张，以环境开场，走进日常，最后回到海边。</p><button class="button button-cyan" id="demo-suggest">查看示例建议 <span aria-hidden="true">↗</span></button><div id="demo-draft" class="demo-draft" hidden></div><p class="demo-disclaimer">本地交互示意：建议来自预设方案，不调用模型、不读取或上传你的照片。刷新后重置。</p></aside>
+        </div>
+        <div class="demo-status" role="status" id="demo-status">从一张照片开始。你的判断，不必和示例一样。</div>
+      </div>
+      <div class="section-footnote"><span>演示里的每一次采纳，只改变当前页面。</span><a href="guide.html#agent">了解真实 Agent 委托流程 ↗</a></div>
+    </section>
+
+    <section class="agent-section section-pad" aria-labelledby="agent-title"><div class="wrap agent-feature-grid"><div class="agent-story"><p class="eyebrow">03 / AN ASSISTANT, WITH BOUNDARIES</p><h2 id="agent-title">多一个编辑视角。<br>始终是你的作品。</h2><p>告诉 Agent 这组照片想表达什么。<br>让它提出选片与序列草案，给出理由；<br>你可以逐项采纳，也可以有自己的答案。</p><a class="quiet-link" href="guide.html#drafts">如何审阅一份草案 <span aria-hidden="true">↗</span></a></div><div class="agent-flow"><div class="intent-bubble"><span class="mini-label">你的创作意图</span><p>“做一组安静的海岸作品。<br>选 12 张，有空间，也有人的痕迹。”</p></div><div class="flow-line" aria-hidden="true"><span></span>↓</div><div class="proposal-bubble"><div><span class="sparkle" aria-hidden="true">✳</span><strong>先给你一份可审阅的草案</strong><span class="pill">待你确认</span></div><p>核对照片与理由，比较顺序，再决定如何采纳。</p><div class="approval-options"><span>逐项采纳</span><span>全量替换</span><span>保留原判断</span></div></div><p class="flow-note">AI 的建议从你的目标开始；使用前确认本次分析范围和可用额度。</p></div></div></section>
+
+    <section class="collaboration-section section-pad wrap" id="collaboration" aria-labelledby="collaboration-title"><div class="collab-grid"><div class="collab-art"><div class="collab-photo photo-art photo-2" role="img" aria-label="通向海边的街巷示意照片"></div><div class="comment-pin" aria-hidden="true">1</div><div class="comment-bubble"><div><span class="avatar">编</span><strong>编辑的一个想法</strong><span>示意批注</span></div><p>让这张接在海岸之后，<br>像是从远处，走进一个人的日常。</p><small>回复 · 讨论 · 提出序列建议</small></div><span class="collab-caption">一间工作室，容得下不同的观看。</span></div><div class="collab-copy"><p class="eyebrow">04 / ANOTHER PAIR OF EYES</p><h2 id="collaboration-title">请信任的人，<br>一起看一看。</h2><p>分享预览，留下带位置的批注。<br>编辑提出序列建议，作者逐项审阅，<br>让交流留下痕迹，让正式改动有确认。</p><ul class="check-list"><li><span aria-hidden="true">↗</span> 私密邀请，按项目授予权限</li><li><span aria-hidden="true">↗</span> 照片批注、讨论与可审阅提案</li><li><span aria-hidden="true">↗</span> 历史版本，让取舍可以回看</li></ul><button class="quiet-link" data-open="workspace-dialog">了解共享评片入口 <span aria-hidden="true">↗</span></button></div></div></section>
+
+    <section class="privacy-section section-pad" id="privacy" aria-labelledby="privacy-title"><div class="wrap"><div class="privacy-heading"><span class="privacy-symbol" aria-hidden="true">⌑</span><p class="eyebrow">A LITTLE MORE PEACE OF MIND</p><h2 id="privacy-title">原图在你手里。<br>选择也一样。</h2><p>你知道什么被保留、什么被分享，<br>也知道下一次确认，会改变什么。</p></div><div class="privacy-columns"><article><span class="mono">01 / LOCAL FIRST</span><h3>原图只读，本地开始。</h3><p>导入建立引用与预览缓存。原图留在原目录，人工选片无需调用云模型。</p></article><article><span class="mono">02 / EXPLICIT CONSENT</span><h3>上传之前，先问过你。</h3><p>视觉任务上传派生预览，需单独授权。云共享与 AI 图像授权分开决定。</p></article><article><span class="mono">03 / HUMAN APPROVAL</span><h3>建议之外，还有确认。</h3><p>草案与正式作品分开。采纳、版本和证据让每次修改有来处。</p></article></div><a class="quiet-link privacy-link" href="privacy.html">阅读隐私与数据说明 <span aria-hidden="true">↗</span></a></div></section>
+
+    <section class="faq-section section-pad wrap" id="faq" aria-labelledby="faq-title"><div class="faq-intro"><p class="eyebrow">A FEW THINGS TO KNOW</p><h2 id="faq-title">开始之前，<br>你可能想问。</h2><a class="quiet-link" href="guide.html">打开详细操作说明 <span aria-hidden="true">↗</span></a></div><div class="faq-list"><details><summary>Research、画布和摄影书现在都能用吗？<span aria-hidden="true">+</span></summary><p>尚未完整发布。研究参考板属于规划；画布、外部调色往返、共享画布与摄影书正在开发和验证。现有下载版与官网演示不代表完整创作闭环已经交付。</p></details><details><summary>谁适合使用 FocalRoom？<span aria-hidden="true">+</span></summary><p>希望整理长期项目、编辑组照或与编辑共同评片的摄影创作者。艺术摄影师、摄影书作者、摄影编辑和工作室可以从现有选片与序列功能开始；完整出版制作仍在开发。</p></details><details open><summary>FocalRoom 能替代 Lightroom 或 Capture One 吗？<span aria-hidden="true">+</span></summary><p>不能。FocalRoom 专注选片、视觉编辑、叙事与评审。继续用熟悉的软件显影、调色和精修；两者之间的自动版本往返仍在开发。</p></details><details><summary>不用 AI，也可以使用吗？<span aria-hidden="true">+</span></summary><p>可以。桌面的导入、保留与淘汰、评分、比较、序列、版本和导出可以独立使用。</p></details><details><summary>一句创作目标，就能自动选片吗？<span aria-hidden="true">+</span></summary><p>先导入照片，再告诉 AI 创作目标。真实分析依赖可用服务、账户额度与本次任务范围；草案经你采纳才改变正式选片。官网演示使用预设建议。</p></details><details><summary>共享之后，桌面还能继续修改吗？<span aria-hidden="true">+</span></summary><p>有两种方式：导出共享预览包会建立独立副本，本地项目仍可编辑；正式迁移为共享项目后，桌面保留迁移时的只读快照，后续评片在 Web 进行。两种方式均不上传原图文件。</p></details><details><summary>支持哪些设备？在哪里获取应用？<span aria-hidden="true">+</span></summary><p>支持 macOS 11 及以上的 Apple Silicon Mac。现有下载版为 1.0.4；Intel Mac 和其他桌面平台尚未完成发行验收。Web 评片可通过浏览器访问，完整 v3 规划不包含在现有安装包中。</p></details><details><summary>官网演示会上传我的照片吗？<span aria-hidden="true">+</span></summary><p>不会。这里使用的是已经随页面提供的 AI 生成样片，不提供个人照片上传入口。示例建议由本页预设规则生成，保留与排序仅存在当前页面，刷新后重置。</p></details></div></section>
+
+    <section class="access-section" id="get-started" aria-labelledby="access-title"><div class="wrap access-inner"><p class="eyebrow">MAKE ROOM FOR YOUR NEXT BODY OF WORK.</p><h2 id="access-title">下一组作品，<br>从这里继续。</h2><p>给认真拍下的照片，留一次认真编辑的机会。<br>从一次选择开始，找到下一组作品的样子。</p><div><a class="button button-dark" href="#playground">体验选片工作台 <span aria-hidden="true">↗</span></a><a class="quiet-link" href="guide.html">阅读使用说明 <span aria-hidden="true">↗</span></a></div><span class="access-note">macOS 桌面创作 · Web 私密评片 · 无需为演示注册</span></div><span class="access-watermark" aria-hidden="true">FocalRoom</span></section>
+  </main>
+
+  <footer class="site-footer wrap"><div><a class="brand" href="#top"><img src="assets/focalroom-mark.png" alt="" width="28" height="28"><span>Focal<span class="brand-room">Room</span></span></a><p>从照片，到你的作品。</p></div><nav aria-label="页脚导航"><a href="guide.html">使用说明</a><a href="privacy.html">隐私与数据</a><a href="workflow.html">产品方向</a><a href="mailto:sliqiang85@gmail.com">联系作者</a><a href="#playground">体验选片 ↗</a></nav><div class="footer-meta"><span>© 2026 FocalRoom</span><span>Made for a more considered edit.</span></div></footer>
+
+  <dialog id="workspace-dialog" class="site-dialog" aria-labelledby="workspace-dialog-title"><div class="dialog-body"><button class="dialog-close" data-close aria-label="关闭工作区说明">×</button><p class="eyebrow">FOCALROOM / SHARED REVIEW</p><h2 id="workspace-dialog-title">让交流，围绕作品发生。</h2><p>共享评片已有登录、注册、私密邀请与提案审批。请使用项目负责人提供的可信地址和受邀邮箱进入。</p><div class="dialog-info"><strong id="workspace-state-title">https://team.focroom.cc/shared</strong><p id="workspace-state">在浏览器中登录，进入你有权限访问的项目。</p></div><div class="dialog-actions"><a class="button button-dark" id="workspace-action" href="https://team.focroom.cc/shared">打开团队评片 ↗</a><button class="button button-outline" data-close>返回官网</button></div></div></dialog>
+  <noscript><div class="noscript">官网页面可直接阅读，无需开启 JavaScript；交互演示需要 JavaScript。</div></noscript>
+</body>
+</html>
