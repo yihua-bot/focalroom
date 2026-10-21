@@ -493,27 +493,36 @@ pub async fn execute_canvas_tool(
             }
             let id = crate::domain::id();
             let now = crate::domain::timestamp();
-            sqlx::query("INSERT INTO boards(id,project_id,title,state,created_at,updated_at) VALUES(?,?,?,'draft',?,?)")
-                .bind(&id).bind(&task.project_id).bind(title).bind(&now).bind(&now)
+            // H0-03：画布绑定任务身份——Agent 只能写自己创建的沙盒
+            sqlx::query("INSERT INTO boards(id,project_id,title,state,owning_task_id,created_at,updated_at) VALUES(?,?,?,'draft',?,?,?)")
+                .bind(&id).bind(&task.project_id).bind(title).bind(&task.id).bind(&now).bind(&now)
                 .execute(&mut **tx).await?;
-            Ok(json!({"board_id": id, "title": title, "state": "draft"}))
+            Ok(json!({"board_id": id, "title": title, "state": "draft", "owned_by_task": true}))
         }
         "place_photos_on_board" => {
             let board_id = args["board_id"].as_str().unwrap_or("");
-            // H0 复核：画布必须属于当前项目且为 draft 状态（Agent 不能写 official/frozen）
-            let board_state: Option<String> =
-                sqlx::query_scalar("SELECT state FROM boards WHERE id=? AND project_id=?")
-                    .bind(board_id)
-                    .bind(&task.project_id)
-                    .fetch_optional(&mut **tx)
-                    .await?;
-            match board_state.as_deref() {
-                Some("draft") => {}
-                Some(other) => {
-                    return Err(crate::domain::AppError::new(
-                        "PERMISSION_DENIED",
-                        format!("画布为 {other} 状态，Agent 只能写入 draft 草稿"),
-                    ));
+            // H0-03：画布必须属于当前项目、draft 状态、且归属当前任务
+            let board_info: Option<(String, Option<String>)> = sqlx::query_as(
+                "SELECT state, owning_task_id FROM boards WHERE id=? AND project_id=?",
+            )
+            .bind(board_id)
+            .bind(&task.project_id)
+            .fetch_optional(&mut **tx)
+            .await?;
+            match board_info {
+                Some((state, owner)) => {
+                    if state != "draft" {
+                        return Err(crate::domain::AppError::new(
+                            "PERMISSION_DENIED",
+                            format!("画布为 {state} 状态，Agent 只能写入 draft 草稿"),
+                        ));
+                    }
+                    if owner.as_deref() != Some(task.id.as_str()) {
+                        return Err(crate::domain::AppError::new(
+                            "PERMISSION_DENIED",
+                            "画布不属于当前任务：Agent 只能写入自己创建的任务草案",
+                        ));
+                    }
                 }
                 None => return Err(crate::domain::AppError::new("NOT_FOUND", "画布不存在")),
             }

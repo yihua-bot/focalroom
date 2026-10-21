@@ -1220,3 +1220,127 @@ impl Store {
         CommandHandler::new(self).add_ink(project, cmd).await
     }
 }
+
+// ── H0-03：人工采纳任务草案 ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdoptBoardDraftCommand {
+    pub board_id: String,
+}
+
+impl CommandHandler<'_> {
+    /// 人工采纳 Agent 任务草案：清空 owning_task_id，画布进入人工编辑域。
+    /// 这是人类正式命令（经 CommandHandler 通道），不是 Agent 工具。
+    pub async fn adopt_board_draft(
+        &self,
+        project: &str,
+        cmd: &AdoptBoardDraftCommand,
+    ) -> Result<()> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let result = sqlx::query(
+            "UPDATE boards SET owning_task_id=NULL, updated_at=? WHERE id=? AND project_id=? AND owning_task_id IS NOT NULL",
+        )
+        .bind(domain::timestamp())
+        .bind(&cmd.board_id)
+        .bind(project)
+        .execute(&mut *tx)
+        .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::new(
+                "NOT_FOUND",
+                "画布不存在、不属于此项目或不是任务草案",
+            ));
+        }
+        // 记录撤销日志（采纳不可逆——人工决策不自动回退）
+        tx.commit().await?;
+        Ok(())
+    }
+}
+
+impl Store {
+    pub async fn adopt_board_draft(
+        &self,
+        project: &str,
+        cmd: &AdoptBoardDraftCommand,
+    ) -> Result<()> {
+        CommandHandler::new(self)
+            .adopt_board_draft(project, cmd)
+            .await
+    }
+}
+
+#[cfg(test)]
+mod task_owned_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn agent_board_is_task_owned_and_adopt_clears_owner() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Store::open(temp.path().join("task-owned.sqlite").as_path())
+            .await
+            .unwrap();
+        let project = db.create("task-owned", "test").await.unwrap();
+
+        // 人工创建画布（无 owning_task_id）
+        let human_board = db.create_board(&project.id, "人工画布").await.unwrap();
+
+        // Agent 任务专属画布（模拟 Agent 写入）
+        let task_id = domain::id();
+        let agent_board_id = domain::id();
+        let now = domain::timestamp();
+        sqlx::query("INSERT INTO agent_tasks(id,project_id,goal,base_revision,allowed_ids_json,selected_ids_json,target_count,state,reason,budget_json,usage_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            .bind(&task_id)
+            .bind(&project.id)
+            .bind("测试任务")
+            .bind(1)
+            .bind("[]")
+            .bind("[]")
+            .bind(1)
+            .bind("completed")
+            .bind("测试")
+            .bind("{}")
+            .bind("{}")
+            .bind(&now)
+            .bind(&now)
+            .execute(&db.pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO boards(id,project_id,title,state,owning_task_id,created_at,updated_at) VALUES(?,?, 'Agent 草案','draft',?,?,?)")
+            .bind(&agent_board_id).bind(&project.id).bind(&task_id).bind(&now).bind(&now)
+            .execute(&db.pool)
+            .await
+            .unwrap();
+
+        // 人工采纳：清空 owning_task_id
+        db.adopt_board_draft(
+            &project.id,
+            &AdoptBoardDraftCommand {
+                board_id: agent_board_id.clone(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 验证归属已清空
+        let owner: Option<String> =
+            sqlx::query_scalar("SELECT owning_task_id FROM boards WHERE id=?")
+                .bind(&agent_board_id)
+                .fetch_one(&db.pool)
+                .await
+                .unwrap();
+        assert!(owner.is_none(), "采纳后 owning_task_id 应为 NULL");
+
+        // 人工画布不能被"采纳"（本来就无任务归属）
+        let result = db
+            .adopt_board_draft(
+                &project.id,
+                &AdoptBoardDraftCommand {
+                    board_id: human_board.id.clone(),
+                },
+            )
+            .await;
+        assert!(result.is_err(), "人工画布不可被采纳");
+    }
+}

@@ -191,6 +191,7 @@ pub fn run() {
             commands::canvas_add_arrow,
             commands::canvas_undo,
             commands::canvas_add_ink,
+            commands::canvas_adopt_board_draft,
             commands::pub_create,
             commands::pub_list,
             commands::pub_pages,

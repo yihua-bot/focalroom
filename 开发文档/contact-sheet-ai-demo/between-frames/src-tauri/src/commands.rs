@@ -879,3 +879,18 @@ pub async fn pub_generate(
 ) -> Result<i64> {
     state.store.generate_from_sequence(&project_id, &cmd).await
 }
+
+#[tauri::command]
+pub async fn canvas_adopt_board_draft(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+) -> Result<()> {
+    state
+        .store
+        .adopt_board_draft(
+            &project_id,
+            &crate::canvas::AdoptBoardDraftCommand { board_id },
+        )
+        .await
+}
