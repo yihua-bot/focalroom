@@ -391,6 +391,25 @@ export class CloudService {
             preview.data.length,
           ],
         );
+        // G1 FR3-010：同步写入资产域映射（source_asset + alias）
+        // PG 事务内失败会 abort——用 SAVEPOINT 保护，失败回滚到保存点
+        await tx.query('SAVEPOINT g1_asset_map');
+        try {
+          await tx.query(
+            `INSERT INTO fr_source_assets(id, project_id, photo_id, content_sha256, file_size, width, height, format)
+             VALUES($1, $2, $3, $4, $5, $6, $7, 'jpeg')
+             ON CONFLICT (project_id, photo_id) DO NOTHING`,
+            [photoId, id, photoId, preview.sha, preview.data.length, preview.width, preview.height],
+          );
+          await tx.query(
+            `INSERT INTO fr_asset_aliases(photo_id, asset_id, project_id) VALUES($1, $2, $3)
+             ON CONFLICT (photo_id) DO NOTHING`,
+            [photoId, photoId, id],
+          );
+          await tx.query('RELEASE SAVEPOINT g1_asset_map');
+        } catch {
+          await tx.query('ROLLBACK TO SAVEPOINT g1_asset_map');
+        }
         return {
           photo_id: photoId,
           sha256: preview.sha,
