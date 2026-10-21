@@ -657,6 +657,16 @@ impl CommandHandler<'_> {
         .bind(z).bind(&content_json).bind(&style_json)
         .bind(&now).bind(&now)
         .execute(&mut *tx).await?;
+        // H0-07：撤销日志
+        Self::log_canvas_op(
+            &mut tx,
+            project,
+            &cmd.board_id,
+            "add_node",
+            &serde_json::json!({"nodeId": id, "nodeType": cmd.node_type}),
+            &serde_json::json!({"nodeId": id}),
+        )
+        .await?;
         tx.commit().await?;
         Ok(CanvasNode {
             id,
@@ -931,6 +941,16 @@ impl CommandHandler<'_> {
         .bind(&id).bind(&cmd.board_id).bind(z).bind(&style).bind(&children)
         .bind(&now).bind(&now)
         .execute(&mut *tx).await?;
+        // H0-07：撤销日志
+        Self::log_canvas_op(
+            &mut tx,
+            project,
+            &cmd.board_id,
+            "add_node",
+            &serde_json::json!({"nodeId": id, "nodeType": "arrow"}),
+            &serde_json::json!({"nodeId": id}),
+        )
+        .await?;
         tx.commit().await?;
         Ok(CanvasNode {
             id,
@@ -1199,6 +1219,16 @@ impl CommandHandler<'_> {
         .bind(z).bind(&content).bind(&style)
         .bind(&now).bind(&now)
         .execute(&mut *tx).await?;
+        // H0-07：撤销日志
+        Self::log_canvas_op(
+            &mut tx,
+            project,
+            &cmd.board_id,
+            "add_node",
+            &serde_json::json!({"nodeId": id, "nodeType": "ink"}),
+            &serde_json::json!({"nodeId": id}),
+        )
+        .await?;
         tx.commit().await?;
         Ok(CanvasNode {
             id,
@@ -1635,5 +1665,94 @@ impl Store {
         CommandHandler::new(self)
             .group_nodes_cmd(project, cmd)
             .await
+    }
+}
+
+#[cfg(test)]
+mod board_revision_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn board_revision_bumps_on_node_writes() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Store::open(temp.path().join("rev-test.sqlite").as_path())
+            .await
+            .unwrap();
+        let project = db.create("rev-test", "revision").await.unwrap();
+        let board = db.create_board(&project.id, "rev").await.unwrap();
+
+        // 初始 revision = 1
+        let rev0: i64 = sqlx::query_scalar("SELECT revision FROM boards WHERE id=?")
+            .bind(&board.id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        assert_eq!(rev0, 1, "新画布 revision=1");
+
+        // 插入照片资产+节点 → revision 递增
+        let id = domain::id();
+        let now = domain::timestamp();
+        sqlx::query("INSERT INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,created_at) VALUES(?,?,?, '[]',10,10,10,'jpeg',?)")
+            .bind(&id).bind(&project.id).bind("sha-rev").bind(&now)
+            .execute(&db.pool).await.unwrap();
+        let node = db
+            .place_photo_node(
+                &project.id,
+                &PlacePhotoNodeCommand {
+                    board_id: board.id.clone(),
+                    asset_id: id.clone(),
+                    x: 0.0,
+                    y: 0.0,
+                    width: 100.0,
+                    height: 100.0,
+                },
+            )
+            .await
+            .unwrap();
+
+        let rev1: i64 = sqlx::query_scalar("SELECT revision FROM boards WHERE id=?")
+            .bind(&board.id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        assert_eq!(rev1, 2, "插入节点后 revision=2");
+
+        // 移动 → 再递增
+        db.move_nodes(
+            &project.id,
+            &MoveNodesCommand {
+                board_id: board.id.clone(),
+                node_ids: vec![node.id.clone()],
+                dx: 10.0,
+                dy: 10.0,
+            },
+        )
+        .await
+        .unwrap();
+
+        let rev2: i64 = sqlx::query_scalar("SELECT revision FROM boards WHERE id=?")
+            .bind(&board.id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        assert_eq!(rev2, 3, "移动后 revision=3");
+
+        // 删除 → 再递增
+        db.delete_node(
+            &project.id,
+            &DeleteNodeCommand {
+                board_id: board.id.clone(),
+                node_id: node.id.clone(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rev3: i64 = sqlx::query_scalar("SELECT revision FROM boards WHERE id=?")
+            .bind(&board.id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        assert_eq!(rev3, 4, "删除后 revision=4");
     }
 }
