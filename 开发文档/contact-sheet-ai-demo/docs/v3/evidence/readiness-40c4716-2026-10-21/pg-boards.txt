@@ -1,0 +1,13 @@
+✔ G6 board discovery and creation enforce project grants, not just authentication (339.418875ms)
+✔ G6 node and comment reads are scoped; hidden nodes and missing resources behave correctly (8.795291ms)
+✔ G6 comments validate input, require write permission and restrict resolution to author or editor (23.98375ms)
+✔ G6 cookie mutations require CSRF; revoked grants stop existing board access immediately (11.0295ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 723.060875
+Isolated PostgreSQL evidence: /var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-pg-tests-KjGprZ

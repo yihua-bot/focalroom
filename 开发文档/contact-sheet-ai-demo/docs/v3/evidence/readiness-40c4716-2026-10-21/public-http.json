@@ -1,0 +1,103 @@
+{
+  "date": "2026-10-21",
+  "scope": "public static HTML, no login",
+  "pages": [
+    {
+      "path": "/",
+      "status": "200",
+      "canonical": "https://focroom.cc/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/workflow/",
+      "status": "200",
+      "canonical": "https://focroom.cc/workflow/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/guide/",
+      "status": "200",
+      "canonical": "https://focroom.cc/guide/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/privacy/",
+      "status": "200",
+      "canonical": "https://focroom.cc/privacy/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/en/",
+      "status": "200",
+      "canonical": "https://focroom.cc/en/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/en/workflow/",
+      "status": "200",
+      "canonical": "https://focroom.cc/en/workflow/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/en/guide/",
+      "status": "200",
+      "canonical": "https://focroom.cc/en/guide/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/en/privacy/",
+      "status": "200",
+      "canonical": "https://focroom.cc/en/privacy/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/ja/",
+      "status": "200",
+      "canonical": "https://focroom.cc/ja/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/ja/workflow/",
+      "status": "200",
+      "canonical": "https://focroom.cc/ja/workflow/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/ja/guide/",
+      "status": "200",
+      "canonical": "https://focroom.cc/ja/guide/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/ja/privacy/",
+      "status": "200",
+      "canonical": "https://focroom.cc/ja/privacy/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/ko/",
+      "status": "200",
+      "canonical": "https://focroom.cc/ko/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/ko/workflow/",
+      "status": "200",
+      "canonical": "https://focroom.cc/ko/workflow/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/ko/guide/",
+      "status": "200",
+      "canonical": "https://focroom.cc/ko/guide/",
+      "canonicalMatches": true
+    },
+    {
+      "path": "/ko/privacy/",
+      "status": "200",
+      "canonical": "https://focroom.cc/ko/privacy/",
+      "canonicalMatches": true
+    }
+  ],
+  "allPassed": true
+}
