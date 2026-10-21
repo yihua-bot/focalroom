@@ -2,6 +2,9 @@ import { TauriDiagnosticsRepository } from './TauriDiagnosticsRepository';
 import { TauriAgentRepository } from './TauriAgentRepository';
 import { TauriMemoryRepository } from './TauriMemoryRepository';
 import { TauriSharingRepository } from './TauriSharingRepository';
+import { TauriCanvasRepository } from './TauriCanvasRepository';
+import { TauriPublicationRepository } from './TauriPublicationRepository';
+import { invokeCommand as command } from './tauriCommand';
 import type { SelectionDraft } from '../domain/agent';
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { z } from 'zod';
@@ -27,16 +30,9 @@ export const EVENT_KIND_LABELS: Record<string, string> = {
   draft_apply: '采纳草案', draft_rebase: '重新比较草案基线', draft_edit: '调整草案顺序', draft_discard: '丢弃草案',
 };
 
-async function command<T>(name: string, args?: Record<string, unknown>): Promise<T> {
-  try { return await invoke<T>(name, args); }
-  catch (error) {
-    const parsed = z.object({ code: z.string(), message: z.string(), retriable: z.boolean() }).safeParse(error);
-    if (parsed.success) throw Object.assign(new Error(parsed.data.message), { code: parsed.data.code });
-    throw error instanceof Error ? error : new Error(`本地操作失败：${String(error)}`);
-  }
-}
-
 export class TauriRepository implements DesktopProjectRepository {
+  readonly canvas = new TauriCanvasRepository();
+  readonly publication = new TauriPublicationRepository();
   readonly sharing = new TauriSharingRepository();
   readonly cloudAuth = this.sharing.auth;
   readonly mode = 'desktop' as const;

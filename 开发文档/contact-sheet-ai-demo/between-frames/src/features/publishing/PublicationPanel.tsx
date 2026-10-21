@@ -3,25 +3,13 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../components/shared/Button';
 
-interface PublicationInfo {
-  id: string;
-  projectId: string;
-  pubType: string;
-  title: string;
-  state: string;
-  createdAt: string;
-}
+import type { PublicationInfo, PublicationPage, PublicationRepository } from '../../domain/publication';
 
-export interface PublicationRepository {
-  list(projectId: string): Promise<PublicationInfo[]>;
-  create(projectId: string, title: string, pubType?: string): Promise<PublicationInfo>;
-  generate(projectId: string, publicationId: string, photosPerPage?: number): Promise<number>;
-}
-
-export function PublicationPanel({ repository, projectId, sequenceCount }: {
-  repository?: { publication: PublicationRepository };
+export function PublicationPanel({ repository, projectId, sequenceCount, readOnly = false }: {
+  repository?: PublicationRepository;
   projectId: string;
   sequenceCount: number;
+  readOnly?: boolean;
 }) {
   const [publications, setPublications] = useState<PublicationInfo[]>([]);
   const [creating, setCreating] = useState(false);
@@ -29,43 +17,62 @@ export function PublicationPanel({ repository, projectId, sequenceCount }: {
   const [title, setTitle] = useState('');
   const [perPage, setPerPage] = useState(1);
   const [notice, setNotice] = useState('');
+  const [pages, setPages] = useState<Record<string, PublicationPage[]>>({});
+  const [loadingPages, setLoadingPages] = useState<string | null>(null);
 
   const load = async () => {
     if (!repository) return;
-    const list = await repository.publication.list(projectId);
+    const list = await repository.list(projectId);
     setPublications(list);
   };
 
   useEffect(() => {
     let active = true;
     if (repository) {
-      repository.publication.list(projectId).then(list => {
+      repository.list(projectId).then(list => {
         if (active) setPublications(list);
-      }).catch(() => {});
+      }).catch(error => { if (active) setNotice(error instanceof Error ? error.message : '读取出版物失败'); });
     }
     return () => { active = false; };
   }, [repository, projectId]);
 
   const create = async () => {
-    if (!repository || creating || !title.trim()) return;
+    if (!repository || readOnly || creating || !title.trim()) return;
     setCreating(true);
+    setNotice('');
     try {
-      await repository.publication.create(projectId, title.trim());
+      await repository.create(projectId, title.trim());
       setTitle('');
       await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '创建出版物失败');
     } finally { setCreating(false); }
   };
 
   const generate = async (pubId: string) => {
-    if (!repository || generating) return;
+    if (!repository || readOnly || generating) return;
     setGenerating(true);
     setNotice('');
     try {
-      const pages = await repository.publication.generate(projectId, pubId, perPage);
+      const pages = await repository.generate(projectId, pubId, perPage);
       setNotice(`已生成 ${pages} 页初稿`);
+      setPages(current => ({ ...current, [pubId]: [] }));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : '生成失败');
     } finally { setGenerating(false); }
+  };
+
+  const showPages = async (publicationId: string) => {
+    if (!repository || loadingPages) return;
+    setLoadingPages(publicationId);
+    setNotice('');
+    try {
+      const loaded = await repository.pages(projectId, publicationId);
+      setPages(current => ({ ...current, [publicationId]: loaded }));
+      if (!loaded.length) setNotice('还没有页面，请先从作品序列生成。');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '读取页面失败');
+    } finally { setLoadingPages(null); }
   };
 
   if (!repository) {
@@ -82,11 +89,12 @@ export function PublicationPanel({ repository, projectId, sequenceCount }: {
         value={title}
         placeholder="出版物标题…"
         maxLength={200}
-        disabled={creating}
+        disabled={creating || readOnly}
+        aria-label="出版物标题"
         onChange={e => setTitle(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') void create(); }}
       />
-      <Button size="small" disabled={creating || !title.trim()} onClick={() => void create()}>
+      <Button size="small" disabled={creating || readOnly || !title.trim()} onClick={() => void create()}>
         {creating ? '创建中…' : '创建'}
       </Button>
     </div>
@@ -95,21 +103,36 @@ export function PublicationPanel({ repository, projectId, sequenceCount }: {
       <div key={pub.id} className="publication-card">
         <div className="publication-card-head">
           <strong>{pub.title}</strong>
-          <span className={`publication-state ${pub.state}`}>{pub.state}</span>
+          <span className={`publication-state ${pub.state}`}>{{ draft: '草稿', in_review: '审阅中', finalized: '已定稿', delivered: '已交付' }[pub.state] ?? pub.state}</span>
         </div>
         <div className="publication-card-meta">
-          {pub.pubType} · {new Date(pub.createdAt).toLocaleDateString()}
+          {{ photobook: '摄影书', exhibition: '展览', portfolio: '作品集' }[pub.pubType] ?? pub.pubType} · {new Date(pub.createdAt).toLocaleDateString()}
         </div>
         <div className="publication-actions">
-          <select value={perPage} onChange={e => setPerPage(Number(e.target.value))}>
+          <select aria-label={`${pub.title}每页照片数`} value={perPage} disabled={readOnly || generating} onChange={e => setPerPage(Number(e.target.value))}>
             <option value={1}>每页 1 张</option>
             <option value={2}>每页 2 张</option>
             <option value={4}>每页 4 张</option>
           </select>
-          <Button size="small" disabled={generating || sequenceCount === 0} onClick={() => void generate(pub.id)}>
+          <Button size="small" disabled={readOnly || generating || sequenceCount === 0 || pub.state !== 'draft'} onClick={() => void generate(pub.id)}>
             {generating ? '生成中…' : `从序列生成（${sequenceCount} 张）`}
           </Button>
+          <Button size="small" disabled={!!loadingPages || generating} onClick={() => void showPages(pub.id)}>
+            {loadingPages === pub.id ? '读取中…' : '查看页面'}
+          </Button>
         </div>
+        {!!pages[pub.id]?.length && <div className="publication-pages" aria-label={`${pub.title}页面初稿`}>
+          {pages[pub.id].map(page => <figure key={page.id} className="publication-page-preview">
+            <div className="publication-paper" style={{ aspectRatio: `${page.widthMm} / ${page.heightMm}` }}>
+              {page.frames.map(frame => <div key={frame.id} className="publication-frame" style={{
+                left: `${frame.xMm / page.widthMm * 100}%`, top: `${frame.yMm / page.heightMm * 100}%`,
+                width: `${frame.widthMm / page.widthMm * 100}%`, height: `${frame.heightMm / page.heightMm * 100}%`,
+              }}>{frame.thumbnailSrc ? <img src={frame.thumbnailSrc} alt="" style={{ objectFit: frame.fitMode === 'fit' ? 'contain' : frame.fitMode === 'fill' ? 'cover' : 'fill' }} />
+                : <span>照片暂不可用</span>}</div>)}
+            </div>
+            <figcaption>{page.pageNumber === 0 ? '封面' : `第 ${page.pageNumber} 页`}</figcaption>
+          </figure>)}
+        </div>}
       </div>
     ))}
 

@@ -1,0 +1,57 @@
+{
+  "status": "LOCAL_VALIDATION_PASS_REMOTE_CI_AND_NATIVE_GUI_PENDING",
+  "frontend": {
+    "passed": 274,
+    "files": 41
+  },
+  "coreRust": {
+    "passed": 239,
+    "failed": 0,
+    "ignored": 15,
+    "keychainRoundtripFiltered": 1
+  },
+  "postgresql": {
+    "passed": 76,
+    "suites": 11
+  },
+  "browserPreview": {
+    "passed": 18
+  },
+  "realRustStoreJourneys": {
+    "passed": 7
+  },
+  "mixed500AndInspection": {
+    "passed": 4,
+    "originalHashesMatched": 500,
+    "snapshotRestored": true,
+    "aiTasks": 0,
+    "externalRequests": 0
+  },
+  "checks": {
+    "contracts": "PASS",
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "fmt": "PASS",
+    "strictClippy": "PASS",
+    "buildWorkspaces": "PASS",
+    "webJourney": "PASS",
+    "nativePromotion": "PASS",
+    "verifyV2ExitCode": 0,
+    "reviewAppBuild": "PASS",
+    "nativeGui": "NOT_EXECUTED",
+    "remoteCI": "NOT_RUN",
+    "productionChanged": false
+  },
+  "resourcesNotValidated": [
+    "Apple native embeddings",
+    "real Keychain roundtrip",
+    "real HEIC/CR2 sample tests",
+    "ignored performance baselines",
+    "real model and human quality evaluation",
+    "real Polar webhook",
+    "native WKWebView interaction",
+    "real Lightroom/Capture One",
+    "print supplier",
+    "final signed release"
+  ]
+}

@@ -26,12 +26,90 @@ fn string<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
         .ok_or_else(|| AppError::new("INVALID_INPUT", format!("缺少 {key}")))
 }
 
+fn payload<T: serde::de::DeserializeOwned>(args: &Value) -> Result<T> {
+    serde_json::from_value(args["cmd"].clone())
+        .map_err(|error| AppError::new("VALIDATION_ERROR", error.to_string()))
+}
+
 impl Harness {
     async fn execute(&mut self, command: &str, args: &Value) -> Result<Value> {
         let id = args["projectId"].as_str().unwrap_or("");
         let revision = args["expectedRevision"].as_i64().unwrap_or(0);
         let photo = args["photoId"].as_str().unwrap_or("");
         let value = match command {
+            "canvas_list_boards" => json!(self.store.list_boards(id).await?),
+            "canvas_create_board" => {
+                json!(self.store.create_board(id, string(args, "title")?).await?)
+            }
+            "canvas_get_nodes" => {
+                json!(self.store.get_board_nodes(string(args, "boardId")?).await?)
+            }
+            "canvas_get_photo_sources" => json!(
+                self.store
+                    .board_photo_sources(string(args, "boardId")?)
+                    .await?
+            ),
+            "canvas_get_annotations" => {
+                json!(self.store.get_annotations(string(args, "boardId")?).await?)
+            }
+            "canvas_place_photo" => json!(self.store.place_photo_node(id, &payload(args)?).await?),
+            "canvas_move_nodes" => {
+                let cmd = between_frames_lib::canvas::MoveNodesCommand {
+                    board_id: string(args, "boardId")?.to_owned(),
+                    node_ids: serde_json::from_value(args["nodeIds"].clone())
+                        .map_err(|error| AppError::new("VALIDATION_ERROR", error.to_string()))?,
+                    dx: args["dx"]
+                        .as_f64()
+                        .ok_or_else(|| AppError::new("VALIDATION_ERROR", "缺少 dx"))?,
+                    dy: args["dy"]
+                        .as_f64()
+                        .ok_or_else(|| AppError::new("VALIDATION_ERROR", "缺少 dy"))?,
+                };
+                self.store.move_nodes(id, &cmd).await?;
+                Value::Null
+            }
+            "canvas_add_text" => json!(self.store.add_text_node(id, &payload(args)?).await?),
+            "canvas_delete_node" => {
+                self.store
+                    .delete_node(
+                        id,
+                        &between_frames_lib::canvas::DeleteNodeCommand {
+                            board_id: string(args, "boardId")?.to_owned(),
+                            node_id: string(args, "nodeId")?.to_owned(),
+                        },
+                    )
+                    .await?;
+                Value::Null
+            }
+            "canvas_add_annotation" => json!(self.store.add_annotation(id, &payload(args)?).await?),
+            "canvas_resolve_annotation" => {
+                self.store.resolve_annotation(id, &payload(args)?).await?;
+                Value::Null
+            }
+            "canvas_add_arrow" => json!(self.store.add_arrow(id, &payload(args)?).await?),
+            "canvas_add_ink" => json!(self.store.add_ink(id, &payload(args)?).await?),
+            "canvas_undo" => json!(
+                self.store
+                    .undo_canvas(
+                        id,
+                        &between_frames_lib::canvas::UndoCanvasCommand {
+                            board_id: string(args, "boardId")?.to_owned(),
+                        }
+                    )
+                    .await?
+            ),
+            "pub_list" => json!(self.store.list_publications(id).await?),
+            "pub_pages" => json!(
+                self.store
+                    .publication_pages(id, string(args, "publicationId")?)
+                    .await?
+            ),
+            "pub_create" => json!(self.store.create_publication(id, &payload(args)?).await?),
+            "pub_generate" => json!(
+                self.store
+                    .generate_from_sequence(id, &payload(args)?)
+                    .await?
+            ),
             "set_cloud_test_session" => {
                 let origin =
                     between_frames_lib::login_guard::trusted_origin(string(args, "origin")?)?;

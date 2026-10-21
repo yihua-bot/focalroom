@@ -182,6 +182,7 @@ pub fn run() {
             commands::canvas_place_photo,
             commands::canvas_move_nodes,
             commands::canvas_get_nodes,
+            commands::canvas_get_photo_sources,
             commands::canvas_add_text,
             commands::canvas_delete_node,
             commands::canvas_add_annotation,
@@ -192,6 +193,7 @@ pub fn run() {
             commands::canvas_add_ink,
             commands::pub_create,
             commands::pub_list,
+            commands::pub_pages,
             commands::pub_generate
         ])
         .run(tauri::generate_context!())

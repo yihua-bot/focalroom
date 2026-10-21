@@ -100,16 +100,23 @@ class ApiController {
       return response;
     }
     if (path === "/boards" && req.method === "GET") {
-      await s.auth.authenticate(headers, false);
-      return s.boards.list(new URL(req.url ?? "", `http://${req.headers.host}`).searchParams.get("project") ?? "");
+      return s.boards.list(headers, req.query.project);
     }
     if (path === "/boards" && req.method === "POST") {
-      const u = await s.auth.authenticate(headers, true);
-      return s.boards.create(u.id, String(req.body?.projectId ?? ""), String(req.body?.title ?? ""));
+      return s.boards.create(headers, req.body);
     }
     if (path === "/boards/annotations" && req.method === "POST") {
-      const u = await s.auth.authenticate(headers, true);
-      return { id: await s.boards.annotate(u.id, String(req.body?.boardId ?? ""), Number(req.body?.x ?? 0), Number(req.body?.y ?? 0), String(req.body?.body ?? "")) };
+      return { id: await s.boards.annotate(headers, req.body) };
+    }
+    const boardRead = path.match(/^\/boards\/([^/]+)\/(nodes|annotations)$/);
+    if (boardRead && req.method === "GET") {
+      return boardRead[2] === "nodes"
+        ? s.boards.nodes(headers, boardRead[1])
+        : s.boards.annotations(headers, boardRead[1]);
+    }
+    const annotationResolve = path.match(/^\/boards\/annotations\/([^/]+)\/resolve$/);
+    if (annotationResolve && req.method === "POST") {
+      return s.boards.resolve(headers, annotationResolve[1], req.body);
     }
     if (path === "/auth/profile" && req.method === "PATCH") {
       const u = await s.auth.authenticate(headers, true);
