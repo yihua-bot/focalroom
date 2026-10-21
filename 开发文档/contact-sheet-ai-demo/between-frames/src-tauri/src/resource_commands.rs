@@ -83,21 +83,15 @@ impl CommandHandler<'_> {
         )
         .bind(&variant_id).bind(&id).bind("original").bind(&now)
         .execute(&mut *tx).await?;
-        for (kind, path, w, h) in [
-            (
-                "thumbnail",
-                &prepared.thumbnail,
-                prepared.width / 4,
-                prepared.height / 4,
-            ),
-            (
-                "display_proxy",
-                &prepared.preview,
-                prepared.width,
-                prepared.height,
-            ),
+        // G1 修复：读缓存文件真实尺寸（缩略图按宽高比适配 320px，不是 width/4）
+        for (kind, path) in [
+            ("thumbnail", &prepared.thumbnail),
+            ("display_proxy", &prepared.preview),
         ] {
             let rep_size = std::fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
+            let (w, h) = image::image_dimensions(path)
+                .map(|(dw, dh)| (dw as i64, dh as i64))
+                .unwrap_or((prepared.width as i64, prepared.height as i64));
             sqlx::query(
                 "INSERT INTO asset_representations(id,asset_id,kind,algorithm,width,height,file_path,file_size,profile_digest,created_at) VALUES(?,?,?,?,?,?,?,?,NULL,?)",
             )

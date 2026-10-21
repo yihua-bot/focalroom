@@ -150,7 +150,7 @@ impl Store {
     pub async fn record_rendition(&self, rendition: &RenditionInput) -> Result<String> {
         let id = domain::id();
         let now = domain::timestamp();
-        sqlx::query(
+        let result = sqlx::query(
             "INSERT OR IGNORE INTO renditions(id,variant_id,sha256,width,height,bit_depth,icc_digest,source_type,source_ref,file_path,file_size,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(&id).bind(&rendition.variant_id).bind(&rendition.sha256)
@@ -160,6 +160,17 @@ impl Store {
         .execute(&self.pool)
         .await
         .map_err(AppError::from)?;
+        if result.rows_affected() == 0 {
+            // 幂等：同 (variant_id, sha256) 已存在——返回已有 ID 而非未插入的新 ID
+            let existing: Option<String> =
+                sqlx::query_scalar("SELECT id FROM renditions WHERE variant_id=? AND sha256=?")
+                    .bind(&rendition.variant_id)
+                    .bind(&rendition.sha256)
+                    .fetch_optional(&self.pool)
+                    .await
+                    .map_err(AppError::from)?;
+            return Ok(existing.unwrap_or(id));
+        }
         Ok(id)
     }
 

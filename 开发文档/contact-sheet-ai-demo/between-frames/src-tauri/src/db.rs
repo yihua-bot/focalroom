@@ -488,15 +488,19 @@ impl Store {
             .bind(&variant_id).bind(&id).bind("original").bind(&now)
             .execute(&mut *tx).await?;
             // 两条 representation：thumbnail + display_proxy
+            // G1 修复：读缓存文件的真实尺寸，不再用 width/4 猜测
             for (kind, path) in [("thumbnail", &thumbnail), ("display_proxy", &preview)] {
                 let size = std::fs::metadata(path.as_str())
                     .map(|m| m.len() as i64)
                     .unwrap_or(0);
+                let (rep_w, rep_h) = image::image_dimensions(path.as_str())
+                    .map(|(w, h)| (w as i64, h as i64))
+                    .unwrap_or((width, height)); // 文件损坏时退回源尺寸
                 sqlx::query(
                     "INSERT INTO asset_representations(id, asset_id, kind, algorithm, width, height, file_path, file_size, profile_digest, created_at) VALUES(?,?,?,?,?,?,?,?,NULL,?)",
                 )
                 .bind(crate::domain::id()).bind(&id).bind(kind).bind("image_pipeline_v1")
-                .bind(width / 4).bind(height / 4).bind(path.as_str()).bind(size).bind(&now)
+                .bind(rep_w).bind(rep_h).bind(path.as_str()).bind(size).bind(&now)
                 .execute(&mut *tx).await?;
             }
             tx.commit().await?;

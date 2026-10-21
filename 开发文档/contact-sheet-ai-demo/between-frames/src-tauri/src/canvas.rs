@@ -1453,3 +1453,51 @@ impl Store {
         CommandHandler::new(self).redo_canvas(project, cmd).await
     }
 }
+
+#[cfg(test)]
+mod g1_representation_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn backfill_uses_real_cache_dimensions_not_quarter() {
+        // G1 修复回归：回填的 representation 尺寸必须来自真实缓存文件，
+        // 不是 width/4 猜测。用 1600x900 源图验证。
+        let temp = tempfile::tempdir().unwrap();
+        let db = Store::open(temp.path().join("g1-dim.sqlite").as_path())
+            .await
+            .unwrap();
+        let project = db.create("g1-dim", "test").await.unwrap();
+
+        // 生成 1600x900 测试图（宽高比 16:9，缩略图应为 320x180 而非 400x225）
+        let img_path = temp.path().join("wide.png");
+        image::RgbImage::from_pixel(1600, 900, image::Rgb([50, 100, 150]))
+            .save(&img_path)
+            .unwrap();
+        let prepared =
+            crate::image_pipeline::prepare(&img_path, &temp.path().join("cache")).unwrap();
+
+        // 走正式导入
+        let inserted = db.insert_photo(&project.id, &prepared).await.unwrap();
+        assert!(inserted, "首次导入应成功");
+
+        // 验证 representation 尺寸来自真实文件
+        let reps: Vec<(String, i64, i64)> = sqlx::query_as(
+            "SELECT kind, width, height FROM asset_representations WHERE asset_id=(SELECT id FROM source_assets LIMIT 1) ORDER BY kind",
+        )
+        .fetch_all(&db.pool)
+        .await
+        .unwrap();
+
+        assert_eq!(reps.len(), 2, "应有 thumbnail + display_proxy 两条");
+        // thumbnail：320x180（16:9 适配 320px 宽，不是 1600/4=400）
+        let thumb = reps.iter().find(|(k, _, _)| k == "thumbnail").unwrap();
+        assert_eq!(
+            thumb.1, 320,
+            "缩略图宽度应为 320（真实缓存）而非 width/4=400"
+        );
+        assert_eq!(thumb.2, 180, "缩略图高度应为 180（保持宽高比）");
+        // display_proxy：1400x788（16:9 适配 1400px 宽）
+        let proxy = reps.iter().find(|(k, _, _)| k == "display_proxy").unwrap();
+        assert_eq!(proxy.1, 1400, "代理宽度应为 1400");
+    }
+}
