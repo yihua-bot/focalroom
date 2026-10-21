@@ -116,7 +116,7 @@ export class BoardService {
           n.asset_id, n.rendition_ref, n.content_json, n.style_json, n.children_json, n.locked, n.visible,
           a.photo_id
          FROM fr_canvas_nodes n
-         LEFT JOIN fr_asset_aliases a ON a.asset_id = n.asset_id
+         LEFT JOIN fr_asset_aliases a ON a.asset_id::text = n.asset_id
          WHERE n.board_id=$1 AND n.visible=true ORDER BY n.z_order, n.id`,
         [id],
       )

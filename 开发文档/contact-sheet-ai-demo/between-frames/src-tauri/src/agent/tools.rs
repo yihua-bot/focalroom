@@ -500,25 +500,43 @@ pub async fn execute_canvas_tool(
         }
         "place_photos_on_board" => {
             let board_id = args["board_id"].as_str().unwrap_or("");
-            let board_exists: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM boards WHERE id=? AND project_id=?")
+            // H0 复核：画布必须属于当前项目且为 draft 状态（Agent 不能写 official/frozen）
+            let board_state: Option<String> =
+                sqlx::query_scalar("SELECT state FROM boards WHERE id=? AND project_id=?")
                     .bind(board_id)
                     .bind(&task.project_id)
-                    .fetch_one(&mut **tx)
+                    .fetch_optional(&mut **tx)
                     .await?;
-            if board_exists == 0 {
-                return Err(crate::domain::AppError::new("NOT_FOUND", "画布不存在"));
+            match board_state.as_deref() {
+                Some("draft") => {}
+                Some(other) => {
+                    return Err(crate::domain::AppError::new(
+                        "PERMISSION_DENIED",
+                        format!("画布为 {other} 状态，Agent 只能写入 draft 草稿"),
+                    ));
+                }
+                None => return Err(crate::domain::AppError::new("NOT_FOUND", "画布不存在")),
             }
             let placements = args["placements"].as_array().cloned().unwrap_or_default();
+            // H0 复核：placements 内嵌套 photo_id 必须在任务授权范围内
+            for p in &placements {
+                let pid = p["photo_id"].as_str().unwrap_or("");
+                if !pid.is_empty() && !task.allowed_photo_ids.contains(&pid.to_owned()) {
+                    return Err(crate::domain::AppError::new(
+                        "PERMISSION_DENIED",
+                        format!("照片 {pid} 不在任务授权范围内"),
+                    ));
+                }
+            }
             let mut placed = Vec::new();
             let now = crate::domain::timestamp();
             for p in &placements {
                 let photo_id = p["photo_id"].as_str().unwrap_or("");
-                // 通过 alias 解析 asset_id
+                // 通过 alias 解析 asset_id（限定项目内）
                 let asset_id: Option<String> = sqlx::query_scalar(
-                    "SELECT id FROM source_assets WHERE id=? OR id=(SELECT asset_id FROM asset_aliases WHERE photo_id=?)",
+                    "SELECT id FROM source_assets WHERE id=? AND project_id=? OR id=(SELECT asset_id FROM asset_aliases WHERE photo_id=?) AND project_id=?",
                 )
-                .bind(photo_id).bind(photo_id)
+                .bind(photo_id).bind(&task.project_id).bind(photo_id).bind(&task.project_id)
                 .fetch_optional(&mut **tx).await?;
                 let Some(asset) = asset_id else { continue };
                 let x = p["x"].as_f64().unwrap_or(0.0);
@@ -542,6 +560,21 @@ pub async fn execute_canvas_tool(
         }
         "get_board" => {
             let board_id = args["board_id"].as_str().unwrap_or("");
+            // H0 复核：画布必须属于当前任务的项目
+            let board_owner: Option<String> =
+                sqlx::query_scalar("SELECT project_id FROM boards WHERE id=?")
+                    .bind(board_id)
+                    .fetch_optional(&mut **tx)
+                    .await?;
+            match board_owner.as_deref() {
+                Some(pid) if pid == task.project_id => {}
+                _ => {
+                    return Err(crate::domain::AppError::new(
+                        "PERMISSION_DENIED",
+                        "画布不存在或不属于当前项目",
+                    ));
+                }
+            }
             let nodes = sqlx::query(
                 "SELECT id, node_type, x, y, width, height, z_order, asset_id FROM canvas_nodes WHERE board_id=? AND visible=1 ORDER BY z_order",
             )

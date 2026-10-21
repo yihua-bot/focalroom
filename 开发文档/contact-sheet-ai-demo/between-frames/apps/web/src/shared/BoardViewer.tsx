@@ -42,15 +42,24 @@ export function BoardViewer({ session, projectId, onBack }: {
   useEffect(() => {
     if (!activeBoard) return;
     let active = true;
+    const createdUrls: string[] = [];
     // 获取节点和评论
     request<NodeInfo[]>(`/boards/${activeBoard}/nodes`, session, 'GET')
       .then(async ns => {
         if (!active || !ns) return;
         setNodes(ns);
         // 走现有 preview ticket 流程（photoId → ticket → blob → objectURL）
-        const photoNodes = ns.filter(n => n.node_type === 'photo' && n.asset_id && n.photo_id);
+        // H0 复核：同一 asset 去重；取消后停止拉取
+        const seen = new Set<string>();
+        const photoNodes = ns.filter(n => {
+          if (n.node_type !== 'photo' || !n.asset_id || !n.photo_id) return false;
+          if (seen.has(n.asset_id)) return false;
+          seen.add(n.asset_id);
+          return true;
+        });
         const urls: Record<string, string> = {};
         for (const node of photoNodes.slice(0, 50)) {
+          if (!active) return;
           try {
             const ticket = await request<{ url: string }>(
               `/projects/${encodeURIComponent(projectId)}/previews/${encodeURIComponent(node.photo_id!)}/ticket`,
@@ -59,7 +68,10 @@ export function BoardViewer({ session, projectId, onBack }: {
             const resp = await fetch(ticket.url, { credentials: 'same-origin' });
             if (resp.ok) {
               const blob = await resp.blob();
-              urls[node.asset_id!] = URL.createObjectURL(blob);
+              if (!active) return;
+              const url = URL.createObjectURL(blob);
+              createdUrls.push(url);
+              urls[node.asset_id!] = url;
             }
           } catch { /* 逐张容错，失败显示占位符 */ }
         }
@@ -67,7 +79,10 @@ export function BoardViewer({ session, projectId, onBack }: {
       }).catch(() => {});
     request<AnnotationInfo[]>(`/boards/${activeBoard}/annotations`, session, 'GET')
       .then(ans => { if (active) setAnnotations(ans ?? []); }).catch(() => {});
-    return () => { active = false; };
+    return () => {
+      active = false;
+      for (const url of createdUrls) URL.revokeObjectURL(url);
+    };
   }, [session, activeBoard, projectId]);
 
   const onWheel = (e: React.WheelEvent) => {
