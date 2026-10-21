@@ -752,6 +752,14 @@ pub async fn canvas_get_nodes(
 }
 
 #[tauri::command]
+pub async fn canvas_get_photo_sources(
+    state: State<'_, Backend>,
+    board_id: String,
+) -> Result<Vec<crate::canvas::CanvasPhotoSource>> {
+    state.store.board_photo_sources(&board_id).await
+}
+
+#[tauri::command]
 pub async fn canvas_add_text(
     state: State<'_, Backend>,
     project_id: String,
@@ -849,6 +857,18 @@ pub async fn pub_list(
     project_id: String,
 ) -> Result<Vec<crate::publishing::Publication>> {
     state.store.list_publications(&project_id).await
+}
+
+#[tauri::command]
+pub async fn pub_pages(
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+) -> Result<Vec<crate::publishing::PublicationPage>> {
+    state
+        .store
+        .publication_pages(&project_id, &publication_id)
+        .await
 }
 
 #[tauri::command]

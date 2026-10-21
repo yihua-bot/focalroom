@@ -1,0 +1,8 @@
+{
+  "bundleIdentifier": "studio.betweenframes.v2foundation",
+  "version": "1.0.4",
+  "executableSha256": "f85e75d0061b2b7ff4438a7e4aafdd275005414f9456416ab706c5408ded1c09",
+  "build": "debug --no-sign",
+  "nativeGuiAcceptance": "NOT_EXECUTED",
+  "appPath": "/Users/yihua/.codex/worktrees/focalroom-v3-hardening/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/FocalRoom V2 Review.app"
+}

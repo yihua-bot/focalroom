@@ -15,7 +15,7 @@ try {
   await exec(join(bin, 'initdb'), ['-D', data, '-U', 'focalroom', '--auth=trust', '--no-locale', '-E', 'UTF8']);
   await exec(join(bin, 'pg_ctl'), ['-D', data, '-l', join(directory, 'postgres.log'), '-o', `-h 127.0.0.1 -p ${port} -k ${socket}`, '-w', 'start']); started = true;
   const custom = process.argv.slice(2);
-  const suites = ['integration','storage','account-security','magic-login','desktop-login','account-avatar','hosted-ai','min_privilege','agent_worker','metrics'];
+  const suites = ['integration','storage','account-security','magic-login','desktop-login','account-avatar','hosted-ai','min_privilege','agent_worker','metrics','boards'];
   // 每套件独立数据库，避免触发器、角色初始化、清库与指标断言依赖其他文件的执行时序。
   const runs = custom.length ? [{args:custom,database:'postgres'}] : suites.map((name,index)=>({args:['--test',`apps/api/test/${name}.mjs`],database:`focalroom_suite_${index}`}));
   for (const run of runs) {

@@ -34,7 +34,7 @@ test('M4 角色初始化（等价 postgres-init 脚本）与迁移角色执行�
   });
   await migrate(migrator);
   const versions = (await migrator.query('SELECT version FROM fr_migrations ORDER BY version')).rows.map((row) => row.version);
-  assert.deepEqual(versions, ['0001', '0002', '0006', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015']);
+  assert.deepEqual(versions, ['0001', '0002', '0006', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015', '0017', '0018']);
   // 幂等重放（0009 每次 migrate 都会重放授权）。
   await migrate(migrator);
   await migrator.end();
@@ -48,6 +48,12 @@ test('M4 应用角色只能 DML：读写通过，DDL 与建角色被拒', async 
   // 读：迁移登记表。
   const read = await app.query('SELECT count(*)::int AS n FROM fr_migrations');
   assert.ok(read.rows[0].n >= 5);
+  for (const table of ['fr_source_assets', 'fr_asset_aliases', 'fr_edit_variants', 'fr_renditions', 'fr_boards', 'fr_canvas_nodes', 'fr_board_annotations']) {
+    for (const privilege of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
+      assert.equal((await app.query('SELECT has_table_privilege(current_user,$1,$2) AS allowed', [table, privilege])).rows[0].allowed, true, `${table}: ${privilege}`);
+    }
+    assert.equal((await app.query("SELECT has_table_privilege(current_user,$1,'TRUNCATE') AS allowed", [table])).rows[0].allowed, false);
+  }
   // 写：用户表 INSERT/UPDATE/DELETE 走全生命周期。
   const inserted = await app.query(
     "INSERT INTO fr_users(id,email,password_hash,display_name,created_at) VALUES('mp-1','mp@fr.test','x','最小权限回归',now()) RETURNING id",

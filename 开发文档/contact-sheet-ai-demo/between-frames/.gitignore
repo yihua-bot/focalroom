@@ -26,3 +26,4 @@ dist-ssr
 # 自动化测试输出
 test-results/
 playwright-report/
+src-tauri/target-v3-hardening/

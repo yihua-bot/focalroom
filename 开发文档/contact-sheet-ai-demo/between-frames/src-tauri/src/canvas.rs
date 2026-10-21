@@ -68,6 +68,44 @@ pub struct MoveNodesCommand {
     pub dy: f64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CanvasPhotoSource {
+    pub asset_id: String,
+    pub thumbnail_path: String,
+}
+
+fn validate_rectangle(x: f64, y: f64, width: f64, height: f64) -> Result<()> {
+    if ![x, y, width, height]
+        .iter()
+        .all(|v| v.is_finite() && v.abs() <= 1e9)
+        || width <= 0.0
+        || height <= 0.0
+    {
+        return Err(AppError::new(
+            "VALIDATION_ERROR",
+            "节点位置须为有限数值，尺寸须大于零",
+        ));
+    }
+    Ok(())
+}
+
+impl Store {
+    /// 只提供画布所属项目中已关联照片的缓存路径，不暴露任意文件读取入口。
+    pub async fn board_photo_sources(&self, board_id: &str) -> Result<Vec<CanvasPhotoSource>> {
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT a.id, MIN(p.thumbnail_path) FROM boards b JOIN canvas_nodes n ON n.board_id=b.id JOIN source_assets a ON a.id=n.asset_id AND a.project_id=b.project_id JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=b.project_id WHERE b.id=? AND n.node_type='photo' AND n.visible=1 GROUP BY a.id",
+        ).bind(board_id).fetch_all(&self.pool).await?;
+        Ok(rows
+            .into_iter()
+            .map(|(asset_id, thumbnail_path)| CanvasPhotoSource {
+                asset_id,
+                thumbnail_path,
+            })
+            .collect())
+    }
+}
+
 impl CommandHandler<'_> {
     /// 创建画布（正式命令，走事务+审计）。
     pub async fn create_board(&self, project: &str, title: &str) -> Result<Board> {
@@ -99,6 +137,7 @@ impl CommandHandler<'_> {
         project: &str,
         cmd: &PlacePhotoNodeCommand,
     ) -> Result<CanvasNode> {
+        validate_rectangle(cmd.x, cmd.y, cmd.width, cmd.height)?;
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
         crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
         // 验证画布属于此项目
@@ -113,9 +152,9 @@ impl CommandHandler<'_> {
         }
         // 验证资产存在（通过 alias 或直接 asset_id）
         let asset: Option<String> = sqlx::query_scalar(
-            "SELECT id FROM source_assets WHERE id=? OR id=(SELECT asset_id FROM asset_aliases WHERE photo_id=?)",
+            "SELECT id FROM source_assets WHERE project_id=? AND (id=? OR id=(SELECT asset_id FROM asset_aliases WHERE photo_id=?))",
         )
-        .bind(&cmd.asset_id).bind(&cmd.asset_id)
+        .bind(project).bind(&cmd.asset_id).bind(&cmd.asset_id)
         .fetch_optional(&mut *tx)
         .await?;
         let asset_id = asset.ok_or_else(|| AppError::new("NOT_FOUND", "资产不存在"))?;
@@ -405,6 +444,127 @@ mod tests {
             .await;
         assert!(result.is_err());
     }
+
+    #[tokio::test]
+    async fn text_arrow_and_ink_persist_correct_geometry_style_and_order() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("node-types.sqlite");
+        let db = Store::open(&path).await.unwrap();
+        let project = db.create("叙事", "").await.unwrap();
+        let board = db.create_board(&project.id, "第一章").await.unwrap();
+        let text = db
+            .add_text_node(
+                &project.id,
+                &AddTextNodeCommand {
+                    board_id: board.id.clone(),
+                    node_type: "sticky".to_owned(),
+                    x: 20.0,
+                    y: 30.0,
+                    width: 200.0,
+                    height: 120.0,
+                    content: "停顿与转场".to_owned(),
+                    color: Some("quoted\"color".to_owned()),
+                },
+            )
+            .await
+            .unwrap();
+        let ink = db
+            .add_ink(
+                &project.id,
+                &AddInkCommand {
+                    board_id: board.id.clone(),
+                    x: 0.0,
+                    y: 0.0,
+                    width: 100.0,
+                    height: 0.0,
+                    points: vec![
+                        InkPoint {
+                            x: 0.0,
+                            y: 0.0,
+                            pressure: None,
+                        },
+                        InkPoint {
+                            x: 100.0,
+                            y: 0.0,
+                            pressure: Some(0.5),
+                        },
+                    ],
+                    color: None,
+                    stroke_width: Some(2.0),
+                },
+            )
+            .await
+            .unwrap();
+        let arrow = db
+            .add_arrow(
+                &project.id,
+                &AddArrowCommand {
+                    board_id: board.id.clone(),
+                    from_node_id: text.id.clone(),
+                    to_node_id: ink.id.clone(),
+                    color: None,
+                },
+            )
+            .await
+            .unwrap();
+        db.pool.close().await;
+        let reopened = Store::open(&path).await.unwrap();
+        let nodes = reopened.get_board_nodes(&board.id).await.unwrap();
+        assert_eq!(
+            nodes.iter().map(|n| n.id.clone()).collect::<Vec<_>>(),
+            vec![text.id, ink.id, arrow.id]
+        );
+        assert_eq!(
+            nodes.iter().map(|n| n.z_order).collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        assert!(nodes.iter().all(|n| n.rotation == 0.0));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(nodes[0].style_json.as_ref().unwrap())
+                .unwrap()["color"],
+            "quoted\"color"
+        );
+    }
+
+    #[tokio::test]
+    async fn foreign_assets_and_invalid_photo_geometry_are_rejected_atomically() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Store::open(&temp.path().join("node-scopes.sqlite"))
+            .await
+            .unwrap();
+        let project = db.create("项目甲", "").await.unwrap();
+        let other = db.create("项目乙", "").await.unwrap();
+        let board = db.create_board(&project.id, "画布").await.unwrap();
+        sqlx::query("INSERT INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,created_at) VALUES('foreign',?,'hash','[]',100,100,100,'jpeg','now')")
+            .bind(&other.id).execute(&db.pool).await.unwrap();
+        let mut command = PlacePhotoNodeCommand {
+            board_id: board.id.clone(),
+            asset_id: "foreign".to_owned(),
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
+        assert_eq!(
+            db.place_photo_node(&project.id, &command)
+                .await
+                .unwrap_err()
+                .code,
+            "NOT_FOUND"
+        );
+        for value in [f64::NAN, f64::INFINITY, -1.0, 0.0] {
+            command.width = value;
+            assert_eq!(
+                db.place_photo_node(&project.id, &command)
+                    .await
+                    .unwrap_err()
+                    .code,
+                "VALIDATION_ERROR"
+            );
+        }
+        assert!(db.get_board_nodes(&board.id).await.unwrap().is_empty());
+        assert!(db.board_photo_sources(&board.id).await.unwrap().is_empty());
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -440,7 +600,8 @@ impl CommandHandler<'_> {
                 "节点类型须为 text/sticky/shape",
             ));
         }
-        if cmd.content.len() > 5000 {
+        validate_rectangle(cmd.x, cmd.y, cmd.width, cmd.height)?;
+        if cmd.content.chars().count() > 5000 {
             return Err(AppError::new("VALIDATION_ERROR", "内容不超过 5000 字符"));
         }
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
@@ -464,9 +625,12 @@ impl CommandHandler<'_> {
         .await?;
         let content_json = serde_json::to_string(&serde_json::json!({"text": cmd.content}))
             .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
-        let style_json = cmd.color.as_ref().map(|c| format!("{{\"color\":\"{c}\"}}"));
+        let style_json = cmd
+            .color
+            .as_ref()
+            .map(|c| serde_json::json!({ "color": c }).to_string());
         sqlx::query(
-            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,style_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,0,?,?,?,?)",
+            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,style_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,0,?,?,?,?,?)",
         )
         .bind(&id).bind(&cmd.board_id).bind(&cmd.node_type)
         .bind(cmd.x).bind(cmd.y).bind(cmd.width).bind(cmd.height)
@@ -727,9 +891,12 @@ impl CommandHandler<'_> {
         let children =
             serde_json::to_string(&serde_json::json!([cmd.from_node_id, cmd.to_node_id]))
                 .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
-        let style = cmd.color.as_ref().map(|c| format!("{{\"color\":\"{c}\"}}"));
+        let style = cmd
+            .color
+            .as_ref()
+            .map(|c| serde_json::json!({ "color": c }).to_string());
         sqlx::query(
-            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,style_json,children_json,created_at,updated_at) VALUES(?,?, 'arrow',0,0,0,0,0,?,?,?,?)",
+            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,style_json,children_json,created_at,updated_at) VALUES(?,?, 'arrow',0,0,0,0,0,?,?,?,?,?)",
         )
         .bind(&id).bind(&cmd.board_id).bind(z).bind(&style).bind(&children)
         .bind(&now).bind(&now)
@@ -906,6 +1073,27 @@ impl CommandHandler<'_> {
         if cmd.points.is_empty() || cmd.points.len() > 10_000 {
             return Err(AppError::new("VALIDATION_ERROR", "笔迹须为 1–10000 个点"));
         }
+        if ![cmd.x, cmd.y, cmd.width, cmd.height]
+            .iter()
+            .all(|v| v.is_finite() && v.abs() <= 1e9)
+            || cmd.width < 0.0
+            || cmd.height < 0.0
+            || cmd
+                .stroke_width
+                .is_some_and(|v| !v.is_finite() || !(0.1..=1000.0).contains(&v))
+            || cmd.points.iter().any(|point| {
+                !point.x.is_finite()
+                    || !point.y.is_finite()
+                    || point
+                        .pressure
+                        .is_some_and(|v| !v.is_finite() || !(0.0..=1.0).contains(&v))
+            })
+        {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "笔迹的位置、压力或线宽无效",
+            ));
+        }
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
         crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
         let board: Option<String> =
@@ -936,7 +1124,7 @@ impl CommandHandler<'_> {
         }))
         .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
         sqlx::query(
-            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,style_json,created_at,updated_at) VALUES(?,?, 'ink',?,?,?,?,?,0,?,?,?,?)",
+            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,style_json,created_at,updated_at) VALUES(?,?, 'ink',?,?,?,?,0,?,?,?,?,?)",
         )
         .bind(&id).bind(&cmd.board_id)
         .bind(cmd.x).bind(cmd.y).bind(cmd.width).bind(cmd.height)

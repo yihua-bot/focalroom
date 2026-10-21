@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-21T12:19:13.519114+08:00",
+  "baseHead": "4ca66a1fc6ed71622f51b0923f3147c7ad05174a",
+  "branch": "codex/v3-h0-hardening",
+  "state": "UNCOMMITTED_CANDIDATE",
+  "sourceUnchangedDuringFinalValidation": true,
+  "sourceFiles": [
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/.gitignore",
+      "sha256": "61e4af0087d0830e119785712fd7caa5ebf07dd474eeb5cc4456043a12aa9ba4"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/boards.ts",
+      "sha256": "6cc945c3a36df608467b9d785ee7843f5944ecbb4bb3a57d15f4bd8009a7f4d8"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/server.ts",
+      "sha256": "7d1dbc88635cbef0e67f91477fc9b17e1313baee6fab828ecb59946200a5774b"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/service.ts",
+      "sha256": "31541d00b0fe0f66bc820ea2aaa80e01b8d937d8dd88029a8f87fea858635d52"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/test/account-security.mjs",
+      "sha256": "1a1f813e0a768ae315cbff26ea18d8b3fffe7526c127d5afe33acef598e658d2"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/test/boards.mjs",
+      "sha256": "0f9e7deb77c9380b82ccd34627fa34673658829d92a338d5b6a071d5a81edd85"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/test/min_privilege.mjs",
+      "sha256": "1e41daf83c0676bb988df60b738eac6d52f3aedfde1a6467e955e2ad4c0e8698"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/test/run.mjs",
+      "sha256": "fe000596f42b44d41a003798332e1440578293f0fc30c1874f359a021bd209db"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/e2e/v3-workspace.spec.ts",
+      "sha256": "d366b0715098c4d544be2ff2752bc66205c60fa22006cacdf5619eaaeb274e29"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/playwright.config.ts",
+      "sha256": "f210bc46e7b3ada961e6e80d224db1f96021ca36c804cc3bc7bf018c4c9da4df"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/playwright.integration.config.ts",
+      "sha256": "6e1a0ca45459b3ed4eafd66fb68d962fec1c685769e453a5c4b5fa4be17551a7"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/bin/m1-harness.rs",
+      "sha256": "324f5a68bbacd2ad52e19c6e3450e4b1ff97b57fc5168effd0f9cea61023d49f"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/canvas.rs",
+      "sha256": "714c0a10ac36839b8a6e851a1355b7a54259c6fc7c5e3d3df9dcfba789b1e7a1"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/color_engine.rs",
+      "sha256": "788ee49bd411a743990f592832fc91fb7be11fa509c70c5b45f46bd2d709f099"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/commands.rs",
+      "sha256": "0cc046fdf553ef1fa7a22e184dff6996b7beb4f797b30e5c0fe58fd202e95457"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/lib.rs",
+      "sha256": "50b99c03191110005a53089efb08f325c2ff3f668f489aa68435a209703fda10"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/publishing.rs",
+      "sha256": "ad5c62fc9dfc2c48642f58782a9c98bb907c19fb8ad267f7b63a2a7141af1f1a"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/app/AppController.tsx",
+      "sha256": "369666db141aa80bbee9c30170755a40e82512af0333ba9c61184b1fa7469f0a"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/app/Workspace.tsx",
+      "sha256": "940fd2fc858bd50e24b461e6bac9ca15d04510bb5d3424d2119c5bbb6608e500"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/domain/canvas.ts",
+      "sha256": "3eb76ec12d55f83c69c4ded17ce9d635b6ca85398116bddac42d04f90cd5f1e8"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/domain/models.ts",
+      "sha256": "1385fd8df919cb6c51553d4ac8a944e6b367091e362783bb927bd670b4b40736"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/domain/publication.ts",
+      "sha256": "7a2feede614f607f46fbec8a5a9ff71014b0a554d45377836662e432eb62ebba"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/canvas/NarrativeCanvas.test.tsx",
+      "sha256": "4fca1d010fa7239bc6f4d165a16a038883e6829233739c3bf608098212e144da"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/canvas/NarrativeCanvas.tsx",
+      "sha256": "981fd6b62f23f38d09d58c0a2ca85d5a3bbd8c193a1ed7df896d846b23f18041"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/publishing/PublicationPanel.test.tsx",
+      "sha256": "60d840af8b9a76c2aabc6409e66945715a352780901b92cc87196f4e2d58e8aa"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/publishing/PublicationPanel.tsx",
+      "sha256": "0a783cfdc7531b835fb079158e2fb21c159e71516478445747076e34fcda4119"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriCanvasRepository.ts",
+      "sha256": "ba45a4da7ad50dc43f3cc35285a51cbf74ccf91543a753a278e6f27c086763e0"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriPublicationRepository.ts",
+      "sha256": "79ea17b8445ba5ede358ae840bc45c8f8d1784f08872bb78c3b2f64b09ab686c"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriRepository.ts",
+      "sha256": "2c36d07a66260a035ce7f6d4a02700a0c93db770a696ad512f8c01b9c00a2442"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriWorkspaceRepository.test.ts",
+      "sha256": "ade4d099d335fc697cfb0e769d62de6b9cc652ceedc9eb86f3f1ba248b680c8c"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/tauriCommand.ts",
+      "sha256": "f10edee8143fc90d1ccb01ef5353d0435b16ed10102645ce65f912c486037cb6"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/stores/uiStore.ts",
+      "sha256": "f3531320d5d6f5fd4ba01e563fc145c34fef78fa36756bbc7b9c25c7d84e47ff"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/styles/app.css",
+      "sha256": "f719ea750b2065e4a38f90286b057ae8a8fc4d8a1b134f8c3e227b6025bd704e"
+    }
+  ]
+}

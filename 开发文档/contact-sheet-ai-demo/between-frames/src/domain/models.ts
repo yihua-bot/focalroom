@@ -93,6 +93,8 @@ export interface ImportJob {
 export interface ExportReceipt { path: string; sha256: string; bytes: number }
 
 export interface DesktopProjectRepository extends ProjectRepository, DraftRepository {
+  canvas?: import('./canvas').CanvasRepository;
+  publication?: import('./publication').PublicationRepository;
   cloudAuth?: import('./cloud-auth').CloudAuthRepository;
   sharing?: import('./sharing').SharingRepository;
   memory: import('./memory').MemoryRepository;
