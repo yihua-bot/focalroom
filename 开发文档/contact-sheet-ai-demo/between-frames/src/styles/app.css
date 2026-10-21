@@ -600,3 +600,5 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .canvas-group-node{position:absolute;border:2px dashed rgba(108,92,231,.5);border-radius:12px;background:rgba(108,92,231,.05);pointer-events:none}
 .canvas-group-node.selected{border-color:var(--accent,#6c5ce7);background:rgba(108,92,231,.12)}
 .canvas-group-label{position:absolute;top:-24px;left:8px;font-size:12px;color:var(--accent,#a29bfe);background:var(--bg-secondary,#1a1a28);padding:2px 8px;border-radius:4px;white-space:nowrap}
+.canvas-resize-handle{position:absolute;right:-4px;bottom:-4px;width:12px;height:12px;background:var(--accent,#6c5ce7);border:2px solid #fff;border-radius:50%;cursor:nwse-resize;z-index:10}
+.canvas-lock-badge{position:absolute;top:4px;right:4px;font-size:12px;background:rgba(0,0,0,.5);border-radius:4px;padding:1px 4px;pointer-events:none}

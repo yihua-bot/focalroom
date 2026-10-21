@@ -194,6 +194,8 @@ pub fn run() {
             commands::canvas_adopt_board_draft,
             commands::canvas_redo,
             commands::canvas_group_nodes,
+            commands::canvas_resize_node,
+            commands::canvas_set_node_locked,
             commands::pub_create,
             commands::pub_list,
             commands::pub_pages,

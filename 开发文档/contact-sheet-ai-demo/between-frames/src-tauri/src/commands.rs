@@ -915,3 +915,47 @@ pub async fn canvas_group_nodes(
 ) -> Result<crate::canvas::CanvasNode> {
     state.store.group_nodes_cmd(&project_id, &cmd).await
 }
+
+#[tauri::command]
+pub async fn canvas_resize_node(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+    node_id: String,
+    width: f64,
+    height: f64,
+) -> Result<()> {
+    state
+        .store
+        .resize_node(
+            &project_id,
+            &crate::canvas::ResizeNodesCommand {
+                board_id,
+                node_id,
+                width,
+                height,
+            },
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn canvas_set_node_locked(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+    node_id: String,
+    locked: bool,
+) -> Result<()> {
+    state
+        .store
+        .set_node_locked(
+            &project_id,
+            &crate::canvas::SetNodeLockedCommand {
+                board_id,
+                node_id,
+                locked,
+            },
+        )
+        .await
+}

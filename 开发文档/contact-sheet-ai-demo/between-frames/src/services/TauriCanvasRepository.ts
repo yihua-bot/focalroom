@@ -75,4 +75,11 @@ export class TauriCanvasRepository implements CanvasRepository {
       cmd: { boardId, nodeIds, label },
     });
   }
+
+  async resizeNode(projectId: string, boardId: string, nodeId: string, width: number, height: number) {
+    await invoke('canvas_resize_node', { projectId, boardId, nodeId, width, height });
+  }
+  async setNodeLocked(projectId: string, boardId: string, nodeId: string, locked: boolean) {
+    await invoke('canvas_set_node_locked', { projectId, boardId, nodeId, locked });
+  }
 }

@@ -1756,3 +1756,74 @@ mod board_revision_tests {
         assert_eq!(rev3, 4, "删除后 revision=4");
     }
 }
+
+// ── G3：节点 Resize 与锁定 ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResizeNodesCommand {
+    pub board_id: String,
+    /// 单节点 resize（多节点独立 resize 无明确语义，不支持）
+    pub node_id: String,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetNodeLockedCommand {
+    pub board_id: String,
+    pub node_id: String,
+    pub locked: bool,
+}
+
+impl CommandHandler<'_> {
+    /// 调整节点尺寸（最小 20x20，最大 10000x10000）。
+    pub async fn resize_node(&self, project: &str, cmd: &ResizeNodesCommand) -> Result<()> {
+        if cmd.width < 20.0 || cmd.height < 20.0 || cmd.width > 10000.0 || cmd.height > 10000.0 {
+            return Err(AppError::new("VALIDATION_ERROR", "尺寸须在 20–10000 之间"));
+        }
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let result = sqlx::query(
+            "UPDATE canvas_nodes SET width=?, height=?, updated_at=? WHERE id=? AND board_id=? AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+        )
+        .bind(cmd.width).bind(cmd.height).bind(domain::timestamp())
+        .bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
+        .execute(&mut *tx).await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::new("NOT_FOUND", "节点不存在或已锁定"));
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// 锁定/解锁节点（锁定后不可拖动/resize/删除）。
+    pub async fn set_node_locked(&self, project: &str, cmd: &SetNodeLockedCommand) -> Result<()> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let result = sqlx::query(
+            "UPDATE canvas_nodes SET locked=?, updated_at=? WHERE id=? AND board_id=? AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+        )
+        .bind(if cmd.locked { 1 } else { 0 })
+        .bind(domain::timestamp())
+        .bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
+        .execute(&mut *tx).await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::new("NOT_FOUND", "节点不存在"));
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+}
+
+impl Store {
+    pub async fn resize_node(&self, project: &str, cmd: &ResizeNodesCommand) -> Result<()> {
+        CommandHandler::new(self).resize_node(project, cmd).await
+    }
+    pub async fn set_node_locked(&self, project: &str, cmd: &SetNodeLockedCommand) -> Result<()> {
+        CommandHandler::new(self)
+            .set_node_locked(project, cmd)
+            .await
+    }
+}

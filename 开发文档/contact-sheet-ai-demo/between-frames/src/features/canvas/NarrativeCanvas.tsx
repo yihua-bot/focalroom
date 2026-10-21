@@ -20,6 +20,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const [dragging, setDragging] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [marquee, setMarquee] = useState<{x0:number;y0:number;x1:number;y1:number} | null>(null);
+  const [resizing, setResizing] = useState<{nodeId:string;startW:number;startH:number;x:number;y:number} | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationInfo[]>([]);
   const [linking, setLinking] = useState<string | null>(null);
   const [linkMode, setLinkMode] = useState(false);
@@ -101,6 +102,18 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
         startX + i * 240, 50, 220, 160);
     }
     await loadBoards();
+  };
+
+  const toggleLockSelected = async () => {
+    if (!repository || !activeBoard || selectedNodeIds.size === 0) return;
+    const first = nodes.find(n => selectedNodeIds.has(n.id));
+    if (!first) return;
+    const target = !first.locked;
+    for (const id of selectedNodeIds) {
+      await repository.setNodeLocked(projectId, activeBoard, id, target);
+    }
+    const ns = await repository.getNodes(activeBoard);
+    setNodes(ns);
   };
 
   const groupSelected = async () => {
@@ -201,6 +214,14 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (resizing) {
+      const dx = (e.clientX - resizing.x) / zoom;
+      const dy = (e.clientY - resizing.y) / zoom;
+      const w = Math.max(20, resizing.startW + dx);
+      const h = Math.max(20, resizing.startH + dy);
+      setNodes(prev => prev.map(n => n.id === resizing.nodeId ? { ...n, width: w, height: h } : n));
+      return;
+    }
     if (inkMode && inkPoints.length > 0) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
@@ -270,6 +291,14 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
       setMarquee(null);
       return;
     }
+    if (resizing) {
+      const node = nodes.find(n => n.id === resizing.nodeId);
+      if (node && repository && activeBoard) {
+        await repository.resizeNode(projectId, activeBoard, node.id, node.width, node.height);
+      }
+      setResizing(null);
+      return;
+    }
     setDragging(null);
     dragStart.current = null;
     panning.current = null;
@@ -288,6 +317,17 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     const ans = await repository.getAnnotations(activeBoard);
     setAnnotations(ans);
   };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'l' || e.key === 'L') {
+        void toggleLockSelected();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   if (!repository) {
     return <div className="canvas-empty"><p>画布功能需要桌面版。</p></div>;
@@ -333,6 +373,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           });
         }}
         onPointerCancel={() => {
+          if (resizing) { setResizing(null); setNodes(current => { void current; return current; }); }
           if (dragging && dragStart.current) {
             const start = dragStart.current;
             setNodes(current => current.map(node => node.id === dragging ? { ...node, x: start.nodeX, y: start.nodeY } : node));
@@ -360,6 +401,17 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
               {node.thumbnailPath
                 ? <img src={node.thumbnailPath} alt="" draggable={false} />
                 : <div className="canvas-photo-placeholder">📷</div>}
+              {!node.locked && <div
+                className="canvas-resize-handle"
+                onPointerDown={e => {
+                  e.stopPropagation();
+                  if (!node.locked) {
+                    setResizing({ nodeId: node.id, startW: node.width, startH: node.height, x: e.clientX, y: e.clientY });
+                    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                  }
+                }}
+              />}
+              {node.locked && <span className="canvas-lock-badge">🔒</span>}
             </div>
           ))}
           {nodes.filter(n => ['sticky', 'text', 'shape', 'chapter'].includes(n.nodeType)).map(node => {

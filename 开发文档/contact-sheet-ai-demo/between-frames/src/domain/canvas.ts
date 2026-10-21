@@ -32,5 +32,7 @@ export interface CanvasRepository {
   addArrow(projectId: string, boardId: string, fromNodeId: string, toNodeId: string, color?: string): Promise<void>;
   undo(projectId: string, boardId: string): Promise<boolean>;
   groupNodes(projectId: string, boardId: string, nodeIds: string[], label: string): Promise<void>;
+  resizeNode(projectId: string, boardId: string, nodeId: string, width: number, height: number): Promise<void>;
+  setNodeLocked(projectId: string, boardId: string, nodeId: string, locked: boolean): Promise<void>;
   addInk(projectId: string, boardId: string, x: number, y: number, w: number, h: number, points: Array<{x:number;y:number;pressure?:number}>, color?: string, strokeWidth?: number): Promise<void>;
 }
