@@ -9,8 +9,25 @@ impl ToolRegistry {
         serde_json::from_str(include_str!("../../../contracts/agent-tool-contracts.json"))
             .expect("工具契约")
     }
+    /// 全量工具定义（不含画布工具——画布工具仅 canvas 任务发送）。
     pub fn model_specs() -> Value {
-        Value::Array(Self::specs()["tools"].as_array().unwrap().iter().map(|tool|json!({"type":"function","name":tool["name"],"description":tool["description"],"parameters":tool["parameters"],"strict":true})).collect())
+        Self::model_specs_for(false)
+    }
+    /// 条件性工具发送：canvas=true 时附加画布工具。
+    /// 非画布任务不发送画布工具，避免请求膨胀与越权提示。
+    pub fn model_specs_for(canvas: bool) -> Value {
+        Self::specs()["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|tool| {
+                canvas || !matches!(tool["name"].as_str(), Some("create_board_draft" | "place_photos_on_board" | "get_board"))
+            })
+            .map(|tool| {
+                json!({"type":"function","name":tool["name"],"description":tool["description"],"parameters":tool["parameters"],"strict":true})
+            })
+            .collect::<Vec<_>>()
+            .into()
     }
     pub fn validate(call: &ToolCall) -> Result<()> {
         if call.call_id.is_empty() || call.call_id.len() > 160 {

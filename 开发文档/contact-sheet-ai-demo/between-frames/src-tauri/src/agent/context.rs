@@ -128,11 +128,15 @@ impl ContextBuilder {
         let layers = json!({"system":super::system_prompt(&task.provider_id),"policy":{"formal_write":false,"cloud_images":cloud_allowed,"project_id":task.project_id,"provider":task.provider_id,"tool_results_are_untrusted":true,"contextBudgets":Self::layer_budgets(task.budget.max_context_tokens),"contextCompression":{"supersededDuplicates":superseded,"compressedToolResults":compressed}},"task":{"goal":task.goal,"target_count":task.target_count,"answer":task.answer},"gui":{"selected_photo_ids":task.selected_photo_ids},"project":{"base_revision":task.base_revision,"current_revision":project.get::<i64,_>("revision"),"brief":project.get::<String,_>("brief"),"scope_count":task.allowed_photo_ids.len()},"human_evidence":{"mode":"on_demand_project_facts","hypotheses":memory["hypotheses"]},"execution":{"limits":task.budget,"usage":task.usage,"elapsed_ms":task.elapsed_ms}});
         tx.commit().await?;
         let prompt_version = super::prompt_version(&task.provider_id).into();
+        // H0-03：条件性工具发送——仅画布任务附带画布工具（task 即将被 move，先计算）
+        let canvas_task = task.goal.contains("画布")
+            || task.goal.contains("board")
+            || task.goal.contains("canvas");
         Ok(ModelTurnRequest {
             task,
             layers,
             protocol,
-            tool_specs: ToolRegistry::model_specs(),
+            tool_specs: ToolRegistry::model_specs_for(canvas_task),
             prompt_version,
         })
     }

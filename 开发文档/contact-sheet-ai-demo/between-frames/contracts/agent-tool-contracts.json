@@ -622,6 +622,68 @@
       },
       "strict": true,
       "access": "draft"
+    },
+    {
+      "name": "group_nodes",
+      "description": "将多个画布节点分组。只能操作当前任务创建的草案画布。",
+      "strict": true,
+      "access": "draft",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "board_id": {
+            "type": "string"
+          },
+          "node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "board_id",
+          "node_ids",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "create_sequence_draft",
+      "description": "从一组照片创建线性叙事序列草案。",
+      "strict": true,
+      "access": "draft",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "photo_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "photo_ids",
+          "title"
+        ],
+        "additionalProperties": false
+      }
     }
   ]
 }
