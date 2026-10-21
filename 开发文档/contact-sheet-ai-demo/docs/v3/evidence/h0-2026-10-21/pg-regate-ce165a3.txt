@@ -1,0 +1,169 @@
+
+> between-frames@0.1.0 test:cloud:pg
+> node apps/api/test/run.mjs
+
+✔ M4 promotion verifies media, strips EXIF, atomically commits and replays (385.282292ms)
+✔ M4 project-only invitation, email binding, one-time acceptance and isolation (20.652125ms)
+✔ M4 cookie CSRF, session hashes, unknown fields, no model authorization (6.312125ms)
+✔ M5 comment anchors, parent project isolation, provenance and Viewer denial (18.770416ms)
+✔ M5 two concurrent proposals: one atomic formal apply, other remains submitted (24.408666ms)
+✔ M5 authenticated WS, private Yjs, presence, snapshot reconnect and revoke (1158.860333ms)
+✔ M5 cross-instance presence syncs through the PostgreSQL bus (1001.755458ms)
+✔ M5 short task principals are project scoped, read-only, expiring and revocable (39.971083ms)
+✔ M4 malformed and oversized requests return safe private JSON errors (7.9215ms)
+✔ M4 invitations expire and membership never grants ordinary project access (12.752292ms)
+✔ M5 Yjs rejects formal state fields and viewer replay cannot bypass downgraded ACL (76.134333ms)
+✔ M4/M5 API restart preserves session, authoritative versions and comments (22.409666ms)
+✔ M4 workspace member removal preserves independent project grants and protects owner (7.788375ms)
+✔ M5 draft revisions are private, owned, idempotent and partially approved with complete audit (57.452709ms)
+✔ M5 thread replies replay exactly and preserve an immutable original payload (9.924791ms)
+✔ M4 append-only migration upgrades 0001 without rewriting legacy receipts (90.703125ms)
+✔ M4 project authority does not authorize cloud model transmission (4.41125ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3549.043084
+✔ M4 R2 adapter signs S3 put/get against an isolated local protocol server (23.402625ms)
+✔ M4 local preview store rejects links, foreign object paths and content collisions (2.433041ms)
+✔ M4 media policy rejects oversized, PNG-disguised and corrupt sources (2.634459ms)
+✔ M4 R2 configuration requires explicit official endpoint and complete credentials (0.915791ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 237.750792
+✔ M4 explicit migrations create account/limiter tables and remain idempotent (125.081042ms)
+✔ M4 independent database clients enforce one shared hourly quota under concurrency (24.790125ms)
+✔ M4 password reset hashes match login, revoke sessions and consume every outstanding token (250.346834ms)
+✔ M4 concurrent resets with different tokens have exactly one winner (108.279959ms)
+✔ M4 invalid, expired and oversized reset inputs do not change the account (161.997792ms)
+✔ M4 forgot password normalizes email and hides account existence and email quota (167.526041ms)
+✔ M4 verification enforces session/CSRF and concurrent ten-minute delivery quota (61.991625ms)
+✔ M4 unavailable email rolls back tokens without claiming verification delivery (55.7835ms)
+✔ M4 account mail links use fragments, reject public HTTP and support the Web route (0.350917ms)
+✔ M4 quota cleanup removes expired rows without erasing longer live windows (1.507ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1435.145541
+✔ M4 OTP migration supports legacy draft tables and repeat explicit migration (113.605042ms)
+✔ M4 OTP normalizes email and stores a challenge-bound hash, never the code (29.205958ms)
+✔ M4 OTP creates an authenticated cookie session, verified account and owner workspace (70.370458ms)
+✔ M4 OTP reuses existing accounts without changing password or duplicating workspaces (110.492792ms)
+✔ M4 OTP mail failure rejects the request and rolls back codes (55.843208ms)
+✔ M4 OTP expired codes and invalid inputs create no session (5.627167ms)
+✔ M4 OTP wrong attempts persist and revoke the code after five failures (7.815916ms)
+✔ M4 OTP resend invalidates old challenges, with one shared email quota (57.900333ms)
+✔ M4 OTP concurrent verification succeeds once and creates one session (63.240834ms)
+✔ M4 OTP session failure rolls back code consumption and new account atomically (114.844542ms)
+✔ M4 OTP failed resend preserves the previously delivered code (54.809ms)
+✔ M4 OTP concurrent resend cannot bypass the shared delivery quota (56.921ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1105.154791
+✔ desktop grant stores hashes, fixed return URL and real PKCE session; browser never receives bearer (170.409125ms)
+✔ authorize requires browser authentication, exact state and CSRF; malformed/external redirect rejected (61.308083ms)
+✔ wrong verifier/state/code cannot redeem or consume the legitimate grant (60.023209ms)
+✔ concurrent exchanges create only one desktop session (64.722042ms)
+✔ grant and authorization code expiry both prevent redemption (111.959209ms)
+✔ browser revocation/password reset cannot yield a new desktop credential (110.200625ms)
+✔ existing browser session may approve, retry replaces code and another account cannot take over (110.379833ms)
+✔ session creation failure rolls back code consumption, then legitimate exchange can recover (60.054875ms)
+✔ revocation and redemption share session-first lock ordering without a deadlock (107.172083ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1205.287625
+✔ Google verified profile persists and is returned immediately, by /me and subsequent OTP session (168.8645ms)
+✔ wrong audience, unverified email or self-asserted profile cannot create an identity (1.655833ms)
+✔ unsupported avatar does not replace the saved trusted image; OTP-only accounts remain null (54.077375ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 574.671958
+✔ hosted AI requires live account, verified email, correct policy and CSRF; key never returned (226.168458ms)
+✔ quota and grants are account isolated and idempotent, cannot self-top-up over HTTP (117.180167ms)
+✔ atomic reservation across two service instances rejects overspending and simultaneous duplicate IDs (215.578334ms)
+✔ confirmed upstream rejection releases reservation; unknown network/meter/result holds it and never replays (363.443042ms)
+✔ image forwarding requires consent and bounded local JPEG, strips metadata and blocks URLs/server tools (80.130875ms)
+✔ disabled service is explicit and has no trial side effect; exhausted quota never calls provider (113.004292ms)
+✔ operator reconciliation needs a confirmed reference, cannot release active calls, and is atomic/idempotent (60.875917ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1549.204125
+✔ M4 角色初始化（等价 postgres-init 脚本）与迁移角色执行迁移 (63.515834ms)
+✔ M4 应用角色只能 DML：读写通过，DDL 与建角色被拒 (17.397416ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10138.137375
+✔ M4 cookie-authenticated Agent GETs need no Origin/CSRF, writes remain protected (278.408208ms)
+✔ M4 无显式授权时入队被拒；授权/任务/取消/撤权全链路 (37.499792ms)
+✔ M4 分歧分析：消息体为 system/user 字符串且 task_type 落库为分歧 (3.948708ms)
+✔ M4 崩溃恢复：租约过期的 RUNNING 任务被重新领取并完成 (5.727709ms)
+✔ M4 模型失败有限重试后 FAILED 且不外发更多请求 (6.9145ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 693.888958
+✔ M4 /metrics 暴露请求计数、延迟桶与 DB 派生指标 (97.228834ms)
+✔ M4 UUID 路由模板归一，防止标签基数爆炸 (3.467041ms)
+✔ M4 FOCALROOM_METRICS_TOKEN 未设置时开放，设置后需令牌 (2.874791ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 470.85575
+✔ G6 board discovery and creation enforce project grants, not just authentication (364.755709ms)
+✔ G6 node and comment reads are scoped; hidden nodes and missing resources behave correctly (8.394542ms)
+✔ G6 comments validate input, require write permission and restrict resolution to author or editor (25.245958ms)
+✔ G6 cookie mutations require CSRF; revoked grants stop existing board access immediately (10.792125ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 764.246
+Isolated PostgreSQL evidence: /var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-pg-tests-h8eqhe

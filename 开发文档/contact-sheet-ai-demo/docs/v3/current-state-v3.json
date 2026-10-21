@@ -3,32 +3,30 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-20T12:36:39.343Z",
-  "sourceHead": "d06577137d564d8cc92004c032cfd83d817f8e48",
-  "changedSources": [
-    {
-      "path": "e2e/m1-500.spec.ts",
-      "sha256": "9d125678d9523f0716050dd76b49d32fbe8775c3585a38cc6d6ec79a4f018ea6"
-    },
-    {
-      "path": "scripts/integration-server.mjs",
-      "sha256": "64fa9aa529f7ebc84408182e8b044f20f09cf647c54213a5858e19ffda80e712"
-    }
-  ],
+  "observedAt": "2026-10-21T05:57:30.555Z",
+  "sourceHead": "dd9978190063777df493486af451c4f24ecd3f50",
+  "changedSources": [],
   "branch": "main",
   "clientVersion": "1.0.4",
   "ciWorkflow": {
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "fb4e66cd42211da17a1c216569369c1ab62397e81cd0dfea3017978f862b7b2e"
   },
-  "status": "LOCAL_G0_PASS_REMOTE_CI_PENDING",
+  "status": "H0_HARDENING_MERGED_MAIN_CI_GREEN",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
     "realModelCalls": 0,
     "historicalMigrationsChanged": false
   },
-  "migrationDeltaFromBaseline": [],
+  "migrationDeltaFromBaseline": [
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0017_cloud_asset_domain.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0018_cloud_canvas.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0020_asset_domain.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0021_canvas.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0022_external_edit.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0023_publishing.sql\""
+  ],
   "modules": [
     {
       "id": "ai-drawer",
@@ -39,7 +37,7 @@
     {
       "id": "desktop-ui",
       "path": "src/app/AppController.tsx",
-      "sha256": "dd9e823e1736b2bf1969e7d05e683abbebf1d08cd00d5b58955db40f5b07b0ad",
+      "sha256": "369666db141aa80bbee9c30170755a40e82512af0333ba9c61184b1fa7469f0a",
       "boundary": "working selection workspace; no free-coordinate Board"
     },
     {
@@ -51,7 +49,7 @@
     {
       "id": "sqlite",
       "path": "src-tauri/src/db.rs",
-      "sha256": "8749acc80ed07eb69a3635b456ff4f9c37b48fe1eb5c0022ddaf7554169ea06e",
+      "sha256": "ae4736fa0ebbdbf25cf7626e8f606282961f5fd457b4366ac246bd2b11ede25f",
       "boundary": "backup-before-upgrade and SQLx migrations"
     },
     {
@@ -199,15 +197,31 @@
         {
           "path": "src-tauri/migrations/0019_model_quality.sql",
           "sha256": "550236612d22164102880640340f56804e316f82acd14bd672911b6878e8e37d"
+        },
+        {
+          "path": "src-tauri/migrations/0020_asset_domain.sql",
+          "sha256": "47b6a1da74278f8dbee5f9ece4127e7ac04421b1f6e3db38a94d1daacef6fada"
+        },
+        {
+          "path": "src-tauri/migrations/0021_canvas.sql",
+          "sha256": "afac109f635383382b5c4ea703eba529c9b8b070413f9da8228463024fbf1428"
+        },
+        {
+          "path": "src-tauri/migrations/0022_external_edit.sql",
+          "sha256": "6f11d314486847458429f290f4f4012a6462d4be498cc9da68e5c27eef3da510"
+        },
+        {
+          "path": "src-tauri/migrations/0023_publishing.sql",
+          "sha256": "7b4599ec95d14efa316e191690a3a7bcf38e2775582c7eb17173d7a643b61703"
         }
       ],
-      "backupSha256": "9ebfe579bd9b8bcbc7017fbe168c4e0b2f918167436c9842fc7db5e94622c090",
+      "backupSha256": "7c7ce2a9923500258c6f2ada764e3a625cc84a3926b5d6b8edf7c42157ab07ac",
       "fixture": "generated JPEG and legacy v11 SQLite; no user data",
-      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmpq1hlAv",
+      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmp2GWGQG",
       "foreignKeyViolations": 0,
       "legacyMigrations": 11,
       "restoredProjectionMatches": true,
-      "snapshotSha256": "beef76161dcfffb4664a33ebe31c3487eb8a2e173035e80a13d77d6e6726f074",
+      "snapshotSha256": "8c4003df8e414774f52033bad9253c7ce099a8eefde76e049874e1a3464c73d7",
       "snapshotUnchanged": true,
       "sourceSha256": "ddcce3e7c64670e2b67b55522783440118049c8107e958be51a5299df4b0709a",
       "sourceUnchanged": true,
@@ -217,6 +231,11 @@
         "agent_request_receipts",
         "agent_steps",
         "agent_tasks",
+        "asset_aliases",
+        "asset_representations",
+        "board_annotations",
+        "boards",
+        "canvas_nodes",
         "command_events",
         "command_history",
         "command_receipt_aliases",
@@ -228,6 +247,8 @@
         "decision_events",
         "draft_items",
         "drafts",
+        "edit_variants",
+        "external_edit_links",
         "history_heads",
         "memory_commands",
         "memory_evidence_state",
@@ -246,15 +267,23 @@
         "photos",
         "preference_evidence",
         "preference_hypotheses",
+        "print_contracts",
         "privacy_consents",
         "projects",
         "proposal_operations",
         "proposals",
+        "publication_frames",
+        "publication_pages",
+        "publication_texts",
+        "publications",
+        "renditions",
         "sequence_items",
         "sequence_versions",
+        "source_assets",
         "sqlite_sequence",
         "task_messages",
         "tool_calls",
+        "transfer_jobs",
         "v2_billing_events",
         "v2_command_receipts",
         "v2_creators",
@@ -279,10 +308,15 @@
         "fr_ai_grants",
         "fr_ai_reconciliations",
         "fr_ai_requests",
+        "fr_asset_aliases",
+        "fr_board_annotations",
+        "fr_boards",
+        "fr_canvas_nodes",
         "fr_commands",
         "fr_comments",
         "fr_desktop_logins",
         "fr_drafts",
+        "fr_edit_variants",
         "fr_email_verify_tokens",
         "fr_events",
         "fr_grants",
@@ -297,7 +331,9 @@
         "fr_projects",
         "fr_proposals",
         "fr_rate_limits",
+        "fr_renditions",
         "fr_sessions",
+        "fr_source_assets",
         "fr_tickets",
         "fr_users",
         "fr_versions",
@@ -347,6 +383,14 @@
         {
           "version": "0015",
           "sha256": "61cbbcee7df864631b3b84bc98e498a5059547b908fc8b49a027c56e7f1bb324"
+        },
+        {
+          "version": "0017",
+          "sha256": "ae4419e4ca10d56d2b663a60635d7043274ac95adaa3029e3db94a9184cf91f4"
+        },
+        {
+          "version": "0018",
+          "sha256": "efd2a30dd3ba1ced3e196bc90305dd5a263eecfbf0addd9ca9f43caa5c638983"
         }
       ],
       "registeredFiles": [
@@ -393,6 +437,14 @@
         {
           "path": "apps/api/migrations/0015_hosted_ai.sql",
           "sha256": "61cbbcee7df864631b3b84bc98e498a5059547b908fc8b49a027c56e7f1bb324"
+        },
+        {
+          "path": "apps/api/migrations/0017_cloud_asset_domain.sql",
+          "sha256": "ae4419e4ca10d56d2b663a60635d7043274ac95adaa3029e3db94a9184cf91f4"
+        },
+        {
+          "path": "apps/api/migrations/0018_cloud_canvas.sql",
+          "sha256": "efd2a30dd3ba1ced3e196bc90305dd5a263eecfbf0addd9ca9f43caa5c638983"
         }
       ],
       "unregisteredDesignFiles": [
@@ -444,179 +496,131 @@
       "id": "full-local-gate",
       "command": "npm run verify:v2",
       "result": "PASS",
-      "evidence": "evidence/v3-g0-20261020/final-verify.txt",
-      "sourceState": {
-        "head": "66901ca61cc962942c09adb39a99736a6656f19e",
-        "changedSources": [
-          {
-            "path": "e2e/m1-500.spec.ts",
-            "sha256": "af1b08d0de569ab15db130151ef94e7b98df89e5a7216a4f861dcb599670e9a3"
-          },
-          {
-            "path": "scripts/inventory-v3.mjs",
-            "sha256": "309d6d0087a3355e7a1f99f71b6c3cbcb76524b072ccb04bf16e8aaeb2fed6b1"
-          },
-          {
-            "path": "src-tauri/tests/v3_baseline.rs",
-            "sha256": "731bf946eab703be912d9bca72a19c3bc3ea35ba952a140fda8c1b6dff18d8e2"
-          }
-        ],
-        "note": "Full local gate before 65767f9; all recorded module hashes remain identical. m1-500 selector change reverified separately at 65767f9."
-      }
+      "exitCode": 0,
+      "head": "ce165a3",
+      "evidence": "evidence/h0-2026-10-21/verify-v2.txt"
     },
     {
       "id": "frontend",
       "result": "PASS",
-      "tests": 265,
-      "files": 38
+      "tests": 274,
+      "files": 41
     },
     {
       "id": "rust",
       "result": "PASS",
-      "tests": 223,
+      "tests": 239,
       "ignored": 15,
       "filteredKeychain": 1
     },
     {
-      "id": "legacy-cloud-protocol",
+      "id": "postgresql-candidate",
       "result": "PASS",
-      "tests": 16
+      "tests": 76,
+      "suites": 11,
+      "evidence": "evidence/h0-2026-10-21/test-summary.json"
     },
     {
-      "id": "preview-e2e",
+      "id": "postgresql-l-regate",
+      "result": "PASS",
+      "suites": 11,
+      "exitCode": 0,
+      "head": "ce165a3",
+      "note": "L independent re-run on frozen tree after concurrent-write incident",
+      "evidence": "evidence/h0-2026-10-21/pg-regate-ce165a3.txt"
+    },
+    {
+      "id": "browser-preview-e2e",
       "result": "PASS",
       "tests": 18
     },
     {
-      "id": "local-integration-e2e",
+      "id": "real-rust-store-journeys",
       "result": "PASS",
-      "tests": 6
-    },
-    {
-      "id": "api-postgresql",
-      "result": "PASS",
-      "tests": 72
-    },
-    {
-      "id": "shared-web-real-postgresql",
-      "result": "PASS",
-      "users": 3,
-      "realEmailSent": 0,
-      "evidence": "evidence/v3-g0-20261020/web-journey.txt"
-    },
-    {
-      "id": "rust-promotion-real-postgresql",
-      "result": "PASS",
-      "sourcePhotos": 2,
-      "evidence": "evidence/v3-g0-20261020/promotion.txt"
+      "tests": 7,
+      "note": "includes new canvas/publication journeys"
     },
     {
       "id": "500-generated-file-gui",
       "result": "PASS",
       "tests": 4,
-      "photos": 500,
-      "caveat": "250 JPEG + 250 PNG generated from repository references; not 500 independent professional photographs"
-    },
-    {
-      "id": "legacy-v11-copy-upgrade-restore",
-      "result": "PASS",
-      "sourceUnchanged": true,
-      "snapshotUnchanged": true,
-      "commentAnchorsPreserved": true,
-      "evidence": "evidence/v3-g0-20261020/legacy-snapshot.json"
-    },
-    {
-      "id": "contracts-types-lint-fmt-clippy",
-      "result": "PASS"
+      "originalHashesMatched": 500,
+      "snapshotRestored": true,
+      "aiTasks": 0,
+      "evidence": "evidence/h0-2026-10-21/m1-500-gui-metrics.json"
     },
     {
       "id": "desktop-review-build",
       "result": "PASS",
       "signed": false,
-      "artifact": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target-v1/debug/bundle/macos/FocalRoom V2 Review.app",
-      "bundleIdentifier": "studio.betweenframes.v2foundation",
-      "version": "1.0.4",
-      "binarySha256": "8f868f1f0cab913156c27a2a6fb2227996564fbbfd847ae4372f60d3e7830a73",
-      "nativeGuiAcceptance": "NOT_TESTED_IN_G0",
-      "evidence": "evidence/v3-g0-20261020/desktop-build.txt"
+      "sizeMiB": 64.23,
+      "nativeGui": "NOT_EXECUTED",
+      "evidence": "evidence/h0-2026-10-21/native-review-build.txt"
     },
     {
-      "id": "500-gui-at-65767f9",
-      "command": "npm run test:m1-gui",
+      "id": "remote-ci-candidate-branch",
       "result": "PASS",
-      "tests": 4,
-      "sourceHead": "65767f90619d0b676e142738c9e4ef4257e79f41",
-      "evidence": "evidence/v3-g0-20261020/500-at-65767f9.txt"
-    },
-    {
-      "id": "restart-drain-500-suite",
-      "result": "PASS",
-      "tests": 4,
-      "evidence": "evidence/v3-g0-20261020/restart-drain-full.txt"
-    },
-    {
-      "id": "restart-with-request-in-flight",
-      "result": "PASS",
-      "isolatedFreshFixtureRuns": 5,
-      "assertion": "pendingAtRestart > 0; original request completed; new PID; stored projection and 500 source hashes preserved",
-      "evidence": [
-        "evidence/v3-g0-20261020/restart-isolated-1.txt",
-        "evidence/v3-g0-20261020/restart-isolated-2.txt",
-        "evidence/v3-g0-20261020/restart-isolated-3.txt",
-        "evidence/v3-g0-20261020/restart-isolated-4.txt",
-        "evidence/v3-g0-20261020/restart-isolated-5.txt"
+      "runs": [
+        39544472721,
+        39544510872
       ],
-      "sourceState": {
-        "head": "d06577137d564d8cc92004c032cfd83d817f8e48",
-        "changedSources": [
-          {
-            "path": "e2e/m1-500.spec.ts",
-            "sha256": "9d125678d9523f0716050dd76b49d32fbe8775c3585a38cc6d6ec79a4f018ea6"
-          },
-          {
-            "path": "scripts/integration-server.mjs",
-            "sha256": "64fa9aa529f7ebc84408182e8b044f20f09cf647c54213a5858e19ffda80e712"
-          }
-        ],
-        "ciWorkflow": {
-          "path": "../../../.github/workflows/betweenframes-v2.yml",
-          "sha256": "fb4e66cd42211da17a1c216569369c1ab62397e81cd0dfea3017978f862b7b2e"
-        }
-      }
+      "head": "ce165a3"
     },
     {
-      "id": "integration-after-bridge-change",
+      "id": "remote-ci-main-merge",
       "result": "PASS",
-      "tests": 6,
-      "evidence": "evidence/v3-g0-20261020/restart-integration.txt"
+      "run": 39552206030,
+      "head": "dd9978190063777df493486af451c4f24ecd3f50"
     },
     {
-      "id": "restart-lint-typecheck",
+      "id": "v3-baseline-legacy-restore",
       "result": "PASS",
-      "evidence": [
-        "evidence/v3-g0-20261020/restart-lint.txt",
-        "evidence/v3-g0-20261020/restart-types.txt"
-      ]
+      "head": "dd9978190063777df493486af451c4f24ecd3f50",
+      "note": "legacy v11 snapshot upgrade/restore on merged main"
+    },
+    {
+      "id": "g0-inventory",
+      "result": "PASS",
+      "pgTables": 38,
+      "pgMigrations": 13,
+      "sqliteMigrations": 23,
+      "head": "dd9978190063777df493486af451c4f24ecd3f50",
+      "note": "isolated runner; no production data"
     }
   ],
   "remaining": [
-    "Verify complete remote CI for the restart-drain follow-up commit",
-    "G1/G2 API/data/color design review before implementation",
-    "Real user database compatibility not tested; only isolated old-format fixture",
+    "H0-03 agent tool contracts/PolicyGate/task-owned drafts not started",
+    "H0-06 external reflow file-integrity and path boundaries not started",
+    "H0-07 command/history/undo integration for canvas+publication not started",
+    "H0-02/04/05/08 native WKWebView UI acceptance and Web BoardViewer wiring pending",
+    "B-domain deep review of color_engine.rs bounded parsing (L reviewed ACL+SQL only)",
+    "G1+ implementation order per IMPLEMENTATION-AND-MULTI-AGENT-HANDOFF-2026-10-21 section 7",
     "Device/human/supplier/production acceptance remains separate"
   ],
-  "evidence": {
-    "legacySnapshot": "evidence/v3-g0-20261020/legacy-snapshot.json",
-    "postgresql": "evidence/v3-g0-20261020/postgres-inventory.json",
-    "drawerEscapeScreenshot": "evidence/v3-g0-20261020/drawer-after-escape.png"
+  "h0": {
+    "record": "H0-HARDENING-2026-10-21.md",
+    "mergedPR": 1,
+    "candidateHead": "ce165a39951f991939c12fe322f24b18bbe209b9",
+    "h0Closed": [
+      "H0-01",
+      "H0-02(partial:browser-bridge)",
+      "H0-04(partial:server-side)",
+      "H0-05(partial:non-empty-pages)",
+      "H0-08(partial:bounded-parsing)"
+    ],
+    "h0Open": [
+      "H0-03",
+      "H0-06",
+      "H0-07"
+    ]
   },
   "remoteCI": {
-    "conclusion": "failure",
-    "databaseId": 39419715422,
-    "headSha": "d06577137d564d8cc92004c032cfd83d817f8e48",
+    "conclusion": "success",
+    "databaseId": 39552206030,
+    "headSha": "dd9978190063777df493486af451c4f24ecd3f50",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/39419715422",
-    "observedAt": "2026-10-20T12:36:39.343Z",
-    "note": "Failed at the restart busy guard in exception E2E. Corrected local follow-up requires a new complete remote workflow."
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/39552206030",
+    "observedAt": "2026-10-21T06:19:36.012Z",
+    "note": "Squash merge of PR #1 (candidate ce165a3). H0-01 migration assertions now expect 0017/0018."
   }
 }
