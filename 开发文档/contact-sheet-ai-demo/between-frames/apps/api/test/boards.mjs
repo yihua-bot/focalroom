@@ -133,3 +133,57 @@ test('G6 cookie mutations require CSRF; revoked grants stop existing board acces
   const denied = await pool.query('SELECT count(*)::int AS n FROM fr_acl_audit WHERE project_id=$1 AND user_id=$2 AND NOT allowed', [project, reviewer.user.id]);
   assert.ok(denied.rows[0].n >= 5);
 });
+
+test('H0-04 board with real asset alias returns photo_id for image ticket flow', async () => {
+  // 创建带真实 alias 的画布节点——验证 photo_id 从 JOIN 返回
+  const created = await call('/boards', 'POST', owner, { projectId: project, title: '真实照片画布' });
+  // 插入 source_asset + alias（模拟桌面端同步上来的资产）
+  const assetId = randomUUID();
+  await pool.query(
+    'INSERT INTO fr_source_assets(id, project_id, photo_id, content_sha256, file_size, width, height, format) VALUES($1,$2,$3,$4,100,96,64,\'jpeg\')',
+    [assetId, project, 'p1', 'b'.repeat(64)],
+  );
+  await pool.query(
+    'INSERT INTO fr_asset_aliases(photo_id, asset_id, project_id) VALUES($1,$2,$3)',
+    ['p1', assetId, project],
+  );
+  // 在画布上放一个引用该资产的照片节点
+  await pool.query(
+    'INSERT INTO fr_canvas_nodes(id, board_id, node_type, x, y, width, height, z_order, asset_id) VALUES($1,$2,\'photo\',50,60,220,160,1,$3)',
+    [randomUUID(), created.id, assetId],
+  );
+  // 放一个无 alias 的节点（占位符场景）
+  const orphanAsset = randomUUID();
+  await pool.query(
+    'INSERT INTO fr_canvas_nodes(id, board_id, node_type, x, y, width, height, z_order, asset_id) VALUES($1,$2,\'photo\',300,60,220,160,2,$3)',
+    [randomUUID(), created.id, orphanAsset],
+  );
+
+  const nodes = await call('/boards/' + created.id + '/nodes', 'GET', owner);
+  assert.equal(nodes.length, 2);
+  const withAlias = nodes.find(n => n.asset_id === assetId);
+  const withoutAlias = nodes.find(n => n.asset_id === orphanAsset);
+  assert.ok(withAlias, '有 alias 的节点应存在');
+  assert.equal(withAlias.photo_id, 'p1', 'JOIN 应返回 photo_id=p1');
+  assert.ok(withoutAlias, '无 alias 的节点也应存在');
+  assert.equal(withoutAlias.photo_id, null, '无 alias 返回 null photo_id');
+
+  // photo_id 应能走现有 preview ticket 流程
+  const ticket = await call('/projects/' + project + '/previews/p1/ticket', 'POST', owner);
+  assert.ok(ticket.url, '应获得预览票据 URL');
+
+  // outsider 不能读节点
+  await call('/boards/' + created.id + '/nodes', 'GET', outsider, undefined, 403);
+});
+
+test('H0-04 uuid-text cast does not error on legacy text asset ids', async () => {
+  // 旧版本可能存了非 UUID 格式的 asset_id——JOIN 不应崩
+  const created = await call('/boards', 'POST', owner, { projectId: project, title: '旧格式画布' });
+  await pool.query(
+    "INSERT INTO fr_canvas_nodes(id, board_id, node_type, x, y, width, height, z_order, asset_id) VALUES($1,$2,'photo',10,10,100,100,1,'legacy-text-id')",
+    [randomUUID(), created.id],
+  );
+  const nodes = await call('/boards/' + created.id + '/nodes', 'GET', owner);
+  assert.equal(nodes.length, 1);
+  assert.equal(nodes[0].photo_id, null, '旧 TEXT 引用正确无匹配，不报错');
+});
