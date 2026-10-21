@@ -273,19 +273,61 @@ pub async fn process_manifest(store: &Store, manifest_path: &Path) -> Result<Pro
         errors: Vec::new(),
     };
 
+    let manifest_dir = manifest_path
+        .parent()
+        .ok_or_else(|| AppError::new("VALIDATION_ERROR", "manifest 无父目录"))?
+        .canonicalize()
+        .map_err(|e| AppError::new("FILE_IO", format!("目录不可访问：{e}")))?;
+
     for item in &manifest.items {
         match store.match_manifest_item(item).await {
             MatchResult::Matched {
                 asset_id: _,
                 variant_id,
             } => {
-                // 计算 SHA-256（如果 manifest 提供了）
+                // H0-06：不信任 manifest 声明的 SHA——读真实文件计算
                 let sha = item.render_sha256.clone().unwrap_or_default();
-                let file_path = manifest_path
-                    .parent()
-                    .unwrap_or(Path::new("."))
-                    .join(&item.render_filename);
-                let size = std::fs::metadata(&file_path)
+                // H0-06：文件名必须无路径分隔符（防目录逃逸）
+                if item.render_filename.contains('/')
+                    || item.render_filename.contains('\\')
+                    || item.render_filename.contains("..")
+                {
+                    summary.errors.push(format!(
+                        "{}: 文件名含路径分隔符，拒绝",
+                        item.render_filename
+                    ));
+                    continue;
+                }
+                let file_path = manifest_dir.join(&item.render_filename);
+                // H0-06：canonicalize 后必须仍在 manifest 目录内（防符号链接逃逸）
+                let canonical = match file_path.canonicalize() {
+                    Ok(p) => p,
+                    Err(_) => {
+                        summary
+                            .errors
+                            .push(format!("{}: 文件不存在或不可访问", item.render_filename));
+                        continue;
+                    }
+                };
+                if !canonical.starts_with(&manifest_dir) {
+                    summary.errors.push(format!(
+                        "{}: 路径逃逸出 manifest 目录，拒绝",
+                        item.render_filename
+                    ));
+                    continue;
+                }
+                // H0-06：读真实文件计算 SHA-256 并与声明比对
+                let real_sha = crate::image_pipeline::fingerprint(&canonical).ok();
+                if let (Some(declared), Some(actual)) = (&item.render_sha256, &real_sha)
+                    && declared != actual
+                {
+                    summary.errors.push(format!(
+                        "{}: SHA-256 不匹配（声明 {declared}，实际 {actual}），拒绝",
+                        item.render_filename
+                    ));
+                    continue;
+                }
+                let size = std::fs::metadata(&canonical)
                     .map(|m| m.len() as i64)
                     .unwrap_or(0);
                 if !sha.is_empty() && size > 0 {
