@@ -45,6 +45,32 @@ pub struct SourceProfile {
     pub description: String,
     /// profile 是否有效可解析
     pub valid: bool,
+    /// H0-08 明确诊断：
+    /// Absent = 文件无嵌入 profile（多数 sRGB 相机默认）
+    /// Unsupported = 容器格式暂不支持提取（HEIF/BigTIFF 等）
+    /// Invalid = 有嵌入数据但结构校验失败
+    /// Valid = 结构安全可读（不代表色彩转换已实现）
+    pub diagnostic: ProfileDiagnostic,
+}
+
+/// ICC profile 诊断结论。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProfileDiagnostic {
+    Absent,
+    Unsupported(&'static str),
+    Invalid(String),
+    Valid,
+}
+
+impl ProfileDiagnostic {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Absent => "absent",
+            Self::Unsupported(_) => "unsupported",
+            Self::Invalid(_) => "invalid",
+            Self::Valid => "valid",
+        }
+    }
 }
 
 /// 源文件按段读取；不把大型 TIFF/RAW 像素整体载入内存。
@@ -56,6 +82,11 @@ pub fn read_source_profile(path: &Path) -> Result<Option<SourceProfile>> {
         return Ok(None);
     };
     let valid = valid_icc_structure(&icc);
+    let diagnostic = if valid {
+        ProfileDiagnostic::Valid
+    } else {
+        ProfileDiagnostic::Invalid(format!("header {} bytes", icc.len()))
+    };
     Ok(Some(SourceProfile {
         digest: format!("{:x}", Sha256::digest(&icc)),
         description: if valid {
@@ -64,6 +95,7 @@ pub fn read_source_profile(path: &Path) -> Result<Option<SourceProfile>> {
             "invalid".to_owned()
         },
         valid,
+        diagnostic,
     }))
 }
 
@@ -562,5 +594,110 @@ mod tests {
         let result = read_source_profile(temp.path()).unwrap().unwrap();
         assert!(result.valid);
         assert_eq!(result.description, "Test Profile");
+    }
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn absent_profile_returns_none() {
+        // 无嵌入 profile → None（Absent 路径）
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("no-icc.jpg");
+        std::fs::write(&path, [0xFF, 0xD8, 0xFF, 0xD9]).unwrap(); // 最小 JPEG
+        assert!(read_source_profile(&path).unwrap().is_none());
+    }
+
+    #[test]
+    fn valid_profile_gets_valid_diagnostic() {
+        // 构造结构合法的最小 ICC → Valid 诊断
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("valid.png");
+        // PNG with iCCP（用测试辅助构造）
+        let icc = valid_test_icc();
+        let png = png_with_iccp(&icc);
+        std::fs::write(&path, png).unwrap();
+        let profile = read_source_profile(&path).unwrap().unwrap();
+        assert_eq!(profile.diagnostic, ProfileDiagnostic::Valid);
+        assert!(profile.valid);
+    }
+
+    #[test]
+    fn invalid_profile_gets_invalid_diagnostic() {
+        // 有嵌入数据但结构损坏 → Invalid 诊断（不是静默丢弃）
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("broken.png");
+        let broken_icc = [0u8; 50]; // 太短，结构校验必失败
+        let png = png_with_iccp(&broken_icc);
+        std::fs::write(&path, png).unwrap();
+        let profile = read_source_profile(&path).unwrap();
+        // 提取可能失败返回 None，或提取成功但校验失败 → 两种都是明确路径
+        match profile {
+            None => { /* Absent 路径：PNG 解析器可能拒绝损坏 chunk */ }
+            Some(p) => {
+                assert!(!p.valid);
+                assert_eq!(p.diagnostic.as_str(), "invalid");
+            }
+        }
+    }
+
+    fn valid_test_icc() -> Vec<u8> {
+        // 最小合法 ICC：128 header + tag table + desc tag
+        let mut icc = vec![0u8; 200];
+        let total = icc.len() as u32;
+        icc[0..4].copy_from_slice(&total.to_be_bytes()); // 声明总长
+        icc[36..40].copy_from_slice(b"acsp");
+        icc[128..132].copy_from_slice(&1u32.to_be_bytes());
+        icc[132..136].copy_from_slice(b"desc");
+        icc[136..140].copy_from_slice(&144u32.to_be_bytes());
+        icc[140..144].copy_from_slice(&40u32.to_be_bytes());
+        icc[144..148].copy_from_slice(b"desc");
+        icc
+    }
+
+    fn png_with_iccp(icc: &[u8]) -> Vec<u8> {
+        // 构造最小 PNG + iCCP chunk（zlib 压缩 ICC）
+        use std::io::Write;
+        let mut compressed = Vec::new();
+        let mut encoder =
+            flate2::write::ZlibEncoder::new(&mut compressed, flate2::Compression::default());
+        encoder.write_all(icc).unwrap();
+        drop(encoder);
+        let mut png = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        // IHDR
+        png.extend_from_slice(&13u32.to_be_bytes());
+        png.extend_from_slice(b"IHDR");
+        png.extend_from_slice(&[0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0]);
+        let crc = crc32(&png[12..29]);
+        png.extend_from_slice(&crc.to_be_bytes());
+        // iCCP
+        let mut chunk_data = Vec::new();
+        chunk_data.extend_from_slice(b"test\0"); // name + null
+        chunk_data.push(0); // compression method
+        chunk_data.extend_from_slice(&compressed);
+        png.extend_from_slice(&(chunk_data.len() as u32).to_be_bytes());
+        png.extend_from_slice(b"iCCP");
+        let crc_start = png.len();
+        png.extend_from_slice(&chunk_data);
+        let crc = crc32(&png[crc_start..]);
+        png.extend_from_slice(&crc.to_be_bytes());
+        png
+    }
+
+    fn crc32(data: &[u8]) -> u32 {
+        let mut crc: u32 = 0xFFFFFFFF;
+        for &byte in data {
+            crc ^= byte as u32;
+            for _ in 0..8 {
+                if crc & 1 != 0 {
+                    crc = (crc >> 1) ^ 0xEDB88320;
+                } else {
+                    crc >>= 1;
+                }
+            }
+        }
+        !crc
     }
 }

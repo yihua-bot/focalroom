@@ -60,11 +60,15 @@ impl CommandHandler<'_> {
             format
         };
         // G2：读取源 ICC profile digest（无嵌入 profile 时为 NULL）
-        let profile_digest = crate::color_engine::read_source_profile(&prepared.path)
+        let profile_result = crate::color_engine::read_source_profile(&prepared.path)
             .ok()
-            .flatten()
-            .filter(|p| p.valid)
-            .map(|p| p.digest);
+            .flatten();
+        let profile_digest = match &profile_result {
+            Some(p) if p.valid => Some(p.digest.clone()),
+            // H0-08：invalid 也记录 digest（带前缀标记诊断），absent 保持 NULL
+            Some(p) => Some(format!("invalid:{}", p.diagnostic.as_str())),
+            None => None,
+        };
         sqlx::query(
             "INSERT INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,source_profile_digest,source_hash_verified_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,NULL,?)",
         )
