@@ -1,10 +1,10 @@
 # FocalRoom 官网
 
-中、英、日、韩四语摄影编辑产品介绍站。独立的静态目录，不修改桌面应用、共享 API 或数据库。用户明确要求：不设「加入内测」、申请表、邮箱收集或虚构申请成功。
+中、英、日、韩四语摄影创作工作空间官网，正式域名为 https://focroom.cc。网站与桌面应用、团队 API 和数据库独立。无加入内测、申请表、邮箱收集或虚构评价。
 
-## 本地预览
+本次内容根据用户提供的创作工作流、v3 最终蓝图和 2026-10-21 创作工作空间补充文档更新。Research & Moodboard 为规划；完整画布、外部调色往返和出版制作仍在开发，不能用愿景冒充现有下载版能力。
 
-在本目录运行：
+## 本地预览与验证
 
 ```sh
 npm run build
@@ -13,41 +13,55 @@ npm test
 npm run dev
 ```
 
-打开终端显示的 `http://127.0.0.1:1441/`。运行只需 Node.js 与 Python 3，无依赖安装。词表修改后先运行 build；已有 dist 可直接静态托管。
+本地地址：http://127.0.0.1:1441/。构建只需 Node.js 和 Python 3，无依赖安装。
 
-## 文件
+可复用本机已安装的 Playwright 做浏览器回归：
 
-- `dist/index.html`：官网首页，工作方式、交互演示、Agent/协作说明、FAQ。
-- `dist/styles.css`：桌面与移动布局，键盘焦点与减少动态效果支持。
-- `dist/app.js`：浏览器内存选片、预设草案、采纳、序列调整、撤销、重置、导航与入口对话框。
-- `locales/messages.tsv`：291 条四语文案，依次为中文键、英文、日文、韩文，以 Tab 分隔。
-- `dist/locales.js`：build 从词表生成；不要独立编辑。
-- `dist/i18n.js`：静态文字、ARIA、元信息、内部链接与语言偏好；不依赖远程翻译服务。
-- `dist/languages.css`：语言选择器与多语字体、长文本布局。
-- `dist/config.js`：实际 HTTPS 工作区地址。默认空；不将账号密码引导到当前 HTTP 评审服务。
-- `dist/privacy.html`：官网演示与当前产品数据边界。
-- `dist/guide.html`：四语快速指南。官网的使用说明与章节链接均进入此页。
-- `dist/user-guide.html`：长篇中文操作说明书副本，明确标为中文；未声称其已完整翻译。
-- `.openai/hosting.json`：已注册 Sites 身份；后续复用，禁止重复创建 Site。
+```sh
+node "scripts/test-browser.mjs" "/absolute/path/to/playwright/index.mjs"
+```
 
-## 真实工作区
+运行前保持本地服务器在 1441；测试只访问本机，不调用生产登录或 AI。结果与截图保存在忽略目录 qa/2026-10-21/。
 
-确认正式域名和 HTTPS 后，将 `workspaceUrl` 设为实际共享入口。前端只接受 HTTPS、无 URL 用户名/密码的地址；无效配置保持未就绪说明。官网本身不创建产品账户，也不收集登录密码。
+## 源文件与生成文件
 
-没有公共下载包时不显示虚假下载按钮。实际应用分发和生产服务验收仍由产品工程单独完成。
+- templates/：中文首页、创作工作流、快速指南、隐私说明的 HTML 源模板。
+- public/：按原字节复制到网站根目录的静态文件；Google 验证文件固定为 google409d83b744653349.html，不保留下载时附加的“(2)”。
+- locales/messages.tsv：原有四语词表，保留已有修改。
+- locales/workspace.json：本轮创作工作空间及产品状态的四语补充词表。
+- scripts/site-content.mjs：共享词表、路由、翻译与结构化数据生成规则。
+- scripts/build-locales.mjs：生成 16 个可独立抓取的静态页面、元信息、语言索引与托管规则。
+- dist/：直接交付静态托管；其中 HTML、locales.js、page-data.js、sitemap.xml、robots.txt、llms.txt、_headers、_redirects、404.html 由构建生成，不单独编辑。
+- dist/app.js、i18n.js、styles.css、languages.css、workspace.css、config.js：当前手写脚本、样式及真实入口配置。
+- dist/user-guide.html：历史中文长篇手册，未声称提供四语翻译；托管规则标记 noindex，避免作为当前功能说明索引。
+- .openai/hosting.json：历史 Sites 预览身份，保留供溯源；本次不创建或发布另一套 Sites，不修改现有域名路由。
 
-## 素材与声明
+中文首页为 /，其他语言为 /en/、/ja/、/ko/。每种语言均有 workflow/、guide/、privacy/。显式语言地址优先于浏览器和已保存偏好，不按 IP 自动重定向。旧 ?lang= 链接仍可在启用 JavaScript 时切换，但不进入 sitemap。语言链接在关闭 JavaScript 时仍可访问各静态版本；启用 JavaScript 后切换不清空本页演示序列和撤销栈。
 
-`focalroom-mark.png` 直接复制项目已有的用户 logo，不改动。`coastal-contact-sheet.png` 使用内置 image_gen 生成的六格海岸组照，原始生成物位于 Codex generated_images；本站独立保存最终资产，不依赖原目录。页面标为 AI 生成样片，不冒充客户作品或专业评测结果。提示词与原图路径见 `ASSETS.md`。
+## 搜索与生成式检索
 
-演示建议是预设方案，不调用模型、不上传照片、不访问生产 API；选片仅在内存中，刷新重置。只有语言偏好以 focalroom.locale 保存到当前浏览器；存储被禁用时仍可切换。没有用户见证、客户名单、虚构统计、未验收的摄影质量或永久免费承诺。
+各静态页面均生成独立 title、description、自指 canonical、相互对应的 hreflang（含 x-default）、社交分享元信息和 JSON-LD。软件功能描述仅列现有能力，FAQ 与正文一致，不伪造价格、评分、用户数或推荐。
 
-## 语言规则
+四语 llms.txt 是可选的简明阅读索引，明确区分现有、开发中和规划中；它不是搜索排名或 AI 引用的必要条件。robots.txt 允许公开页面抓取，并列出 sitemap。Cloudflare 的托管爬虫策略仍需在上线后单独核对，不能仅凭源码保证抓取成功。
 
-优先级为 URL 的 lang 参数、已记住的选择、受支持的浏览器语言、中文默认。可分享 `index.html?lang=en`、`?lang=ja`、`?lang=ko` 等链接。切换会更新 HTML lang、标题/描述、静态文字、ARIA、动态演示和内部链接，不刷新页面，因此不丢失当前选片、草案和撤销栈。跨页导航后演示按原规则重新开始，但语言延续。
+详细设计依据、验证证据、发布步骤和未完成事项见 SEO-GEO-UPDATE-2026-10-21.md。
 
-官网语言与桌面/共享应用的界面语言独立。首页、FAQ、对话框、隐私页、快速指南提供四语；长篇手册保留中文并明确标注。KISS/DRY：复用一套页面和状态逻辑，以集中词表和独立语言模块完成切换，不复制四份演示代码，也不引入新依赖。
+## 下载与产品边界
 
-## 托管状态
+现有下载包 FocalRoom-1.0.4-macos-arm64.zip 保持原字节：7,263,662 bytes，SHA-256 为 9c9f51a9f85430c7173640f5a2af369ac10531d11c6a356f0316b9a5d50fb6c6。已修正原首页重复 download/ 路径。
 
-已创建私有 Sites 项目用于预览交付，当前发布状态以工具返回为准。用户已明确授权本目录的 git commit、git push 与私有预览发布；源码与部署归档通过 Sites 辅助工具同步。不会修改腾讯云生产服务或 DNS。
+Info.plist 虽写 10.15，包内 Mach-O LC_BUILD_VERSION 的最低系统为 11.0，因此官网按 macOS 11+ 显示。这次不修改、重新签名或发布客户端，也不以包中配置代替签名/公证验证。
+
+团队入口保持 https://team.focroom.cc/shared。官网不创建账户、不收集服务凭据；进入团队入口后适用产品服务规则。
+
+## 演示与素材
+
+logo 沿用用户现有资产；海岸组照为 AI 生成样片。演示使用预设选片建议，不访问真实 AI 或生产 API、不接收个人照片。选片仅在内存中，刷新重置；仅语言偏好以 focalroom.locale 保存，存储被禁用时仍可切换。素材来源见 ASSETS.md。
+
+## 发布状态
+
+Google Search Console 验证文件已接入构建与内容一致性检查，公开目标为 https://focroom.cc/google409d83b744653349.html。本地 Pages 验证该精确地址直接返回 200、53 字节原始内容；专用 200 代理规则避免默认去除 .html 后缀的外部跳转。加入验证文件后的官网 ZIP 和 SHA 清单已重新生成。
+
+本轮公网检查该地址仍为 404，Cloudflare 凭据刷新仍返回 400，未上传。必须先部署，使公开地址返回原始验证内容，再回 Search Console 点击验证；不能把本地文件存在当成站点已验证。
+
+本次本地修改未提交、未推送、未发布到 Cloudflare。现有 Wrangler OAuth 凭据失效（只读项目列表请求返回认证错误）。用户已明确确认本次生产发布。仍需完成本地 Cloudflare 授权并确认映射 focroom.cc 的原 Pages 项目；官方 OAuth 自动打开与手动链接均未完成授权，用户报告链接打不开或超时，当前停在发布前。禁止为了绕开授权而切换到旧 Sites、另建项目或修改 DNS。

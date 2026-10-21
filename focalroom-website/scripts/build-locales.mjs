@@ -2,6 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { root, origin, languages, pages, pagePath, readCatalog, translateHTML, escapeHTML, plainText, structuredData, translator } from './site-content.mjs';
 
+// 站点验证文件按原字节复制，不参与模板翻译和 HTML 包装。
+await fs.cp(path.join(root, 'public'), path.join(root, 'dist'), { recursive: true });
+const verificationFiles = (await fs.readdir(path.join(root, 'public'))).filter(name => /^google[a-f0-9]+\.html$/.test(name));
 const messages = await readCatalog();
 const output = '// 由 locales/messages.tsv 与 locales/workspace.json 生成。\nwindow.FOCALROOM_MESSAGES = Object.freeze(' + JSON.stringify(messages, null, 2) + ');\n';
 await fs.writeFile(path.join(root, 'dist/locales.js'), output);
@@ -40,7 +43,7 @@ for (const [page, template] of Object.entries(pages)) {
     const languageLinks = `<nav class="locale-links" aria-label="${escapeHTML(translator(messages, language)('选择语言'))}" data-no-translate>${Object.entries(names).map(([key, label]) => `<a href="${pagePath(page, key)}" lang="${languages[key]}" hreflang="${languages[key]}" data-locale-link="${key}"${key === language ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>`;
     html = html.replace('<div class="footer-meta">', `${languageLinks}<div class="footer-meta">`);
     // 详细手册仅有中文，不伪造四语版本。
-    html = html.replace(/href="\/user-guide.html\?lang=[^"]*"/g, 'href="/user-guide.html"');
+    html = html.replace(/href="\/user-guide.html\?lang=[^"]*"/g, 'href="/user-guide.html"').replace(/^[\t ]+$/gm, '');
     const directory = path.join(root, 'dist', pagePath(page, language));
     await fs.mkdir(directory, { recursive: true });
     await fs.writeFile(path.join(directory, 'index.html'), html);
@@ -53,7 +56,8 @@ await fs.writeFile(path.join(root, 'dist/page-data.js'), `// 页面元信息与�
 const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + urls.map(({ url }) => `  <url><loc>${url}</loc></url>`).join('\n') + '\n</urlset>\n';
 await fs.writeFile(path.join(root, 'dist/sitemap.xml'), sitemap);
 await fs.writeFile(path.join(root, 'dist/robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`);
-await fs.writeFile(path.join(root, 'dist/_redirects'), '/index.html / 301\n/zh/ / 301\n/guide.html /guide/ 301\n/privacy.html /privacy/ 301\n/workflow.html /workflow/ 301\n');
+const verificationRules = verificationFiles.map(name => `/${name} /${name.slice(0, -5)} 200\n`).join('');
+await fs.writeFile(path.join(root, 'dist/_redirects'), verificationRules + '/index.html / 301\n/zh/ / 301\n/guide.html /guide/ 301\n/privacy.html /privacy/ 301\n/workflow.html /workflow/ 301\n');
 await fs.writeFile(path.join(root, 'dist/_headers'), '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n/user-guide*\n  X-Robots-Tag: noindex\n');
 await fs.writeFile(path.join(root, 'dist/404.html'), '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Page not found · FocalRoom</title><link rel="stylesheet" href="/styles.css"></head><body><main class="document-page wrap"><h1>Page not found</h1><p>FocalRoom</p><nav><a href="/">中文</a> · <a href="/en/">English</a> · <a href="/ja/">日本語</a> · <a href="/ko/">한국어</a></nav></main></body></html>\n');
 // 可选阅读索引，不作为搜索或生成式引用的排名承诺，也不替代 HTML 正文。

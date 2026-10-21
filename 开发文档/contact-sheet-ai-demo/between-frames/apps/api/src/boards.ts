@@ -42,6 +42,7 @@ export interface CloudCanvasNode {
   rotation: number;
   z_order: number;
   asset_id: string | null;
+  photo_id: string | null;
   rendition_ref: string | null;
   content_json: unknown;
   style_json: unknown;
@@ -112,8 +113,11 @@ export class BoardService {
     return this.boardScope(headers, id, false, async ({ tx }) => (
       await tx.query(
         `SELECT id, board_id, node_type, x, y, width, height, rotation, z_order,
-          asset_id, rendition_ref, content_json, style_json, children_json, locked, visible
-         FROM fr_canvas_nodes WHERE board_id=$1 AND visible=true ORDER BY z_order,id`,
+          n.asset_id, n.rendition_ref, n.content_json, n.style_json, n.children_json, n.locked, n.visible,
+          a.photo_id
+         FROM fr_canvas_nodes n
+         LEFT JOIN fr_asset_aliases a ON a.asset_id = n.asset_id
+         WHERE n.board_id=$1 AND n.visible=true ORDER BY n.z_order, n.id`,
         [id],
       )
     ).rows);

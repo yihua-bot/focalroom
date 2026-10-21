@@ -628,12 +628,6 @@ export function ProjectReview({
               aria-pressed={tab === "boards"}
               onClick={() => setTab("boards")}
             >
-              批注
-            </button>
-            <button
-              aria-pressed={tab === "boards"}
-              onClick={() => setTab("boards")}
-            >
               画布
             </button>
             <button

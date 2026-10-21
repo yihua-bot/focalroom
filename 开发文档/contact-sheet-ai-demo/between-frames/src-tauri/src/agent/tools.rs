@@ -21,7 +21,7 @@ pub(crate) async fn execute(
         "create_board_draft" | "place_photos_on_board" | "get_board" => {
             return execute_canvas_tool(tx, name, &call.args, task).await;
         }
-        "group_nodes" | "create_sequence_draft" | "evaluate_sequence" => {
+        "group_nodes" | "create_sequence_draft" => {
             return execute_canvas_tool_extended(tx, name, &call.args, task).await;
         }
         "get_project_context" => {
@@ -623,20 +623,30 @@ pub async fn execute_canvas_tool_extended(
             // 创建草案（复用现有 draft 系统）
             let draft_id = crate::domain::id();
             let now = crate::domain::timestamp();
+            // H0 复核：匹配 drafts 真实表结构（task_id/base_revision/state/summary 必填）
             sqlx::query(
-                "INSERT INTO drafts(id,project_id,title,created_at,updated_at) VALUES(?,?,?,?,?)",
+                "INSERT INTO drafts(id,project_id,task_id,title,base_revision,state,summary,created_at,updated_at) VALUES(?,?,?,?,?,'pending',?,?,?)",
             )
             .bind(&draft_id)
             .bind(&task.project_id)
+            .bind(&task.id)
             .bind(title)
+            .bind(task.base_revision)
+            .bind("Agent 从画布生成的序列草案")
             .bind(&now)
             .bind(&now)
             .execute(&mut **tx)
             .await?;
+            // draft_items 列名是 proposed_action 且 rationale 必填
             for (pos, photo_id) in photo_ids.iter().enumerate() {
-                sqlx::query("INSERT INTO draft_items(draft_id,photo_id,position,action) VALUES(?,?,?,'keep')")
-                    .bind(&draft_id).bind(photo_id).bind(pos as i64)
-                    .execute(&mut **tx).await?;
+                sqlx::query(
+                    "INSERT INTO draft_items(draft_id,photo_id,proposed_action,position,rationale) VALUES(?,?, 'keep',?, '序列顺序')",
+                )
+                .bind(&draft_id)
+                .bind(photo_id)
+                .bind(pos as i64)
+                .execute(&mut **tx)
+                .await?;
             }
             Ok(json!({"draft_id": draft_id, "title": title, "photo_count": photo_ids.len()}))
         }

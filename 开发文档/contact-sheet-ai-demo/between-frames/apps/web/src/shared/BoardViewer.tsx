@@ -7,7 +7,7 @@ interface BoardInfo { id: string; project_id: string; title: string; state: stri
 interface NodeInfo {
   id: string; board_id: string; node_type: string;
   x: number; y: number; width: number; height: number;
-  z_order: number; asset_id: string | null;
+  z_order: number; asset_id: string | null; photo_id: string | null;
   content_json: unknown; style_json: unknown;
 }
 interface AnnotationInfo {
@@ -31,7 +31,7 @@ export function BoardViewer({ session, projectId, onBack }: {
   const panning = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
 
   useEffect(() => {
-    request<BoardInfo[]>('/boards', session, 'GET').catch(() => {}).then(list => {
+    request<BoardInfo[]>(`/boards?project=${encodeURIComponent(projectId)}`, session, 'GET').catch(() => {}).then(list => {
       if (list) {
         setBoards(list);
         if (list.length > 0) setActiveBoard(list[0].id);
@@ -47,21 +47,28 @@ export function BoardViewer({ session, projectId, onBack }: {
       .then(async ns => {
         if (!active || !ns) return;
         setNodes(ns);
-        // 加载照片节点的预览 URL
-        const assetIds = ns.filter(n => n.node_type === 'photo' && n.asset_id).map(n => n.asset_id!);
+        // 走现有 preview ticket 流程（photoId → ticket → blob → objectURL）
+        const photoNodes = ns.filter(n => n.node_type === 'photo' && n.asset_id && n.photo_id);
         const urls: Record<string, string> = {};
-        for (const assetId of assetIds.slice(0, 50)) {
+        for (const node of photoNodes.slice(0, 50)) {
           try {
-            const resp = await request<{url?: string}>(`/assets/${assetId}/preview-url`, session, 'GET').catch(() => null);
-            if (resp?.url) urls[assetId] = resp.url;
-          } catch { /* 逐张容错 */ }
+            const ticket = await request<{ url: string }>(
+              `/projects/${encodeURIComponent(projectId)}/previews/${encodeURIComponent(node.photo_id!)}/ticket`,
+              session, 'POST',
+            );
+            const resp = await fetch(ticket.url, { credentials: 'same-origin' });
+            if (resp.ok) {
+              const blob = await resp.blob();
+              urls[node.asset_id!] = URL.createObjectURL(blob);
+            }
+          } catch { /* 逐张容错，失败显示占位符 */ }
         }
         if (active) setPreviewUrls(urls);
       }).catch(() => {});
     request<AnnotationInfo[]>(`/boards/${activeBoard}/annotations`, session, 'GET')
       .then(ans => { if (active) setAnnotations(ans ?? []); }).catch(() => {});
     return () => { active = false; };
-  }, [session, activeBoard]);
+  }, [session, activeBoard, projectId]);
 
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();

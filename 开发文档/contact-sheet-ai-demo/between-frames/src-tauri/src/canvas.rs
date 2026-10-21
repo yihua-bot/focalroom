@@ -176,7 +176,7 @@ impl CommandHandler<'_> {
         .execute(&mut *tx)
         .await?;
         // H0-07：记录撤销日志
-        let _ = Self::log_canvas_op(
+        Self::log_canvas_op(
             &mut tx,
             project,
             &cmd.board_id,
@@ -184,7 +184,7 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeId": id, "nodeType": "photo"}),
             &serde_json::json!({"nodeId": id}),
         )
-        .await;
+        .await?;
         tx.commit().await?;
         Ok(CanvasNode {
             id,
@@ -229,7 +229,7 @@ impl CommandHandler<'_> {
             }
         }
         // H0-07：记录撤销日志
-        let _ = Self::log_canvas_op(
+        Self::log_canvas_op(
             &mut tx,
             project,
             &cmd.board_id,
@@ -237,7 +237,7 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeIds": cmd.node_ids, "dx": cmd.dx, "dy": cmd.dy}),
             &serde_json::json!({"nodeIds": cmd.node_ids, "dx": cmd.dx, "dy": cmd.dy}),
         )
-        .await;
+        .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -694,7 +694,7 @@ impl CommandHandler<'_> {
             return Err(AppError::new("NOT_FOUND", "节点不存在"));
         }
         // H0-07：记录撤销日志
-        let _ = Self::log_canvas_op(
+        Self::log_canvas_op(
             &mut tx,
             project,
             &cmd.board_id,
@@ -702,7 +702,7 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeId": cmd.node_id}),
             &serde_json::json!({"nodeId": cmd.node_id}),
         )
-        .await;
+        .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -1033,10 +1033,28 @@ impl CommandHandler<'_> {
                     .unwrap_or_default();
                 let dx = undo["dx"].as_f64().unwrap_or(0.0);
                 let dy = undo["dy"].as_f64().unwrap_or(0.0);
+                // H0 复核：锁定节点导致部分恢复 → 原子失败（不消费撤销记录）
                 for node_id in &node_ids {
-                    sqlx::query("UPDATE canvas_nodes SET x=x-?, y=y-?, updated_at=? WHERE id=? AND board_id=? AND locked=0")
-                        .bind(dx).bind(dy).bind(&now).bind(node_id).bind(&cmd.board_id)
-                        .execute(&mut *tx).await?;
+                    let result = sqlx::query(
+                        "UPDATE canvas_nodes SET x=x-?, y=y-?, updated_at=? WHERE id=? AND board_id=? AND locked=0",
+                    )
+                    .bind(dx).bind(dy).bind(&now).bind(node_id).bind(&cmd.board_id)
+                    .execute(&mut *tx).await?;
+                    if result.rows_affected() == 0 {
+                        let exists: i64 = sqlx::query_scalar(
+                            "SELECT COUNT(*) FROM canvas_nodes WHERE id=? AND board_id=?",
+                        )
+                        .bind(node_id)
+                        .bind(&cmd.board_id)
+                        .fetch_one(&mut *tx)
+                        .await?;
+                        if exists > 0 {
+                            return Err(AppError::new(
+                                "CONFLICT",
+                                format!("节点 {node_id} 已锁定，无法撤销移动"),
+                            ));
+                        }
+                    }
                 }
             }
             "add_node" => {

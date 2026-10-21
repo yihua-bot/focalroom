@@ -6,6 +6,10 @@ import { root, readCatalog } from './site-content.mjs';
 
 const messages = await readCatalog();
 const errors = [];
+const verificationFile = 'google409d83b744653349.html';
+const verificationSource = await fs.readFile(path.join(root, 'public', verificationFile));
+const verificationOutput = await fs.readFile(path.join(root, 'dist', verificationFile));
+if (verificationSource.toString('utf8') !== `google-site-verification: ${verificationFile}` || !verificationSource.equals(verificationOutput)) errors.push('Google verification filename/content changed');
 for (const file of ['app.js', 'config.js', 'i18n.js', 'locales.js', 'page-data.js']) {
   const code = await fs.readFile(path.join(root, 'dist', file), 'utf8');
   new vm.Script(code, { filename: file });

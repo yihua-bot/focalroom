@@ -526,9 +526,14 @@
           "title": {
             "type": "string",
             "description": "画布标题，如「叙事方向 A：冷暖对比」"
+          },
+          "project_id": {
+            "type": "string",
+            "description": "项目 ID"
           }
         },
         "required": [
+          "project_id",
           "title"
         ],
         "additionalProperties": false
@@ -580,9 +585,13 @@
               ],
               "additionalProperties": false
             }
+          },
+          "project_id": {
+            "type": "string"
           }
         },
         "required": [
+          "project_id",
           "board_id",
           "placements"
         ],
@@ -600,9 +609,13 @@
           "board_id": {
             "type": "string",
             "description": "画布 ID"
+          },
+          "project_id": {
+            "type": "string"
           }
         },
         "required": [
+          "project_id",
           "board_id"
         ],
         "additionalProperties": false
