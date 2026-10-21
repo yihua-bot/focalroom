@@ -1087,10 +1087,18 @@ impl CommandHandler<'_> {
         }
 
         // 在 op_log 中标记已撤销（不是审计事件，是私有撤销栈）
-        sqlx::query("UPDATE canvas_op_log SET undone=1 WHERE id=?")
+        sqlx::query("UPDATE canvas_op_log SET undone=1, redone=0 WHERE id=?")
             .bind(&log_id)
             .execute(&mut *tx)
             .await?;
+        // 栈语义：新撤销丢弃其后所有 redo 分支
+        sqlx::query(
+            "UPDATE canvas_op_log SET redone=0 WHERE board_id=? AND created_at < (SELECT created_at FROM canvas_op_log WHERE id=?) AND redone=1",
+        )
+        .bind(&cmd.board_id)
+        .bind(&log_id)
+        .execute(&mut *tx)
+        .await?;
 
         tx.commit().await?;
         Ok(true)
@@ -1342,5 +1350,106 @@ mod task_owned_tests {
             )
             .await;
         assert!(result.is_err(), "人工画布不可被采纳");
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RedoCanvasCommand {
+    pub board_id: String,
+}
+
+impl CommandHandler<'_> {
+    /// H0-07：重做画布上最后一次被撤销的操作。
+    /// 栈语义：最近一条 undone=1 且 redone=0 的记录可重做。
+    pub async fn redo_canvas(&self, project: &str, cmd: &RedoCanvasCommand) -> Result<bool> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+
+        let board: Option<String> =
+            sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
+                .bind(&cmd.board_id)
+                .bind(project)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if board.is_none() {
+            return Err(AppError::new("NOT_FOUND", "画布不存在"));
+        }
+
+        // 找最近一条已撤销且未重做的操作
+        let last: Option<(String, String, String)> = sqlx::query_as(
+            "SELECT id, op_type, undo_data FROM canvas_op_log WHERE board_id=? AND undone=1 AND redone=0 ORDER BY created_at DESC, id DESC LIMIT 1",
+        )
+        .bind(&cmd.board_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let Some((log_id, op_type, undo_json)) = last else {
+            return Ok(false);
+        };
+        let undo: serde_json::Value = serde_json::from_str(&undo_json)
+            .map_err(|e| AppError::new("VALIDATION_ERROR", format!("重做数据格式错误：{e}")))?;
+
+        let now = domain::timestamp();
+        match op_type.as_str() {
+            "move" => {
+                let node_ids: Vec<String> = undo["nodeIds"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let dx = undo["dx"].as_f64().unwrap_or(0.0);
+                let dy = undo["dy"].as_f64().unwrap_or(0.0);
+                for node_id in &node_ids {
+                    sqlx::query("UPDATE canvas_nodes SET x=x+?, y=y+?, updated_at=? WHERE id=? AND board_id=? AND locked=0 AND visible=1")
+                        .bind(dx).bind(dy).bind(&now).bind(node_id).bind(&cmd.board_id)
+                        .execute(&mut *tx).await?;
+                }
+            }
+            "add_node" => {
+                let node_id = undo["nodeId"].as_str().unwrap_or("");
+                if !node_id.is_empty() {
+                    sqlx::query(
+                        "UPDATE canvas_nodes SET visible=1, updated_at=? WHERE id=? AND board_id=?",
+                    )
+                    .bind(&now)
+                    .bind(node_id)
+                    .bind(&cmd.board_id)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+            }
+            "delete_node" => {
+                let node_id = undo["nodeId"].as_str().unwrap_or("");
+                if !node_id.is_empty() {
+                    sqlx::query(
+                        "UPDATE canvas_nodes SET visible=0, updated_at=? WHERE id=? AND board_id=?",
+                    )
+                    .bind(&now)
+                    .bind(node_id)
+                    .bind(&cmd.board_id)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+            }
+            _ => return Ok(false),
+        }
+
+        sqlx::query("UPDATE canvas_op_log SET undone=0, redone=1 WHERE id=?")
+            .bind(&log_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        Ok(true)
+    }
+}
+
+impl Store {
+    pub async fn redo_canvas(&self, project: &str, cmd: &RedoCanvasCommand) -> Result<bool> {
+        CommandHandler::new(self).redo_canvas(project, cmd).await
     }
 }

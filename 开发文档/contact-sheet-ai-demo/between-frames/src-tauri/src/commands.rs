@@ -894,3 +894,15 @@ pub async fn canvas_adopt_board_draft(
         )
         .await
 }
+
+#[tauri::command]
+pub async fn canvas_redo(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+) -> Result<bool> {
+    state
+        .store
+        .redo_canvas(&project_id, &crate::canvas::RedoCanvasCommand { board_id })
+        .await
+}
