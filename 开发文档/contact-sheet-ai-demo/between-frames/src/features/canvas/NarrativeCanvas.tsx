@@ -103,6 +103,16 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     await loadBoards();
   };
 
+  const groupSelected = async () => {
+    if (!repository || !activeBoard || selectedNodeIds.size < 2) return;
+    const label = prompt('分组标签：')?.trim();
+    if (!label) return;
+    await repository.groupNodes(projectId, activeBoard, Array.from(selectedNodeIds), label);
+    setSelectedNodeIds(new Set());
+    const ns = await repository.getNodes(activeBoard);
+    setNodes(ns);
+  };
+
   const addSticky = async () => {
     if (!repository || !activeBoard || !noteText.trim()) return;
     const x = -pan.x / zoom + 60;
@@ -297,6 +307,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
         <Button size="small" aria-expanded={noteOpen} disabled={working || readOnly || !activeBoard} onClick={() => setNoteOpen(!noteOpen)}>便签</Button>
         <Button size="small" aria-pressed={linkMode} disabled={working || readOnly || !activeBoard} onClick={() => { setLinkMode(!linkMode); setLinking(null); setInkMode(false); }}>{linkMode ? (linking ? '选择连接终点' : '选择连接起点') : '连接'}</Button>
         <Button size="small" aria-pressed={inkMode} disabled={working || readOnly || !activeBoard} onClick={() => { setInkMode(!inkMode); setLinkMode(false); setLinking(null); }}>画笔</Button>
+        <Button size="small" disabled={working || readOnly || !activeBoard || selectedNodeIds.size < 2} onClick={() => void groupSelected()}>分组</Button>
         <span className="canvas-zoom-label">{Math.round(zoom * 100)}%</span>
       </div>
       {noteOpen && <form className="canvas-note-editor" onSubmit={event => { event.preventDefault(); void run(addSticky); }}>
@@ -359,6 +370,15 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
               className={`canvas-sticky-node ${dragging === node.id ? 'dragging' : ''}`}
               style={{ left: node.x, top: node.y, width: node.width, height: node.height, zIndex: node.zOrder, background: color }}
             >{content}</div>;
+          })}
+          {nodes.filter(n => n.nodeType === 'group').map(g => {
+            const label = g.contentJson ? (() => { try { return JSON.parse(g.contentJson!).label ?? ''; } catch { return ''; } })() : '';
+            return <div key={g.id} data-node-id={g.id}
+              className={`canvas-group-node ${selectedNodeIds.has(g.id) ? 'selected' : ''}`}
+              style={{ left: g.x, top: g.y, width: g.width, height: g.height, zIndex: -1 }}
+            >
+              <span className="canvas-group-label">{label}</span>
+            </div>;
           })}
           {marquee && (() => {
             const x = Math.min(marquee.x0, marquee.x1);

@@ -906,3 +906,12 @@ pub async fn canvas_redo(
         .redo_canvas(&project_id, &crate::canvas::RedoCanvasCommand { board_id })
         .await
 }
+
+#[tauri::command]
+pub async fn canvas_group_nodes(
+    state: State<'_, Backend>,
+    project_id: String,
+    cmd: crate::canvas::GroupNodesCommand,
+) -> Result<crate::canvas::CanvasNode> {
+    state.store.group_nodes_cmd(&project_id, &cmd).await
+}

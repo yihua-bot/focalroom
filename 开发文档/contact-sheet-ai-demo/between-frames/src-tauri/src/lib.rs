@@ -193,6 +193,7 @@ pub fn run() {
             commands::canvas_add_ink,
             commands::canvas_adopt_board_draft,
             commands::canvas_redo,
+            commands::canvas_group_nodes,
             commands::pub_create,
             commands::pub_list,
             commands::pub_pages,

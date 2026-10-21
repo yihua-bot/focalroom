@@ -31,5 +31,6 @@ export interface CanvasRepository {
   getAnnotations(boardId: string): Promise<AnnotationInfo[]>;
   addArrow(projectId: string, boardId: string, fromNodeId: string, toNodeId: string, color?: string): Promise<void>;
   undo(projectId: string, boardId: string): Promise<boolean>;
+  groupNodes(projectId: string, boardId: string, nodeIds: string[], label: string): Promise<void>;
   addInk(projectId: string, boardId: string, x: number, y: number, w: number, h: number, points: Array<{x:number;y:number;pressure?:number}>, color?: string, strokeWidth?: number): Promise<void>;
 }

@@ -1501,3 +1501,139 @@ mod g1_representation_tests {
         assert_eq!(proxy.1, 1400, "代理宽度应为 1400");
     }
 }
+
+// ── G3：用户分组命令 ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupNodesCommand {
+    pub board_id: String,
+    pub node_ids: Vec<String>,
+    pub label: String,
+}
+
+impl CommandHandler<'_> {
+    /// 用户分组：把选中节点记录到一个 group 节点的 children 里。
+    /// 分组本身也是一个节点（可整体拖动/删除）。
+    pub async fn group_nodes_cmd(
+        &self,
+        project: &str,
+        cmd: &GroupNodesCommand,
+    ) -> Result<CanvasNode> {
+        if cmd.node_ids.is_empty() || cmd.node_ids.len() > 100 {
+            return Err(AppError::new("VALIDATION_ERROR", "分组须包含 1–100 个节点"));
+        }
+        let label = cmd.label.trim();
+        if label.is_empty() || label.chars().count() > 50 {
+            return Err(AppError::new("VALIDATION_ERROR", "分组标签须为 1–50 字符"));
+        }
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let board: Option<String> =
+            sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
+                .bind(&cmd.board_id)
+                .bind(project)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if board.is_none() {
+            return Err(AppError::new("NOT_FOUND", "画布不存在"));
+        }
+        // 验证所有子节点存在且未锁定
+        for nid in &cmd.node_ids {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM canvas_nodes WHERE id=? AND board_id=? AND visible=1 AND locked=0",
+            )
+            .bind(nid)
+            .bind(&cmd.board_id)
+            .fetch_one(&mut *tx)
+            .await?;
+            if exists == 0 {
+                return Err(AppError::new(
+                    "NOT_FOUND",
+                    format!("节点 {nid} 不存在或已锁定"),
+                ));
+            }
+        }
+        // 计算包围盒
+        let bbox: Option<(f64, f64, f64, f64)> = sqlx::query_as(
+            "SELECT MIN(x), MIN(y), MAX(x+width), MAX(y+height) FROM canvas_nodes WHERE board_id=? AND id IN (SELECT value FROM json_each(?))",
+        )
+        .bind(&cmd.board_id)
+        .bind(serde_json::to_string(&cmd.node_ids).unwrap_or_default())
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some((min_x, min_y, max_x, max_y)) = bbox else {
+            return Err(AppError::new("VALIDATION_ERROR", "无法计算分组包围盒"));
+        };
+        let id = domain::id();
+        let now = domain::timestamp();
+        let z: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
+        )
+        .bind(&cmd.board_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let content = serde_json::json!({"label": label}).to_string();
+        let children = serde_json::to_string(&cmd.node_ids)
+            .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+        sqlx::query(
+            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,children_json,created_at,updated_at) VALUES(?,?, 'group',?,?,?,?,0,?,?,?,?)",
+        )
+        .bind(&id)
+        .bind(&cmd.board_id)
+        .bind(min_x)
+        .bind(min_y)
+        .bind(max_x - min_x)
+        .bind(max_y - min_y)
+        .bind(z)
+        .bind(&content)
+        .bind(&children)
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+        // 撤销日志
+        Self::log_canvas_op(
+            &mut tx,
+            project,
+            &cmd.board_id,
+            "add_node",
+            &serde_json::json!({"nodeId": id, "nodeType": "group"}),
+            &serde_json::json!({"nodeId": id}),
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(CanvasNode {
+            id,
+            board_id: cmd.board_id.clone(),
+            node_type: "group".to_owned(),
+            x: min_x,
+            y: min_y,
+            width: max_x - min_x,
+            height: max_y - min_y,
+            rotation: 0.0,
+            z_order: z,
+            asset_id: None,
+            rendition_ref: None,
+            content_json: Some(content),
+            style_json: None,
+            children_json: Some(children),
+            locked: false,
+            visible: true,
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+}
+
+impl Store {
+    pub async fn group_nodes_cmd(
+        &self,
+        project: &str,
+        cmd: &GroupNodesCommand,
+    ) -> Result<CanvasNode> {
+        CommandHandler::new(self)
+            .group_nodes_cmd(project, cmd)
+            .await
+    }
+}

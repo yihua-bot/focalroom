@@ -68,4 +68,11 @@ export class TauriCanvasRepository implements CanvasRepository {
     points: Array<{x:number;y:number;pressure?:number}>, color?: string, strokeWidth?: number) {
     nodeSchema.parse(await invoke('canvas_add_ink', { projectId, cmd: { boardId, x, y, width, height, points, color, strokeWidth } }));
   }
+
+  async groupNodes(projectId: string, boardId: string, nodeIds: string[], label: string) {
+    await invoke('canvas_group_nodes', {
+      projectId,
+      cmd: { boardId, nodeIds, label },
+    });
+  }
 }
