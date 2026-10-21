@@ -18,6 +18,8 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [marquee, setMarquee] = useState<{x0:number;y0:number;x1:number;y1:number} | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationInfo[]>([]);
   const [linking, setLinking] = useState<string | null>(null);
   const [linkMode, setLinkMode] = useState(false);
@@ -170,7 +172,18 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           setDragging(nodeId);
           dragStart.current = { x: e.clientX, y: e.clientY, nodeX: node.x, nodeY: node.y };
         }
+      } else if (e.shiftKey) {
+        // Shift + 空白拖拽 = 框选
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (rect) {
+          const bx = (e.clientX - rect.left - pan.x) / zoom;
+          const by = (e.clientY - rect.top - pan.y) / zoom;
+          setMarquee({ x0: bx, y0: by, x1: bx, y1: by });
+        }
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
       } else {
+        // 普通空白点击：取消选择 + 平移
+        setSelectedNodeIds(new Set());
         panning.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
       }
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -191,10 +204,17 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
       const dx = (e.clientX - dragStart.current.x) / zoom;
       const dy = (e.clientY - dragStart.current.y) / zoom;
       setNodes(prev => prev.map(n =>
-        n.id === dragging
+        selectedNodeIds.has(n.id) || n.id === dragging
           ? { ...n, x: dragStart.current!.nodeX + dx, y: dragStart.current!.nodeY + dy }
           : n
       ));
+    } else if (marquee) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const bx = (e.clientX - rect.left - pan.x) / zoom;
+        const by = (e.clientY - rect.top - pan.y) / zoom;
+        setMarquee(prev => prev ? { ...prev, x1: bx, y1: by } : null);
+      }
     } else if (panning.current) {
       setPan({
         x: panning.current.panX + (e.clientX - panning.current.x),
@@ -227,6 +247,18 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           await repository.moveNodes(projectId, activeBoard, [dragging], dx, dy);
         }
       }
+    }
+    if (marquee) {
+      // 计算与框选矩形相交的所有照片/便签节点
+      const x0 = Math.min(marquee.x0, marquee.x1), x1 = Math.max(marquee.x0, marquee.x1);
+      const y0 = Math.min(marquee.y0, marquee.y1), y1 = Math.max(marquee.y0, marquee.y1);
+      const hit = new Set(nodes.filter(n =>
+        n.nodeType !== 'arrow' && n.visible !== false &&
+        n.x < x1 && n.x + n.width > x0 && n.y < y1 && n.y + n.height > y0
+      ).map(n => n.id));
+      setSelectedNodeIds(hit);
+      setMarquee(null);
+      return;
     }
     setDragging(null);
     dragStart.current = null;
@@ -306,7 +338,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
             <div
               key={node.id}
               data-node-id={node.id}
-              className={`canvas-photo-node ${dragging === node.id ? 'dragging' : ''}`}
+              className={`canvas-photo-node ${dragging === node.id ? 'dragging' : ''} ${selectedNodeIds.has(node.id) ? 'selected' : ''}`}
               onClick={() => void run(() => onNodeClick(node.id))}
               style={{
                 left: node.x, top: node.y, width: node.width, height: node.height,
@@ -328,6 +360,13 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
               style={{ left: node.x, top: node.y, width: node.width, height: node.height, zIndex: node.zOrder, background: color }}
             >{content}</div>;
           })}
+          {marquee && (() => {
+            const x = Math.min(marquee.x0, marquee.x1);
+            const y = Math.min(marquee.y0, marquee.y1);
+            const w = Math.abs(marquee.x1 - marquee.x0);
+            const h = Math.abs(marquee.y1 - marquee.y0);
+            return <div className="canvas-marquee" style={{ position: 'absolute', left: x, top: y, width: w, height: h, pointerEvents: 'none', zIndex: 9998 }} />;
+          })()}
           {inkPoints.length > 1 && (() => {
             const d = inkPoints.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(' ');
             return <svg style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999, overflow: 'visible' }}>

@@ -11,6 +11,7 @@ export interface CanvasPhoto extends CanvasNodeInfo {
   styleJson?: string | null;
   childrenJson?: string | null;
   locked?: boolean;
+  visible?: boolean;
 }
 export interface AnnotationInfo {
   id: string; boardId: string; anchorType: string;

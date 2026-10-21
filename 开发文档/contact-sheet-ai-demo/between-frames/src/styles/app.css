@@ -595,3 +595,5 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .publication-frame{position:absolute;display:flex;align-items:center;justify-content:center;color:#555;font-size:10px;background:#eee}
 .publication-frame img{width:100%;height:100%}
 .publication-page-preview figcaption{text-align:center;font-size:12px;margin-top:8px;color:var(--text2)}
+.canvas-photo-node.selected{outline:2px solid var(--accent,#6c5ce7);outline-offset:2px}
+.canvas-marquee{border:1px solid var(--accent,#6c5ce7);background:rgba(108,92,231,.1);border-radius:2px}
