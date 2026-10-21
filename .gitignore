@@ -21,3 +21,6 @@ src-tauri/gen/schemas/
 # 本地环境
 *.local
 .gh-export/
+.omo/
+.wrangler/
+**/*.schema
