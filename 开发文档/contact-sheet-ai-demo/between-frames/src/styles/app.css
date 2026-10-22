@@ -679,3 +679,7 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .focal-chat-input .attach.on{border-color:var(--accent,#6c5ce7);background:rgba(108,92,231,.18)}
 .focal-chat-input .attach .count{position:absolute;top:-6px;right:-6px;background:var(--accent,#6c5ce7);color:#fff;font-size:10px;border-radius:8px;padding:0 5px;min-width:14px}
 .focal-photo-ref{background:rgba(108,92,231,.2);border:1px solid rgba(108,92,231,.4);border-radius:4px;padding:0 4px;font-family:ui-monospace,monospace;font-size:12px;color:#a29bfe}
+.focal-chat-meta{display:flex;justify-content:space-between;align-items:center;padding:4px 16px;font-size:11px;color:var(--text2,#777)}
+.focal-chat-meta .cost{font-variant-numeric:tabular-nums}
+.focal-chat-meta .clear{background:none;border:none;color:var(--text2,#777);cursor:pointer;font-size:11px;text-decoration:underline}
+.focal-chat-meta .clear:hover{color:var(--text,#e8e8f0)}

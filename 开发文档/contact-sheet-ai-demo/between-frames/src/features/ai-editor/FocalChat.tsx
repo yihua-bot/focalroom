@@ -13,14 +13,20 @@ export function FocalChat({ projectId, selectedPhotoIds, photoNames, onSuggestTa
   onSuggestTask: (goal: string) => void;
   prefill?: string;
 }) {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const storageKey = `focal-chat:${projectId}`;
+  const [turns, setTurns] = useState<Turn[]>(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) ?? '[]') as Turn[]; } catch { return []; }
+  });
   const [input, setInput] = useState(prefill ?? '');
   const [busy, setBusy] = useState(false);
   const [includeImages, setIncludeImages] = useState(false);
   const [error, setError] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { scroller.current?.scrollTo({ top: 1e9 }); }, [turns]);
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: 1e9 });
+    try { localStorage.setItem(storageKey, JSON.stringify(turns.slice(-100))); } catch { /* 存储满静默 */ }
+  }, [turns, storageKey]);
 
   const send = async () => {
     const message = input.trim();
@@ -51,6 +57,10 @@ export function FocalChat({ projectId, selectedPhotoIds, photoNames, onSuggestTa
     });
   };
 
+  const costEstimate = (images: number) => images === 0 ? '2–5 千' : `${2 + images * 15}–${5 + images * 30} 千`;
+
+  const clearChat = () => { setTurns([]); try { localStorage.removeItem(storageKey); } catch { /* 忽略 */ } };
+
   return <div className="focal-chat">
     <div className="focal-chat-scroll" ref={scroller}>
       {turns.length === 0 && <div className="focal-chat-hint">
@@ -66,6 +76,10 @@ export function FocalChat({ projectId, selectedPhotoIds, photoNames, onSuggestTa
       {busy && <div className="focal-chat-msg assistant"><span className="focal-chat-avatar">F</span><div className="focal-chat-bubble thinking">…</div></div>}
       {error && <p role="alert" className="fr-error">{error}</p>}
     </div>
+    {turns.length > 0 && <div className="focal-chat-meta">
+      <span className="cost">{includeImages && selectedPhotoIds.length > 0 ? `本次约 ${costEstimate(Math.min(selectedPhotoIds.length, 6))} tokens` : `文字对话约 ${costEstimate(0)} tokens/次`}</span>
+      <button className="clear" onClick={clearChat} title="清空对话">清空</button>
+    </div>}
     <div className="focal-chat-input">
       <textarea
         value={input}
@@ -80,7 +94,7 @@ export function FocalChat({ projectId, selectedPhotoIds, photoNames, onSuggestTa
       />
       <button className={`attach ${includeImages ? 'on' : ''}`} disabled={busy || selectedPhotoIds.length === 0}
         onClick={() => setIncludeImages(!includeImages)}
-        title={includeImages ? `将发送 ${Math.min(selectedPhotoIds.length, 6)} 张选中照片的预览图` : '附加选中照片（最多 6 张）'}>📷{selectedPhotoIds.length > 0 && <span className="count">{Math.min(selectedPhotoIds.length, 6)}</span>}</button>
+        title={includeImages ? `将发送 ${Math.min(selectedPhotoIds.length, 6)} 张照片预览（约 ${costEstimate(Math.min(selectedPhotoIds.length, 6))} tokens）` : '附加选中照片（最多 6 张）'}>📷{selectedPhotoIds.length > 0 && <span className="count">{Math.min(selectedPhotoIds.length, 6)}</span>}</button>
       <button className="send" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={zh.send}>↑</button>
     </div>
   </div>;
