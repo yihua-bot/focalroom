@@ -180,6 +180,7 @@ async fn hosted_calls_use_account_bearer_and_fixed_policy_without_a_provider_key
     let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap());
     let provider = OpenAiProvider::hosted(auth).bind_account().unwrap();
     assert!(provider.api_key_tail().is_empty());
+    assert_eq!(provider.rate_card(), agent::pricing::RateCard::DeepseekFlashPeak20261016);
     assert_eq!(provider.identity().account_id.as_deref(), Some("user-a"));
     let result = provider.generate_metered(&input()).await.unwrap();
     assert_eq!(result.usage.unwrap().total_tokens, 15);

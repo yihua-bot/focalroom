@@ -59,16 +59,7 @@ pub(crate) async fn reserve(
             "视觉请求已预留，不能重复传输",
         ));
     }
-    if t.usage.tool_calls >= t.budget.max_tool_calls
-        || t.elapsed_ms >= u64::from(t.budget.max_duration_seconds) * 1000
-        || t.usage.cloud_images.saturating_add(images) > t.budget.max_cloud_images
-        || t.usage.cost_minor_usd.saturating_add(cost) > t.budget.max_cost_minor_usd.min(cost_limit)
-    {
-        return Err(AppError::new(
-            "BUDGET_EXCEEDED",
-            "视觉请求预留超过图像、费用、工具或时间预算；未上传",
-        ));
-    }
+    super::budget::vision_limits(&t, images, cost, cost_limit)?;
     let consent = consent::authorize(&mut tx, &t, i64::from(images))
         .await?
         .ok_or_else(|| AppError::new("PERMISSION_DENIED", "图像授权已撤回或配额不足；未上传"))?;

@@ -131,6 +131,7 @@ impl ModelProvider for Scenario {
                     message: "测试暂不可用".into(),
                     retriable: true,
                     current_revision: None,
+                    details: None,
                 }),
                 "fault" => {
                     let id = t.allowed_photo_ids[0].clone();

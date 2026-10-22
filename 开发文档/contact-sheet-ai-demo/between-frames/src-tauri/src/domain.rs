@@ -11,6 +11,8 @@ pub struct AppError {
     pub retriable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_revision: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
 }
 impl AppError {
     pub fn new(code: &str, message: impl Into<String>) -> Self {
@@ -19,6 +21,7 @@ impl AppError {
             message: message.into(),
             retriable: code == "REVISION_CONFLICT" || code == "DATABASE",
             current_revision: None,
+            details: None,
         }
     }
 }

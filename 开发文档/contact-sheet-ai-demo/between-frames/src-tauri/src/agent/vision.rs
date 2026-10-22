@@ -132,6 +132,7 @@ pub(crate) async fn prefetch(
             cache_version,
         }));
     }
+    super::budget::vision_limits(task, missing.len() as u32, 0, u32::MAX)?;
     // 授权在预取阶段只读校验；配额扣减在写事务，同项目唯一执行任务避免并发超用。
     let mut read = db.pool.begin().await?;
     let authorized = consent::authorize(&mut read, task, missing.len() as i64).await?;
@@ -152,12 +153,6 @@ pub(crate) async fn prefetch(
         &task.provider_id,
         Some(provider.route()?),
     )?;
-    if task.usage.cloud_images + missing.len() as u32 > task.budget.max_cloud_images {
-        return Err(AppError::new(
-            "BUDGET_EXCEEDED",
-            "云端图像预算不足，请调整预算或减少照片数",
-        ));
-    }
     let brief = project_brief(db, task).await?;
     let mut images = vec![];
     for photo in &missing {

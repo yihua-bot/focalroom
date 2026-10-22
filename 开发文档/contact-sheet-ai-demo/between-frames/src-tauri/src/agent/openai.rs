@@ -35,6 +35,7 @@ impl Clone for OpenAiProvider {
                 message: e.message.clone(),
                 retriable: e.retriable,
                 current_revision: e.current_revision,
+                details: e.details.clone(),
             }),
             hosted: self.hosted.clone(),
             hosted_account: self.hosted_account.clone(),
@@ -247,6 +248,10 @@ impl OpenAiProvider {
         }
     }
     pub fn rate_card(&self) -> super::pricing::RateCard {
+        // 固定托管策略绑定官方 DeepSeek，不按本地代理地址误判为未知高价服务。
+        if self.is_hosted() {
+            return super::pricing::RateCard::DeepseekFlashPeak20261016;
+        }
         super::pricing::RateCard::for_endpoint(&self.base_url, &self.model)
     }
     async fn post(&self, body: &Value) -> Result<Value> {

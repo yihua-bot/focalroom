@@ -249,6 +249,7 @@ pub struct AgentProjection {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskView {
+    pub budget_issue: Option<super::budget::BudgetIssue>,
     pub canvas_task: bool,
     pub canvas_source: Option<super::task_scope::CanvasTaskSource>,
     pub board_drafts: Vec<crate::canvas::Board>,

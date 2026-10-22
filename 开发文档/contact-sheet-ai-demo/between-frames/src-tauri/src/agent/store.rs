@@ -177,7 +177,17 @@ pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection>
             created_at: r.get("created_at"),
         })
         .collect();
+        let budget_issue = if t.state == "paused" {
+            let raw: Option<String> = sqlx::query_scalar("SELECT body_json FROM agent_steps WHERE task_id=? AND kind='budget_limit' ORDER BY id DESC LIMIT 1")
+                .bind(&id).fetch_optional(&mut *tx).await?;
+            raw.and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+                .filter(|body| body["reason"].as_str() == Some(t.reason.as_str()))
+                .and_then(|body| serde_json::from_value(body["issue"].clone()).ok())
+        } else {
+            None
+        };
         tasks.push(TaskView {
+            budget_issue,
             canvas_task: grant.canvas,
             canvas_source: grant.source,
             board_drafts: boards,

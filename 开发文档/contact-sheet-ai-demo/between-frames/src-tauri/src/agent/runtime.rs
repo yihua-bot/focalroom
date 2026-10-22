@@ -388,6 +388,10 @@ impl AgentEngine {
                 match outcome {
                     ModelOutcome::ToolCalls { calls } => {
                         for call in calls {
+                            let current_task = ContextBuilder::build(&self.db, id).await?.task;
+                            if current_task.state != "running" {
+                                return Ok(());
+                            }
                             let openai = self
                                 .observation
                                 .as_deref()
@@ -398,7 +402,7 @@ impl AgentEngine {
                                     match vision::prefetch(
                                         &self.db,
                                         provider,
-                                        &input.task,
+                                        &current_task,
                                         &call,
                                         &self.region,
                                         self.tier,
@@ -408,7 +412,7 @@ impl AgentEngine {
                                     {
                                         Ok(data) => data,
                                         Err(e) if e.code == "BUDGET_EXCEEDED" => {
-                                            handler.agent_state(id, "paused", &e.message).await?;
+                                            handler.agent_budget_stop(id, &e).await?;
                                             return Ok(());
                                         }
                                         Err(e) => return Err(e),
@@ -435,7 +439,7 @@ impl AgentEngine {
             let provider = match self.provider_for(&input.task, &quality) {
                 Ok(provider) => provider,
                 Err(error) if error.code == "BUDGET_EXCEEDED" => {
-                    handler.agent_state(id, "paused", &error.message).await?;
+                    handler.agent_budget_stop(id, &error).await?;
                     return Ok(());
                 }
                 Err(error) => return Err(error),
@@ -464,7 +468,7 @@ impl AgentEngine {
             ) {
                 Ok(limit) => limit,
                 Err(error) => {
-                    handler.agent_state(id, "paused", &error.message).await?;
+                    handler.agent_budget_stop(id, &error).await?;
                     return Ok(());
                 }
             };
@@ -474,7 +478,7 @@ impl AgentEngine {
             if let Err(e) =
                 super::policy::PolicyGate::model_budget(&input.task, estimate, cost_limit, rate)
             {
-                handler.agent_state(id, "paused", &e.message).await?;
+                handler.agent_budget_stop(id, &e).await?;
                 return Ok(());
             }
             handler

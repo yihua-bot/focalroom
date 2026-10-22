@@ -100,9 +100,12 @@ impl PolicyGate {
             .min(cost_limit)
             .saturating_sub(task.usage.cost_minor_usd);
         if rate.model_cost(input, 128) > remaining {
-            return Err(AppError::new(
-                "BUDGET_EXCEEDED",
-                "剩余预算不足以预留输入和最少输出，任务已暂停",
+            return Err(super::budget::exceeded(
+                super::budget::LimitKind::Cost,
+                u64::from(task.usage.cost_minor_usd),
+                u64::from(rate.model_cost(input, 128)),
+                u64::from(task.budget.max_cost_minor_usd.min(cost_limit)),
+                "model",
             ));
         }
         let (mut low, mut high) = (128, task.budget.max_output_tokens);
@@ -181,25 +184,57 @@ impl PolicyGate {
     ) -> Result<()> {
         let b = &task.budget;
         let u = &task.usage;
-        if u.model_turns >= b.max_model_turns
-            || u.tool_calls >= b.max_tool_calls
-            || task.elapsed_ms >= u64::from(b.max_duration_seconds) * 1000
-            || input > b.max_context_tokens
-            || u.input_estimate
-                .saturating_add(u.output_estimate)
-                .saturating_add(input)
-                .saturating_add(b.max_output_tokens)
-                > b.max_total_tokens
-            || u.cloud_images > b.max_cloud_images
-            || u.cost_minor_usd > b.max_cost_minor_usd.min(cost_limit)
-            || u.cost_minor_usd
-                .saturating_add(rate.reservation(task, input))
-                > b.max_cost_minor_usd.min(cost_limit)
-        {
-            return Err(AppError::new(
-                "BUDGET_EXCEEDED",
-                "后端预算已达到上限，请调整预算后恢复或取消",
-            ));
+        use super::budget::LimitKind::*;
+        let checks = [
+            (
+                Time,
+                task.elapsed_ms,
+                1,
+                u64::from(b.max_duration_seconds) * 1000,
+            ),
+            (
+                Rounds,
+                u64::from(u.model_turns),
+                1,
+                u64::from(b.max_model_turns),
+            ),
+            (
+                Steps,
+                u64::from(u.tool_calls),
+                1,
+                u64::from(b.max_tool_calls),
+            ),
+            (
+                Context,
+                0,
+                u64::from(input),
+                u64::from(b.max_context_tokens),
+            ),
+            (
+                Tokens,
+                u64::from(u.input_estimate) + u64::from(u.output_estimate),
+                u64::from(input) + u64::from(b.max_output_tokens),
+                u64::from(b.max_total_tokens),
+            ),
+            (
+                Images,
+                u64::from(u.cloud_images),
+                0,
+                u64::from(b.max_cloud_images),
+            ),
+            (
+                Cost,
+                u64::from(u.cost_minor_usd),
+                u64::from(rate.reservation(task, input)),
+                u64::from(b.max_cost_minor_usd.min(cost_limit)),
+            ),
+        ];
+        for (kind, used, requested, limit) in checks {
+            if used.saturating_add(requested) > limit {
+                return Err(super::budget::exceeded(
+                    kind, used, requested, limit, "model",
+                ));
+            }
         }
         Ok(())
     }

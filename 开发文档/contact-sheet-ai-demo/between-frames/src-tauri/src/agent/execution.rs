@@ -14,6 +14,27 @@ pub(crate) async fn state(db: &Store, id: &str, next: &str, reason: &str) -> Res
     tx.commit().await?;
     Ok(())
 }
+pub(crate) async fn budget_stop(db: &Store, id: &str, error: &AppError) -> Result<()> {
+    let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let mut task = store::load(&mut tx, id).await?;
+    if task.state != "running" {
+        return Ok(());
+    }
+    if let Some(issue) = super::budget::issue(error) {
+        store::step(
+            &mut tx,
+            id,
+            "budget_limit",
+            json!({"issue":issue,"reason":error.message}),
+            &error.message,
+        )
+        .await?;
+    }
+    store::transition(&mut tx, &mut task, "paused", &error.message).await?;
+    store::checkpoint(&mut tx, &task).await?;
+    tx.commit().await?;
+    Ok(())
+}
 pub(crate) async fn outcome(
     db: &Store,
     id: &str,

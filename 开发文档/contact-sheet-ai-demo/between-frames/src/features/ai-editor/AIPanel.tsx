@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '../../stores/uiStore';
 import { zh } from '../../app/copy';
 import type { DesktopProjectRepository, Project } from '../../domain/models';
-import { defaultAgentBudget, type AiConfig, type TaskCommand, type TaskState } from '../../domain/agent';
+import { defaultAgentBudget, type AiConfig, type AgentTask, type TaskCommand, type TaskState } from '../../domain/agent';
+import { budgetMessage, resumeBudget } from './budgetRecovery';
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
 import { DraftReview } from './DraftReview';
@@ -49,6 +50,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  const [error, setError] = useState('');
  const [draftId, setDraftId] = useState<string | null>(null);
  const last = useRef<HTMLDivElement>(null);
+ const composer = useRef<HTMLTextAreaElement>(null);
  const consumedAction = useRef<string | null>(null);
  const tasks = query.data?.tasks ?? [];
  const task = tasks[0];
@@ -104,7 +106,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
     await repository.agent.request(project.id, { type: 'SubmitFeedback', taskId: task.id, answer: message.trim() });
    } else {
     const ids = scopeSelection ? selectedIds : [];
-    const images = supportsVision(fresh.data) ? Math.min(imageLimit, ids.length || project.photos.length) : 0;
+    const images = supportsVision(fresh.data) ? imageLimit : 0;
     const budget = { ...defaultAgentBudget, maxDurationSeconds: duration, maxCloudImages: images };
     let consentId: number | null = null;
     if (images > 0) {
@@ -123,6 +125,12 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
   finally { sending.current = false; setBusy(false); }
  };
  const draft = query.data?.drafts.find(item => item.id === draftId);
+ const prepareRestart = (item: AgentTask) => {
+  setOutput(item.canvasTask ? 'canvas' : 'selection');
+  setMessage(item.goal); setScopeSelection(true);
+  saveDraft(project.id, { goal: item.goal, count, scopeSelection: true });
+  composer.current?.focus();
+ };
  const suggestions = [
   { label: zh.chatSuggestSelect, goal: project.brief || zh.chatGoalSelect },
   { label: zh.chatSuggestCompare, goal: zh.chatGoalCompare },
@@ -138,7 +146,8 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
     <div className="chat-assistant-message"><span className="chat-assistant-icon"><Sparkles size={15} /></span><div>
      <strong className="chat-task-status" data-state={item.state}>{taskLabels[item.state]}</strong>
      {item.question && <p>{item.question}</p>}
-     {['paused', 'interrupted', 'failed', 'stale'].includes(item.state) && <p>{userFacingError(new Error(item.reason))}</p>}
+     {['paused', 'interrupted', 'failed', 'stale'].includes(item.state) && <p>{budgetMessage(item) ?? userFacingError(new Error(item.reason))}</p>}
+     {item.budgetIssue?.stage === 'vision' && item.budgetIssue.requestNotSent && <p className="muted">{zh.chatPhotosNotSent}</p>}
      {(query.data?.drafts ?? []).filter(candidate => candidate.taskId === item.id).map(candidate => <div className="chat-draft-card" key={candidate.id}>
       <div><Check size={15} /><strong>{candidate.title}</strong></div><p>{candidate.summary}</p>
       <Button size="small" disabled={running} onClick={() => setDraftId(candidate.id)}>{zh.chatReviewDraft}</Button>
@@ -149,7 +158,10 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
      </div>)}
      {item.id === task?.id && <div className="chat-task-controls">
       {['queued', 'planning', 'running'].includes(item.state) && <Button size="small" disabled={busy} onClick={() => { void request({ type: 'PauseTask', taskId: item.id }); }}>{zh.chatPause}</Button>}
-      {['paused', 'interrupted'].includes(item.state) && <Button size="small" disabled={busy || running || blocked} onClick={() => { void request({ type: 'ResumeTask', taskId: item.id, budget: { ...item.budget, maxModelTurns: Math.max(item.budget.maxModelTurns, defaultAgentBudget.maxModelTurns), maxToolCalls: Math.max(item.budget.maxToolCalls, defaultAgentBudget.maxToolCalls), maxDurationSeconds: Math.min(7200, Math.max(item.budget.maxDurationSeconds, Math.ceil(item.elapsedMs / 1000) + duration)) } }); }}>{zh.chatContinue}</Button>}
+      {['paused', 'interrupted'].includes(item.state) && (resumeBudget(item, duration) ? <Button size="small" disabled={busy || running || blocked} onClick={() => {
+       const budget = resumeBudget(item, duration);
+       if (budget) void request({ type: 'ResumeTask', taskId: item.id, budget });
+      }}>{item.budgetIssue?.kind === 'time' ? zh.chatExtendWait : zh.chatContinue}</Button> : <Button size="small" disabled={busy || running} onClick={() => prepareRestart(item)}>{zh.chatAdjustRange}</Button>)}
       {!['completed', 'failed', 'cancelled'].includes(item.state) && <Button size="small" disabled={busy} onClick={() => { void request({ type: 'CancelTask', taskId: item.id }); }}>{zh.chatCancel}</Button>}
       {['review_ready', 'stale'].includes(item.state) && <Button size="small" disabled={busy} onClick={() => { void request({ type: 'CloseTask', taskId: item.id }); }}>{zh.chatFinishReview}</Button>}
      </div>}
@@ -167,7 +179,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
       <option value="selection">{zh.chatSelectionOutput}</option><option value="canvas">{zh.chatCanvasOutput}</option>
     </select></label>{output === 'canvas' && canvasSource && <span>{zh.chatCanvasSource}</span>}</div>
     <div className="chat-compose-box">
-     <textarea aria-label={zh.chatMessage} placeholder={task?.state === 'needs_input' ? zh.chatReplyPlaceholder : zh.chatPlaceholder} maxLength={2000} rows={3} value={message} disabled={busy}
+     <textarea ref={composer} aria-label={zh.chatMessage} placeholder={task?.state === 'needs_input' ? zh.chatReplyPlaceholder : zh.chatPlaceholder} maxLength={2000} rows={3} value={message} disabled={busy}
       onChange={event => updateMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
      <div className="chat-compose-actions">
       <label className="chat-count">{output === 'canvas' ? zh.chatCanvasCount : zh.chatCount}<input aria-label={output === 'canvas' ? zh.chatCanvasCount : zh.chatCount} type="number" min={1} max={output === 'canvas' ? 500 : 100} required disabled={busy} value={count} onChange={event => { const count = Number(event.target.value); setCount(count); saveDraft(project.id, { goal: message, count, scopeSelection }); }} /></label>
@@ -178,7 +190,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
      <option value="project">{zh.chatProjectPhotos} · {project.photos.length}</option><option value="selected">{zh.chatSelectedPhotos} · {selectedIds.length}</option>
     </select></div>
    </form>
-   {selectionEmpty ? <p className="chat-footnote">{zh.chatSelectPhotos}</p> : !project.photos.length ? <p className="chat-footnote">{zh.chatImportFirst}</p> : vision ? <p className="chat-footnote">{zh.chatSendConsent.replace('{count}', String(Math.min(imageLimit, scopeSelection ? selectedIds.length : project.photos.length)))}</p> : null}
+   {selectionEmpty ? <p className="chat-footnote">{zh.chatSelectPhotos}</p> : !project.photos.length ? <p className="chat-footnote">{zh.chatImportFirst}</p> : vision ? <p className="chat-footnote">{zh.chatSendConsent.replace('{count}', String(imageLimit)).replace('{provider}', config?.hostedAccount?.provider ?? config?.observation?.modelId ?? config?.modelId ?? 'FocalRoom AI')}</p> : null}
   </footer>
   {settingsOpen && <Modal title={zh.settings} onClose={onSettingsClose}>
    <div className="ai-settings-fields"><div className="settings-service"><Sparkles size={17} /><span>FocalRoom AI</span></div>

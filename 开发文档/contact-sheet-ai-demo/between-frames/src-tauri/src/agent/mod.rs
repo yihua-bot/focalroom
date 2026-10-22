@@ -1,5 +1,6 @@
 pub mod anthropic;
 pub mod billing;
+pub mod budget;
 mod canvas_edit;
 pub mod capabilities;
 mod cloud;
@@ -99,6 +100,13 @@ impl CommandHandler<'_> {
     }
     pub(crate) async fn agent_state(&self, id: &str, state: &str, reason: &str) -> Result<()> {
         execution::state(self.store, id, state, reason).await
+    }
+    pub(crate) async fn agent_budget_stop(
+        &self,
+        id: &str,
+        error: &crate::domain::AppError,
+    ) -> Result<()> {
+        execution::budget_stop(self.store, id, error).await
     }
     pub(crate) async fn agent_outcome(
         &self,
