@@ -675,3 +675,7 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .focal-mode-tabs{display:flex;gap:0;padding:8px 12px 0;border-bottom:1px solid var(--border,#2a2a40)}
 .focal-mode-tabs button{flex:1;padding:8px 12px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text2,#888);font-size:13px;cursor:pointer}
 .focal-mode-tabs button.active{color:var(--text,#e8e8f0);border-bottom-color:var(--accent,#6c5ce7);font-weight:600}
+.focal-chat-input .attach{position:relative;flex:none;width:36px;height:36px;border-radius:10px;border:1px solid var(--border,#2a2a40);background:var(--bg-secondary,#14141f);cursor:pointer;font-size:15px}
+.focal-chat-input .attach.on{border-color:var(--accent,#6c5ce7);background:rgba(108,92,231,.18)}
+.focal-chat-input .attach .count{position:absolute;top:-6px;right:-6px;background:var(--accent,#6c5ce7);color:#fff;font-size:10px;border-radius:8px;padding:0 5px;min-width:14px}
+.focal-photo-ref{background:rgba(108,92,231,.2);border:1px solid rgba(108,92,231,.4);border-radius:4px;padding:0 4px;font-family:ui-monospace,monospace;font-size:12px;color:#a29bfe}

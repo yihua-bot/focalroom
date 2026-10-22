@@ -6,15 +6,17 @@ import { zh } from '../../app/copy';
 
 interface Turn { role: 'user' | 'assistant'; content: string; }
 
-export function FocalChat({ projectId, selectedPhotoIds, onSuggestTask, prefill }: {
+export function FocalChat({ projectId, selectedPhotoIds, photoNames, onSuggestTask, prefill }: {
   projectId: string;
   selectedPhotoIds: string[];
+  photoNames?: Record<string, string>;
   onSuggestTask: (goal: string) => void;
   prefill?: string;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState(prefill ?? '');
   const [busy, setBusy] = useState(false);
+  const [includeImages, setIncludeImages] = useState(false);
   const [error, setError] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -28,13 +30,25 @@ export function FocalChat({ projectId, selectedPhotoIds, onSuggestTask, prefill 
     setTurns(prev => [...prev, { role: 'user', content: message }]);
     try {
       const reply = await invoke<{ reply: string; suggestion: string }>('focal_chat', {
-        cmd: { projectId, message, history, photoIds: selectedPhotoIds },
+        cmd: { projectId, message, history, photoIds: selectedPhotoIds, includeImages },
       });
       setTurns(prev => [...prev, { role: 'assistant', content: reply.reply }]);
       if (reply.suggestion === 'create_task') onSuggestTask(message);
+      else if (reply.suggestion === 'analyze_photos' && selectedPhotoIds.length > 0) setIncludeImages(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setBusy(false); }
+  };
+
+  const renderWithPhotoRefs = (text: string, names?: Record<string, string>) => {
+    if (!names || Object.keys(names).length === 0) return text;
+    // 匹配照片文件名（如 IMG_2041.jpg、DSC_0042.png 等）
+    const parts = text.split(/([A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp|tif|tiff|heic|dng|cr2|cr3|nef|arw))/gi);
+    return parts.map((part, i) => {
+      const matched = Object.entries(names).find(([, name]) => name === part);
+      if (matched) return <span key={i} className="focal-photo-ref" title={matched[0]}>{part}</span>;
+      return part;
+    });
   };
 
   return <div className="focal-chat">
@@ -46,7 +60,7 @@ export function FocalChat({ projectId, selectedPhotoIds, onSuggestTask, prefill 
       {turns.map((t, i) => (
         <div key={i} className={`focal-chat-msg ${t.role}`}>
           {t.role === 'assistant' && <span className="focal-chat-avatar">F</span>}
-          <div className="focal-chat-bubble">{t.content}</div>
+          <div className="focal-chat-bubble">{renderWithPhotoRefs(t.content, photoNames)}</div>
         </div>
       ))}
       {busy && <div className="focal-chat-msg assistant"><span className="focal-chat-avatar">F</span><div className="focal-chat-bubble thinking">…</div></div>}
@@ -64,6 +78,9 @@ export function FocalChat({ projectId, selectedPhotoIds, onSuggestTask, prefill 
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); }
         }}
       />
+      <button className={`attach ${includeImages ? 'on' : ''}`} disabled={busy || selectedPhotoIds.length === 0}
+        onClick={() => setIncludeImages(!includeImages)}
+        title={includeImages ? `将发送 ${Math.min(selectedPhotoIds.length, 6)} 张选中照片的预览图` : '附加选中照片（最多 6 张）'}>📷{selectedPhotoIds.length > 0 && <span className="count">{Math.min(selectedPhotoIds.length, 6)}</span>}</button>
       <button className="send" disabled={busy || !input.trim()} onClick={() => void send()} aria-label={zh.send}>↑</button>
     </div>
   </div>;

@@ -145,7 +145,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
     <button role="tab" aria-selected={mode === 'chat'} className={mode === 'chat' ? 'active' : ''} tabIndex={0} onClick={() => setMode('chat')}>对话</button>
     <button role="tab" aria-selected={mode === 'task'} className={mode === 'task' ? 'active' : ''} onClick={() => setMode('task')}>选片任务</button>
   </div>
-  {mode === 'chat' && repository && <FocalChat projectId={project.id} selectedPhotoIds={selectedIds} prefill={initialGoal} onSuggestTask={goal => { setMessage(goal); setMode('task'); }} />}
+  {mode === 'chat' && repository && <FocalChat projectId={project.id} selectedPhotoIds={selectedIds} photoNames={Object.fromEntries(project.photos.map(p => [p.id, p.name]))} prefill={initialGoal} onSuggestTask={goal => { setMessage(goal); setMode('task'); }} />}
   {mode === 'task' && <>
   <div className="ai-chat-feed" role="log" aria-label={zh.chatHistory} aria-live="polite">
    {!tasks.length && <div className="ai-chat-welcome"><span className="chat-welcome-mark"><Sparkles size={27} /></span><h3>{zh.chatWelcome}</h3><p>{zh.chatWelcomeHint}</p>

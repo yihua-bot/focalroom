@@ -26,6 +26,8 @@ pub struct FocalChatCommand {
     pub message: String,
     pub history: Vec<ChatTurn>,
     pub photo_ids: Vec<String>,
+    /// 附加选中照片的预览图（多模态视觉分析）
+    pub include_images: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,10 +44,14 @@ const SYSTEM_PROMPT: &str = r#"你是 Focal AI——FocalRoom（本地优先的�
 你的定位：像一位懂摄影的对话伙伴，不是命令机器人。
 - 用自然对话回应：摄影选题、构图、色彩、编辑策略、叙事编排、印前准备
 - 引用项目上下文时具体说（比如"你选中的第 3 张"），不编造不存在的照片
-- 用户说"帮我选 N 张""开始选片""筛一轮"时，简短确认并设置 suggestion 为 "create_task"
-- 其他情况 suggestion 留空字符串
 - 回复简洁（一般 200 字以内），跟随用户语言
-- 不确定时如实说，不编造照片内容"#;
+- 不确定时如实说，不编造照片内容
+- 引用照片时用确切文件名（如 IMG_2041.jpg）
+
+回复格式：正常正文之后，如需建议下一步操作，在最后一行单独输出：
+[[suggest:create_task]] 表示用户想选片/筛照片/确定最终组照
+[[suggest:analyze_photos]] 表示用户想深入分析当前选中照片
+没有建议时不输出任何标记。"#;
 
 impl Store {
     pub async fn focal_chat(
@@ -102,7 +108,29 @@ impl Store {
         for turn in cmd.history.iter().take(MAX_HISTORY) {
             input.push(json!({"role": turn.role, "content": turn.content}));
         }
-        input.push(json!({"role": "user", "content": message}));
+        // 多模态：选中照片附预览图（最多 6 张，1400px JPEG）
+        let mut user_content: Vec<serde_json::Value> = vec![json!({
+            "type": "input_text", "text": message,
+        })];
+        if cmd.include_images && !cmd.photo_ids.is_empty() {
+            let previews: Vec<(String, String)> = sqlx::query_as(
+                "SELECT id, preview_path FROM photos WHERE project_id=? AND id IN (SELECT value FROM json_each(?)) LIMIT 6",
+            )
+            .bind(&cmd.project_id)
+            .bind(serde_json::to_string(&cmd.photo_ids).unwrap_or_else(|_| "[]".into()))
+            .fetch_all(&self.pool)
+            .await?;
+            for (pid, path) in &previews {
+                if let Ok(data) = std::fs::read(path) {
+                    let encoded =
+                        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data);
+                    user_content
+                        .push(json!({"type": "input_text", "text": format!("photo_id: {pid}")}));
+                    user_content.push(json!({"type": "input_image", "image_url": format!("data:image/jpeg;base64,{encoded}")}));
+                }
+            }
+        }
+        input.push(json!({"role": "user", "content": user_content}));
 
         let body = json!({
             "model": "deepseek-flash",
@@ -153,17 +181,30 @@ impl Store {
         }
 
         // 意图识别（简单可靠：选片动词 + 数字）
-        let wants_task = ["选", "挑", "筛", "select", "choose", "pick"]
-            .iter()
-            .any(|k| message.contains(k))
-            && message.chars().any(|c| c.is_ascii_digit());
-        let suggestion = if wants_task {
-            "create_task".to_owned()
-        } else {
-            String::new()
-        };
+        let mut reply_text = reply;
+        let mut suggestion = String::new();
+        for marker in ["create_task", "analyze_photos"] {
+            let tag = format!("[[suggest:{marker}]]");
+            if let Some(pos) = reply_text.find(&tag) {
+                suggestion = marker.to_owned();
+                reply_text = reply_text[..pos].trim_end().to_owned();
+                break;
+            }
+        }
+        if suggestion.is_empty() {
+            let wants_task = ["选", "挑", "筛", "select", "choose", "pick"]
+                .iter()
+                .any(|k| message.contains(k))
+                && message.chars().any(|c| c.is_ascii_digit());
+            if wants_task {
+                suggestion = "create_task".to_owned();
+            }
+        }
 
-        Ok(FocalChatReply { reply, suggestion })
+        Ok(FocalChatReply {
+            reply: reply_text,
+            suggestion,
+        })
     }
 }
 

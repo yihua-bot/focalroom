@@ -193,6 +193,7 @@ pub fn run() {
             commands::billing_catalog,
             commands::billing_overview,
             commands::billing_checkout,
+            commands::focal_chat,
             commands::billing_manage,
             commands::billing_cancel_checkout,
             commands::share_project,
