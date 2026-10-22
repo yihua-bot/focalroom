@@ -107,7 +107,11 @@ pub fn vision_output_limit(
         .saturating_mul(256)
         .saturating_add(128)
         .min(task.budget.max_output_tokens);
-    let mut high = task.budget.max_output_tokens;
+    // 短观察不使用完整策展回复长度，减少等待与截断前的无效输出。
+    let mut high = task
+        .budget
+        .max_output_tokens
+        .min(images.saturating_mul(384).saturating_add(512));
     let minimum_cost = rate.vision_reservation(images, input, low);
     if minimum_cost > remaining {
         return Err(exceeded(

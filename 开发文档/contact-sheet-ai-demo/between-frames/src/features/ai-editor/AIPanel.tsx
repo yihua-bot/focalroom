@@ -10,6 +10,7 @@ import { budgetMessage, resumeBudget } from './budgetRecovery';
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
 import { DraftReview } from './DraftReview';
+import { TaskProgress } from './TaskProgress';
 import { useAccount } from '../cloud-login/AccountProvider';
 
 export const taskLabels: Record<TaskState, string> = { queued: '排队中', planning: '准备中', running: '执行中', needs_input: '等待答复', review_ready: '待审核', completed: '已完成', paused: '已暂停', stale: '项目已更新', failed: '失败', cancelled: '已取消', interrupted: '已中断' };
@@ -35,7 +36,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  const canvasSource = useUIStore(state => state.canvasTaskSource);
  const openCanvasBoard = useUIStore(state => state.openCanvasBoard);
  const [output, setOutput] = useState<'selection' | 'canvas'>(canvasSource ? 'canvas' : 'selection');
- const query = useQuery({ queryKey: ['agent', project.id], queryFn: () => repository!.agent.query(project.id), enabled: Boolean(repository), refetchInterval: repository ? 1000 : false });
+ const query = useQuery({ queryKey: ['agent', project.id], queryFn: () => repository!.agent.query(project.id), enabled: Boolean(repository), refetchInterval: repository ? 1000 : false, refetchIntervalInBackground: true, refetchOnWindowFocus: 'always' });
  const configQuery = useQuery({ queryKey: ['ai-config', project.id], queryFn: () => repository!.agent.aiConfig(project.id), enabled: Boolean(repository), staleTime: 10_000, refetchInterval: 15_000 });
  const config = configQuery.data;
  const saved = useUIStore(state => state.aiDrafts[project.id]);
@@ -96,6 +97,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  };
  const send = async () => {
   if (!repository || sending.current || blocked || running || !message.trim() || !project.photos.length || selectionEmpty || count < 1 || count > (output === 'canvas' ? 500 : 100)) return;
+  if (!/[\p{L}\p{N}]/u.test(message)) { setError(zh.chatClarifyMessage); return; }
   sending.current = true; setBusy(true); setError('');
   try {
    const fresh = await configQuery.refetch();
@@ -145,6 +147,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
     <div className="chat-user-message"><p>{item.goal.split('补充要求：').pop()}</p></div>
     <div className="chat-assistant-message"><span className="chat-assistant-icon"><Sparkles size={15} /></span><div>
      <strong className="chat-task-status" data-state={item.state}>{taskLabels[item.state]}</strong>
+     <TaskProgress task={item} />
      {item.question && <p>{item.question}</p>}
      {['paused', 'interrupted', 'failed', 'stale'].includes(item.state) && <p>{budgetMessage(item) ?? userFacingError(new Error(item.reason))}</p>}
      {item.budgetIssue?.kind === 'images' && <p className="muted">{zh.chatLimitImagesCount.replace('{used}', String(item.budgetIssue.used)).replace('{requested}', String(item.budgetIssue.requested)).replace('{limit}', String(item.budgetIssue.limit))}</p>}

@@ -2,7 +2,7 @@ use super::{consent, openai::OpenAiProvider, types::*};
 use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 
-pub const VISION_PROMPT_VERSION: &str = "m3-vision-2";
+pub const VISION_PROMPT_VERSION: &str = "m3-vision-3";
 
 /// 一次视觉工具调用的预取结果：缓存命中零上传；未命中部分经 HTTP 观察取得。
 /// 预取只持读事务与网络，写事务在 tools::execute 内完成配额消耗与观察落库。

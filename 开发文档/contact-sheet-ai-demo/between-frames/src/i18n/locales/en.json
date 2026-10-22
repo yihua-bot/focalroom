@@ -1,7 +1,7 @@
 {
   "app.title": "FocalRoom",
   "nav.photo": "Photo Details",
-  "nav.ai": "AI Selection",
+  "nav.ai": "Focal AI",
   "nav.memory": "Preferences",
   "nav.projects": "Projects",
   "nav.shared": "Shared Review",
@@ -115,7 +115,7 @@
     "tagline": "Photo selection and sequencing",
     "preview": "Explore the demo freely. Refreshing restores its original content.",
     "import": "Import Photos",
-    "ai": "AI Selection",
+    "ai": "Focal AI",
     "keep": "Keep",
     "reject": "Reject",
     "undecided": "Reset to Undecided",
@@ -175,7 +175,7 @@
     "currentProject": "Current project",
     "hidePanel": "Hide panel",
     "showPanel": "Show panel",
-    "aiDesktop": "Use AI Selection in the desktop app.",
+    "aiDesktop": "Use Focal AI in the desktop app.",
     "aiGoal": "Selection goal",
     "aiGoalHint": "For example: Select 20 travel photos showing people in their surroundings",
     "aiStart": "Start selection",
@@ -299,5 +299,13 @@
   "editor.loading": "Loading color versions…",
   "editor.empty": "Export with the bridge, then select the generated FocalRoom folder. Import the matching originals into this project first.",
   "editor.collapse": "Close enlarged photo",
-  "editor.done": "Done"
+  "editor.done": "Done",
+  "chatPreparing": "Preparing your selection…",
+  "chatReadingPhotos": "Analyzing the photographs…",
+  "chatOrganizingSelection": "Putting your selection together…",
+  "chatConsideringSelection": "Considering your creative direction…",
+  "chatStageWait": "Waiting {seconds} seconds on this step",
+  "chatWaitingReply": "This step is taking longer. Waiting for the service to respond; you do not need to resend.",
+  "chatResultUnknown": "The connection was interrupted, so the result could not be confirmed. Check your remaining usage or contact support before sending again.",
+  "chatClarifyMessage": "Tell me how you would like to select your photos, or what you would like to know."
 }

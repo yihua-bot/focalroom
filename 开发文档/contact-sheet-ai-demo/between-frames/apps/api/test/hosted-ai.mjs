@@ -40,6 +40,7 @@ test('hosted AI requires live account, verified email, correct policy and CSRF; 
  assert.equal((await post(a,body(),randomUUID(),{'x-focalroom-ai-policy':'another-service'})).status,409);
  assert.equal((await post(a,body(),randomUUID(),{authorization:'',cookie:`fr_session=${a.token}`})).status,403);
  const result=await post(a);assert.equal(result.status,200);assert.equal((await account(a)).body.spent,30);assert.equal((await account(a)).body.reserved,0);
+ assert.equal(seen.reasoning,undefined,'text orchestration keeps its configured behavior');
  assert.ok(!JSON.stringify({quota,result}).includes(secret));
  await pool.query('DELETE FROM fr_sessions WHERE digest=$1',[digest(a.token)]);assert.equal((await post(a)).status,401);
 });
@@ -80,6 +81,7 @@ test('image forwarding requires consent and bounded local JPEG, strips metadata 
  assert.equal((await post(a,{...body(),tools:[{type:'web_search'}]})).status,400);assert.equal((await post(a,{...body(),previous_response_id:'other-user'})).status,400);
  assert.equal(calls,start);
  assert.equal((await post(a,image(data),randomUUID(),{'x-focalroom-image-consent':'granted'})).status,200);
+ assert.deepEqual(seen.reasoning,{effort:'none'},'bounded factual observation disables default high thinking');
  const part=seen.input[0].content[0];assert.equal(part.detail,'low');const meta=await sharp(Buffer.from(part.image_url.split(',')[1],'base64')).metadata();assert.equal(meta.exif,undefined);
 });
 test('disabled service is explicit and has no trial side effect; exhausted quota never calls provider',async()=>{

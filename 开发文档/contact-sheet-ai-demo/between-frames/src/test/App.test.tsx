@@ -29,7 +29,7 @@ describe('工作台交互', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: '账户菜单' }));
     await user.click(screen.getByRole('menuitem', { name: '设置' }));
-    for (const [locale, name] of [['en', 'AI Selection'], ['ja', 'AI 写真セレクト'], ['ko', 'AI 사진 선택'], ['zh', 'AI 智能选片']]) {
+    for (const [locale, name] of [['en', 'Focal AI'], ['ja', 'Focal AI'], ['ko', 'Focal AI'], ['zh', 'Focal AI']]) {
       await user.selectOptions(screen.getByRole('combobox', { name: 'Language / 语言 / 言語 / 언어' }), locale);
       expect(within(screen.getByRole('main', { hidden: true })).getByRole('button', { name, hidden: true })).toBeInTheDocument();
     }
@@ -56,8 +56,8 @@ describe('工作台交互', () => {
   });
   it('浏览器 Mock 入口不启动桌面任务，保留集合不变', async () => {
     const { repository, user } = await open();
-    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'AI 智能选片' }));
-    expect(screen.getByText('请在桌面版使用 AI 智能选片。')).toBeInTheDocument();
+    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'Focal AI' }));
+    expect(screen.getByText('请在桌面版使用 Focal AI。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '发送' })).toBeDisabled();
     expect((await repository.get('sample-project')).sequence).toEqual([]);
   });
@@ -66,21 +66,21 @@ describe('工作台交互', () => {
     await user.click(screen.getByRole('button', { name: '项目列表' }));
     await screen.findByRole('heading', { name: '项目' });
     expect(screen.queryByRole('button', { name: '选片工作台' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'AI 智能选片' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Focal AI' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /未命名的日常.*28 张照片/ }));
     const nav = await screen.findByRole('navigation', { name: '未命名的日常' });
-    expect(within(nav).queryByRole('button', { name: 'AI 智能选片' })).not.toBeInTheDocument();
-    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'AI 智能选片' }));
-    expect(screen.getByRole('dialog', { name: 'AI 智能选片' })).toBeInTheDocument();
+    expect(within(nav).queryByRole('button', { name: 'Focal AI' })).not.toBeInTheDocument();
+    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'Focal AI' }));
+    expect(screen.getByRole('dialog', { name: 'Focal AI' })).toBeInTheDocument();
     expect(screen.queryByLabelText('检查器面板')).not.toBeInTheDocument();
     await user.clear(screen.getByLabelText('选片消息'));
     await user.type(screen.getByLabelText('选片消息'), '为夏日旅行选择照片');
     await user.click(screen.getByRole('button', { name: '查看第 2 张 交错的视线' }));
     expect(screen.getByLabelText('选片消息')).toHaveValue('为夏日旅行选择照片');
-    await user.click(screen.getByRole('button', { name: '关闭 AI 智能选片' }));
+    await user.click(screen.getByRole('button', { name: '关闭 Focal AI' }));
     expect(screen.getByRole('complementary', { name: '照片详情' })).toBeInTheDocument();
-    expect(within(nav).queryByRole('button', { name: 'AI 智能选片' })).not.toBeInTheDocument();
-    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'AI 智能选片' }));
+    expect(within(nav).queryByRole('button', { name: 'Focal AI' })).not.toBeInTheDocument();
+    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'Focal AI' }));
     expect(screen.getByLabelText('选片消息')).toHaveValue('为夏日旅行选择照片');
   });
   it('AI 目标按项目隔离，切换项目不会带入上一个项目的输入', async () => {
@@ -89,12 +89,12 @@ describe('工作台交互', () => {
     render(<App repository={repository} auth={signedIn} />);
     const user = userEvent.setup();
     await screen.findByRole('button', { name: '查看第 1 张 某个上午' });
-    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'AI 智能选片' }));
+    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'Focal AI' }));
     await user.clear(screen.getByLabelText('选片消息'));
     await user.type(screen.getByLabelText('选片消息'), '仅属于第一个项目');
     await user.click(screen.getByRole('button', { name: '项目列表' }));
     await user.click(await screen.findByRole('button', { name: /另一组作品.*0 张照片/ }));
-    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'AI 智能选片' }));
+    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'Focal AI' }));
     expect(screen.getByLabelText('选片消息')).toHaveValue('');
   });
   it('已保留筛选无照片时，显示恢复路径', async () => {

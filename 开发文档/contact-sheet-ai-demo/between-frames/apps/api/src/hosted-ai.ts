@@ -182,7 +182,10 @@ export class HostedAiService {
       if (changed.rowCount && charged !== null) await tx.query("UPDATE fr_ai_accounts SET reserved=reserved-$2,spent=spent+$3 WHERE user_id=$1",[user.id,reservation,charged]);
     });
     try {
-      const response = await this.transport(body,this.config.key);
+      // 图像观察只需简短事实；DeepSeek 默认为 high thinking，会挤占同步请求等待时间。
+      // 编排请求保持原样；不允许客户端借此切换模型、服务或扩大权限。
+      const upstream = images ? {...body, reasoning: {effort: "none"}} : body;
+      const response = await this.transport(upstream,this.config.key);
       if ([400,401,403,404,422].includes(response.status)) {
         await response.body?.cancel(); await settle("REJECTED",0);
         throw new ApiError(502,"AI_PROVIDER_REJECTED","模型服务拒绝了请求，额度已释放");
