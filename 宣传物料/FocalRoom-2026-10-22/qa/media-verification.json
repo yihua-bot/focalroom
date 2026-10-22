@@ -1,0 +1,176 @@
+{
+  "verifiedAt": "2026-10-22T04:25:30.058Z",
+  "results": [
+    {
+      "filename": "FocalRoom-宣传片-横版-1920x1080.mp4",
+      "width": 1920,
+      "height": 1080,
+      "duration": 32,
+      "frameRate": "30/1",
+      "videoCodec": "h264",
+      "pixelFormat": "yuv420p",
+      "colorRange": "tv",
+      "colorSpace": "bt709",
+      "audioCodec": "aac",
+      "audioChannels": 2,
+      "audioSampleRate": "48000",
+      "fullDecodePassed": true,
+      "browserPlaybackPassed": true,
+      "seeks": [
+        {
+          "requested": 0.2,
+          "actual": 0.2,
+          "range": 255
+        },
+        {
+          "requested": 4.95,
+          "actual": 4.95,
+          "range": 177
+        },
+        {
+          "requested": 7.4,
+          "actual": 7.4,
+          "range": 250
+        },
+        {
+          "requested": 10.95,
+          "actual": 10.95,
+          "range": 183
+        },
+        {
+          "requested": 16.95,
+          "actual": 16.95,
+          "range": 188
+        },
+        {
+          "requested": 22.95,
+          "actual": 22.95,
+          "range": 185
+        },
+        {
+          "requested": 28.2,
+          "actual": 28.2,
+          "range": 244
+        },
+        {
+          "requested": 31.6,
+          "actual": 31.6,
+          "range": 248
+        }
+      ],
+      "bytes": 7538465,
+      "sha256": "4992841fe7526d3036ca9592a2b2c1eddc09cc3f6a9c976d6e064d236527a254"
+    },
+    {
+      "filename": "FocalRoom-宣传片-竖版-1080x1920.mp4",
+      "width": 1080,
+      "height": 1920,
+      "duration": 32,
+      "frameRate": "30/1",
+      "videoCodec": "h264",
+      "pixelFormat": "yuv420p",
+      "colorRange": "tv",
+      "colorSpace": "bt709",
+      "audioCodec": "aac",
+      "audioChannels": 2,
+      "audioSampleRate": "48000",
+      "fullDecodePassed": true,
+      "browserPlaybackPassed": true,
+      "seeks": [
+        {
+          "requested": 0.2,
+          "actual": 0.2,
+          "range": 247
+        },
+        {
+          "requested": 4.95,
+          "actual": 4.95,
+          "range": 169
+        },
+        {
+          "requested": 7.4,
+          "actual": 7.4,
+          "range": 247
+        },
+        {
+          "requested": 10.95,
+          "actual": 10.95,
+          "range": 190
+        },
+        {
+          "requested": 16.95,
+          "actual": 16.95,
+          "range": 180
+        },
+        {
+          "requested": 22.95,
+          "actual": 22.95,
+          "range": 180
+        },
+        {
+          "requested": 28.2,
+          "actual": 28.2,
+          "range": 246
+        },
+        {
+          "requested": 31.6,
+          "actual": 31.6,
+          "range": 247
+        }
+      ],
+      "bytes": 6007734,
+      "sha256": "0c5f572fe6fb4db6d460ecb0dcf47104eaa0f4a768fe4600c96146a70e2c2ebc"
+    }
+  ],
+  "logoMatchesProduct": true,
+  "posters": [
+    {
+      "name": "FocalRoom-海报-竖版-2160x3240.png",
+      "dimensions": [
+        2160,
+        3240
+      ],
+      "bytes": 6353042,
+      "sha256": "0415c29e84f54bc140e487f3ae2f0c8169f6fc7ac333d0454dca006785d206bf"
+    },
+    {
+      "name": "FocalRoom-海报-横版-3840x2160.png",
+      "dimensions": [
+        3840,
+        2160
+      ],
+      "bytes": 10392042,
+      "sha256": "2aaf6d642d7a827a22d8192f64f5c56b96136e30a248041ffa125e8eaf29995d"
+    },
+    {
+      "name": "FocalRoom-海报-竖版-1080x1620.jpg",
+      "dimensions": [
+        1080,
+        1620
+      ],
+      "bytes": 282322,
+      "sha256": "c81bbfdf657c8efd206478792b774484c00009c0b25ef5ce6d95e9359142248f"
+    },
+    {
+      "name": "FocalRoom-海报-横版-1920x1080.jpg",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "bytes": 394220,
+      "sha256": "dbdb1a6010d4c1a5d6d0eff9a88aef7dfb253a9d9edc3351a2834fa0e1be7396"
+    }
+  ],
+  "audioSignal": {
+    "meanDb": -20.1,
+    "peakDb": -7.5,
+    "clippingDetected": false,
+    "originalLocallyComposed": true
+  },
+  "visualQa": {
+    "posterTypographyReviewed": true,
+    "keyframesReviewed": 12,
+    "encodedFramesReviewed": 4,
+    "productScreenshotsPreserveAspectRatio": true
+  }
+}

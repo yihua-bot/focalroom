@@ -1,0 +1,491 @@
+{
+  "head": "9795d40616d59801300bb1b4c042db441d2866f8",
+  "state": "uncommitted-working-tree",
+  "files": [
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/migrations/0019_subscriptions.sql",
+      "sha256": "70e183858a59c29aa7dedc15521d38195a75b5ca140e6095a74a80132d85fc9e",
+      "bytes": 2040
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/auth.ts",
+      "sha256": "51197d6efe6d3d1d05d18451d36fc59d1ea808c8b34c34e96ccfc28981642a49",
+      "bytes": 6174
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/billing-gateway.ts",
+      "sha256": "42ad924893c14151dec3c432cb5302b56e7819f4c6e919bf135b072db690b2f2",
+      "bytes": 10439
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/billing.ts",
+      "sha256": "c87b5bca04e38eb606d49b4c239c86a3fbc9158271b47d2b5135d1f12d2f5ce7",
+      "bytes": 13535
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/database.ts",
+      "sha256": "c34f7fe8ea740f1cdfe89c17a1df174eb4e163b5bd1a1e5d9d579bad40fb9681",
+      "bytes": 3612
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/hosted-ai.ts",
+      "sha256": "841e3b5ed9f59b322d3a4d0d6f9a7f55a472f60ef68ac118721be23d22776275",
+      "bytes": 15197
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/server.ts",
+      "sha256": "b753edc6dea78b15be91c9b927b4f2058ae15b08f440a490c02fa417aafa595d",
+      "bytes": 17987
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/src/service.ts",
+      "sha256": "59789c95fb786527317d4a704f69c52424f031e6e3cc49487cc2fe6de6253fb7",
+      "bytes": 47400
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/test/account-security.mjs",
+      "sha256": "942b562b152b6fa13be1e4aa99eb8ddbc77dcb6d9d3ccabbf7cb157c6fc5b666",
+      "bytes": 10741
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/test/billing.mjs",
+      "sha256": "e1da42ef5c2ba55232160539868d11d367c276ae3ed6608e936f180c986ff387",
+      "bytes": 14968
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/test/min_privilege.mjs",
+      "sha256": "f6ad9895ef0eebfc9c05b8b3d817f05c6dece5205cffeb3df7db57d9ce8ce28e",
+      "bytes": 4554
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/api/test/run.mjs",
+      "sha256": "2b7786e6ef4ee7331dae0a0814d87a1c8e4d327522f22af1f460efa8b8eab45f",
+      "bytes": 2687
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/SharedApp.tsx",
+      "sha256": "40385f21b2a43b12e93f81c6e0dbf69771784134d67e0394783dbdb03b14efac",
+      "bytes": 9598
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/locales/en.json",
+      "sha256": "b4ead29eb5bd20280d1ef9440b24dcea64b2b505b268611bbb2c192faeebaf3b",
+      "bytes": 7808
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/locales/ja.json",
+      "sha256": "9f2fadaf17fea4976f3acf0833ecfb685af30003db249ef9f76391ba37ce70e1",
+      "bytes": 9424
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/locales/ko.json",
+      "sha256": "e2628203a4a7d7dffa201548912883cdd3b86ab5a93accc6affe1f42e34d27f5",
+      "bytes": 8869
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/locales/zh.json",
+      "sha256": "a90f50de2c8aabe1c26b76343eeeee22b1cef9d9080e853028fd5127fbcd5af5",
+      "bytes": 7541
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/main.tsx",
+      "sha256": "9e42705cd756922c904496769f627775c149441dda293b7e84fd13f7266ceaa3",
+      "bytes": 499
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/shared-api.ts",
+      "sha256": "70f4abdf89c1dca23013ba26e52e884ab470fb2c9a7adff5c236e5e5e42852b4",
+      "bytes": 3624
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/shared/BillingDialog.test.tsx",
+      "sha256": "b6061ef733492c5eec116d1ac6750c67adfeef99111e34cf5881b3e4cba95736",
+      "bytes": 773
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/shared/BillingDialog.tsx",
+      "sha256": "9336c6287f21fa0f53a38d5fe936bd002a3fc65c0785a2d51a46eda76d846678",
+      "bytes": 2164
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/shared/ProjectHome.tsx",
+      "sha256": "38110682f58b84daa92eda855cb9c77901aac940b84d010f5bc70f5ed812dad5",
+      "bytes": 7780
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/shared/billing.css",
+      "sha256": "cde66fb34331e851a2fe0be9a673854579ac078e12243e86d677977df708d0d1",
+      "bytes": 2159
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/e2e/account-experience.spec.ts",
+      "sha256": "9e8a5df85c5319cda822ef92b2787704767e03493a13b25b8b41f79a5a2448b0",
+      "bytes": 8127
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/e2e/account-fixture.ts",
+      "sha256": "c051eaa773144216f109bde8d815204785ccb2380cf35ee317192cb9b8e7dae2",
+      "bytes": 3303
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/e2e/agent-core.spec.ts",
+      "sha256": "742332b1d8a572b8a8e1021c58c0e62c8838293a5a0a5404711e098fa84bf092",
+      "bytes": 9711
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/e2e/beta-journey.spec.ts",
+      "sha256": "ee06de34eadf1a81009412428c0a720c2c9d0a0315e3cef06206cb3428e2c4b9",
+      "bytes": 9225
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/e2e/diagnostics.spec.ts",
+      "sha256": "27488616102cf200cdd8a38f955d17d8d05366a202ffe442be765c17deb909ed",
+      "bytes": 4722
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/e2e/v2-proposals.spec.ts",
+      "sha256": "78562137ca3d4d05f6eb4d33b71084029d2233cee9abb823e2f87b23ef38c756",
+      "bytes": 5944
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/e2e/v3-workspace.spec.ts",
+      "sha256": "347917c0b3ff11848e789aea5de8e7388bf56e3350b370afb29bfd0c08f19115",
+      "bytes": 9711
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/ops/shared/compose.yaml",
+      "sha256": "c539eee221fad1705d7214069be5ef41ff050d07788e6d53c607d95450643a8a",
+      "bytes": 3241
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/ops/shared/environment.example",
+      "sha256": "7065cb3bb62ab66646d3be5a452ea9338d2332b8ab59876c7ddf33031cec540b",
+      "bytes": 1014
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/packages/contracts/src/billing.ts",
+      "sha256": "60508fb0ed0398dbbc5e1de34879fdd6d0754a084e1ef80738a8ef725a458eae",
+      "bytes": 1970
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/packages/contracts/src/index.ts",
+      "sha256": "388c19b390874d44c942d8f4b43653f70ab0b764e86fd08fc5502ddf0525adfb",
+      "bytes": 116
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/playwright.account.config.ts",
+      "sha256": "f0e7c75fc9094594a84c14534641b37c403260ccd3eb8a0ec0128dc4b9f2340a",
+      "bytes": 696
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0028_canvas_history_states.sql",
+      "sha256": "d05062a59e94d1709427234680d84abff86c4b59495579657b3fe0d6a583dcff",
+      "bytes": 1017
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/canvas_tools_tests.rs",
+      "sha256": "455770cc0ddd7d6bed3a8e068125567789075601b5a95592d3a64e2c3853ed2b",
+      "bytes": 6144
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/policy.rs",
+      "sha256": "be5e19343074b65e9b2ffdd107477c5ae2caebb3f6e2f8a414bed22c57df05a0",
+      "bytes": 8063
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/tools.rs",
+      "sha256": "5519cc8ff277da2b6a33a7d6c0681ab361472f571d3e02f25f1753c3036b770a",
+      "bytes": 37034
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/billing.rs",
+      "sha256": "723eacf5986fe392fe57073ddfb50a0b270a791f7d1c85f2e2d91f8d7f785f56",
+      "bytes": 1845
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/bin/m1-harness.rs",
+      "sha256": "f8991d4a1937b4ac697e5d8a02565a492de19fcbb5959bb51ddc974e3de51ca7",
+      "bytes": 29079
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/canvas.rs",
+      "sha256": "4d130988f0d7ca22199cfe72e43bdb41bf1caa91ff6cfb069effc2c97f623f4c",
+      "bytes": 67264
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/canvas_history_tests.rs",
+      "sha256": "ee8e5956d9fac86e4ca5d16e818ccd3592d50755c939fc3df2553709fa9c02d9",
+      "bytes": 9238
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/cloud_auth.rs",
+      "sha256": "68a34a171146aa226cc3de86e8f6dd8f3f3ca6295b3c8e6dcf5f7a832557dc23",
+      "bytes": 21823
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/commands.rs",
+      "sha256": "64ed25848222c2a789102e7662fe97106ce36568d566da0d0f70b70231591aeb",
+      "bytes": 31012
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/lib.rs",
+      "sha256": "dc084c561745829831d87c9419f5e17a6b2c7099b3f767cd7a8e3369de597d53",
+      "bytes": 8924
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/product_links.rs",
+      "sha256": "7b30ba4def6e19c6c7b586041482ee96ac51b15eddc1729b63b73c7cee5494fd",
+      "bytes": 2065
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/diagnostics.rs",
+      "sha256": "cddcb16f8e0dde98d7f1f992f5e9100ee5c47890222fd8a2c25e6d13fdd3b382",
+      "bytes": 10619
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/local_core.rs",
+      "sha256": "5fda42d1b18fe3ac55308e6df731c6f443555785de94b949a38d8c8b011bee14",
+      "bytes": 22460
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/v2_foundation.rs",
+      "sha256": "537e52b3bde0078fe9e08266680721a8c0528e00e84b89b2043d0afb1818b7b6",
+      "bytes": 4345
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/App.tsx",
+      "sha256": "ec5cef696ea54587dba4b88632d66495b8e89b4f0c9356554759787ae02eb444",
+      "bytes": 1198
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/app/AppController.tsx",
+      "sha256": "3a0afe8dd1cdbb061b4daa81e62f99f7ca8068f8134b070775231096cab887b3",
+      "bytes": 23873
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/app/SideNav.tsx",
+      "sha256": "2a5d72b30561edf20574587f63f41ce1a628d30312ce3a3a1172c016c37d1d61",
+      "bytes": 4164
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/app/Workspace.tsx",
+      "sha256": "4b8f71cba2bb7f4abde082578fa1d28e70441287bb71109fa82f2fd1f74320cf",
+      "bytes": 9901
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/components/shared/Modal.tsx",
+      "sha256": "50be3d9c249ea25bb2a83842a54ff2d80b070d6d8bc284a58b278731f53b1370",
+      "bytes": 1561
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/domain/billing.ts",
+      "sha256": "440c0766f2387cf58b92f5225db987b8035b4b4e22b0733358053582d744299d",
+      "bytes": 504
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/domain/canvas.ts",
+      "sha256": "bdf0db912f362382eefd39c01ee7dfab1ecbb48ce7d73236cb612df1a2c2a8bd",
+      "bytes": 2563
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/domain/models.ts",
+      "sha256": "3a8786687687ef0fd993463ee8d9aeb4f34a899ae882f5a3a670878ea2e737a8",
+      "bytes": 4240
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/ai-editor/AIPanel.test.tsx",
+      "sha256": "cf49a14c85dd3f92450531a99f0ba4d287eccdad40ca0f4272cf7c861ab8bae7",
+      "bytes": 10880
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/ai-editor/AIPanel.tsx",
+      "sha256": "47434c859186b6bc2fd6f6ace0ce8df7f75719fe6d4cb76f72f345686b1b0143",
+      "bytes": 14984
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/canvas/NarrativeCanvas.test.tsx",
+      "sha256": "5ecb637c31311dcc49f79bfb81dbf83a806c8bbc61865c743e40ece9c59124a9",
+      "bytes": 6483
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/canvas/NarrativeCanvas.tsx",
+      "sha256": "4bf90553abf9b99689681250f4d9727fd8a1aaa5abec2db4959ac2248eca0d08",
+      "bytes": 26671
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/cloud-login/AccountProvider.test.tsx",
+      "sha256": "d26f133c9f109c0ac3bf8ebf6ab161481845ee2dd5d15a7bf8b60529bd6628d2",
+      "bytes": 4116
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/cloud-login/AccountProvider.tsx",
+      "sha256": "76fb534372a90bdffaf1d2f244b2637097e8839797074d71441074fac7210724",
+      "bytes": 3323
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/cloud-login/CloudLoginView.test.tsx",
+      "sha256": "7ba8d8591910df76baab8cc25d96ca82d9d055deafe422f2d7ac4c2d8deadefa",
+      "bytes": 6081
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/cloud-login/CloudLoginView.tsx",
+      "sha256": "a6eebd4ec9a66658143111f5e349439cc42199b8d1375f0f1d3373111ef16f89",
+      "bytes": 13714
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/cloud-login/LoginDialog.tsx",
+      "sha256": "cdcc603530cb3cbde697bbe3af85471a8997504c92f6ad032724e9820b1f2b3b",
+      "bytes": 5991
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/cloud-login/useCloudStatus.ts",
+      "sha256": "5f5914136e6cc602ea0f447087aaa60fbae221da0f6931b3c68573ce9f2e1f85",
+      "bytes": 1293
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/diagnostics/DiagnosticsDialog.test.tsx",
+      "sha256": "b94a9fd27554f72bffd6c0b147fb6a3c3b76ec3738d385f5b681860c10a84c5c",
+      "bytes": 3653
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/diagnostics/DiagnosticsDialog.tsx",
+      "sha256": "fbb50f52870cbca42e69bd27e8ffc5df6fce63a45cbcabc8bc863603161bb8d6",
+      "bytes": 4574
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/export/ExportDialog.tsx",
+      "sha256": "77dc76bd2aef701b787aab5f6edee6cce7a80dcd8c04be2f06dfb4c44a621317",
+      "bytes": 2632
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/export/SharingControls.test.tsx",
+      "sha256": "5f33ca9d304e969742ffc5c1d40165bcf561f35490cea286e78305334ba8ef95",
+      "bytes": 2889
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/export/SharingControls.tsx",
+      "sha256": "8fb85c6cb80ad384f8e36f19aea5645d1e82fcdabc0e078b64966e224eb0d6cc",
+      "bytes": 4196
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/photo-import/ImportDialog.tsx",
+      "sha256": "f66361d7576f83534a5866c77cdc4bcc12d718adf5cc8625b3fa23151e320573",
+      "bytes": 3835
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/project/ActivityDialog.tsx",
+      "sha256": "a887366dbdadc65d95f37d306131d6708667eb4148a582e168f539aae43a51c8",
+      "bytes": 3772
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/project/ProjectList.tsx",
+      "sha256": "7916f8a2920a7822df37878f5adfe9496fa3edfa212519fe8078f73c48f003dd",
+      "bytes": 3387
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/proposals/ProposalsPanel.test.tsx",
+      "sha256": "bb28b2a453264f866f628110d57775755f79337ec46cf363485933d0903399b6",
+      "bytes": 4221
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/proposals/ProposalsPanel.tsx",
+      "sha256": "3f0c761e8084cbf70d8c293bc582414a63ee7b3b8dbf2511b9120188d0ca6f22",
+      "bytes": 4629
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/subscription/SubscriptionDialog.test.tsx",
+      "sha256": "115c807a4a8230e533611ddefa56f12cd1dfa24686423837f92d0e58643d0a35",
+      "bytes": 6520
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/subscription/SubscriptionDialog.tsx",
+      "sha256": "69089f8759d253581163e3f6889bc8d43bd5e039bb799e53c23eed0390f985cb",
+      "bytes": 9298
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/subscription/copy.ts",
+      "sha256": "3e939a99213a90828d3d4ef62961259f87877f0325e0a2eefed5da9dbe0ae4d1",
+      "bytes": 8395
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/subscription/subscription.css",
+      "sha256": "97738480c61aca3b2156abef44e53234a721297d842096f747febc8289422d39",
+      "bytes": 4197
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/i18n/locales/en.json",
+      "sha256": "36c9a57015997d3679fb48c84f39e2dd0587c35867c3aa1be8f15ccae24b20b0",
+      "bytes": 10870
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/i18n/locales/ja.json",
+      "sha256": "049d18fe010134ebe2322d5b303297ba8ee324ec366c2184f05098adce913f98",
+      "bytes": 13134
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/i18n/locales/ko.json",
+      "sha256": "19ae2ae5acee0a3dbd4e2faabf972eab17e2323d8f3b9967bc576da798d42b88",
+      "bytes": 12429
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/i18n/locales/zh.json",
+      "sha256": "bf43464944ce8a0c9ba782cea57abbfd56461b3d40b8c6aa5be1c0131fa5f9d0",
+      "bytes": 10551
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriBillingRepository.ts",
+      "sha256": "bce97cfabfd96cc658722dd90ac73bfb32bfb7450166073bf52beb68e5efdd9c",
+      "bytes": 724
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriCanvasRepository.ts",
+      "sha256": "b96e966e6d240d87368d9e7b10ffe3e3f25ac6ff0eb61d1bd0cceb5e8f3ff573",
+      "bytes": 5235
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriCloudAuthRepository.ts",
+      "sha256": "7da23266b1c9dd85813d7801d1ad74eca92b244ed115bd00ebf684aa1aa8f805",
+      "bytes": 1402
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriRepository.ts",
+      "sha256": "a26b521753f8f1abd5f606eb5da224c690e9e4fd45921d6956b1e4d47000e4af",
+      "bytes": 12983
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriWorkspaceRepository.test.ts",
+      "sha256": "32322a60aab2dd3c37b66e8d8d1123035bc23dde3013bc56866f19d906eee733",
+      "bytes": 4184
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/tauriCommand.ts",
+      "sha256": "0406c62d560b5d0c1ee5eb029d2a4a44181018552986c55a1cf8d27acbcbfc96",
+      "bytes": 647
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/userFacingError.test.ts",
+      "sha256": "25ea14de554b994baf8cd34cabb62dadfd78752d4be703e900fce5453589c28a",
+      "bytes": 700
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/userFacingError.ts",
+      "sha256": "afc0ec4253bb5934de1ca963c39c268391d4ec2c15e807240048e0077eb7a5c0",
+      "bytes": 1264
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/styles/app.css",
+      "sha256": "01691bcc1dee48f5419b84ef2a402487def447efeed7ca7b9b50e63a46fa58a0",
+      "bytes": 56204
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/test/App.test.tsx",
+      "sha256": "9845be89168c185be583430b25d0e60c747861a1fe7266b59b36433431cd85ca",
+      "bytes": 7931
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/tsconfig.node.json",
+      "sha256": "e05cb6d9c9386b9411d2f184bef46e8270a03b5f8a5322c9570f2b68d1ecaa5c",
+      "bytes": 375
+    }
+  ]
+}

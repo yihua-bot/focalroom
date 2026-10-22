@@ -1,0 +1,74 @@
+{
+  "baseCommit": "9795d40616d59801300bb1b4c042db441d2866f8",
+  "committed": false,
+  "files": [
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/e2e/v3-workspace.spec.ts",
+      "sha256": "347917c0b3ff11848e789aea5de8e7388bf56e3350b370afb29bfd0c08f19115"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0028_canvas_history_states.sql",
+      "sha256": "d05062a59e94d1709427234680d84abff86c4b59495579657b3fe0d6a583dcff"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/canvas_tools_tests.rs",
+      "sha256": "455770cc0ddd7d6bed3a8e068125567789075601b5a95592d3a64e2c3853ed2b"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/policy.rs",
+      "sha256": "be5e19343074b65e9b2ffdd107477c5ae2caebb3f6e2f8a414bed22c57df05a0"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/agent/tools.rs",
+      "sha256": "5519cc8ff277da2b6a33a7d6c0681ab361472f571d3e02f25f1753c3036b770a"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/bin/m1-harness.rs",
+      "sha256": "f8991d4a1937b4ac697e5d8a02565a492de19fcbb5959bb51ddc974e3de51ca7"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/canvas.rs",
+      "sha256": "4d130988f0d7ca22199cfe72e43bdb41bf1caa91ff6cfb069effc2c97f623f4c"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/src/canvas_history_tests.rs",
+      "sha256": "ee8e5956d9fac86e4ca5d16e818ccd3592d50755c939fc3df2553709fa9c02d9"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/diagnostics.rs",
+      "sha256": "cddcb16f8e0dde98d7f1f992f5e9100ee5c47890222fd8a2c25e6d13fdd3b382"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/local_core.rs",
+      "sha256": "5fda42d1b18fe3ac55308e6df731c6f443555785de94b949a38d8c8b011bee14"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src-tauri/tests/v2_foundation.rs",
+      "sha256": "537e52b3bde0078fe9e08266680721a8c0528e00e84b89b2043d0afb1818b7b6"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/domain/canvas.ts",
+      "sha256": "bdf0db912f362382eefd39c01ee7dfab1ecbb48ce7d73236cb612df1a2c2a8bd"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/canvas/NarrativeCanvas.test.tsx",
+      "sha256": "5ecb637c31311dcc49f79bfb81dbf83a806c8bbc61865c743e40ece9c59124a9"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/features/canvas/NarrativeCanvas.tsx",
+      "sha256": "4bf90553abf9b99689681250f4d9727fd8a1aaa5abec2db4959ac2248eca0d08"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriCanvasRepository.ts",
+      "sha256": "b96e966e6d240d87368d9e7b10ffe3e3f25ac6ff0eb61d1bd0cceb5e8f3ff573"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/services/TauriWorkspaceRepository.test.ts",
+      "sha256": "32322a60aab2dd3c37b66e8d8d1123035bc23dde3013bc56866f19d906eee733"
+    },
+    {
+      "path": "开发文档/contact-sheet-ai-demo/between-frames/src/styles/app.css",
+      "sha256": "e842b734fdfc7f02cc6842fdb43e4114c2283c7f486262f9b82ecbee8a9f2d91"
+    }
+  ]
+}

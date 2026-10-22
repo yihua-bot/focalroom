@@ -32,6 +32,9 @@ pub struct CommandContext {
     human: bool,
 }
 impl CommandContext {
+    pub(crate) fn permits_human(&self, project: &str) -> bool {
+        self.human && self.project == project
+    }
     pub fn human(project: &str) -> Self {
         Self {
             project: project.into(),

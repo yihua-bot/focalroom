@@ -1,0 +1,54 @@
+{
+  "duration": 32,
+  "framesPerSecond": 30,
+  "errors": [],
+  "scenes": [
+    {
+      "start": 0,
+      "end": 4.8,
+      "title": "好照片，\n不止一张。",
+      "desc": "那些拍下的瞬间，值得成为作品。",
+      "label": "PHOTOGRAPHS → YOUR BODY OF WORK"
+    },
+    {
+      "start": 4.8,
+      "end": 10.8,
+      "title": "让想法，\n先被听见。",
+      "desc": "说出主题、用途与想留下的感觉。",
+      "label": "01 / AI 智能选片",
+      "key": "ai"
+    },
+    {
+      "start": 10.8,
+      "end": 16.8,
+      "title": "选得从容，\n留下喜欢。",
+      "desc": "比较、标记、保留。\n把注意力，还给照片。",
+      "label": "02 / 选片工作台",
+      "key": "work"
+    },
+    {
+      "start": 16.8,
+      "end": 22.8,
+      "title": "顺序里，\n有你的表达。",
+      "desc": "把独立的瞬间，\n编排成一个完整的故事。",
+      "label": "03 / 作品序列",
+      "key": "sequence"
+    },
+    {
+      "start": 22.8,
+      "end": 27.8,
+      "title": "一起看见，\n新的可能。",
+      "desc": "把评论留在照片旁，\n让讨论，围绕作品展开。",
+      "label": "04 / 协作审稿",
+      "key": "review"
+    },
+    {
+      "start": 27.8,
+      "end": 32,
+      "title": "从照片，\n到你的作品。",
+      "desc": "AI 选片 · 作品编排 · 协作审稿",
+      "label": "FOCALROOM"
+    }
+  ],
+  "generatedAt": "2026-10-22T04:25:25.935Z"
+}

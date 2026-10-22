@@ -1,0 +1,170 @@
+{
+  "verifiedAt": "2026-10-22T05:06:10.110992+00:00",
+  "baseHead": "9795d40616d59801300bb1b4c042db441d2866f8",
+  "rust": {
+    "suites": 37,
+    "passed": 267,
+    "failed": 0,
+    "ignored": 15
+  },
+  "frontend": {
+    "passed": 298,
+    "files": 47
+  },
+  "browser": {
+    "passed": 2,
+    "roles": "SIMULATED",
+    "backend": "real Rust Store",
+    "fixturePhotos": 200,
+    "restartsVerified": true,
+    "originalSha256Preserved": true,
+    "lostResponseAfterRealCommitVerified": true,
+    "conflictInputPreserved": true,
+    "noticeBoundsVerified": true
+  },
+  "checks": {
+    "typecheck": true,
+    "lint": true,
+    "clippyStrict": true,
+    "fmt": true,
+    "workspaceBuild": true,
+    "existingContracts": true,
+    "sharedCanvasExamples": 15
+  },
+  "externalActions": {
+    "productionDatabase": false,
+    "userLibrary": false,
+    "modelCalls": false,
+    "paymentCalls": false,
+    "deploy": false,
+    "gitCommitOrPush": false
+  },
+  "sources": [
+    {
+      "path": "src-tauri/migrations/0029_canvas_command_receipts.sql",
+      "sha256": "d74b13fe2357675f7cce6d00c8c597f23ad1d9b1094e08d21b720b442b587e47"
+    },
+    {
+      "path": "src-tauri/src/canvas_commands.rs",
+      "sha256": "5ed3d61b903e3baff115daed7dd4c81c824ad3a1b3a4648c8916ae4d0cd9beb7"
+    },
+    {
+      "path": "src-tauri/src/canvas_command_tests.rs",
+      "sha256": "98efb7fc96b681c3137497697c86b34992f2bcac2a23656ea769dab93675b440"
+    },
+    {
+      "path": "src-tauri/src/canvas.rs",
+      "sha256": "2c2351380d01a3eb13516d8c9ee9ce52db738e12b5f465bb48c82cb757cc93c7"
+    },
+    {
+      "path": "src-tauri/src/command_handler.rs",
+      "sha256": "f2898b87378d4d56153bcf9fa8168f684ed0b01f743ec0d8ef1daac60094f9e8"
+    },
+    {
+      "path": "src-tauri/src/commands.rs",
+      "sha256": "55a82faa8c07866b063a6cd1c7d7ba798eda172cc078407921cc70dd8bec1fc2"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "sha256": "562e7a3fa69d8473342064b5f4bc94e0e2103ed0edca446f3a72b92107167b5d"
+    },
+    {
+      "path": "src-tauri/src/bin/m1-harness.rs",
+      "sha256": "0e087b72c9b47912d11122fa2728aa78dcc4390eec49b7c049d302a4d0b76f14"
+    },
+    {
+      "path": "src-tauri/tests/local_core.rs",
+      "sha256": "9f59c06a6999a2bf33aee830de3d327b38e2fd6de0e432895f579ceaae67ff6e"
+    },
+    {
+      "path": "src-tauri/tests/diagnostics.rs",
+      "sha256": "aeb111d4e1094ce1a4d3c50daa6d465082bac95eb2a070889dba17044bfb5e2e"
+    },
+    {
+      "path": "src-tauri/tests/v2_foundation.rs",
+      "sha256": "98f459bc5ff34367e6f01a08025dab888f818ef5c40e492ee89e12961ba71c3a"
+    },
+    {
+      "path": "contracts/canvas-command-examples.json",
+      "sha256": "b3a41d7907f24f1b529c484a48cd19461301fafd8f2ba5b824c60b45999256e2"
+    },
+    {
+      "path": "packages/contracts/src/canvas.ts",
+      "sha256": "6ca16cc1b37d443b4e44f64431fa02764d5d645d27abbb5bbb77ef03b1c733ce"
+    },
+    {
+      "path": "packages/contracts/src/canvas.test.ts",
+      "sha256": "c0cd078e52c4622e35962718a1740cb646ecd5b930865d00ff9452bd8571ef75"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "c1aca7741325921eb12d1564b279d2d1ac00de94e1349e3072dce838321541ca"
+    },
+    {
+      "path": "src/domain/canvasCommands.ts",
+      "sha256": "a6fa94864c718306121a5471e69eb39c6017fc94556254051416b6557dfbe598"
+    },
+    {
+      "path": "src/domain/canvas.ts",
+      "sha256": "fea2b6befa1c6413956ae1f288d7b59407d5c92aa3a74aabc980bfaa49b86091"
+    },
+    {
+      "path": "src/services/CanvasCommandClient.ts",
+      "sha256": "6c64f9400dd7e91ec878378cacb2246b0c7cd9db8e6e2edf08e7954c30b12120"
+    },
+    {
+      "path": "src/services/CanvasCommandClient.test.ts",
+      "sha256": "2dc58742f256282ceda21f8cc3eadee7e8e9d8e7833e04b3d24af47faf85eeb4"
+    },
+    {
+      "path": "src/services/TauriCanvasRepository.ts",
+      "sha256": "c5da42e8a65d11d25b07f91dbe8ea3570321c7f5eb2f34eec736c8f060cbba7e"
+    },
+    {
+      "path": "src/services/TauriWorkspaceRepository.test.ts",
+      "sha256": "2dc834ee0ed7e0ef16878b6714a940160e04bf0dbbb0d0c0a3835ac392d1da4a"
+    },
+    {
+      "path": "src/features/canvas/NarrativeCanvas.tsx",
+      "sha256": "c0124eac50551cff8a7cc9823e7a6abc4ca5230f06c92336c4ea168db2d4365a"
+    },
+    {
+      "path": "src/features/canvas/NarrativeCanvas.test.tsx",
+      "sha256": "efb43aa94b28fe4f8f14db6081291210f79b2586d410f2d4ee38d3d0da95daa0"
+    },
+    {
+      "path": "src/styles/app.css",
+      "sha256": "77784e160cd9f7081074a5ec4cd28b0f68235a326bfaca102ef488573f1ceb63"
+    },
+    {
+      "path": "e2e/v3-workspace.spec.ts",
+      "sha256": "40838db63448e8fdaa4e13c0b075c74a1056e2b8b0c2655aadffbb11a56d02f3"
+    }
+  ],
+  "harness": {
+    "path": "src-tauri/target/debug/m1-harness",
+    "sha256": "1b80cefae8efd6cc8a35b139ba69d058fba59e0c4f9af7ba3eaf51a4c5894fc9"
+  },
+  "screenshots": [
+    {
+      "path": "canvas-history.png",
+      "sha256": "0e46321e9ec471d897a0c6c93b9e954a5521b2da5acb9a33aee719220e841863"
+    },
+    {
+      "path": "conflict-preserves-input.png",
+      "sha256": "48907d41200db09c4ad91e828830992f0c635654a4df07acbe6274b5a77a0fc6"
+    },
+    {
+      "path": "pending-after-restart.png",
+      "sha256": "385b57aa26930d1f03e06d2270a84a1eb7b6661674df2203820c6f4d8deaae9e"
+    },
+    {
+      "path": "publication.png",
+      "sha256": "cab49ac400ec993c168c2fa14f2580242b9481d4a23e246d5ebb7a084261687b"
+    },
+    {
+      "path": "recovered.png",
+      "sha256": "2f99d19aa6e2a8788d3aa4a400b976a6fe46ef47b6841ad311a66d499014a478"
+    }
+  ]
+}

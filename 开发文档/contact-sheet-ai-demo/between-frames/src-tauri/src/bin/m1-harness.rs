@@ -9,6 +9,8 @@ use serde_json::{Value, json};
 use std::{collections::HashMap, path::PathBuf};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+#[path = "../harness_canvas_provider.rs"]
+mod canvas_provider;
 #[path = "../harness_fixtures.rs"]
 mod fixtures;
 
@@ -37,6 +39,25 @@ impl Harness {
         let revision = args["expectedRevision"].as_i64().unwrap_or(0);
         let photo = args["photoId"].as_str().unwrap_or("");
         let value = match command {
+            "canvas_comparison" => json!(
+                self.store
+                    .canvas_comparison(id, string(args, "boardId")?)
+                    .await?
+            ),
+            "canvas_execute" => {
+                json!(
+                    self.store
+                        .execute_canvas(serde_json::from_value(args["request"].clone()).map_err(
+                            |error| AppError::new("VALIDATION_ERROR", error.to_string())
+                        )?)
+                        .await?
+                )
+            }
+            "canvas_snapshot" => json!(
+                self.store
+                    .canvas_snapshot(id, string(args, "boardId")?)
+                    .await?
+            ),
             "canvas_list_boards" => json!(self.store.list_boards(id).await?),
             "canvas_create_board" => {
                 json!(self.store.create_board(id, string(args, "title")?).await?)
@@ -98,6 +119,40 @@ impl Harness {
                     )
                     .await?
             ),
+            "canvas_redo" => json!(
+                self.store
+                    .redo_canvas(
+                        id,
+                        &between_frames_lib::canvas::RedoCanvasCommand {
+                            board_id: string(args, "boardId")?.to_owned(),
+                        }
+                    )
+                    .await?
+            ),
+            "canvas_adopt_board_draft" => {
+                self.store
+                    .adopt_board_draft(
+                        id,
+                        &between_frames_lib::canvas::AdoptBoardDraftCommand {
+                            board_id: string(args, "boardId")?.to_owned(),
+                        },
+                    )
+                    .await?;
+                Value::Null
+            }
+            "canvas_group_nodes" => json!(self.store.group_nodes_cmd(id, &payload(args)?).await?),
+            "canvas_resize_node" => {
+                let cmd = serde_json::from_value(args.clone())
+                    .map_err(|error| AppError::new("VALIDATION_ERROR", error.to_string()))?;
+                self.store.resize_node(id, &cmd).await?;
+                Value::Null
+            }
+            "canvas_set_node_locked" => {
+                let cmd = serde_json::from_value(args.clone())
+                    .map_err(|error| AppError::new("VALIDATION_ERROR", error.to_string()))?;
+                self.store.set_node_locked(id, &cmd).await?;
+                Value::Null
+            }
             "pub_list" => json!(self.store.list_publications(id).await?),
             "pub_pages" => json!(
                 self.store
@@ -513,8 +568,10 @@ impl Harness {
                 between_frames_lib::command_handler::CommandHandler::new(&self.store)
                     .recover_agents()
                     .await?;
-                self.agent =
-                    between_frames_lib::agent::runtime::AgentEngine::new(self.store.clone());
+                self.agent = between_frames_lib::agent::runtime::AgentEngine::with_provider(
+                    self.store.clone(),
+                    std::sync::Arc::new(canvas_provider::CanvasScenarioProvider),
+                );
                 json!(true)
             }
             "test_fixture_info" => fixtures::info(&self.root)?,
@@ -589,7 +646,10 @@ async fn main() {
         .unwrap();
     let mut harness = Harness {
         cloud: None,
-        agent: between_frames_lib::agent::runtime::AgentEngine::new(store.clone()),
+        agent: between_frames_lib::agent::runtime::AgentEngine::with_provider(
+            store.clone(),
+            std::sync::Arc::new(canvas_provider::CanvasScenarioProvider),
+        ),
         store,
         root,
         imports: Default::default(),

@@ -57,6 +57,42 @@ impl CloudAuth {
         let token = self.bearer(&self.origin).await?;
         self.request("/ai/account", None, Some(&token)).await
     }
+    pub async fn billing_catalog(&self) -> Result<Value> {
+        self.request("/billing/catalog", None, None).await
+    }
+    pub async fn billing_overview(&self) -> Result<Value> {
+        let token = self.bearer(&self.origin).await?;
+        self.request("/billing/overview", None, Some(&token)).await
+    }
+    pub async fn billing_checkout(&self, price_id: &str, request_id: &str) -> Result<Value> {
+        if !price_id.starts_with("price_")
+            || price_id.len() > 200
+            || uuid::Uuid::parse_str(request_id).is_err()
+        {
+            return Err(AppError::new("VALIDATION_ERROR", "请重新选择订阅方案"));
+        }
+        let token = self.bearer(&self.origin).await?;
+        self.request(
+            "/billing/checkout",
+            Some(serde_json::json!({"priceId":price_id,"requestId":request_id})),
+            Some(&token),
+        )
+        .await
+    }
+    pub async fn billing_manage(&self) -> Result<Value> {
+        let token = self.bearer(&self.origin).await?;
+        self.request("/billing/manage", Some(serde_json::json!({})), Some(&token))
+            .await
+    }
+    pub async fn billing_cancel_checkout(&self) -> Result<Value> {
+        let token = self.bearer(&self.origin).await?;
+        self.request(
+            "/billing/cancel-checkout",
+            Some(serde_json::json!({})),
+            Some(&token),
+        )
+        .await
+    }
     pub fn new(origin: &str, namespace: &str, vault: Arc<dyn CredentialStore>) -> Result<Self> {
         let origin = login_guard::trusted_origin(origin)?;
         Ok(Self {
@@ -123,6 +159,27 @@ impl CloudAuth {
             return Err(AppError::new("AUTH_REVOKED", "登录已失效，请重新登录"));
         }
         if !status.is_success() {
+            if path.starts_with("/billing/") {
+                let value: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+                let code = value["error"]["code"].as_str().unwrap_or("");
+                let message = match code {
+                    "BILLING_NOT_AVAILABLE" => "订阅暂未开放",
+                    "BILLING_PRICE_CHANGED" => "订阅方案已更新，请刷新后重试",
+                    "BILLING_SESSION_EXPIRED" => "付款页面已过期，请重新选择订阅",
+                    "ALREADY_SUBSCRIBED" => "你已有订阅，请在管理订阅中调整方案",
+                    "BILLING_CHECKOUT_PENDING" => "请先完成当前付款，再选择其他方案",
+                    "EMAIL_UNVERIFIED" => "请先完成邮箱验证",
+                    _ => "订阅操作未完成，请稍后重试",
+                };
+                return Err(AppError::new(
+                    if code.is_empty() {
+                        "BILLING_UNAVAILABLE"
+                    } else {
+                        code
+                    },
+                    message,
+                ));
+            }
             return Err(AppError::new(
                 "CLOUD_REJECTED",
                 "登录请求未完成，请重新发起",

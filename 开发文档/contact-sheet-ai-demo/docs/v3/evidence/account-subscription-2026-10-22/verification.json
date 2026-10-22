@@ -1,0 +1,50 @@
+{
+  "recordedAt": "2026-10-21T17:10:12.377631+00:00",
+  "baselineHead": "9795d40616d59801300bb1b4c042db441d2866f8",
+  "frontend": {
+    "passed": 290,
+    "failed": 0
+  },
+  "rust": {
+    "passed": 255,
+    "failed": 0,
+    "ignored": 15
+  },
+  "postgresql": {
+    "tests": 88,
+    "passed": 88,
+    "failed": 0
+  },
+  "browser": {
+    "accountJourneysPassed": 3,
+    "regressionJourneysPassed": 4,
+    "accountAndPaymentMode": "SIMULATED; local Rust project Store is real; no external payment, model, or mail calls"
+  },
+  "checks": [
+    "typecheck",
+    "lint",
+    "fmt",
+    "strict clippy",
+    "desktop frontend build",
+    "web build",
+    "contracts"
+  ],
+  "productionDeployment": false,
+  "clientRelease": false,
+  "paidSalesEnabled": false,
+  "businessPrices": "not confirmed; test amounts are not product prices",
+  "logHashes": {
+    "frontend": "31f1a9c633c1f4c28514cb6d28d211d8a9426c44fa8bb2c0573889f6f7ec26a6",
+    "rust": "a6c084a08096265a4cbc4cc33776912b3975d3ec7c7c9bdbe8b491672ca5ebad",
+    "postgresql": "c7ced5dba770ebd17a6d8d2ce86da05b9638c52f2e06a7ad65d4c7e40f80c290",
+    "browser_accounts": "531bc0490031ad3dc70b5710e61e5cd1ee985eff342e39383633327d623a4231",
+    "browser_regression": "5317e3fc9e589ebfdc5c7c26fbee71427f687d7489db4a1e4701bd545fd090a5",
+    "typecheck": "3f04615bb538f00e0881dfdabedddcdea12d85441bc4705dc9db7f61efe13b1b",
+    "lint": "1cdbc38b5dc7e6206b5017e3189306f485b6ece325558dce7b751c6c0d726922",
+    "fmt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "clippy": "bf6f2b2986a73fef72bf56730eec8be42a34b4dd273377166b9e52899822f7e3",
+    "build_desktop_frontend": "6878a487f8fd13c1431ef0868745e6731790fb8cf9348bf2b36fb2f99505db0c",
+    "build_web": "1fbe8042f62fb7c3b257954f6c4777e24555699e95911935e1164bef70722b1e",
+    "contracts": "04daf1240d7e8fb40e328eb5312c5e83d9ed6aa873a4d541a249660fbc6a6d95"
+  }
+}

@@ -18,12 +18,18 @@ impl ProductLink {
 }
 #[tauri::command]
 pub async fn open_product_link(link: ProductLink) -> Result<()> {
+    open_system_url(link.url()).await
+}
+
+/// 调用者须先完成固定目的地验证；不作为 IPC 暴露任意 URL。
+pub(crate) async fn open_system_url(url: &str) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
+        let value = url.to_owned();
         let ok = tokio::task::spawn_blocking(move || {
             std::process::Command::new("/usr/bin/open")
                 .arg("--")
-                .arg(link.url())
+                .arg(value)
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
@@ -43,7 +49,7 @@ pub async fn open_product_link(link: ProductLink) -> Result<()> {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = link;
+        let _ = url;
         Err(AppError::new(
             "UNSUPPORTED_PLATFORM",
             "请在浏览器打开此链接",
