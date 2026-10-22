@@ -194,6 +194,8 @@ pub fn run() {
             commands::billing_overview,
             commands::billing_checkout,
             commands::focal_chat,
+            commands::focal_chat_history,
+            commands::focal_chat_clear,
             commands::billing_manage,
             commands::billing_cancel_checkout,
             commands::share_project,

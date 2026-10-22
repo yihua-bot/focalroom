@@ -847,3 +847,20 @@ pub async fn focal_chat(
     let auth = state.cloud_auth.clone();
     state.store.focal_chat(&auth, &cmd).await
 }
+
+#[tauri::command]
+pub async fn focal_chat_history(
+    state: State<'_, Backend>,
+    project_id: String,
+    limit: Option<usize>,
+) -> Result<Vec<crate::focal_chat::StoredMessage>> {
+    state
+        .store
+        .focal_chat_history(&project_id, limit.unwrap_or(100))
+        .await
+}
+
+#[tauri::command]
+pub async fn focal_chat_clear(state: State<'_, Backend>, project_id: String) -> Result<()> {
+    state.store.focal_chat_clear(&project_id).await
+}

@@ -201,6 +201,14 @@ impl Store {
             }
         }
 
+        // SQLite 持久化（发送前存 user，回复后存 assistant）
+        let _ = self
+            .save_message(&cmd.project_id, "user", message, "")
+            .await;
+        let _ = self
+            .save_message(&cmd.project_id, "assistant", &reply_text, &suggestion)
+            .await;
+
         Ok(FocalChatReply {
             reply: reply_text,
             suggestion,
@@ -227,5 +235,78 @@ mod tests {
             .any(|k| msg2.contains(k))
             && msg2.chars().any(|c| c.is_ascii_digit());
         assert!(!wants2);
+    }
+}
+
+// ── SQLite 持久化 ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredMessage {
+    pub id: i64,
+    pub role: String,
+    pub content: String,
+    pub suggestion: String,
+    pub created_at: String,
+}
+
+impl Store {
+    /// 读取项目对话历史（最近 N 条）。
+    pub async fn focal_chat_history(
+        &self,
+        project_id: &str,
+        limit: usize,
+    ) -> Result<Vec<StoredMessage>> {
+        let rows: Vec<(i64, String, String, String, String)> = sqlx::query_as(
+            "SELECT id, role, content, suggestion, created_at FROM focal_chat_messages WHERE project_id=? ORDER BY id DESC LIMIT ?",
+        )
+        .bind(project_id)
+        .bind(limit as i64)
+        .fetch_all(&self.pool)
+        .await?;
+        // 倒序取，正序返回
+        Ok(rows
+            .into_iter()
+            .rev()
+            .map(
+                |(id, role, content, suggestion, created_at)| StoredMessage {
+                    id,
+                    role,
+                    content,
+                    suggestion,
+                    created_at,
+                },
+            )
+            .collect())
+    }
+
+    /// 清空项目对话。
+    pub async fn focal_chat_clear(&self, project_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM focal_chat_messages WHERE project_id=?")
+            .bind(project_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// 写入单条消息（内部）。
+    async fn save_message(
+        &self,
+        project_id: &str,
+        role: &str,
+        content: &str,
+        suggestion: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO focal_chat_messages(project_id, role, content, suggestion, created_at) VALUES(?,?,?,?,?)",
+        )
+        .bind(project_id)
+        .bind(role)
+        .bind(content)
+        .bind(suggestion)
+        .bind(crate::domain::timestamp())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 }

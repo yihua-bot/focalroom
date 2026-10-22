@@ -13,20 +13,23 @@ export function FocalChat({ projectId, selectedPhotoIds, photoNames, onSuggestTa
   onSuggestTask: (goal: string) => void;
   prefill?: string;
 }) {
-  const storageKey = `focal-chat:${projectId}`;
-  const [turns, setTurns] = useState<Turn[]>(() => {
-    try { return JSON.parse(localStorage.getItem(storageKey) ?? '[]') as Turn[]; } catch { return []; }
-  });
+  const [turns, setTurns] = useState<Turn[]>([]);
+  useEffect(() => {
+    let active = true;
+    invoke<Array<{ id: number; role: string; content: string; suggestion: string }>>('focal_chat_history', { projectId, limit: 100 })
+      .then(msgs => {
+        if (active && msgs) setTurns(msgs.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })));
+      })
+      .catch(() => { /* 首次无历史 */ });
+    return () => { active = false; };
+  }, [projectId]);
   const [input, setInput] = useState(prefill ?? '');
   const [busy, setBusy] = useState(false);
   const [includeImages, setIncludeImages] = useState(false);
   const [error, setError] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    scroller.current?.scrollTo({ top: 1e9 });
-    try { localStorage.setItem(storageKey, JSON.stringify(turns.slice(-100))); } catch { /* 存储满静默 */ }
-  }, [turns, storageKey]);
+  useEffect(() => { scroller.current?.scrollTo({ top: 1e9 }); }, [turns]);
 
   const send = async () => {
     const message = input.trim();
@@ -59,7 +62,10 @@ export function FocalChat({ projectId, selectedPhotoIds, photoNames, onSuggestTa
 
   const costEstimate = (images: number) => images === 0 ? '2–5 千' : `${2 + images * 15}–${5 + images * 30} 千`;
 
-  const clearChat = () => { setTurns([]); try { localStorage.removeItem(storageKey); } catch { /* 忽略 */ } };
+  const clearChat = async () => {
+    setTurns([]);
+    try { await invoke('focal_chat_clear', { projectId }); } catch { /* 忽略 */ }
+  };
 
   return <div className="focal-chat">
     <div className="focal-chat-scroll" ref={scroller}>
