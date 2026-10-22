@@ -5,7 +5,7 @@ use crate::{
     domain::{AppError, Result},
 };
 use serde_json::json;
-use sqlx::Row;
+use sqlx::{Row, Sqlite, Transaction};
 pub(crate) async fn state(db: &Store, id: &str, next: &str, reason: &str) -> Result<()> {
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, id).await?;
@@ -20,19 +20,27 @@ pub(crate) async fn budget_stop(db: &Store, id: &str, error: &AppError) -> Resul
     if task.state != "running" {
         return Ok(());
     }
+    record_budget_stop(&mut tx, &mut task, error).await?;
+    tx.commit().await?;
+    Ok(())
+}
+async fn record_budget_stop(
+    tx: &mut Transaction<'_, Sqlite>,
+    task: &mut Task,
+    error: &AppError,
+) -> Result<()> {
     if let Some(issue) = super::budget::issue(error) {
         store::step(
-            &mut tx,
-            id,
+            tx,
+            &task.id,
             "budget_limit",
             json!({"issue":issue,"reason":error.message}),
             &error.message,
         )
         .await?;
     }
-    store::transition(&mut tx, &mut task, "paused", &error.message).await?;
-    store::checkpoint(&mut tx, &task).await?;
-    tx.commit().await?;
+    store::transition(tx, task, "paused", &error.message).await?;
+    store::checkpoint(tx, task).await?;
     Ok(())
 }
 pub(crate) async fn outcome(
@@ -223,10 +231,26 @@ pub(crate) async fn tool(
             >= u64::from(t.budget.max_duration_seconds) * 1000
     {
         t.elapsed_ms = t.elapsed_ms.saturating_add(preparation_ms);
-        store::transition(&mut tx, &mut t, "paused", "工具调用达到预算上限").await?;
-        store::checkpoint(&mut tx, &t).await?;
+        let error = if t.usage.tool_calls >= t.budget.max_tool_calls {
+            super::budget::exceeded(
+                super::budget::LimitKind::Steps,
+                u64::from(t.usage.tool_calls),
+                1,
+                u64::from(t.budget.max_tool_calls),
+                "tool",
+            )
+        } else {
+            super::budget::exceeded(
+                super::budget::LimitKind::Time,
+                t.elapsed_ms,
+                1,
+                u64::from(t.budget.max_duration_seconds) * 1000,
+                "tool",
+            )
+        };
+        record_budget_stop(&mut tx, &mut t, &error).await?;
         tx.commit().await?;
-        return Err(AppError::new("BUDGET_EXCEEDED", "工具预算耗尽"));
+        return Err(error);
     }
     let started = std::time::Instant::now();
     t.usage.tool_calls += 1;

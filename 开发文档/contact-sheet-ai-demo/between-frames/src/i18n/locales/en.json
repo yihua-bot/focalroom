@@ -216,6 +216,8 @@
     "chatSendConsent": "This task may send up to {count} previews to {provider}, including repeat sends. Originals stay on your computer.",
     "chatImageLimit": "Preview sends per task",
     "chatLimitImages": "This analysis needs more preview sends than remain. Progress is saved. Choose a smaller set and start again.",
+    "chatLimitImagesCount": "{used} previews sent; this request needs {requested} more. The limit for this analysis is {limit}.",
+    "chatLimitUnconfirmed": "The previous photo analysis result is unconfirmed. Automatic retries have stopped to avoid duplicate usage. Check again later before starting over.",
     "chatLimitCost": "The allowance remaining for this analysis is too small. Progress is saved. Choose fewer photos and start again.",
     "chatLimitSteps": "This analysis needs more steps. Progress is saved and you can continue.",
     "chatLimitTime": "This analysis reached its time limit. Progress is saved. Allow more time to continue.",

@@ -51,7 +51,8 @@
     },
     "resources": [
       "resources/demo/*.jpg"
-    ]
+    ],
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "deep-link": {
@@ -60,6 +61,14 @@
           "focalroom"
         ]
       }
+    },
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY0RUQwNkE1NjY0OUNEQjgKUldTNHpVbG1wUWJ0WkpNRGphVzJBUnE0SEk5MmQydXhrNWl2ZHFNZG5NdHFmSnQ5TkJXZ2Q3aDUK",
+      "endpoints": [
+        "https://focroom.cc/download/latest.json"
+      ]
     }
   }
 }

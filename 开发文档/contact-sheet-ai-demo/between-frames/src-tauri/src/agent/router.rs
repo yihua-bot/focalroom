@@ -267,12 +267,16 @@ fn route_candidates(request: &RouteRequest<'_>, catalog: Vec<Route>) -> Result<R
         .max_cost_usd_per_task()
         .min(request.budget_remaining_usd.max(0.0));
     if best.est_cost_usd > ceiling && best.est_cost_usd > 0.0 {
-        return Err(AppError::new(
-            "BUDGET_EXCEEDED",
-            format!(
-                "估算成本 ${:.2} 超出可用预算 ${ceiling:.2}（服务档位上限与剩余预算取小）；请提高预算或降低任务规模。",
-                best.est_cost_usd
-            ),
+        return Err(super::budget::exceeded(
+            super::budget::LimitKind::Cost,
+            0,
+            (best.est_cost_usd * 100.0).ceil() as u64,
+            (ceiling * 100.0).floor() as u64,
+            if request.task_type == TaskType::VisionObserve {
+                "vision"
+            } else {
+                "model"
+            },
         ));
     }
     Ok(best)

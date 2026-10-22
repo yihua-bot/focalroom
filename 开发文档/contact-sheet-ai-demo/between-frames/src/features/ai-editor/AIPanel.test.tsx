@@ -34,13 +34,13 @@ describe('选片对话与本次预览使用', () => {
  it('步骤耗尽后继续会实际增加额度，不重复提交原来的上限', async () => {
   const paused = { ...task('paused'), usage: { ...task('paused').usage, toolCalls: 40 }, budgetIssue: { kind: 'steps' as const, used: 40, requested: 1, limit: 40, stage: 'vision', requestNotSent: true } };
   const repo = fixture({}, { tasks: [paused], drafts: [] }); mount(repo); await ready();
-  await userEvent.click(screen.getByRole('button', { name: '继续', exact: true }));
+  await userEvent.click(screen.getByRole('button', { name: /^继续$/ }));
   expect(repo.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'ResumeTask', budget: expect.objectContaining({ maxToolCalls: 80, maxCloudImages: 0, maxCostMinorUsd: 100 }) }));
  });
  it.each(['images', 'cost', 'context', 'tokens'] as const)('%s 不自动提额，调整范围只填写要求，由用户再次发送', async kind => {
   const paused = { ...task('paused'), budgetIssue: { kind, used: 20, requested: 1, limit: 20, stage: 'vision', requestNotSent: true } };
   const repo = fixture({}, { tasks: [paused], drafts: [] }); mount(repo); await ready();
-  expect(screen.queryByRole('button', { name: '继续', exact: true })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /^继续$/ })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: '调整照片范围' }));
   expect(screen.getByLabelText('选片消息')).toHaveValue('旅行故事');
   expect(screen.getByLabelText('照片范围')).toHaveValue('selected');
@@ -52,7 +52,15 @@ describe('选片对话与本次预览使用', () => {
   await ready();
   expect(screen.getByText('这次分析已暂停。已保留进度，请调整照片范围后重新开始。')).toBeVisible();
   expect(screen.queryByText(/视觉请求预留/)).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '继续', exact: true })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /^继续$/ })).not.toBeInTheDocument();
+ });
+ it('上传结果不明时说明可能的重复消耗，不显示未发送或继续按钮', async () => {
+  const repo = fixture({}, { tasks: [{ ...task('paused'), reason: '视觉请求的传输结果尚未确认；预算预留保留，请重新委托，恢复不会重复上传' }], drafts: [] });
+  mount(repo); await ready();
+  expect(screen.getByText(/上次照片分析的结果尚未确认/)).toBeVisible();
+  expect(screen.queryByText(/这一次照片请求尚未发送/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /^继续$/ })).not.toBeInTheDocument();
+  expect(repo.agent.request).not.toHaveBeenCalled();
  });
  it('任务文字不扩大权限，画布编排需要明确选择', async () => {
   const { repository } = mount(fixture(), { initialGoal: '给我一些画布布局思路' }); await ready();

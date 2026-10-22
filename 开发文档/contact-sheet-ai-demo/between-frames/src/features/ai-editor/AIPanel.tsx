@@ -147,6 +147,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
      <strong className="chat-task-status" data-state={item.state}>{taskLabels[item.state]}</strong>
      {item.question && <p>{item.question}</p>}
      {['paused', 'interrupted', 'failed', 'stale'].includes(item.state) && <p>{budgetMessage(item) ?? userFacingError(new Error(item.reason))}</p>}
+     {item.budgetIssue?.kind === 'images' && <p className="muted">{zh.chatLimitImagesCount.replace('{used}', String(item.budgetIssue.used)).replace('{requested}', String(item.budgetIssue.requested)).replace('{limit}', String(item.budgetIssue.limit))}</p>}
      {item.budgetIssue?.stage === 'vision' && item.budgetIssue.requestNotSent && <p className="muted">{zh.chatPhotosNotSent}</p>}
      {(query.data?.drafts ?? []).filter(candidate => candidate.taskId === item.id).map(candidate => <div className="chat-draft-card" key={candidate.id}>
       <div><Check size={15} /><strong>{candidate.title}</strong></div><p>{candidate.summary}</p>

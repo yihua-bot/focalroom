@@ -175,22 +175,18 @@ pub(crate) async fn prefetch(
         + 512) as u32
         + uploaded * 4096;
     let rate = provider.rate_card();
-    let upper_cost = rate.vision_reservation(uploaded, input_bound, task.budget.max_output_tokens);
+    let cost_limit = (tier.max_cost_usd_per_task() * 100.0) as u32;
+    let output_limit =
+        super::budget::vision_output_limit(task, uploaded, input_bound, cost_limit, rate)?;
+    let upper_cost = rate.vision_reservation(uploaded, input_bound, output_limit);
     let handler = crate::command_handler::CommandHandler::new(db);
     let (consent_id, remaining) = handler
-        .reserve_vision(
-            &task.id,
-            call,
-            uploaded,
-            upper_cost,
-            (tier.max_cost_usd_per_task() * 100.0) as u32,
-            rate,
-        )
+        .reserve_vision(&task.id, call, uploaded, upper_cost, cost_limit, rate)
         .await?;
     let started = std::time::Instant::now();
     let result = tokio::time::timeout(
         std::time::Duration::from_millis(remaining),
-        provider.observe(&brief, &question, &images, task.budget.max_output_tokens),
+        provider.observe(&brief, &question, &images, output_limit),
     )
     .await;
     let (mut observation, tokens) = match result {

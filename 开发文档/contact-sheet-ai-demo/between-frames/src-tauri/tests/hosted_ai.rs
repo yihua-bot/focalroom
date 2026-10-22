@@ -182,7 +182,7 @@ async fn hosted_calls_use_account_bearer_and_fixed_policy_without_a_provider_key
     assert!(provider.api_key_tail().is_empty());
     assert_eq!(
         provider.rate_card(),
-        agent::pricing::RateCard::DeepseekFlashPeak20261016
+        between_frames_lib::agent::pricing::RateCard::DeepseekFlashPeak20261016
     );
     assert_eq!(provider.identity().account_id.as_deref(), Some("user-a"));
     let result = provider.generate_metered(&input()).await.unwrap();

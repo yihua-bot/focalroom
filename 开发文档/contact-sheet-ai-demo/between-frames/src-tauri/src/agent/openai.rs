@@ -249,7 +249,7 @@ impl OpenAiProvider {
     }
     pub fn rate_card(&self) -> super::pricing::RateCard {
         // 固定托管策略绑定官方 DeepSeek，不按本地代理地址误判为未知高价服务。
-        if self.is_hosted() {
+        if self.is_hosted() && self.model == "deepseek-flash" {
             return super::pricing::RateCard::DeepseekFlashPeak20261016;
         }
         super::pricing::RateCard::for_endpoint(&self.base_url, &self.model)

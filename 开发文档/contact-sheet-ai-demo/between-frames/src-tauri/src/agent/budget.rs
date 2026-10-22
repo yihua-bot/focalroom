@@ -93,6 +93,42 @@ pub fn vision_limits(
     Ok(())
 }
 
+/// 收紧本次回复长度以适配剩余额度；不提高任务上限，也不减少用户请求的照片。
+pub fn vision_output_limit(
+    task: &Task,
+    images: u32,
+    input: u32,
+    cost_limit: u32,
+    rate: super::pricing::RateCard,
+) -> crate::domain::Result<u32> {
+    let limit = task.budget.max_cost_minor_usd.min(cost_limit);
+    let remaining = limit.saturating_sub(task.usage.cost_minor_usd);
+    let mut low = images
+        .saturating_mul(256)
+        .saturating_add(128)
+        .min(task.budget.max_output_tokens);
+    let mut high = task.budget.max_output_tokens;
+    let minimum_cost = rate.vision_reservation(images, input, low);
+    if minimum_cost > remaining {
+        return Err(exceeded(
+            LimitKind::Cost,
+            u64::from(task.usage.cost_minor_usd),
+            u64::from(minimum_cost),
+            u64::from(limit),
+            "vision",
+        ));
+    }
+    while low < high {
+        let middle = low + (high - low).div_ceil(2);
+        if rate.vision_reservation(images, input, middle) <= remaining {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    Ok(low)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,5 +198,19 @@ mod tests {
                 .kind,
             LimitKind::Images
         );
+    }
+    #[test]
+    fn a_large_default_reply_is_trimmed_instead_of_refusing_an_affordable_visual_request() {
+        let mut task = task();
+        task.budget.max_cost_minor_usd = 12;
+        task.usage.cost_minor_usd = 5;
+        let rate = super::super::pricing::RateCard::LegacyConservative;
+        assert!(rate.vision_reservation(1, 4096, 8192) > 7);
+        let output = vision_output_limit(&task, 1, 4096, 12, rate).unwrap();
+        assert!((384..8192).contains(&output));
+        assert!(rate.vision_reservation(1, 4096, output) <= 7);
+        assert_eq!(task.budget.max_output_tokens, 8192);
+        assert_eq!(task.budget.max_cost_minor_usd, 12);
+        assert!(vision_output_limit(&task, 1, 4096, 5, rate).is_err());
     }
 }

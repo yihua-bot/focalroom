@@ -216,6 +216,8 @@
     "chatSendConsent": "本次最多向 {provider} 发送 {count} 次照片预览；重复发送会累计，原图留在本机。",
     "chatImageLimit": "本次分析次数上限",
     "chatLimitImages": "这次分析可用的照片次数不足。已保留进度，请调整照片范围后重新开始。",
+    "chatLimitImagesCount": "已发送 {used} 次，本次还需 {requested} 次；本次分析上限为 {limit} 次。",
+    "chatLimitUnconfirmed": "上次照片分析的结果尚未确认。为避免重复消耗，已停止自动重试；请稍后查看结果再决定是否重新开始。",
     "chatLimitCost": "这次分析的可用额度不足。已保留进度，请缩小照片范围后重新开始。",
     "chatLimitSteps": "这次分析需要更多步骤。已保留进度，可以继续分析。",
     "chatLimitTime": "这次分析已达到等待时间。已保留进度，可以延长时间后继续。",

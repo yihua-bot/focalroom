@@ -34,6 +34,7 @@ import { ActivityDialog } from '../features/project/ActivityDialog';
 import { Lightbox } from '../components/inspector/Lightbox';
 import type { SelectionGesture } from '../domain/selection';
 import { useAccount } from '../features/cloud-login/AccountProvider';
+import { UpdateCheck } from '../components/shared/UpdateCheck';
 
 type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' | 'activity' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
 
@@ -230,6 +231,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
     {dialog?.kind === 'enlarge' && <Lightbox photos={navigable} activeId={dialog.photo.id} onClose={() => setDialog(null)} onNavigate={photo => { ui.select(photo.id); setDialog({ kind: 'enlarge', photo }); }} onDecide={(id, status) => decide(id, status)} onRate={(id, rating) => project && act(() => repository.rate(project.id, [id], rating), rating ? `人工评分已保存：${rating} 星` : '人工评分已清除')} />}
     {dialog?.kind === 'palette' && <CommandPalette commands={paletteCommands} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'help' && <Modal title={zh.help} description={zh.helpHint} onClose={() => setDialog(null)}>
+      <div style={{marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border, #2a2a40)'}}><UpdateCheck /></div>
       <ShortcutEditor shortcuts={shortcutConfig.shortcuts} overrides={shortcutConfig.overrides} save={shortcutConfig.save} reset={shortcutConfig.reset} />
     </Modal>}
   </>;

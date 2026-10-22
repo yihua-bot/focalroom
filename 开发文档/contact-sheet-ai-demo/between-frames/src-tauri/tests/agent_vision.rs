@@ -280,6 +280,60 @@ async fn zero_cost_and_exhausted_tool_budget_stop_before_upload() {
 }
 
 #[tokio::test]
+async fn affordable_vision_request_shrinks_reply_and_uploads_once_without_raising_limits() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, project) = setup(temp.path(), 1).await;
+    let (base, state) = spawn_server(Script {
+        main: vec![
+            "tool:list_photos".into(),
+            "tool:inspect_from_history".into(),
+            "text".into(),
+        ],
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &project, "project", &base).await;
+    let task = CommandHandler::new(&db)
+        .agent_request(AgentRequest {
+            request_id: domain::id(),
+            project_id: project.id.clone(),
+            command: TaskCommand::StartTask {
+                goal: "观察这张照片".into(),
+                selected_photo_ids: vec![project.photos[0].id.clone()],
+                target_count: 1,
+                budget: Budget {
+                    max_cloud_images: 1,
+                    max_cost_minor_usd: 15,
+                    ..Budget::default()
+                },
+                consent_id: Some(consent.id),
+            },
+        })
+        .await
+        .unwrap();
+    engine(&db, &base).run(&task.id).await.unwrap();
+    let requests = state.lock().unwrap().requests.clone();
+    let visual: Vec<_> = requests
+        .iter()
+        .filter(|request| request["text"]["format"].is_object())
+        .collect();
+    assert_eq!(visual.len(), 1);
+    assert!(visual[0]["max_output_tokens"].as_u64().unwrap() < 8192);
+    let view = agent::projection(&db, &project.id).await.unwrap();
+    assert_eq!(view.tasks[0].usage.cloud_images, 1);
+    assert_eq!(view.tasks[0].budget.max_cost_minor_usd, 15);
+    assert_eq!(view.tasks[0].budget.max_output_tokens, 8192);
+    assert!(view.tasks[0].usage.cost_minor_usd <= 15);
+    let observations: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(observations, 1);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
 async fn task_consent_is_bound_once_and_never_used_as_project_fallback() {
     let _guard = ENV_LOCK.lock().await;
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
@@ -2758,7 +2812,10 @@ async fn runtime_router_rejects_region_budget_and_missing_provider_before_http()
             "budget" => {
                 assert!(result.is_ok());
                 assert_eq!(task.state, "paused");
-                assert!(task.reason.contains("估算成本"));
+                assert_eq!(
+                    task.budget_issue.as_ref().unwrap().kind,
+                    agent::budget::LimitKind::Cost
+                );
             }
             "region" => {
                 assert_eq!(result.unwrap_err().code, "PRIVACY_REGION_REJECTED");

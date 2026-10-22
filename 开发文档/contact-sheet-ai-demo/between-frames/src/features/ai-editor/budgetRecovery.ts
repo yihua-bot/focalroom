@@ -1,8 +1,9 @@
 import { zh } from '../../app/copy';
 import { defaultAgentBudget, type AgentTask } from '../../domain/agent';
 
-const legacyBudget = /视觉请求预留超过|云端图像预算不足|后端预算已达到|工具预算耗尽|传输结果尚未确认|此前视觉请求失败|视觉等待达到时间上限/;
+const legacyBudget = /视觉请求预留超过|云端图像预算不足|后端预算已达到|工具预算耗尽|工具调用达到预算|估算成本|剩余预算不足以预留|模型输出、费用或时间|传输结果尚未确认|此前视觉请求失败|视觉等待达到时间上限/;
 export function budgetMessage(task: AgentTask): string | undefined {
+  if (/传输结果尚未确认|此前视觉请求失败|视觉等待达到时间上限/.test(task.reason)) return zh.chatLimitUnconfirmed;
   if (!task.budgetIssue) return legacyBudget.test(task.reason) ? zh.chatLimitUnknown : undefined;
   return zh[{
     images: 'chatLimitImages', cost: 'chatLimitCost', steps: 'chatLimitSteps', rounds: 'chatLimitSteps',

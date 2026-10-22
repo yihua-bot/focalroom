@@ -12,7 +12,7 @@ const rpc = async <T>(command: string, args: Record<string, unknown> = {}): Prom
 };
 type Project = { id: string; revision: number; sequence: string[]; photos: { id: string; status: string; note: string; rating: number }[] };
 test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、局部采纳/撤销与重启', async ({ page }) => {
- const screenshots = resolve('../docs/screenshots/v1-m2');
+ const screenshots = resolve('../docs/v3/evidence/ai-budget-recovery-2026-10-22/browser');
  await mkdir(screenshots, { recursive: true });
  const errors: string[] = []; const outside: string[] = [];
  page.on('pageerror', error => errors.push(error.message));
@@ -45,12 +45,20 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  // 低预算通过测试 RPC 创建，生产界面不暴露模型轮次参数。
  await rpc('agent_request', { request: { requestId: crypto.randomUUID(), projectId: project.id, command: { type: 'StartTask', goal: '给两版 25 张序列', selectedPhotoIds: [], targetCount: 25, budget: { ...defaultAgentBudget, maxModelTurns: 2 } } } });
  await expect(page.locator('.chat-task-status')).toHaveText('已暂停', { timeout: 15000 });
+ const paused = (await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0];
+ expect(paused.budgetIssue?.kind).toBe('rounds');
+ await expect(page.getByText('这次分析需要更多步骤。已保留进度，可以继续分析。')).toBeVisible();
  await expect(page.locator('.chat-task-status')).toBeInViewport();
  await page.screenshot({ path: resolve(screenshots, 'paused.png') });
  await page.reload();
  await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
  await page.getByRole('button', { name: '继续', exact: true }).click();
  await expect(page.locator('.chat-task-status')).toHaveText('待审核', { timeout: 20000 });
+ const resumed = (await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0];
+ expect(resumed.id).toBe(paused.id);
+ expect(resumed.budget.maxModelTurns).toBeGreaterThan(paused.usage.modelTurns);
+ expect(resumed.budget.maxCloudImages).toBe(paused.budget.maxCloudImages);
+ expect(resumed.budget.maxCostMinorUsd).toBe(paused.budget.maxCostMinorUsd);
  await expect(page.locator('.chat-draft-card')).toHaveCount(2);
  expect((await rpc<Project>('get_project', { projectId: project.id })).sequence).toHaveLength(0);
  await page.screenshot({ path: resolve(screenshots, 'drafts.png') });
