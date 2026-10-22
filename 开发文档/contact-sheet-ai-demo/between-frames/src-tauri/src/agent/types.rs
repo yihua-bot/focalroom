@@ -64,6 +64,14 @@ pub struct AgentRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub enum TaskCommand {
+    StartCanvasTask {
+        goal: String,
+        selected_photo_ids: Vec<String>,
+        target_count: u32,
+        budget: Budget,
+        consent_id: Option<i64>,
+        source_board: Option<super::task_scope::CanvasTaskSource>,
+    },
     StartTask {
         goal: String,
         selected_photo_ids: Vec<String>,
@@ -92,7 +100,7 @@ pub enum TaskCommand {
 impl TaskCommand {
     pub fn task_id(&self) -> Option<&str> {
         match self {
-            Self::StartTask { .. } => None,
+            Self::StartTask { .. } | Self::StartCanvasTask { .. } => None,
             Self::PauseTask { task_id }
             | Self::CancelTask { task_id }
             | Self::ResumeTask { task_id, .. }
@@ -241,6 +249,9 @@ pub struct AgentProjection {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskView {
+    pub canvas_task: bool,
+    pub canvas_source: Option<super::task_scope::CanvasTaskSource>,
+    pub board_drafts: Vec<crate::canvas::Board>,
     pub id: String,
     pub goal: String,
     pub base_revision: i64,

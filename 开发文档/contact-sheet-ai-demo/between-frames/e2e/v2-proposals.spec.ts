@@ -1,3 +1,4 @@
+import { installAccountFixture } from './account-fixture';
 import { test, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -16,7 +17,8 @@ test('v2 真实后端提案：GUI 提交、批量审批、单组撤销重做、�
     if (['localhost', '127.0.0.1', '[::1]'].includes(new URL(route.request().url()).hostname)) return route.continue();
     outside.push(route.request().url()); return route.abort('internetdisconnected');
   });
-  await page.addInitScript(() => {
+  await installAccountFixture(page);
+ await page.addInitScript(() => {
     Object.assign(globalThis, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: {
       invoke: async (command: string, args: unknown) => {
         if (command.startsWith('plugin:event|')) return 0;
@@ -49,7 +51,7 @@ test('v2 真实后端提案：GUI 提交、批量审批、单组撤销重做、�
   await panel.getByRole('button', { name: '提交审批' }).click();
   await expect(panel.getByRole('button', { name: '执行所选操作' })).toBeVisible();
   await panel.getByRole('button', { name: '执行所选操作' }).click();
-  await expect(panel.getByRole('status')).toHaveText('已执行 2 个操作');
+  await expect(panel.getByRole('status')).toHaveText('已采纳 2 项调整');
   await expect.poll(async () => (await rpc<Project>('get_project', { projectId: project.id })).sequence).toEqual([b.id, a.id]);
   await page.getByRole('button', { name: '撤销', exact: true }).click();
   await expect.poll(async () => (await rpc<Project>('get_project', { projectId: project.id })).sequence).toEqual([]);

@@ -2,8 +2,19 @@
 // v3 蓝图 §03.4/§06：逻辑坐标独立于设备像素；照片引用资产不复制像素。
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../components/shared/Button';
+import { Modal } from '../../components/shared/Modal';
+import { useUIStore } from '../../stores/uiStore';
+import { zh } from '../../app/copy';
+import { useAccount } from '../cloud-login/AccountProvider';
+import { Maximize } from 'lucide-react';
 
 import type { AnnotationInfo, BoardInfo, CanvasPhoto, CanvasRepository } from '../../domain/canvas';
+
+async function readCanvas(repository: CanvasRepository, boardId: string) {
+  if (repository.getSnapshot) return repository.getSnapshot(boardId);
+  const [nodes, annotations] = await Promise.all([repository.getNodes(boardId), repository.getAnnotations(boardId)]);
+  return { nodes, annotations, board: undefined };
+}
 /** 无限画布：拖拽平移 + 滚轮缩放 + 照片节点拖拽放置。 */
 export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readOnly = false }: {
   repository?: CanvasRepository;
@@ -11,6 +22,10 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   selectedPhotoIds: string[];
   readOnly?: boolean;
 }) {
+  const account = useAccount();
+  const boardRequest = useUIStore(state => state.canvasBoardRequest);
+  const requestedBoard = useUIStore(state => state.canvasBoardId);
+  const openCanvasAgent = useUIStore(state => state.openCanvasAgent);
   const [boards, setBoards] = useState<BoardInfo[]>([]);
   const [activeBoard, setActiveBoard] = useState<string | null>(null);
   const [nodes, setNodes] = useState<CanvasPhoto[]>([]);
@@ -26,21 +41,34 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const [linkMode, setLinkMode] = useState(false);
   const [notice, setNotice] = useState('');
   const [working, setWorking] = useState(false);
+  const [pending, setPending] = useState<Array<{ boardId: string }>>([]);
+  const [loadedBoard, setLoadedBoard] = useState<string | null>(null);
+  const [comparison, setComparison] = useState<{ boardId: string; value: Awaited<ReturnType<NonNullable<CanvasRepository['compareDraft']>>> } | null>(null);
+  const [showBaseline, setShowBaseline] = useState(true);
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [adopting, setAdopting] = useState(false);
   const [inkMode, setInkMode] = useState(false);
   const [inkPoints, setInkPoints] = useState<Array<{x:number;y:number}>>([]);
-  const dragStart = useRef<{ x: number; y: number; nodeX: number; nodeY: number } | null>(null);
+  const dragStart = useRef<{ x: number; y: number; nodeX: number; nodeY: number; positions: Map<string, { x: number; y: number }> } | null>(null);
   const panning = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const board = boards.find(value => value.id === activeBoard);
+  const review = comparison?.boardId === activeBoard && comparison.value.draftRevision === board?.revision ? comparison.value : null;
+  const editLocked = readOnly || activeBoard !== loadedBoard || pending.some(item => item.boardId === activeBoard) || Boolean(board?.owningTaskId) || board?.state === 'frozen';
 
   const run = async (action: () => Promise<void>) => {
     if (readOnly || working) return;
     setWorking(true);
     setNotice('');
     try { await action(); }
-    catch (error) { setNotice(error instanceof Error ? error.message : '画布操作失败'); }
-    finally { setWorking(false); }
+    catch (error) {
+      setNotice(error instanceof Error ? error.message : '画布操作失败');
+      if ((error as { code?: string })?.code === 'REVISION_CONFLICT') {
+        try { await loadBoards(); } catch { /* 保留首次冲突提示，用户可重新打开画布。 */ }
+      }
+    }
+    finally { setPending(repository?.pendingCommands?.(projectId) ?? []); setWorking(false); }
   };
   // 节点跟随 activeBoard 变化加载（异步回调内 setState 合法）
   useEffect(() => {
@@ -49,34 +77,60 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
       repository.listBoards(projectId).then(list => {
         if (!active) return;
         setBoards(list);
-        setActiveBoard(prev => prev ?? (list.length > 0 ? list[0].id : null));
+        setPending(repository.pendingCommands?.(projectId) ?? []);
+        setActiveBoard(prev => list.some(value => value.id === requestedBoard) ? requestedBoard : list.some(value => value.id === prev) ? prev : (list[0]?.id ?? null));
       }).catch(error => { if (active) setNotice(error instanceof Error ? error.message : '读取画布失败'); });
     }
     return () => { active = false; };
-  }, [repository, projectId]);
+  }, [repository, projectId, requestedBoard, boardRequest]);
 
   useEffect(() => {
     let active = true;
     if (repository && activeBoard) {
-      repository.getNodes(activeBoard).then(ns => {
-        if (active) setNodes(ns);
+      readCanvas(repository, activeBoard).then(snapshot => {
+        if (!active) return;
+        setNodes(snapshot.nodes); setAnnotations(snapshot.annotations); setLoadedBoard(activeBoard);
+        if (snapshot.board) setBoards(list => list.map(board => board.id === activeBoard ? snapshot.board! : board));
       }).catch(error => { if (active) setNotice(error instanceof Error ? error.message : '读取照片失败'); });
-      repository.getAnnotations(activeBoard).then(ans => {
-        if (active) setAnnotations(ans);
-      }).catch(error => { if (active) setNotice(error instanceof Error ? error.message : '读取批注失败'); });
     }
     return () => { active = false; };
   }, [repository, activeBoard]);
 
+  useEffect(() => {
+    let active = true;
+    if (repository?.compareDraft && activeBoard && board?.owningTaskId) {
+      repository.compareDraft(projectId, activeBoard).then(value => { if (active) setComparison({ boardId: activeBoard, value }); })
+        .catch(error => { if (active) setNotice(error instanceof Error ? error.message : '读取方案失败'); });
+    }
+    return () => { active = false; };
+  }, [repository, projectId, activeBoard, board?.owningTaskId, board?.revision]);
+
   const loadBoards = async () => {
     if (!repository) return;
     const list = await repository.listBoards(projectId);
-    setBoards(list);
+    let current = list;
     if (list.length > 0) setActiveBoard(prev => prev ?? list[0].id);
     if (activeBoard) {
-      const ns = await repository.getNodes(activeBoard);
-      setNodes(ns);
+      const snapshot = await readCanvas(repository, activeBoard);
+      setNodes(snapshot.nodes); setAnnotations(snapshot.annotations); setLoadedBoard(activeBoard);
+      if (snapshot.board) current = list.map(board => board.id === activeBoard ? snapshot.board! : board);
     }
+    setBoards(current);
+  };
+
+  const restoreHistory = async (redo: boolean) => {
+    if (!repository || !activeBoard || editLocked) return;
+    const changed = await (redo ? repository.redo(projectId, activeBoard) : repository.undo(projectId, activeBoard));
+    await loadBoards();
+    setSelectedNodeIds(new Set());
+    if (!changed) setNotice(redo ? '没有可重做的操作' : '没有可撤销的操作');
+  };
+
+  const adoptBoard = async () => {
+    if (!repository || !activeBoard || readOnly) return;
+    await repository.adoptBoard(projectId, activeBoard);
+    setAdopting(false);
+    await loadBoards();
   };
 
   const createBoard = async () => {
@@ -96,22 +150,20 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
 
   const placeSelected = async () => {
     if (!repository || !activeBoard || selectedPhotoIds.length === 0) return;
+    if (selectedPhotoIds.length > 300) throw new Error('每次最多放入 300 张照片，请分次选择。');
     const startX = -pan.x / zoom + 50;
-    for (let i = 0; i < selectedPhotoIds.length; i++) {
-      await repository.placePhoto(projectId, activeBoard, selectedPhotoIds[i],
-        startX + i * 240, 50, 220, 160);
-    }
+    if (repository.placePhotos) await repository.placePhotos(projectId, activeBoard, selectedPhotoIds.map((assetId, i) => ({ assetId, x: startX + i * 240, y: 50, width: 220, height: 160 })));
+    else for (let i = 0; i < selectedPhotoIds.length; i++) await repository.placePhoto(projectId, activeBoard, selectedPhotoIds[i], startX + i * 240, 50, 220, 160);
     await loadBoards();
   };
 
   const toggleLockSelected = async () => {
-    if (!repository || !activeBoard || selectedNodeIds.size === 0) return;
+    if (!repository || !activeBoard || editLocked || selectedNodeIds.size === 0) return;
     const first = nodes.find(n => selectedNodeIds.has(n.id));
     if (!first) return;
     const target = !first.locked;
-    for (const id of selectedNodeIds) {
-      await repository.setNodeLocked(projectId, activeBoard, id, target);
-    }
+    if (repository.setNodesLocked) await repository.setNodesLocked(projectId, activeBoard, [...selectedNodeIds], target);
+    else for (const id of selectedNodeIds) await repository.setNodeLocked(projectId, activeBoard, id, target);
     const ns = await repository.getNodes(activeBoard);
     setNodes(ns);
   };
@@ -140,12 +192,24 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   };
 
   // ── 交互：滚轮缩放（以鼠标位置为锚点）──
+  const fitContent = () => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    const visible = [...nodes, ...(showBaseline ? review?.baselineNodes ?? [] : [])].filter(node => node.nodeType !== 'arrow' && node.visible !== false);
+    if (!rect || rect.width <= 64 || rect.height <= 64 || !visible.length) return;
+    const left = Math.min(...visible.map(node => node.x));
+    const top = Math.min(...visible.map(node => node.y));
+    const right = Math.max(...visible.map(node => node.x + node.width));
+    const bottom = Math.max(...visible.map(node => node.y + node.height));
+    const scale = Math.min(1, (rect.width - 64) / Math.max(1, right - left), (rect.height - 64) / Math.max(1, bottom - top));
+    setZoom(scale);
+    setPan({ x: rect.width / 2 - (left + right) / 2 * scale, y: rect.height / 2 - (top + bottom) / 2 * scale });
+  };
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const factor = e.deltaY < 0 ? 1.1 : 0.9;
-    const newZoom = Math.min(4, Math.max(0.25, zoom * factor));
+    const newZoom = Math.min(4, Math.max(1e-8, zoom * factor));
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     // 保持鼠标指向的画布点不变：screen = pan + zoom * board
@@ -158,7 +222,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
 
   // ── 交互：空格/中键平移 + 节点拖拽 ──
   const onNodeClick = async (nodeId: string) => {
-    if (!linkMode || readOnly) return;
+    if (!linkMode || editLocked) return;
     if (linking && linking !== nodeId) {
       if (repository && activeBoard) {
         await repository.addArrow(projectId, activeBoard, linking, nodeId);
@@ -175,7 +239,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const onPointerDown = (e: React.PointerEvent) => {
     if (working || linkMode) return;
     if (inkMode && e.button === 0) {
-      if (readOnly) return;
+      if (editLocked) return;
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
         const bx = (e.clientX - rect.left - pan.x) / zoom;
@@ -191,9 +255,14 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
       if (nodeEl && e.button === 0) {
         const nodeId = (nodeEl as HTMLElement).dataset.nodeId!;
         const node = nodes.find(n => n.id === nodeId);
-        if (node && !node.locked && !readOnly && !dragging) {
+        if (node && !editLocked) {
+          const selection = e.shiftKey ? new Set(selectedNodeIds) : selectedNodeIds.has(nodeId) ? new Set(selectedNodeIds) : new Set([nodeId]);
+          if (e.shiftKey) { if (selection.has(nodeId)) selection.delete(nodeId); else selection.add(nodeId); }
+          setSelectedNodeIds(selection);
+          if (node.locked || e.shiftKey || dragging) return;
           setDragging(nodeId);
-          dragStart.current = { x: e.clientX, y: e.clientY, nodeX: node.x, nodeY: node.y };
+          const positions = new Map(nodes.filter(value => selection.has(value.id) && !value.locked).map(value => [value.id, { x: value.x, y: value.y }]));
+          dragStart.current = { x: e.clientX, y: e.clientY, nodeX: node.x, nodeY: node.y, positions };
         }
       } else if (e.shiftKey) {
         // Shift + 空白拖拽 = 框选
@@ -217,8 +286,8 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     if (resizing) {
       const dx = (e.clientX - resizing.x) / zoom;
       const dy = (e.clientY - resizing.y) / zoom;
-      const w = Math.max(20, resizing.startW + dx);
-      const h = Math.max(20, resizing.startH + dy);
+      const w = Math.min(10000, Math.max(20, resizing.startW + dx));
+      const h = Math.min(10000, Math.max(20, resizing.startH + dy));
       setNodes(prev => prev.map(n => n.id === resizing.nodeId ? { ...n, width: w, height: h } : n));
       return;
     }
@@ -234,11 +303,11 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     if (dragging && dragStart.current) {
       const dx = (e.clientX - dragStart.current.x) / zoom;
       const dy = (e.clientY - dragStart.current.y) / zoom;
-      setNodes(prev => prev.map(n =>
-        selectedNodeIds.has(n.id) || n.id === dragging
-          ? { ...n, x: dragStart.current!.nodeX + dx, y: dragStart.current!.nodeY + dy }
-          : n
-      ));
+      const positions = dragStart.current.positions;
+      setNodes(prev => prev.map(n => {
+        const origin = positions.get(n.id);
+        return origin ? { ...n, x: origin.x + dx, y: origin.y + dy } : n;
+      }));
     } else if (marquee) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
@@ -275,7 +344,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
         const dx = node.x - start.nodeX;
         const dy = node.y - start.nodeY;
         if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-          await repository.moveNodes(projectId, activeBoard, [dragging], dx, dy);
+          await repository.moveNodes(projectId, activeBoard, Array.from(start.positions.keys()), dx, dy);
         }
       }
     }
@@ -306,7 +375,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
 
   const onContextMenu = async (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!repository || !activeBoard || readOnly) return;
+    if (!repository || !activeBoard || editLocked) return;
     const input = prompt('添加评论：');
     if (!input?.trim()) return;
     const rect = containerRef.current?.getBoundingClientRect();
@@ -318,74 +387,118 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     setAnnotations(ans);
   };
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === 'l' || e.key === 'L') {
-        void toggleLockSelected();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
+  const cancelGesture = () => {
+    const start = dragStart.current;
+    if (start) setNodes(current => current.map(node => {
+      const origin = start.positions.get(node.id);
+      return origin ? { ...node, ...origin } : node;
+    }));
+    if (resizing) setNodes(current => current.map(node => node.id === resizing.nodeId ? { ...node, width: resizing.startW, height: resizing.startH } : node));
+    setResizing(null); setMarquee(null); setDragging(null);
+    dragStart.current = null; panning.current = null; setInkPoints([]);
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if ((event.target as HTMLElement).closest('input,textarea,select,[contenteditable="true"]')) return;
+    if (event.key === 'Escape') { cancelGesture(); return; }
+    if (editLocked) return;
+    const key = event.key.toLowerCase();
+    if ((event.metaKey || event.ctrlKey) && (key === 'z' || key === 'y')) {
+      event.preventDefault();
+      if (!dragging && !resizing) void run(() => restoreHistory(key === 'y' || event.shiftKey));
+    } else if (key === 'l' && !event.metaKey && !event.ctrlKey) {
+      event.preventDefault(); void run(toggleLockSelected);
+    }
+  };
 
   if (!repository) {
     return <div className="canvas-empty"><p>画布功能需要桌面版。</p></div>;
   }
 
   return (
-    <div className="canvas-wrapper">
+    <div className="canvas-wrapper" onKeyDown={onKeyDown}>
       <div className="canvas-toolbar">
         <select aria-label="选择画布" value={activeBoard ?? ''} disabled={working} onChange={e => { setNodes([]); setAnnotations([]); setNotice(''); setActiveBoard(e.target.value); setLinking(null); setLinkMode(false); setPan({ x: 0, y: 0 }); setZoom(1); }}>
           {boards.length === 0 && <option value="">无画布</option>}
           {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
         </select>
         <Button size="small" disabled={creating || working || readOnly} onClick={() => void run(createBoard)}>新建画布</Button>
-        <Button size="small" disabled={working || readOnly || !activeBoard || selectedPhotoIds.length === 0} onClick={() => void run(placeSelected)}>
+        {board?.owningTaskId && <Button size="small" disabled={working || readOnly || Boolean(repository.compareDraft && !review)} onClick={() => setAdopting(true)}>采纳画布</Button>}
+        <Button size="small" disabled={working || editLocked || !activeBoard || selectedPhotoIds.length === 0} onClick={() => void run(placeSelected)}>
           放入选中照片（{selectedPhotoIds.length}）
         </Button>
-        <Button size="small" aria-expanded={noteOpen} disabled={working || readOnly || !activeBoard} onClick={() => setNoteOpen(!noteOpen)}>便签</Button>
-        <Button size="small" aria-pressed={linkMode} disabled={working || readOnly || !activeBoard} onClick={() => { setLinkMode(!linkMode); setLinking(null); setInkMode(false); }}>{linkMode ? (linking ? '选择连接终点' : '选择连接起点') : '连接'}</Button>
-        <Button size="small" aria-pressed={inkMode} disabled={working || readOnly || !activeBoard} onClick={() => { setInkMode(!inkMode); setLinkMode(false); setLinking(null); }}>画笔</Button>
-        <Button size="small" disabled={working || readOnly || !activeBoard || selectedNodeIds.size < 2} onClick={() => void groupSelected()}>分组</Button>
-        <span className="canvas-zoom-label">{Math.round(zoom * 100)}%</span>
+        <Button size="small" disabled={working || editLocked || !board?.revision} onClick={() => void run(async () => {
+          if (!board?.revision || !repository) return;
+          const snapshot = await readCanvas(repository, board.id);
+          setNodes(snapshot.nodes); setAnnotations(snapshot.annotations);
+          if (snapshot.board) setBoards(list => list.map(value => value.id === board.id ? snapshot.board! : value));
+          const source = { boardId: board.id, revision: snapshot.board?.revision ?? board.revision, selectedNodeIds: [...selectedNodeIds] };
+          if (account) await account.requireSignIn('ai', () => openCanvasAgent(source));
+          else openCanvasAgent(source);
+        })}>{zh.chatArrangeBoard}</Button>
+        <Button size="small" aria-expanded={noteOpen} disabled={working || editLocked || !activeBoard} onClick={() => setNoteOpen(!noteOpen)}>便签</Button>
+        <Button size="small" aria-pressed={linkMode} disabled={working || editLocked || !activeBoard} onClick={() => { setLinkMode(!linkMode); setLinking(null); setInkMode(false); }}>{linkMode ? (linking ? '选择连接终点' : '选择连接起点') : '连接'}</Button>
+        <Button size="small" aria-pressed={inkMode} disabled={working || editLocked || !activeBoard} onClick={() => { setInkMode(!inkMode); setLinkMode(false); setLinking(null); }}>画笔</Button>
+        <Button size="small" disabled={working || editLocked || !activeBoard || selectedNodeIds.size < 2} onClick={() => void run(groupSelected)}>分组</Button>
+        <Button size="small" disabled={working || editLocked || !activeBoard} onClick={() => void run(() => restoreHistory(false))}>撤销</Button>
+        <Button size="small" disabled={working || editLocked || !activeBoard} onClick={() => void run(() => restoreHistory(true))}>重做</Button>
+        <Button size="small" disabled={working || editLocked || !activeBoard || selectedNodeIds.size === 0} onClick={() => void run(toggleLockSelected)}>锁定 / 解锁</Button>
+        <Button size="small" aria-label={zh.chatBoardFit} title={zh.chatBoardFit} disabled={working || !nodes.length} onClick={fitContent}><Maximize size={14} /></Button>
+        <span className="canvas-zoom-label">{zoom < 0.1 ? (zoom * 100).toPrecision(2) : Math.round(zoom * 100)}%</span>
       </div>
+      {pending.length > 0 && <div className="canvas-pending" role="status">
+        <span>有画布操作尚未确认。确认后可继续编辑。</span>
+        {pending.map(item => <Button key={item.boardId} size="small" disabled={working || !repository.retryPending} onClick={() => void run(async () => {
+          await repository.retryPending?.(projectId, item.boardId);
+          await loadBoards();
+          setNotice('上次操作已确认');
+        })}>确认上次操作{pending.length > 1 ? ` · ${boards.find(board => board.id === item.boardId)?.title ?? '新画布'}` : ''}</Button>)}
+      </div>}
+      {notice && <p role="status" className="canvas-notice">{notice}</p>}
+      {board?.owningTaskId && repository.compareDraft && <div className="canvas-review" aria-label={zh.chatBoardChanges}>
+        {review ? <>
+          <div className="canvas-review-summary"><strong>{zh.chatBoardChanges}</strong>
+            {(['add', 'change', 'remove'] as const).map(kind => <span key={kind}>{({ add: zh.chatBoardAdded, change: zh.chatBoardChanged, remove: zh.chatBoardRemoved })[kind]} {review.changes.filter(item => item.kind === kind).length}</span>)}
+            {review.baselineNodes.length > 0 && <label><input type="checkbox" checked={showBaseline} onChange={event => setShowBaseline(event.target.checked)} />{zh.chatBoardOverlay}</label>}
+          </div>
+          {review.sourceChanged && <p>{zh.chatBoardSourceChanged}</p>}
+        </> : <Button size="small" disabled={working} onClick={() => void run(loadBoards)}>{zh.chatBoardRefresh}</Button>}
+      </div>}
       {noteOpen && <form className="canvas-note-editor" onSubmit={event => { event.preventDefault(); void run(addSticky); }}>
-        <textarea aria-label="便签内容" placeholder="写下你的想法" maxLength={5000} value={noteText} disabled={working || readOnly} onChange={event => setNoteText(event.target.value)} />
-        <Button size="small" disabled={working || readOnly || !noteText.trim()} type="submit">保存便签</Button>
+        <textarea aria-label="便签内容" placeholder="写下你的想法" maxLength={5000} value={noteText} disabled={working || editLocked} onChange={event => setNoteText(event.target.value)} />
+        <Button size="small" disabled={working || editLocked || !noteText.trim()} type="submit">保存便签</Button>
         <Button size="small" disabled={working} onClick={() => setNoteOpen(false)}>取消</Button>
       </form>}
       <div
         ref={containerRef}
         className={`canvas-surface ${inkMode ? "ink-mode" : ""}`}
+        tabIndex={0}
+        aria-label="叙事画布"
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={() => {
           panning.current = null;
-          if (dragging || inkPoints.length) void run(async () => {
+          if (dragging || resizing || marquee || inkPoints.length) void run(async () => {
             try { await onPointerUp(); }
             catch (error) {
               if (repository && activeBoard) setNodes(await repository.getNodes(activeBoard));
               throw error;
             }
-            finally { setDragging(null); dragStart.current = null; setInkPoints([]); }
+            finally { setDragging(null); setResizing(null); setMarquee(null); dragStart.current = null; setInkPoints([]); }
           });
         }}
-        onPointerCancel={() => {
-          if (resizing) { setResizing(null); setNodes(current => { void current; return current; }); }
-          if (dragging && dragStart.current) {
-            const start = dragStart.current;
-            setNodes(current => current.map(node => node.id === dragging ? { ...node, x: start.nodeX, y: start.nodeY } : node));
-          }
-          setDragging(null); dragStart.current = null; panning.current = null; setInkPoints([]);
-        }}
+        onPointerCancel={cancelGesture}
         onContextMenu={e => { e.preventDefault(); void run(() => onContextMenu(e)); }}
       >
         <div
           className="canvas-board"
           style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}
         >
+          {showBaseline && review?.baselineNodes.filter(node => node.nodeType !== 'arrow').map(node => <div key={'baseline-' + node.id} className="canvas-baseline-node" data-testid="canvas-baseline-node"
+            style={{ left: node.x, top: node.y, width: node.width, height: node.height }}>
+            {node.thumbnailPath ? <img src={node.thumbnailPath} alt="" /> : <span>{zh.chatBoardOriginal}</span>}
+          </div>)}
           {nodes.filter(node => node.nodeType === 'photo').map(node => (
             <div
               key={node.id}
@@ -401,11 +514,11 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
               {node.thumbnailPath
                 ? <img src={node.thumbnailPath} alt="" draggable={false} />
                 : <div className="canvas-photo-placeholder">📷</div>}
-              {!node.locked && <div
+              {!node.locked && !editLocked && <div
                 className="canvas-resize-handle"
                 onPointerDown={e => {
                   e.stopPropagation();
-                  if (!node.locked) {
+                  if (!node.locked && !working) {
                     setResizing({ nodeId: node.id, startW: node.width, startH: node.height, x: e.clientX, y: e.clientY });
                     (e.target as HTMLElement).setPointerCapture(e.pointerId);
                   }
@@ -483,7 +596,10 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           )}
         </div>
       </div>
-      {notice && <p role="status" className="canvas-notice">{notice}</p>}
+      {adopting && <Modal title="采纳这张画布？" description="采纳后可继续编辑，AI 将不再修改这张画布。采纳操作无法撤销。" onClose={() => { if (!working) setAdopting(false); }}>
+        <Button disabled={working || readOnly} onClick={() => void run(adoptBoard)}>确认采纳</Button>
+        <Button disabled={working} onClick={() => setAdopting(false)}>取消</Button>
+      </Modal>}
     </div>
   );
 }

@@ -96,6 +96,7 @@ export interface DesktopProjectRepository extends ProjectRepository, DraftReposi
   canvas?: import('./canvas').CanvasRepository;
   publication?: import('./publication').PublicationRepository;
   cloudAuth?: import('./cloud-auth').CloudAuthRepository;
+  billing?: import('./billing').BillingRepository;
   sharing?: import('./sharing').SharingRepository;
   memory: import('./memory').MemoryRepository;
   diagnostics: import('./diagnostics').DiagnosticsRepository;

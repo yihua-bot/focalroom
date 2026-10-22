@@ -1,5 +1,8 @@
 pub mod agent;
+pub mod billing;
 pub mod canvas;
+pub mod canvas_commands;
+pub mod canvas_review;
 pub mod cloud_auth;
 pub mod cloud_credentials;
 pub mod color_engine;
@@ -176,26 +179,19 @@ pub fn run() {
             commands::cloud_login_profile,
             commands::cloud_login_cancel,
             commands::cloud_login_logout,
+            commands::billing_catalog,
+            commands::billing_overview,
+            commands::billing_checkout,
+            commands::billing_manage,
+            commands::billing_cancel_checkout,
             commands::share_project,
-            commands::canvas_create_board,
+            commands::canvas_execute,
+            commands::canvas_snapshot,
+            commands::canvas_comparison,
             commands::canvas_list_boards,
-            commands::canvas_place_photo,
-            commands::canvas_move_nodes,
             commands::canvas_get_nodes,
             commands::canvas_get_photo_sources,
-            commands::canvas_add_text,
-            commands::canvas_delete_node,
-            commands::canvas_add_annotation,
-            commands::canvas_resolve_annotation,
             commands::canvas_get_annotations,
-            commands::canvas_add_arrow,
-            commands::canvas_undo,
-            commands::canvas_add_ink,
-            commands::canvas_adopt_board_draft,
-            commands::canvas_redo,
-            commands::canvas_group_nodes,
-            commands::canvas_resize_node,
-            commands::canvas_set_node_locked,
             commands::pub_create,
             commands::pub_list,
             commands::pub_pages,

@@ -17,9 +17,9 @@ export function SideNav({ project, page, view, onView, onProjects, onMemory, onH
 }) {
   const ui = useUIStore();
   const [settingsPage, setSettingsPage] = useState<'general' | 'contact' | null>(null);
-  const projectKind = !local ? (project?.id === 'sample-project' ? '示例项目' : '预览项目')
+  const projectKind = !local ? '演示项目'
     : authority === 'shared' ? '共享项目 · 只读'
-    : authority === 'local-promoting' ? '共享迁移中 · 暂停编辑'
+    : authority === 'local-promoting' ? '正在准备共享 · 暂停编辑'
     : authority === 'local' ? '本地项目' : '状态待确认';
   return <aside className="sidebar"><div className="logo"><img className="logo-symbol" src="/focalroom-mark.png" alt="FocalRoom 标志" /><div>
     <div className="brand">FocalRoom</div><div className="brand-sub">PHOTO STUDIO</div></div></div>

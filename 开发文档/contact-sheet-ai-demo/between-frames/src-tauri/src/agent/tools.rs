@@ -4,8 +4,12 @@ use crate::{
     domain::{self, AppError, Result},
 };
 use serde_json::{Value, json};
-use sqlx::{Row, Sqlite, Transaction};
+use sqlx::{FromRow, Row, Sqlite, Transaction};
 use std::collections::{HashMap, HashSet};
+
+#[cfg(test)]
+#[path = "canvas_tools_tests.rs"]
+mod canvas_tools_tests;
 
 pub(crate) async fn execute(
     tx: &mut Transaction<'_, Sqlite>,
@@ -23,6 +27,9 @@ pub(crate) async fn execute(
         }
         "group_nodes" | "create_sequence_draft" => {
             return execute_canvas_tool_extended(tx, name, &call.args, task).await;
+        }
+        "move_nodes" | "remove_nodes" | "create_connector" | "add_editorial_note" => {
+            return super::canvas_edit::execute(tx, name, a, task).await;
         }
         "get_project_context" => {
             let row = sqlx::query("SELECT brief,revision FROM projects WHERE id=?")
@@ -426,6 +433,33 @@ pub(crate) async fn execute(
             }
             Ok(json!({"draft_ids":task.final_draft_ids,"formal_state_unchanged":true}))
         }
+        "finish_canvas_task" => {
+            if a["task_id"] != task.id {
+                return Err(AppError::new("PERMISSION_DENIED", "不能结束其他任务"));
+            }
+            let ids: Vec<String> =
+                serde_json::from_value(a["board_ids"].clone()).map_err(serialization)?;
+            if ids.is_empty()
+                || ids.len() > 10
+                || ids.iter().collect::<HashSet<_>>().len() != ids.len()
+            {
+                return Err(AppError::new(
+                    "VALIDATION_ERROR",
+                    "请选择当前任务的画布草案",
+                ));
+            }
+            for id in &ids {
+                require_task_board(tx, id, task).await?;
+            }
+            store::transition(
+                tx,
+                task,
+                "review_ready",
+                a["summary"].as_str().unwrap_or("画布方案已准备好"),
+            )
+            .await?;
+            Ok(json!({"board_ids":ids,"formal_state_unchanged":true}))
+        }
         _ => Err(AppError::new("PERMISSION_DENIED", "未知工具")),
     }
 }
@@ -476,6 +510,33 @@ pub(crate) async fn photos(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Res
 
 // ── G4 Agent Canvas Tools ──
 
+pub(super) async fn require_task_board(
+    tx: &mut Transaction<'_, Sqlite>,
+    board_id: &str,
+    task: &Task,
+) -> Result<()> {
+    let owned: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM boards WHERE id=? AND project_id=? AND state='draft' AND owning_task_id=?",
+    )
+    .bind(board_id).bind(&task.project_id).bind(&task.id)
+    .fetch_one(&mut **tx).await?;
+    if owned != 1 {
+        return Err(AppError::new(
+            "PERMISSION_DENIED",
+            "只能编辑当前任务拥有的画布草案",
+        ));
+    }
+    Ok(())
+}
+
+fn canvas_node_view(
+    node: &crate::canvas::CanvasNode,
+    photo: Option<&String>,
+    source: Option<&String>,
+) -> Value {
+    json!({"id":node.id,"source_node_id":source,"photo_id":photo,"can_inspect":photo.is_some(),"type":node.node_type,"x":node.x,"y":node.y,"width":node.width,"height":node.height,"z":node.z_order,"asset_id":node.asset_id,"content":node.content_json,"children":node.children_json,"locked":node.locked})
+}
+
 pub async fn execute_canvas_tool(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     name: &str,
@@ -497,35 +558,18 @@ pub async fn execute_canvas_tool(
             sqlx::query("INSERT INTO boards(id,project_id,title,state,owning_task_id,created_at,updated_at) VALUES(?,?,?,'draft',?,?,?)")
                 .bind(&id).bind(&task.project_id).bind(title).bind(&task.id).bind(&now).bind(&now)
                 .execute(&mut **tx).await?;
+            sqlx::query("INSERT INTO board_draft_tasks(board_id,task_id,created_at) VALUES(?,?,?)")
+                .bind(&id)
+                .bind(&task.id)
+                .bind(&now)
+                .execute(&mut **tx)
+                .await?;
+            super::task_scope::clone_source(tx, task, &id).await?;
             Ok(json!({"board_id": id, "title": title, "state": "draft", "owned_by_task": true}))
         }
         "place_photos_on_board" => {
             let board_id = args["board_id"].as_str().unwrap_or("");
-            // H0-03：画布必须属于当前项目、draft 状态、且归属当前任务
-            let board_info: Option<(String, Option<String>)> = sqlx::query_as(
-                "SELECT state, owning_task_id FROM boards WHERE id=? AND project_id=?",
-            )
-            .bind(board_id)
-            .bind(&task.project_id)
-            .fetch_optional(&mut **tx)
-            .await?;
-            match board_info {
-                Some((state, owner)) => {
-                    if state != "draft" {
-                        return Err(crate::domain::AppError::new(
-                            "PERMISSION_DENIED",
-                            format!("画布为 {state} 状态，Agent 只能写入 draft 草稿"),
-                        ));
-                    }
-                    if owner.as_deref() != Some(task.id.as_str()) {
-                        return Err(crate::domain::AppError::new(
-                            "PERMISSION_DENIED",
-                            "画布不属于当前任务：Agent 只能写入自己创建的任务草案",
-                        ));
-                    }
-                }
-                None => return Err(crate::domain::AppError::new("NOT_FOUND", "画布不存在")),
-            }
+            require_task_board(tx, board_id, task).await?;
             let placements = args["placements"].as_array().cloned().unwrap_or_default();
             // H0 复核：placements 内嵌套 photo_id 必须在任务授权范围内
             for p in &placements {
@@ -547,11 +591,13 @@ pub async fn execute_canvas_tool(
                 )
                 .bind(photo_id).bind(&task.project_id).bind(photo_id).bind(&task.project_id)
                 .fetch_optional(&mut **tx).await?;
-                let Some(asset) = asset_id else { continue };
+                let asset =
+                    asset_id.ok_or_else(|| AppError::new("NOT_FOUND", "照片不属于当前项目"))?;
                 let x = p["x"].as_f64().unwrap_or(0.0);
                 let y = p["y"].as_f64().unwrap_or(0.0);
                 let w = p["width"].as_f64().unwrap_or(220.0);
                 let h = p["height"].as_f64().unwrap_or(160.0);
+                crate::canvas::validate_rectangle(x, y, w, h)?;
                 let node_id = crate::domain::id();
                 let z: i64 = sqlx::query_scalar(
                     "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
@@ -569,6 +615,23 @@ pub async fn execute_canvas_tool(
         }
         "get_board" => {
             let board_id = args["board_id"].as_str().unwrap_or("");
+            let aliases:Vec<(String,String)>=sqlx::query_as("SELECT a.id,MIN(alias.photo_id) FROM source_assets a JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=a.project_id WHERE a.project_id=? AND alias.photo_id IN(SELECT value FROM json_each(?)) GROUP BY a.id")
+                .bind(&task.project_id).bind(crate::command_audit::encode(&task.allowed_photo_ids)?).fetch_all(&mut **tx).await?;
+            let aliases: HashMap<String, String> = aliases.into_iter().collect();
+            let grant = super::task_scope::load(tx, task).await?;
+            if grant
+                .source
+                .as_ref()
+                .is_some_and(|source| source.board_id == board_id)
+            {
+                let baseline = super::task_scope::baseline(tx, task)
+                    .await?
+                    .ok_or_else(|| AppError::new("RECOVERY_ERROR", "缺少画布来源"))?;
+                return Ok(
+                    json!({"board_id":board_id,"revision":baseline.board.revision,"source":"task_baseline","nodes":baseline.nodes.iter().map(|n|canvas_node_view(n,aliases.get(n.asset_id.as_deref().unwrap_or("")),Some(&n.id))).collect::<Vec<_>>(),"node_count":baseline.nodes.len()}),
+                );
+            }
+            require_task_board(tx, board_id, task).await?;
             // H0 复核：画布必须属于当前任务的项目
             let board_owner: Option<String> =
                 sqlx::query_scalar("SELECT project_id FROM boards WHERE id=?")
@@ -585,14 +648,28 @@ pub async fn execute_canvas_tool(
                 }
             }
             let nodes = sqlx::query(
-                "SELECT id, node_type, x, y, width, height, z_order, asset_id FROM canvas_nodes WHERE board_id=? AND visible=1 ORDER BY z_order",
+                "SELECT n.*,o.source_node_id FROM canvas_nodes n LEFT JOIN board_draft_node_origins o ON o.node_id=n.id WHERE n.board_id=? AND n.visible=1 ORDER BY n.z_order,n.rowid LIMIT 1001",
             )
             .bind(board_id)
             .fetch_all(&mut **tx).await?;
             use sqlx::Row;
-            let result: Vec<Value> = nodes.iter().map(|r| {
-                json!({"id": r.get::<String,_>("id"), "type": r.get::<String,_>("node_type"), "x": r.get::<f64,_>("x"), "y": r.get::<f64,_>("y"), "width": r.get::<f64,_>("width"), "height": r.get::<f64,_>("height"), "z": r.get::<i64,_>("z_order"), "asset_id": r.get::<Option<String>,_>("asset_id")})
-            }).collect();
+            if nodes.len() > 1000 {
+                return Err(AppError::new(
+                    "VALIDATION_ERROR",
+                    "请把方案拆分成较小的创作范围",
+                ));
+            }
+            let result: Vec<Value> = nodes
+                .iter()
+                .map(|row| -> Result<Value> {
+                    let node = crate::canvas::CanvasNode::from_row(row)?;
+                    Ok(canvas_node_view(
+                        &node,
+                        aliases.get(node.asset_id.as_deref().unwrap_or("")),
+                        row.get::<Option<String>, _>("source_node_id").as_ref(),
+                    ))
+                })
+                .collect::<Result<_>>()?;
             Ok(json!({"board_id": board_id, "node_count": result.len(), "nodes": result}))
         }
         _ => Err(crate::domain::AppError::new(
@@ -612,6 +689,7 @@ pub async fn execute_canvas_tool_extended(
     match name {
         "group_nodes" => {
             let board_id = args["board_id"].as_str().unwrap_or("");
+            require_task_board(tx, board_id, task).await?;
             let node_ids: Vec<String> = args["node_ids"]
                 .as_array()
                 .map(|a| {
@@ -620,19 +698,38 @@ pub async fn execute_canvas_tool_extended(
                         .collect()
                 })
                 .unwrap_or_default();
-            let label = args["label"].as_str().unwrap_or("分组");
-            if node_ids.is_empty() {
+            let label = args["label"].as_str().unwrap_or("分组").trim();
+            let unique: HashSet<_> = node_ids.iter().collect();
+            if node_ids.is_empty()
+                || node_ids.len() > 100
+                || unique.len() != node_ids.len()
+                || label.is_empty()
+                || label.chars().count() > 50
+            {
                 return Err(crate::domain::AppError::new(
                     "VALIDATION_ERROR",
-                    "至少需要一个节点",
+                    "分组须包含 1–100 个不重复节点，标签须为 1–50 字符",
                 ));
             }
+            let children = serde_json::to_string(&node_ids).map_err(serialization)?;
+            let valid: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM canvas_nodes WHERE board_id=? AND visible=1 AND locked=0 AND id IN (SELECT value FROM json_each(?))",
+            ).bind(board_id).bind(&children).fetch_one(&mut **tx).await?;
+            if valid != node_ids.len() as i64 {
+                return Err(AppError::new(
+                    "PERMISSION_DENIED",
+                    "分组节点必须属于当前草案且可编辑",
+                ));
+            }
+            let (x, y, right, bottom): (f64, f64, f64, f64) = sqlx::query_as(
+                "SELECT MIN(x),MIN(y),MAX(x+width),MAX(y+height) FROM canvas_nodes WHERE board_id=? AND id IN (SELECT value FROM json_each(?))",
+            ).bind(board_id).bind(&children).fetch_one(&mut **tx).await?;
             let now = crate::domain::timestamp();
             let group_id = crate::domain::id();
-            sqlx::query("INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,children_json,created_at,updated_at) VALUES(?,?, 'group',0,0,0,0,0,0,?,?,?,?)")
-                .bind(&group_id).bind(board_id)
+            sqlx::query("INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,children_json,created_at,updated_at) VALUES(?,?, 'group',?,?,?,?,0,0,?,?,?,?)")
+                .bind(&group_id).bind(board_id).bind(x).bind(y).bind(right-x).bind(bottom-y)
                 .bind(serde_json::json!({"label": label}).to_string())
-                .bind(serde_json::json!(node_ids).to_string())
+                .bind(&children)
                 .bind(&now).bind(&now)
                 .execute(&mut **tx).await?;
             Ok(json!({"group_id": group_id, "label": label, "node_count": node_ids.len()}))

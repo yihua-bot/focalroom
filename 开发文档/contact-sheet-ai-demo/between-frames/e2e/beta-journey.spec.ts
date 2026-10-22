@@ -1,3 +1,4 @@
+import { installAccountFixture } from './account-fixture';
 // M5 Beta 完整旅程：意图 → 人工选片与备注 → Agent 委托 → 局部采纳 →
 // 记忆假设纠正 → 导出 → 重启一致性。真实 Rust 后端（stdio harness）。
 import { test, expect } from '@playwright/test';
@@ -18,7 +19,8 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
     if (['localhost', '127.0.0.1', '[::1]'].includes(new URL(route.request().url()).hostname)) return route.continue();
     return route.abort('internetdisconnected');
   });
-  await page.addInitScript(() => {
+  await installAccountFixture(page);
+ await page.addInitScript(() => {
     Object.assign(globalThis, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: {
       invoke: async (command: string, args: unknown) => {
         if (command.startsWith('plugin:event|')) return 0;

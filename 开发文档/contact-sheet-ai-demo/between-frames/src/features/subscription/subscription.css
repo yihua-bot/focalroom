@@ -1,0 +1,41 @@
+.subscription-layout { display: grid; grid-template-columns: 165px minmax(0,1fr); min-height: 430px; gap: 24px; }
+.subscription-nav { display: flex; flex-direction: column; align-items: stretch; gap: 5px; border-right: 1px solid var(--border); padding-right: 15px; }
+.subscription-nav button { border: 0; background: none; text-align: left; border-radius: 8px; padding: 12px; color: var(--muted); }
+.subscription-nav button[aria-current="page"] { background: var(--surface-raised); color: var(--text); }
+.subscription-content { min-width: 0; }
+.subscription-heading { text-align: center; padding: 4px 0 18px; }
+.subscription-heading > svg { color: var(--accent); margin: 0 auto 10px; }
+.subscription-heading h3 { font-size: 27px; margin-bottom: 10px; }
+.subscription-heading p { color: var(--muted); line-height: 1.7; }
+.subscription-period { display: flex; width: fit-content; margin: 0 auto 22px; border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
+.subscription-period button { min-width: 80px; border: 0; border-radius: 6px; padding: 7px 15px; background: none; color: var(--muted); }
+.subscription-period button[aria-pressed="true"] { background: var(--accent); color: var(--background); }
+.subscription-plans { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 15px; }
+.subscription-plan { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 15px; padding: 22px; gap: 14px; }
+.subscription-plan-pro { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.subscription-plan-label { font-size: 18px; font-weight: 600; }
+.subscription-plan > p { color: var(--muted); font-size: 12px; line-height: 1.8; }
+.subscription-price { min-height: 48px; display: flex; align-items: baseline; gap: 5px; }
+.subscription-price strong { font-size: 29px; letter-spacing: -.04em; }
+.subscription-price > span { color: var(--muted); font-size: 12px; }
+.subscription-plan ul { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 15px; flex: 1; }
+.subscription-plan li { display: flex; gap: 8px; font-size: 12px; line-height: 1.6; }
+.subscription-plan li svg { flex: 0 0 auto; color: var(--accent); margin-top: 2px; }
+.subscription-plan .button { justify-content: center; min-height: 40px; }
+.subscription-fineprint { font-size: 11px; color: var(--muted); line-height: 1.8; margin-top: 15px; }
+.subscription-current { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+.subscription-current small { color: var(--muted); }
+.subscription-current h3 { font-size: 26px; margin-top: 9px; }
+.subscription-current > span { border: 1px solid var(--border); border-radius: 20px; padding: 5px 10px; font-size: 11px; }
+.subscription-usage { display: grid; gap: 15px; padding: 26px 0; }
+.subscription-usage strong { font-size: 34px; font-weight: 500; }
+.subscription-usage progress { width: 100%; height: 9px; accent-color: var(--accent); }
+.subscription-usage p, .subscription-manage p { color: var(--muted); font-size: 12px; line-height: 1.8; }
+.subscription-manage { display: grid; gap: 14px; padding: 12px 0 22px; }
+.subscription-usage .button, .subscription-manage .button { justify-self: start; }
+.subscription-empty { padding: 35px 10px; display: grid; gap: 18px; justify-items: center; color: var(--muted); text-align: center; line-height: 1.8; }
+.subscription-invoices { width: 100%; border-collapse: collapse; font-size: 12px; }
+.subscription-invoices th, .subscription-invoices td { text-align: left; padding: 13px 5px; border-bottom: 1px solid var(--border); }
+.subscription-invoices th { color: var(--muted); font-weight: 400; }
+.subscription-footer { display: flex; gap: 15px; align-items: center; justify-content: flex-end; margin-top: 22px; }
+@media(max-width:700px) { .subscription-layout { grid-template-columns: 1fr; gap: 18px; }.subscription-nav { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 8px; overflow-x: auto; }.subscription-nav button { white-space: nowrap; }.subscription-plans { grid-template-columns: 1fr; }}

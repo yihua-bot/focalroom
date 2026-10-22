@@ -7,8 +7,8 @@ import { useUIStore } from '../stores/uiStore';
 beforeEach(() => { ipc.mockReset(); useUIStore.getState().reset(); });
 
 it('适配 Rust 的 board/publication snake_case，不能把空字段渲染为已接通', async () => {
-  ipc.mockResolvedValueOnce([{ id: 'board', project_id: 'project', title: '叙事', state: 'draft' }]);
-  expect(await new TauriCanvasRepository().listBoards('project')).toEqual([{ id: 'board', projectId: 'project', title: '叙事', state: 'draft' }]);
+  ipc.mockResolvedValueOnce([{ id: 'board', project_id: 'project', title: '叙事', state: 'draft', owning_task_id: null, revision: 1 }]);
+  expect(await new TauriCanvasRepository().listBoards('project')).toEqual([{ id: 'board', projectId: 'project', title: '叙事', state: 'draft', owningTaskId: null, revision: 1 }]);
   ipc.mockResolvedValueOnce({ id: 'book', project_id: 'project', pub_type: 'photobook', title: '书', state: 'draft', created_at: '2026-10-21' });
   expect(await new TauriPublicationRepository().create('project', '书')).toMatchObject({ projectId: 'project', pubType: 'photobook', createdAt: '2026-10-21' });
   expect(ipc).toHaveBeenLastCalledWith('pub_create', { projectId: 'project', cmd: { title: '书', pubType: 'photobook' } });
@@ -20,13 +20,17 @@ it('画布照片通过资产别名取得授权缓存路径，过滤隐藏节点'
   const node = { id: 'node', boardId: 'board', nodeType: 'photo', x: 0, y: 0, width: 100, height: 80,
     rotation: 0, zOrder: 1, assetId: 'asset-not-photo-id', renditionRef: null, contentJson: null, styleJson: null,
     childrenJson: null, locked: false, visible: true };
-  ipc.mockImplementation(async (name: string) => name === 'canvas_get_nodes'
-    ? [node, { ...node, id: 'hidden', visible: false }]
-    : [{ assetId: 'asset-not-photo-id', thumbnailPath: '/authorized/cache.jpg' }]);
-  const nodes = await new TauriCanvasRepository().getNodes('board');
+  const board = { id: 'board', project_id: 'project', title: '叙事', state: 'draft', owning_task_id: null, revision: 1 };
+  ipc.mockImplementation(async (name: string) => name === 'canvas_list_boards' ? [board] : {
+    board, nodes: [node, { ...node, id: 'hidden', visible: false }], annotations: [],
+    photoSources: [{ assetId: 'asset-not-photo-id', thumbnailPath: '/authorized/cache.jpg' }],
+  });
+  const repository = new TauriCanvasRepository();
+  await repository.listBoards('project');
+  const nodes = await repository.getNodes('board');
   expect(nodes).toHaveLength(1);
   expect(nodes[0].thumbnailPath).toBe('asset:/authorized/cache.jpg');
-  expect(ipc).toHaveBeenCalledWith('canvas_get_photo_sources', { boardId: 'board' });
+  expect(ipc).toHaveBeenCalledWith('canvas_snapshot', { projectId: 'project', boardId: 'board' });
 });
 
 it('生成页面返回值必须为正整数，错误回执不能显示成功', async () => {

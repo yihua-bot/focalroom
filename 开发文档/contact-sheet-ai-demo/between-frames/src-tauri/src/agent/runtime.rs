@@ -34,6 +34,7 @@ impl AgentEngine {
         let queues = matches!(
             request.command,
             TaskCommand::StartTask { .. }
+                | TaskCommand::StartCanvasTask { .. }
                 | TaskCommand::ResumeTask { .. }
                 | TaskCommand::SubmitFeedback { .. }
         );

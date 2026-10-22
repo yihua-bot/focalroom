@@ -3,6 +3,8 @@ import { TauriAgentRepository } from './TauriAgentRepository';
 import { TauriMemoryRepository } from './TauriMemoryRepository';
 import { TauriSharingRepository } from './TauriSharingRepository';
 import { TauriCanvasRepository } from './TauriCanvasRepository';
+import { TauriBillingRepository } from './TauriBillingRepository';
+import { userFacingError } from './userFacingError';
 import { TauriPublicationRepository } from './TauriPublicationRepository';
 import { invokeCommand as command } from './tauriCommand';
 import type { SelectionDraft } from '../domain/agent';
@@ -27,7 +29,7 @@ export const EVENT_KIND_LABELS: Record<string, string> = {
   decision: '修改选片状态', note: '更新照片备注', compare: '记录两图偏好', reorder: '调整作品序列', import: '导入照片', relink: '重新定位照片',
   project: '更新项目意图', project_create: '创建项目', rating: '保存人工评分', undo: '撤销人工编辑', redo: '重做人工编辑',
   version_save: '保存作品版本', version_restore: '恢复作品版本', project_archive: '归档项目', project_restore: '恢复项目',
-  draft_apply: '采纳草案', draft_rebase: '重新比较草案基线', draft_edit: '调整草案顺序', draft_discard: '丢弃草案',
+  draft_apply: '采纳草案', draft_rebase: '根据当前作品重新比较方案', draft_edit: '调整草案顺序', draft_discard: '丢弃草案',
 };
 
 export class TauriRepository implements DesktopProjectRepository {
@@ -35,6 +37,7 @@ export class TauriRepository implements DesktopProjectRepository {
   readonly publication = new TauriPublicationRepository();
   readonly sharing = new TauriSharingRepository();
   readonly cloudAuth = this.sharing.auth;
+  readonly billing = new TauriBillingRepository();
   readonly mode = 'desktop' as const;
   readonly agent = new TauriAgentRepository();
   async setTags(projectId: string, tags: string[]) {
@@ -97,7 +100,7 @@ export class TauriRepository implements DesktopProjectRepository {
       raw = await command('execute_gui_command', { request, compact: true });
     }
     const reply = replySchema.parse(raw);
-    if (!reply.ok || !reply.data?.project) throw Object.assign(new Error(reply.error?.message ?? '命令没有返回项目'), { code: reply.error?.code, currentRevision: reply.error?.currentRevision });
+    if (!reply.ok || !reply.data?.project) throw Object.assign(new Error(userFacingError(reply.error)), { code: reply.error?.code, currentRevision: reply.error?.currentRevision });
     const current = this.snapshots.get(id)?.revision ?? 0;
     if (reply.data.revision < current) return this.get(id);
     return this.map(reply.data.project);

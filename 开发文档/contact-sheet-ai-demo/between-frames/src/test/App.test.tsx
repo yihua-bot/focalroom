@@ -6,11 +6,16 @@ import { MockRepository } from '../services/MockRepository';
 import { useUIStore } from '../stores/uiStore';
 import { I18nProvider } from '../i18n';
 import { setCopyLocale } from '../app/copy';
+import type { CloudAuthRepository } from '../domain/cloud-auth';
+const signedIn: CloudAuthRepository = {
+  status: async () => ({ authenticated: true, waiting: false, origin: 'https://team.focroom.cc', user: { id: 'fixture-user', name: '摄影师', email: 'author@fixture.test' }, error: null }),
+  open: vi.fn(), cancel: vi.fn(), logout: vi.fn(), updateProfile: vi.fn(), subscribe: async () => () => {},
+};
 
 beforeEach(() => { window.history.replaceState(null, '', '/'); useUIStore.getState().reset(); useUIStore.setState({ aiDrafts: {} }); setCopyLocale('zh'); });
 async function open() {
   const repository = new MockRepository();
-  render(<App repository={repository} />);
+  render(<App repository={repository} auth={signedIn} />);
   await screen.findByRole('button', { name: '查看第 1 张 某个上午' });
   return { repository, user: userEvent.setup() };
 }
@@ -19,7 +24,7 @@ describe('工作台交互', () => {
     const originalStorage = globalThis.localStorage;
     const storage = new Map([['focalroom-locale', 'zh']]);
     vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) });
-    render(<I18nProvider><App repository={new MockRepository()} /></I18nProvider>);
+    render(<I18nProvider><App repository={new MockRepository()} auth={signedIn} /></I18nProvider>);
     await screen.findByRole('button', { name: '查看第 1 张 某个上午' });
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: '账户菜单' }));
@@ -81,7 +86,7 @@ describe('工作台交互', () => {
   it('AI 目标按项目隔离，切换项目不会带入上一个项目的输入', async () => {
     const repository = new MockRepository();
     await repository.create('另一组作品', '');
-    render(<App repository={repository} />);
+    render(<App repository={repository} auth={signedIn} />);
     const user = userEvent.setup();
     await screen.findByRole('button', { name: '查看第 1 张 某个上午' });
     await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'AI 智能选片' }));
@@ -101,7 +106,7 @@ describe('工作台交互', () => {
   });
   it('仓库异常明确显示加载失败，并提供重试', async () => {
     class FailingRepository extends MockRepository { override async list(): Promise<never> { throw new Error('读取失败'); } }
-    render(<App repository={new FailingRepository()} />);
+    render(<App repository={new FailingRepository()} auth={signedIn} />);
     expect(await screen.findByRole('heading', { name: '项目加载失败' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
   });

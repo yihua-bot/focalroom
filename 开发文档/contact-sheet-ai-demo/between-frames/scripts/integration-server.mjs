@@ -14,7 +14,7 @@ const pending = new Map();
 const originalGrants = new Set();
 let restarting = false;
 function startHarness() {
-  const worker = spawn(resolve('src-tauri', process.env.CARGO_TARGET_DIR || 'target', buildProfile, 'm1-harness'), [root, fixtureProfile], { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, BETWEEN_FRAMES_OPENAI_API_KEY: '' } });
+  const worker = spawn(resolve('src-tauri', process.env.CARGO_TARGET_DIR || 'target', buildProfile, 'm1-harness'), [root, fixtureProfile], { stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, BETWEEN_FRAMES_OPENAI_API_KEY: '', BETWEEN_FRAMES_ANTHROPIC_API_KEY: '', BETWEEN_FRAMES_GEMINI_API_KEY: '' } });
   createInterface({ input: worker.stdout }).on('line', line => {
     const result = JSON.parse(line);
     const request = pending.get(result.id);

@@ -1,3 +1,4 @@
+import { userFacingError } from '../../services/userFacingError';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowUp, Check, Image, Sparkles } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,15 +9,16 @@ import { defaultAgentBudget, type AiConfig, type TaskCommand, type TaskState } f
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
 import { DraftReview } from './DraftReview';
+import { useAccount } from '../cloud-login/AccountProvider';
 
 export const taskLabels: Record<TaskState, string> = { queued: '排队中', planning: '准备中', running: '执行中', needs_input: '等待答复', review_ready: '待审核', completed: '已完成', paused: '已暂停', stale: '项目已更新', failed: '失败', cancelled: '已取消', interrupted: '已中断' };
 export interface QuickAgentAction { id: string; goal: string; count: number; photoIds: string[] }
 const supportsVision = (config?: AiConfig) => ['vision', 'structured_output', 'instruction_following'].every(capability => (config?.observation?.capabilities ?? config?.capabilities)?.includes(capability));
 function unavailable(config?: AiConfig): string {
  if (!config?.ready) return zh.aiNotReady;
- if (config.configurationError || config.observation?.configurationError) return config.configurationError || config.observation!.configurationError!;
+ if (config.configurationError || config.observation?.configurationError) return zh.aiNotReady;
  if (config.keySource !== 'focalroom') return '';
- if (config.hostedError) return config.hostedError;
+ if (config.hostedError) return zh.aiConnectionFailed;
  if (!config.hostedAccount?.enabled) return zh.aiClosed;
  if (!config.hostedAccount.verified) return zh.aiVerify;
  return config.hostedAccount.available > 0 ? '' : zh.aiQuota;
@@ -28,6 +30,10 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  settingsOpen?: boolean; onSettingsClose?: () => void; children?: ReactNode;
 }) {
  const client = useQueryClient();
+ const account = useAccount();
+ const canvasSource = useUIStore(state => state.canvasTaskSource);
+ const openCanvasBoard = useUIStore(state => state.openCanvasBoard);
+ const [output, setOutput] = useState<'selection' | 'canvas'>(canvasSource ? 'canvas' : 'selection');
  const query = useQuery({ queryKey: ['agent', project.id], queryFn: () => repository!.agent.query(project.id), enabled: Boolean(repository), refetchInterval: repository ? 1000 : false });
  const configQuery = useQuery({ queryKey: ['ai-config', project.id], queryFn: () => repository!.agent.aiConfig(project.id), enabled: Boolean(repository), staleTime: 10_000, refetchInterval: 15_000 });
  const config = configQuery.data;
@@ -52,7 +58,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  const selectionEmpty = scopeSelection && !selectedIds.length;
  const updateMessage = (goal: string) => {
   const explicit = goal.match(/(\d+)\s*(?:张|枚|장|photos?\b|images?\b|frames?\b)/i) ?? goal.match(/(?:select|keep|choose)\s+(\d+)/i);
-  const nextCount = explicit ? Math.min(100, Math.max(1, Number(explicit[1]))) : count;
+  const nextCount = explicit ? Math.min(output === 'canvas' ? 500 : 100, Math.max(1, Number(explicit[1]))) : count;
   setMessage(goal); setCount(nextCount);
   saveDraft(project.id, { goal, count: nextCount, scopeSelection });
  };
@@ -83,11 +89,11 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
   if (!repository || sending.current) return;
   sending.current = true; setBusy(true); setError('');
   try { await repository.agent.request(project.id, command); await query.refetch(); }
-  catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+  catch (cause) { setError(userFacingError(cause)); }
   finally { sending.current = false; setBusy(false); }
  };
  const send = async () => {
-  if (!repository || sending.current || blocked || running || !message.trim() || !project.photos.length || selectionEmpty || count < 1 || count > 100) return;
+  if (!repository || sending.current || blocked || running || !message.trim() || !project.photos.length || selectionEmpty || count < 1 || count > (output === 'canvas' ? 500 : 100)) return;
   sending.current = true; setBusy(true); setError('');
   try {
    const fresh = await configQuery.refetch();
@@ -108,11 +114,12 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
     }
     const goal = task && ['review_ready', 'completed'].includes(task.state)
      ? (task.goal.slice(0, 1900) + '\n\n补充要求：' + message.trim()).slice(0, 4000) : message.trim();
-    await repository.agent.request(project.id, { type: 'StartTask', goal, targetCount: count, selectedPhotoIds: ids, budget, consentId });
+    const options = { goal, targetCount: count, selectedPhotoIds: ids, budget, consentId };
+    await repository.agent.request(project.id, output === 'canvas' ? { type: 'StartCanvasTask', ...options, sourceBoard: canvasSource } : { type: 'StartTask', ...options });
    }
    updateMessage('');
    await query.refetch();
-  } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+  } catch (cause) { setError(userFacingError(cause)); }
   finally { sending.current = false; setBusy(false); }
  };
  const draft = query.data?.drafts.find(item => item.id === draftId);
@@ -131,10 +138,14 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
     <div className="chat-assistant-message"><span className="chat-assistant-icon"><Sparkles size={15} /></span><div>
      <strong className="chat-task-status" data-state={item.state}>{taskLabels[item.state]}</strong>
      {item.question && <p>{item.question}</p>}
-     {['paused', 'interrupted', 'failed', 'stale'].includes(item.state) && <p>{item.reason}</p>}
+     {['paused', 'interrupted', 'failed', 'stale'].includes(item.state) && <p>{userFacingError(new Error(item.reason))}</p>}
      {(query.data?.drafts ?? []).filter(candidate => candidate.taskId === item.id).map(candidate => <div className="chat-draft-card" key={candidate.id}>
       <div><Check size={15} /><strong>{candidate.title}</strong></div><p>{candidate.summary}</p>
       <Button size="small" disabled={running} onClick={() => setDraftId(candidate.id)}>{zh.chatReviewDraft}</Button>
+     </div>)}
+     {(item.boardDrafts ?? []).map(board => <div className="chat-draft-card" key={board.id}>
+      <div><Check size={15} /><strong>{board.title}</strong></div>
+      <Button size="small" disabled={!['review_ready', 'completed'].includes(item.state)} onClick={() => openCanvasBoard(board.id)}>{zh.chatReviewBoard}</Button>
      </div>)}
      {item.id === task?.id && <div className="chat-task-controls">
       {['queued', 'planning', 'running'].includes(item.state) && <Button size="small" disabled={busy} onClick={() => { void request({ type: 'PauseTask', taskId: item.id }); }}>{zh.chatPause}</Button>}
@@ -144,19 +155,22 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
      </div>}
     </div></div>
    </article>)}
-   {(error || query.error) && <p role="alert" className="chat-error">{error || query.error?.message}</p>}
+   {(error || query.error) && <p role="alert" className="chat-error">{error || userFacingError(query.error)}</p>}
    {children}
    <div ref={last} />
   </div>
   <footer className="ai-chat-composer">
-   {!repository ? <p className="chat-notice">{zh.aiDesktop}</p> : configQuery.isError ? <p role="alert" className="chat-notice">{zh.aiConnectionFailed}<button onClick={() => { void configQuery.refetch(); }}>{zh.retryAI}</button></p> : unavailable(config) && <p role="status" className="chat-notice">{unavailable(config)}{config?.hostedError && repository.cloudAuth && <button onClick={() => { void repository.cloudAuth!.open().catch(cause => setError(String(cause))); }}>{zh.signIn}</button>}</p>}
+   {account && !account.status?.authenticated ? <p className="chat-notice"><button onClick={() => account.signIn('ai')}>{zh.signIn}</button></p> : !repository ? <p className="chat-notice">{zh.aiDesktop}</p> : configQuery.isError ? <p role="alert" className="chat-notice">{zh.aiConnectionFailed}<button onClick={() => { void configQuery.refetch(); }}>{zh.retryAI}</button></p> : unavailable(config) && <p role="status" className="chat-notice">{unavailable(config)}{config?.hostedAccount && !config.hostedAccount.available && account && <button onClick={() => account.openSubscription('plans')}>查看订阅</button>}</p>}
    {repository && config?.ready && !vision && <p className="chat-notice">{zh.chatTextOnly}</p>}
-   <form onSubmit={event => { event.preventDefault(); void send(); }}>
+   <form onSubmit={event => { event.preventDefault(); if (account) void account.requireSignIn('ai', send); else void send(); }}>
+    <div className="chat-scope-row"><label>{zh.chatOutput}<select aria-label={zh.chatOutput} value={output} disabled={busy || running || task?.state === 'needs_input'} onChange={event => { const mode = event.target.value as 'selection' | 'canvas'; setOutput(mode); setCount(value => Math.min(value, mode === 'canvas' ? 500 : 100)); }}>
+      <option value="selection">{zh.chatSelectionOutput}</option><option value="canvas">{zh.chatCanvasOutput}</option>
+    </select></label>{output === 'canvas' && canvasSource && <span>{zh.chatCanvasSource}</span>}</div>
     <div className="chat-compose-box">
      <textarea aria-label={zh.chatMessage} placeholder={task?.state === 'needs_input' ? zh.chatReplyPlaceholder : zh.chatPlaceholder} maxLength={2000} rows={3} value={message} disabled={busy}
       onChange={event => updateMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
      <div className="chat-compose-actions">
-      <label className="chat-count">{zh.chatCount}<input aria-label={zh.chatCount} type="number" min={1} max={100} required disabled={busy} value={count} onChange={event => { const count = Number(event.target.value); setCount(count); saveDraft(project.id, { goal: message, count, scopeSelection }); }} /></label>
+      <label className="chat-count">{output === 'canvas' ? zh.chatCanvasCount : zh.chatCount}<input aria-label={output === 'canvas' ? zh.chatCanvasCount : zh.chatCount} type="number" min={1} max={output === 'canvas' ? 500 : 100} required disabled={busy} value={count} onChange={event => { const count = Number(event.target.value); setCount(count); saveDraft(project.id, { goal: message, count, scopeSelection }); }} /></label>
       <button type="submit" className="chat-send" aria-label={zh.chatSend} disabled={blocked || busy || running || !project.photos.length || selectionEmpty || !message.trim()}><ArrowUp size={19} /></button>
      </div>
     </div>
@@ -167,7 +181,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
    {selectionEmpty ? <p className="chat-footnote">{zh.chatSelectPhotos}</p> : !project.photos.length ? <p className="chat-footnote">{zh.chatImportFirst}</p> : vision ? <p className="chat-footnote">{zh.chatSendConsent.replace('{count}', String(Math.min(imageLimit, scopeSelection ? selectedIds.length : project.photos.length)))}</p> : null}
   </footer>
   {settingsOpen && <Modal title={zh.settings} onClose={onSettingsClose}>
-   <div className="ai-settings-fields"><div className="settings-service"><Sparkles size={17} /><span>{config?.keySource === 'focalroom' ? 'FocalRoom AI' : config?.providerId || zh.aiNotReady}</span></div>
+   <div className="ai-settings-fields"><div className="settings-service"><Sparkles size={17} /><span>FocalRoom AI</span></div>
     <label>{zh.chatImageLimit}<select aria-label={zh.chatImageLimit} value={imageLimit} onChange={event => setImageLimit(Number(event.target.value))}>{[20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
     <label>{zh.chatTimeLimit}<select aria-label={zh.chatTimeLimit} value={duration} onChange={event => setDuration(Number(event.target.value))}>{[120, 300, 480, 600].map(n => <option key={n} value={n}>{n / 60} {zh.minutes}</option>)}</select></label>
     <p className="muted">{zh.chatImagePrivacy}</p>

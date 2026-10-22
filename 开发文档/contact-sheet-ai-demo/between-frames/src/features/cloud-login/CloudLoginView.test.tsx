@@ -25,7 +25,7 @@ describe("桌面云登录 UI", () => {
   it("未登录时提供登录入口并进入等待态", async () => {
     const { repository } = fixture();
     render(<CloudLoginView repository={repository} onClose={vi.fn()} />);
-    const button = await screen.findByRole("button", { name: "登录" });
+    const button = await screen.findByRole("button", { name: "继续登录" });
     fireEvent.click(button);
     await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
     expect(repository.open).toHaveBeenCalled();
@@ -65,13 +65,13 @@ it("命令不发送通知时仍主动刷新退出状态；断网也保留本机�
  render(<CloudAccount repository={f.repository}/>);
  fireEvent.click(await screen.findByRole("button",{name:"账户菜单"}));
  fireEvent.click(await screen.findByRole("menuitem",{name:"退出登录"}));
- expect(await screen.findByRole("alert")).toHaveTextContent("已在本机退出；云端会话未能撤销");
+ expect(await screen.findByRole("alert")).toHaveTextContent("已退出当前设备，其他设备的登录状态可能仍然有效。");
  expect(await screen.findByText("未登录")).toBeVisible();expect(screen.queryByText("Cached")).not.toBeInTheDocument();
 });
 it("浏览器打开失败显示原因，并允许重试",async()=>{
  const f=fixture();vi.mocked(f.repository.open).mockRejectedValue(new Error("系统浏览器无法打开"));render(<CloudAccount repository={f.repository}/>);
  fireEvent.click(screen.getByRole("button",{name:"账户菜单"}));
- fireEvent.click(await screen.findByRole("menuitem",{name:"登录"}));expect(await screen.findByRole("alert")).toHaveTextContent("系统浏览器无法打开");expect(screen.queryByRole("status")).not.toBeInTheDocument();
+ fireEvent.click(await screen.findByRole("menuitem",{name:"登录"}));fireEvent.click(await screen.findByRole("button",{name:"继续登录"}));expect(await screen.findByRole("alert")).toHaveTextContent("无法打开登录页面，请重试");expect(screen.queryByRole("status")).not.toBeInTheDocument();
 });
 it("退出后迟到的状态请求不能恢复旧账户，卸载移除订阅",async()=>{
  const f=fixture();let resolve!:(value:CloudStatus)=>void;vi.mocked(f.repository.status).mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));

@@ -21,7 +21,9 @@ pub(crate) async fn load(tx: &mut Transaction<'_, Sqlite>, id: &str) -> Result<T
         memory_revision: r.get("memory_revision"),
         allowed_photo_ids: parse(r.get("allowed_ids_json"))?,
         selected_photo_ids: parse(r.get("selected_ids_json"))?,
-        target_count: r.get::<i64, _>("target_count") as u32,
+        target_count: r
+            .get::<Option<i64>, _>("canvas_target_count")
+            .unwrap_or_else(|| r.get("target_count")) as u32,
         state: r.get("state"),
         reason: r.get("reason"),
         budget: parse(r.get("budget_json"))?,
@@ -126,6 +128,7 @@ pub(crate) async fn protocol(
 }
 pub(crate) async fn checkpoint(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<()> {
     let history = protocol(tx, &task.id).await?;
+    let grant_binding = super::task_scope::binding(tx, task).await?;
     let author_binding =
         super::memory_scope::binding_value(super::memory_scope::load(tx, &task.id).await?);
     let identity = super::model_binding::load(tx, &task.id).await?;
@@ -142,7 +145,7 @@ pub(crate) async fn checkpoint(tx: &mut Transaction<'_, Sqlite>, task: &Task) ->
             .bind(&task.id)
             .fetch_all(&mut **tx)
             .await?;
-    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"authorMemoryBinding":author_binding,"memoryRevision":task.memory_revision,"providerId":task.provider_id,"modelId":model,"modelIdentity":identity,"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"taskGrantBinding":grant_binding,"authorMemoryBinding":author_binding,"memoryRevision":task.memory_revision,"providerId":task.provider_id,"modelId":model,"modelIdentity":identity,"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
     Ok(())
 }
 pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection> {
@@ -157,6 +160,9 @@ pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection>
     let mut tasks = vec![];
     for id in ids {
         let t = load(&mut tx, &id).await?;
+        let grant = super::task_scope::load(&mut tx, &t).await?;
+        let boards=sqlx::query_as("SELECT b.* FROM boards b JOIN board_draft_tasks d ON d.board_id=b.id WHERE b.project_id=? AND d.task_id=? ORDER BY b.created_at,b.rowid")
+            .bind(&t.project_id).bind(&t.id).fetch_all(&mut *tx).await?;
         let steps = sqlx::query(
             "SELECT id,kind,summary,created_at FROM agent_steps WHERE task_id=? ORDER BY id",
         )
@@ -172,6 +178,9 @@ pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection>
         })
         .collect();
         tasks.push(TaskView {
+            canvas_task: grant.canvas,
+            canvas_source: grant.source,
+            board_drafts: boards,
             id: t.id,
             goal: t.goal,
             base_revision: t.base_revision,

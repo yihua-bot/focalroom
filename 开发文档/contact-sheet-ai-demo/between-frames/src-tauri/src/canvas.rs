@@ -9,17 +9,23 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg(test)]
+#[path = "canvas_history_tests.rs"]
+mod history_regressions;
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Board {
     pub id: String,
     pub project_id: String,
     pub title: String,
     pub state: String,
+    pub owning_task_id: Option<String>,
+    pub revision: i64,
     pub created_at: String,
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct CanvasNode {
     pub id: String,
@@ -43,13 +49,13 @@ pub struct CanvasNode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateBoardCommand {
     pub title: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlacePhotoNodeCommand {
     pub board_id: String,
     pub asset_id: String,
@@ -60,7 +66,7 @@ pub struct PlacePhotoNodeCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MoveNodesCommand {
     pub board_id: String,
     pub node_ids: Vec<String>,
@@ -68,14 +74,14 @@ pub struct MoveNodesCommand {
     pub dy: f64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct CanvasPhotoSource {
     pub asset_id: String,
     pub thumbnail_path: String,
 }
 
-fn validate_rectangle(x: f64, y: f64, width: f64, height: f64) -> Result<()> {
+pub(crate) fn validate_rectangle(x: f64, y: f64, width: f64, height: f64) -> Result<()> {
     if ![x, y, width, height]
         .iter()
         .all(|v| v.is_finite() && v.abs() <= 1e9)
@@ -109,23 +115,36 @@ impl Store {
 impl CommandHandler<'_> {
     /// 创建画布（正式命令，走事务+审计）。
     pub async fn create_board(&self, project: &str, title: &str) -> Result<Board> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let result = self.create_board_tx(&mut tx, project, title, None).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    pub(crate) async fn create_board_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        title: &str,
+        new_id: Option<&str>,
+    ) -> Result<Board> {
         let title = title.trim();
         if title.is_empty() || title.chars().count() > 200 {
             return Err(AppError::new("VALIDATION_ERROR", "画布标题须为 1–200 字符"));
         }
-        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
-        let id = domain::id();
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
+        let id = new_id.map(str::to_owned).unwrap_or_else(domain::id);
         let now = domain::timestamp();
         sqlx::query("INSERT INTO boards(id,project_id,title,state,created_at,updated_at) VALUES(?,?,?,'draft',?,?)")
             .bind(&id).bind(project).bind(title).bind(&now).bind(&now)
-            .execute(&mut *tx).await?;
-        tx.commit().await?;
+            .execute(&mut **tx).await?;
         Ok(Board {
             id,
             project_id: project.to_owned(),
             title: title.to_owned(),
             state: "draft".to_owned(),
+            owning_task_id: None,
+            revision: 1,
             created_at: now.clone(),
             updated_at: now,
         })
@@ -137,15 +156,29 @@ impl CommandHandler<'_> {
         project: &str,
         cmd: &PlacePhotoNodeCommand,
     ) -> Result<CanvasNode> {
-        validate_rectangle(cmd.x, cmd.y, cmd.width, cmd.height)?;
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let result = self
+            .place_photo_node_tx(&mut tx, project, cmd, None)
+            .await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    pub(crate) async fn place_photo_node_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &PlacePhotoNodeCommand,
+        new_id: Option<&str>,
+    ) -> Result<CanvasNode> {
+        validate_rectangle(cmd.x, cmd.y, cmd.width, cmd.height)?;
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
         // 验证画布属于此项目
         let board: Option<String> =
             sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
                 .bind(&cmd.board_id)
                 .bind(project)
-                .fetch_optional(&mut *tx)
+                .fetch_optional(&mut **tx)
                 .await?;
         if board.is_none() {
             return Err(AppError::new("NOT_FOUND", "画布不存在或不属于此项目"));
@@ -155,17 +188,17 @@ impl CommandHandler<'_> {
             "SELECT id FROM source_assets WHERE project_id=? AND (id=? OR id=(SELECT asset_id FROM asset_aliases WHERE photo_id=?))",
         )
         .bind(project).bind(&cmd.asset_id).bind(&cmd.asset_id)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await?;
         let asset_id = asset.ok_or_else(|| AppError::new("NOT_FOUND", "资产不存在"))?;
 
-        let id = domain::id();
+        let id = new_id.map(str::to_owned).unwrap_or_else(domain::id);
         let now = domain::timestamp();
         let z: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
         )
         .bind(&cmd.board_id)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut **tx)
         .await?;
         sqlx::query(
             "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,asset_id,created_at,updated_at) VALUES(?,?, 'photo',?,?,?,?,0,?,?,?,?)",
@@ -173,11 +206,11 @@ impl CommandHandler<'_> {
         .bind(&id).bind(&cmd.board_id)
         .bind(cmd.x).bind(cmd.y).bind(cmd.width).bind(cmd.height)
         .bind(z).bind(&asset_id).bind(&now).bind(&now)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
         // H0-07：记录撤销日志
         Self::log_canvas_op(
-            &mut tx,
+            tx,
             project,
             &cmd.board_id,
             "add_node",
@@ -185,7 +218,6 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeId": id}),
         )
         .await?;
-        tx.commit().await?;
         Ok(CanvasNode {
             id,
             board_id: cmd.board_id.clone(),
@@ -211,15 +243,26 @@ impl CommandHandler<'_> {
     /// 移动节点（原子操作，支持多选）。
     pub async fn move_nodes(&self, project: &str, cmd: &MoveNodesCommand) -> Result<()> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        self.move_nodes_tx(&mut tx, project, cmd).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn move_nodes_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &MoveNodesCommand,
+    ) -> Result<()> {
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
         let now = domain::timestamp();
         for node_id in &cmd.node_ids {
             let result = sqlx::query(
-                "UPDATE canvas_nodes SET x=x+?, y=y+?, updated_at=? WHERE id=? AND board_id=? AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+                "UPDATE canvas_nodes SET x=x+?, y=y+?, updated_at=? WHERE id=? AND board_id=? AND visible=1 AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
             )
             .bind(cmd.dx).bind(cmd.dy).bind(&now)
             .bind(node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await?;
             if result.rows_affected() == 0 {
                 return Err(AppError::new(
@@ -230,7 +273,7 @@ impl CommandHandler<'_> {
         }
         // H0-07：记录撤销日志
         Self::log_canvas_op(
-            &mut tx,
+            tx,
             project,
             &cmd.board_id,
             "move",
@@ -238,14 +281,13 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeIds": cmd.node_ids, "dx": cmd.dx, "dy": cmd.dy}),
         )
         .await?;
-        tx.commit().await?;
         Ok(())
     }
 
     /// 查询项目的画布列表。
     pub async fn list_boards(&self, project: &str) -> Result<Vec<Board>> {
-        let rows = sqlx::query_as::<_, (String, String, String, String, String, String)>(
-            "SELECT id, project_id, title, state, created_at, updated_at FROM boards WHERE project_id=? ORDER BY created_at",
+        let rows = sqlx::query_as::<_, (String, String, String, String, Option<String>, i64, String, String)>(
+            "SELECT id, project_id, title, state, owning_task_id, revision, created_at, updated_at FROM boards WHERE project_id=? ORDER BY created_at,rowid",
         )
         .bind(project)
         .fetch_all(&self.store.pool)
@@ -253,11 +295,22 @@ impl CommandHandler<'_> {
         Ok(rows
             .into_iter()
             .map(
-                |(id, project_id, title, state, created_at, updated_at)| Board {
+                |(
                     id,
                     project_id,
                     title,
                     state,
+                    owning_task_id,
+                    revision,
+                    created_at,
+                    updated_at,
+                )| Board {
+                    id,
+                    project_id,
+                    title,
+                    state,
+                    owning_task_id,
+                    revision,
                     created_at,
                     updated_at,
                 },
@@ -588,7 +641,7 @@ mod tests {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AddTextNodeCommand {
     pub board_id: String,
     pub node_type: String, // "text" | "sticky" | "shape"
@@ -597,11 +650,12 @@ pub struct AddTextNodeCommand {
     pub width: f64,
     pub height: f64,
     pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeleteNodeCommand {
     pub board_id: String,
     pub node_id: String,
@@ -614,6 +668,19 @@ impl CommandHandler<'_> {
         project: &str,
         cmd: &AddTextNodeCommand,
     ) -> Result<CanvasNode> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let result = self.add_text_node_tx(&mut tx, project, cmd, None).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    pub(crate) async fn add_text_node_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &AddTextNodeCommand,
+        new_id: Option<&str>,
+    ) -> Result<CanvasNode> {
         if !matches!(cmd.node_type.as_str(), "text" | "sticky" | "shape") {
             return Err(AppError::new(
                 "VALIDATION_ERROR",
@@ -624,24 +691,23 @@ impl CommandHandler<'_> {
         if cmd.content.chars().count() > 5000 {
             return Err(AppError::new("VALIDATION_ERROR", "内容不超过 5000 字符"));
         }
-        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
         let board: Option<String> =
             sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
                 .bind(&cmd.board_id)
                 .bind(project)
-                .fetch_optional(&mut *tx)
+                .fetch_optional(&mut **tx)
                 .await?;
         if board.is_none() {
             return Err(AppError::new("NOT_FOUND", "画布不存在"));
         }
-        let id = domain::id();
+        let id = new_id.map(str::to_owned).unwrap_or_else(domain::id);
         let now = domain::timestamp();
         let z: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
         )
         .bind(&cmd.board_id)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut **tx)
         .await?;
         let content_json = serde_json::to_string(&serde_json::json!({"text": cmd.content}))
             .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
@@ -656,10 +722,10 @@ impl CommandHandler<'_> {
         .bind(cmd.x).bind(cmd.y).bind(cmd.width).bind(cmd.height)
         .bind(z).bind(&content_json).bind(&style_json)
         .bind(&now).bind(&now)
-        .execute(&mut *tx).await?;
+        .execute(&mut **tx).await?;
         // H0-07：撤销日志
         Self::log_canvas_op(
-            &mut tx,
+            tx,
             project,
             &cmd.board_id,
             "add_node",
@@ -667,7 +733,6 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeId": id}),
         )
         .await?;
-        tx.commit().await?;
         Ok(CanvasNode {
             id,
             board_id: cmd.board_id.clone(),
@@ -693,19 +758,30 @@ impl CommandHandler<'_> {
     /// 删除节点（软删——visible=0，保留历史关联）。
     pub async fn delete_node(&self, project: &str, cmd: &DeleteNodeCommand) -> Result<()> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        self.delete_node_tx(&mut tx, project, cmd).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn delete_node_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &DeleteNodeCommand,
+    ) -> Result<()> {
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
         let result = sqlx::query(
-            "UPDATE canvas_nodes SET visible=0, updated_at=? WHERE id=? AND board_id=? AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+            "UPDATE canvas_nodes SET visible=0, updated_at=? WHERE id=? AND board_id=? AND visible=1 AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
         )
         .bind(domain::timestamp())
         .bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
-        .execute(&mut *tx).await?;
+        .execute(&mut **tx).await?;
         if result.rows_affected() == 0 {
             return Err(AppError::new("NOT_FOUND", "节点不存在"));
         }
         // H0-07：记录撤销日志
         Self::log_canvas_op(
-            &mut tx,
+            tx,
             project,
             &cmd.board_id,
             "delete_node",
@@ -713,7 +789,6 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeId": cmd.node_id}),
         )
         .await?;
-        tx.commit().await?;
         Ok(())
     }
 }
@@ -733,7 +808,7 @@ impl Store {
 
 // ── Board Annotations（画布评论）──
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct BoardAnnotation {
     pub id: String,
@@ -751,7 +826,7 @@ pub struct BoardAnnotation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AddAnnotationCommand {
     pub board_id: String,
     pub x: f64,
@@ -760,7 +835,7 @@ pub struct AddAnnotationCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ResolveAnnotationCommand {
     pub annotation_id: String,
     pub resolved: bool,
@@ -773,28 +848,48 @@ impl CommandHandler<'_> {
         project: &str,
         cmd: &AddAnnotationCommand,
     ) -> Result<BoardAnnotation> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let result = self.add_annotation_tx(&mut tx, project, cmd, None).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    pub(crate) async fn add_annotation_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &AddAnnotationCommand,
+        new_id: Option<&str>,
+    ) -> Result<BoardAnnotation> {
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
+        if ![cmd.x, cmd.y]
+            .iter()
+            .all(|v| v.is_finite() && v.abs() <= 1e9)
+        {
+            return Err(AppError::new("VALIDATION_ERROR", "评论位置无效"));
+        }
         let body = cmd.body.trim();
         if body.is_empty() || body.chars().count() > 2000 {
             return Err(AppError::new("VALIDATION_ERROR", "评论须为 1–2000 字符"));
         }
-        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
         let board: Option<String> =
             sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
                 .bind(&cmd.board_id)
                 .bind(project)
-                .fetch_optional(&mut *tx)
+                .fetch_optional(&mut **tx)
                 .await?;
         if board.is_none() {
             return Err(AppError::new("NOT_FOUND", "画布不存在"));
         }
-        let id = domain::id();
+        let id = new_id.map(str::to_owned).unwrap_or_else(domain::id);
         let now = domain::timestamp();
         sqlx::query(
-            "INSERT INTO board_annotations(id,board_id,anchor_type,x,y,author,body,resolved,created_at) VALUES(?,?,'board',?,?,?,'',?,0,?)",
+            "INSERT INTO board_annotations(id,board_id,anchor_type,x,y,author,body,resolved,created_at) VALUES(?,?,'board',?,?,'',?,0,?)",
         )
         .bind(&id).bind(&cmd.board_id).bind(cmd.x).bind(cmd.y).bind(body).bind(&now)
-        .execute(&mut *tx).await?;
-        tx.commit().await?;
+        .execute(&mut **tx).await?;
+        let data = serde_json::json!({"annotationId":id});
+        Self::log_canvas_op(tx, project, &cmd.board_id, "add_annotation", &data, &data).await?;
         Ok(BoardAnnotation {
             id,
             board_id: cmd.board_id.clone(),
@@ -818,23 +913,39 @@ impl CommandHandler<'_> {
         cmd: &ResolveAnnotationCommand,
     ) -> Result<()> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        let result = sqlx::query(
-            "UPDATE board_annotations SET resolved=? WHERE id=? AND EXISTS(SELECT 1 FROM boards WHERE id=board_annotations.board_id AND project_id=?)",
-        )
-        .bind(if cmd.resolved { 1 } else { 0 })
-        .bind(&cmd.annotation_id).bind(project)
-        .execute(&mut *tx).await?;
-        if result.rows_affected() == 0 {
-            return Err(AppError::new("NOT_FOUND", "评论不存在"));
-        }
+        self.resolve_annotation_tx(&mut tx, project, cmd).await?;
         tx.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn resolve_annotation_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &ResolveAnnotationCommand,
+    ) -> Result<()> {
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
+        let before: Option<(String, bool)> = sqlx::query_as(
+            "SELECT a.board_id,a.resolved FROM board_annotations a JOIN boards b ON b.id=a.board_id WHERE a.id=? AND b.project_id=? AND a.visible=1"
+        ).bind(&cmd.annotation_id).bind(project).fetch_optional(&mut **tx).await?;
+        let (board, before) = before.ok_or_else(|| AppError::new("NOT_FOUND", "评论不存在"))?;
+        if before == cmd.resolved {
+            return Ok(());
+        }
+        sqlx::query("UPDATE board_annotations SET resolved=? WHERE id=?")
+            .bind(cmd.resolved)
+            .bind(&cmd.annotation_id)
+            .execute(&mut **tx)
+            .await?;
+        let data = serde_json::json!({"annotationId":cmd.annotation_id,"before":before,"after":cmd.resolved});
+        Self::log_canvas_op(tx, project, &board, "resolve_annotation", &data, &data).await?;
         Ok(())
     }
 
     /// 查询画布评论。
     pub async fn get_annotations(&self, board_id: &str) -> Result<Vec<BoardAnnotation>> {
         let rows = sqlx::query(
-            "SELECT id, board_id, anchor_type, x, y, node_id, nx, ny, author, body, resolved, created_at FROM board_annotations WHERE board_id=? ORDER BY created_at",
+            "SELECT id, board_id, anchor_type, x, y, node_id, nx, ny, author, body, resolved, created_at FROM board_annotations WHERE board_id=? AND visible=1 ORDER BY created_at,rowid",
         )
         .bind(board_id)
         .fetch_all(&self.store.pool)
@@ -884,11 +995,12 @@ impl Store {
 // ── Arrow Connector（箭头连接）──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AddArrowCommand {
     pub board_id: String,
     pub from_node_id: String,
     pub to_node_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
 }
 
@@ -896,12 +1008,24 @@ impl CommandHandler<'_> {
     /// 添加箭头连接（from → to，节点移动时端点跟随）。
     pub async fn add_arrow(&self, project: &str, cmd: &AddArrowCommand) -> Result<CanvasNode> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let result = self.add_arrow_tx(&mut tx, project, cmd, None).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    pub(crate) async fn add_arrow_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &AddArrowCommand,
+        new_id: Option<&str>,
+    ) -> Result<CanvasNode> {
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
         let board: Option<String> =
             sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
                 .bind(&cmd.board_id)
                 .bind(project)
-                .fetch_optional(&mut *tx)
+                .fetch_optional(&mut **tx)
                 .await?;
         if board.is_none() {
             return Err(AppError::new("NOT_FOUND", "画布不存在"));
@@ -913,19 +1037,19 @@ impl CommandHandler<'_> {
             )
             .bind(node_id)
             .bind(&cmd.board_id)
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await?;
             if exists == 0 {
                 return Err(AppError::new("NOT_FOUND", format!("节点 {node_id} 不存在")));
             }
         }
-        let id = domain::id();
+        let id = new_id.map(str::to_owned).unwrap_or_else(domain::id);
         let now = domain::timestamp();
         let z: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
         )
         .bind(&cmd.board_id)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut **tx)
         .await?;
         // 箭头的 children_json 存 [from_id, to_id]；style_json 存颜色
         let children =
@@ -940,10 +1064,10 @@ impl CommandHandler<'_> {
         )
         .bind(&id).bind(&cmd.board_id).bind(z).bind(&style).bind(&children)
         .bind(&now).bind(&now)
-        .execute(&mut *tx).await?;
+        .execute(&mut **tx).await?;
         // H0-07：撤销日志
         Self::log_canvas_op(
-            &mut tx,
+            tx,
             project,
             &cmd.board_id,
             "add_node",
@@ -951,7 +1075,6 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeId": id}),
         )
         .await?;
-        tx.commit().await?;
         Ok(CanvasNode {
             id,
             board_id: cmd.board_id.clone(),
@@ -984,9 +1107,145 @@ impl Store {
 // ── Canvas Undo（画布撤销）──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UndoCanvasCommand {
     pub board_id: String,
+}
+
+/// Undo/Redo 共用变换；任何节点冲突都让调用者的事务整体回滚。
+async fn apply_history(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    board: &str,
+    kind: &str,
+    data: &serde_json::Value,
+    redo: bool,
+) -> Result<()> {
+    let conflict = || AppError::new("CONFLICT", "节点已变化或锁定，无法恢复此操作");
+    let now = domain::timestamp();
+    match kind {
+        "move" => {
+            let ids = data["nodeIds"].as_array().ok_or_else(conflict)?;
+            let direction = if redo { 1.0 } else { -1.0 };
+            let dx = data["dx"].as_f64().ok_or_else(conflict)? * direction;
+            let dy = data["dy"].as_f64().ok_or_else(conflict)? * direction;
+            for id in ids {
+                let changed = sqlx::query("UPDATE canvas_nodes SET x=x+?,y=y+?,updated_at=? WHERE id=? AND board_id=? AND locked=0 AND visible=1")
+                    .bind(dx).bind(dy).bind(&now).bind(id.as_str().ok_or_else(conflict)?)
+                    .bind(board).execute(&mut **tx).await?;
+                if changed.rows_affected() != 1 {
+                    return Err(conflict());
+                }
+            }
+        }
+        "add_node" | "delete_node" => {
+            let visible = (kind == "add_node") == redo;
+            let changed = sqlx::query("UPDATE canvas_nodes SET visible=?,updated_at=? WHERE id=? AND board_id=? AND locked=0 AND visible=?")
+                .bind(visible).bind(&now).bind(data["nodeId"].as_str().ok_or_else(conflict)?)
+                .bind(board).bind(!visible).execute(&mut **tx).await?;
+            if changed.rows_affected() != 1 {
+                return Err(conflict());
+            }
+        }
+        "resize" => {
+            let state = &data[if redo { "after" } else { "before" }];
+            let width = state["width"].as_f64().ok_or_else(conflict)?;
+            let height = state["height"].as_f64().ok_or_else(conflict)?;
+            validate_rectangle(0.0, 0.0, width, height)?;
+            let changed = sqlx::query("UPDATE canvas_nodes SET width=?,height=?,updated_at=? WHERE id=? AND board_id=? AND locked=0 AND visible=1")
+                .bind(width).bind(height).bind(&now).bind(data["nodeId"].as_str().ok_or_else(conflict)?)
+                .bind(board).execute(&mut **tx).await?;
+            if changed.rows_affected() != 1 {
+                return Err(conflict());
+            }
+        }
+        "set_lock" => {
+            let target = data[if redo { "after" } else { "before" }]
+                .as_bool()
+                .ok_or_else(conflict)?;
+            let expected = data[if redo { "before" } else { "after" }]
+                .as_bool()
+                .ok_or_else(conflict)?;
+            let changed = sqlx::query("UPDATE canvas_nodes SET locked=?,updated_at=? WHERE id=? AND board_id=? AND visible=1 AND locked=?")
+                .bind(target).bind(&now).bind(data["nodeId"].as_str().ok_or_else(conflict)?)
+                .bind(board).bind(expected).execute(&mut **tx).await?;
+            if changed.rows_affected() != 1 {
+                return Err(conflict());
+            }
+        }
+        "add_annotation" => {
+            let changed = sqlx::query(
+                "UPDATE board_annotations SET visible=? WHERE id=? AND board_id=? AND visible=?",
+            )
+            .bind(redo)
+            .bind(data["annotationId"].as_str().ok_or_else(conflict)?)
+            .bind(board)
+            .bind(!redo)
+            .execute(&mut **tx)
+            .await?;
+            if changed.rows_affected() != 1 {
+                return Err(conflict());
+            }
+        }
+        "resolve_annotation" => {
+            let target = data[if redo { "after" } else { "before" }]
+                .as_bool()
+                .ok_or_else(conflict)?;
+            let expected = data[if redo { "before" } else { "after" }]
+                .as_bool()
+                .ok_or_else(conflict)?;
+            let changed=sqlx::query("UPDATE board_annotations SET resolved=? WHERE id=? AND board_id=? AND visible=1 AND resolved=?")
+                .bind(target).bind(data["annotationId"].as_str().ok_or_else(conflict)?)
+                .bind(board).bind(expected).execute(&mut **tx).await?;
+            if changed.rows_affected() != 1 {
+                return Err(conflict());
+            }
+        }
+        _ => return Err(AppError::new("NOT_IMPLEMENTED", "此历史操作尚不支持恢复")),
+    }
+    Ok(())
+}
+
+// 一次语义命令可能改变多个节点；旧 NULL group 的记录仍各自独立。
+async fn restore_history_group(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    board: &str,
+    redo: bool,
+) -> Result<bool> {
+    let query = if redo {
+        "SELECT id,command_group FROM canvas_op_log WHERE board_id=? AND undone=1 AND redone=0 ORDER BY rowid ASC LIMIT 1"
+    } else {
+        "SELECT id,command_group FROM canvas_op_log WHERE board_id=? AND undone=0 ORDER BY rowid DESC LIMIT 1"
+    };
+    let selected: Option<(String, Option<String>)> = sqlx::query_as(query)
+        .bind(board)
+        .fetch_optional(&mut **tx)
+        .await?;
+    let Some((id, group)) = selected else {
+        return Ok(false);
+    };
+    let query = if redo {
+        "SELECT id,op_type,undo_data FROM canvas_op_log WHERE board_id=? AND (command_group=? OR id=?) AND undone=1 AND redone=0 ORDER BY rowid ASC"
+    } else {
+        "SELECT id,op_type,undo_data FROM canvas_op_log WHERE board_id=? AND (command_group=? OR id=?) AND undone=0 ORDER BY rowid DESC"
+    };
+    let rows: Vec<(String, String, String)> = sqlx::query_as(query)
+        .bind(board)
+        .bind(group)
+        .bind(id)
+        .fetch_all(&mut **tx)
+        .await?;
+    for (id, kind, data) in rows {
+        let data =
+            serde_json::from_str(&data).map_err(|_| AppError::new("CONFLICT", "无法恢复此操作"))?;
+        apply_history(tx, board, &kind, &data, redo).await?;
+        sqlx::query("UPDATE canvas_op_log SET undone=?,redone=? WHERE id=?")
+            .bind(!redo)
+            .bind(redo)
+            .bind(id)
+            .execute(&mut **tx)
+            .await?;
+    }
+    Ok(true)
 }
 
 impl CommandHandler<'_> {
@@ -999,6 +1258,11 @@ impl CommandHandler<'_> {
         op_data: &serde_json::Value,
         undo_data: &serde_json::Value,
     ) -> Result<()> {
+        // 新编辑使旧 redo 分支失效；保留记录，不删除历史。
+        sqlx::query("UPDATE canvas_op_log SET redone=1 WHERE board_id=? AND undone=1")
+            .bind(board_id)
+            .execute(&mut **tx)
+            .await?;
         let id = domain::id();
         let now = domain::timestamp();
         sqlx::query(
@@ -1013,115 +1277,28 @@ impl CommandHandler<'_> {
     /// 撤销画布上最后一次操作（H0-07：从 canvas_op_log 读取，不修改 command_events）。
     pub async fn undo_canvas(&self, project: &str, cmd: &UndoCanvasCommand) -> Result<bool> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let result = self.undo_canvas_tx(&mut tx, project, cmd).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
 
-        let board: Option<String> =
-            sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
+    pub(crate) async fn undo_canvas_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &UndoCanvasCommand,
+    ) -> Result<bool> {
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)")
                 .bind(&cmd.board_id)
                 .bind(project)
-                .fetch_optional(&mut *tx)
+                .fetch_one(&mut **tx)
                 .await?;
-        if board.is_none() {
+        if !exists {
             return Err(AppError::new("NOT_FOUND", "画布不存在"));
         }
-
-        // 从 canvas_op_log 读取最近一个未撤销的操作（append-only 查询，不修改审计事件）
-        let last: Option<(String, String, String)> = sqlx::query_as(
-            "SELECT id, op_type, undo_data FROM canvas_op_log WHERE board_id=? AND undone=0 ORDER BY created_at DESC, id DESC LIMIT 1",
-        )
-        .bind(&cmd.board_id)
-        .fetch_optional(&mut *tx)
-        .await?;
-
-        let Some((log_id, op_type, undo_json)) = last else {
-            return Ok(false); // 无可撤销操作
-        };
-
-        let undo: serde_json::Value = serde_json::from_str(&undo_json)
-            .map_err(|e| AppError::new("VALIDATION_ERROR", format!("撤销数据格式错误：{e}")))?;
-
-        let now = domain::timestamp();
-        match op_type.as_str() {
-            "move" => {
-                let node_ids: Vec<String> = undo["nodeIds"]
-                    .as_array()
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let dx = undo["dx"].as_f64().unwrap_or(0.0);
-                let dy = undo["dy"].as_f64().unwrap_or(0.0);
-                // H0 复核：锁定节点导致部分恢复 → 原子失败（不消费撤销记录）
-                for node_id in &node_ids {
-                    let result = sqlx::query(
-                        "UPDATE canvas_nodes SET x=x-?, y=y-?, updated_at=? WHERE id=? AND board_id=? AND locked=0",
-                    )
-                    .bind(dx).bind(dy).bind(&now).bind(node_id).bind(&cmd.board_id)
-                    .execute(&mut *tx).await?;
-                    if result.rows_affected() == 0 {
-                        let exists: i64 = sqlx::query_scalar(
-                            "SELECT COUNT(*) FROM canvas_nodes WHERE id=? AND board_id=?",
-                        )
-                        .bind(node_id)
-                        .bind(&cmd.board_id)
-                        .fetch_one(&mut *tx)
-                        .await?;
-                        if exists > 0 {
-                            return Err(AppError::new(
-                                "CONFLICT",
-                                format!("节点 {node_id} 已锁定，无法撤销移动"),
-                            ));
-                        }
-                    }
-                }
-            }
-            "add_node" => {
-                let node_id = undo["nodeId"].as_str().unwrap_or("");
-                if !node_id.is_empty() {
-                    sqlx::query(
-                        "UPDATE canvas_nodes SET visible=0, updated_at=? WHERE id=? AND board_id=?",
-                    )
-                    .bind(&now)
-                    .bind(node_id)
-                    .bind(&cmd.board_id)
-                    .execute(&mut *tx)
-                    .await?;
-                }
-            }
-            "delete_node" => {
-                let node_id = undo["nodeId"].as_str().unwrap_or("");
-                if !node_id.is_empty() {
-                    sqlx::query(
-                        "UPDATE canvas_nodes SET visible=1, updated_at=? WHERE id=? AND board_id=?",
-                    )
-                    .bind(&now)
-                    .bind(node_id)
-                    .bind(&cmd.board_id)
-                    .execute(&mut *tx)
-                    .await?;
-                }
-            }
-            _ => return Ok(false),
-        }
-
-        // 在 op_log 中标记已撤销（不是审计事件，是私有撤销栈）
-        sqlx::query("UPDATE canvas_op_log SET undone=1, redone=0 WHERE id=?")
-            .bind(&log_id)
-            .execute(&mut *tx)
-            .await?;
-        // 栈语义：新撤销丢弃其后所有 redo 分支
-        sqlx::query(
-            "UPDATE canvas_op_log SET redone=0 WHERE board_id=? AND created_at < (SELECT created_at FROM canvas_op_log WHERE id=?) AND redone=1",
-        )
-        .bind(&cmd.board_id)
-        .bind(&log_id)
-        .execute(&mut *tx)
-        .await?;
-
-        tx.commit().await?;
-        Ok(true)
+        restore_history_group(tx, &cmd.board_id, false).await
     }
 }
 
@@ -1134,7 +1311,7 @@ impl Store {
 // ── Ink（画笔/涂鸦）──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AddInkCommand {
     pub board_id: String,
     pub x: f64,
@@ -1143,21 +1320,37 @@ pub struct AddInkCommand {
     pub height: f64,
     /// 矢量路径点（Board 坐标系）：[{x,y,pressure}, ...]
     pub points: Vec<InkPoint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub stroke_width: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InkPoint {
     pub x: f64,
     pub y: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pressure: Option<f64>,
 }
 
 impl CommandHandler<'_> {
     /// 添加画笔笔迹（矢量路径点，存储在 Board 坐标系）。
     pub async fn add_ink(&self, project: &str, cmd: &AddInkCommand) -> Result<CanvasNode> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let result = self.add_ink_tx(&mut tx, project, cmd, None).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    pub(crate) async fn add_ink_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &AddInkCommand,
+        new_id: Option<&str>,
+    ) -> Result<CanvasNode> {
         if cmd.points.is_empty() || cmd.points.len() > 10_000 {
             return Err(AppError::new("VALIDATION_ERROR", "笔迹须为 1–10000 个点"));
         }
@@ -1171,7 +1364,9 @@ impl CommandHandler<'_> {
                 .is_some_and(|v| !v.is_finite() || !(0.1..=1000.0).contains(&v))
             || cmd.points.iter().any(|point| {
                 !point.x.is_finite()
+                    || point.x.abs() > 1e9
                     || !point.y.is_finite()
+                    || point.y.abs() > 1e9
                     || point
                         .pressure
                         .is_some_and(|v| !v.is_finite() || !(0.0..=1.0).contains(&v))
@@ -1182,24 +1377,23 @@ impl CommandHandler<'_> {
                 "笔迹的位置、压力或线宽无效",
             ));
         }
-        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
         let board: Option<String> =
             sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
                 .bind(&cmd.board_id)
                 .bind(project)
-                .fetch_optional(&mut *tx)
+                .fetch_optional(&mut **tx)
                 .await?;
         if board.is_none() {
             return Err(AppError::new("NOT_FOUND", "画布不存在"));
         }
-        let id = domain::id();
+        let id = new_id.map(str::to_owned).unwrap_or_else(domain::id);
         let now = domain::timestamp();
         let z: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
         )
         .bind(&cmd.board_id)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut **tx)
         .await?;
         // content_json 存路径点；style_json 存颜色/线宽
         let content = serde_json::to_string(&serde_json::json!({
@@ -1218,10 +1412,10 @@ impl CommandHandler<'_> {
         .bind(cmd.x).bind(cmd.y).bind(cmd.width).bind(cmd.height)
         .bind(z).bind(&content).bind(&style)
         .bind(&now).bind(&now)
-        .execute(&mut *tx).await?;
+        .execute(&mut **tx).await?;
         // H0-07：撤销日志
         Self::log_canvas_op(
-            &mut tx,
+            tx,
             project,
             &cmd.board_id,
             "add_node",
@@ -1229,7 +1423,6 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeId": id}),
         )
         .await?;
-        tx.commit().await?;
         Ok(CanvasNode {
             id,
             board_id: cmd.board_id.clone(),
@@ -1262,7 +1455,7 @@ impl Store {
 // ── H0-03：人工采纳任务草案 ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AdoptBoardDraftCommand {
     pub board_id: String,
 }
@@ -1276,14 +1469,25 @@ impl CommandHandler<'_> {
         cmd: &AdoptBoardDraftCommand,
     ) -> Result<()> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        self.adopt_board_draft_tx(&mut tx, project, cmd).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn adopt_board_draft_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &AdoptBoardDraftCommand,
+    ) -> Result<()> {
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
         let result = sqlx::query(
             "UPDATE boards SET owning_task_id=NULL, updated_at=? WHERE id=? AND project_id=? AND owning_task_id IS NOT NULL",
         )
         .bind(domain::timestamp())
         .bind(&cmd.board_id)
         .bind(project)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
         if result.rows_affected() == 0 {
             return Err(AppError::new(
@@ -1292,7 +1496,6 @@ impl CommandHandler<'_> {
             ));
         }
         // 记录撤销日志（采纳不可逆——人工决策不自动回退）
-        tx.commit().await?;
         Ok(())
     }
 }
@@ -1384,7 +1587,7 @@ mod task_owned_tests {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RedoCanvasCommand {
     pub board_id: String,
 }
@@ -1394,87 +1597,28 @@ impl CommandHandler<'_> {
     /// 栈语义：最近一条 undone=1 且 redone=0 的记录可重做。
     pub async fn redo_canvas(&self, project: &str, cmd: &RedoCanvasCommand) -> Result<bool> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        let result = self.redo_canvas_tx(&mut tx, project, cmd).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
 
-        let board: Option<String> =
-            sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
+    pub(crate) async fn redo_canvas_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &RedoCanvasCommand,
+    ) -> Result<bool> {
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)")
                 .bind(&cmd.board_id)
                 .bind(project)
-                .fetch_optional(&mut *tx)
+                .fetch_one(&mut **tx)
                 .await?;
-        if board.is_none() {
+        if !exists {
             return Err(AppError::new("NOT_FOUND", "画布不存在"));
         }
-
-        // 找最近一条已撤销且未重做的操作
-        let last: Option<(String, String, String)> = sqlx::query_as(
-            "SELECT id, op_type, undo_data FROM canvas_op_log WHERE board_id=? AND undone=1 AND redone=0 ORDER BY created_at DESC, id DESC LIMIT 1",
-        )
-        .bind(&cmd.board_id)
-        .fetch_optional(&mut *tx)
-        .await?;
-
-        let Some((log_id, op_type, undo_json)) = last else {
-            return Ok(false);
-        };
-        let undo: serde_json::Value = serde_json::from_str(&undo_json)
-            .map_err(|e| AppError::new("VALIDATION_ERROR", format!("重做数据格式错误：{e}")))?;
-
-        let now = domain::timestamp();
-        match op_type.as_str() {
-            "move" => {
-                let node_ids: Vec<String> = undo["nodeIds"]
-                    .as_array()
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let dx = undo["dx"].as_f64().unwrap_or(0.0);
-                let dy = undo["dy"].as_f64().unwrap_or(0.0);
-                for node_id in &node_ids {
-                    sqlx::query("UPDATE canvas_nodes SET x=x+?, y=y+?, updated_at=? WHERE id=? AND board_id=? AND locked=0 AND visible=1")
-                        .bind(dx).bind(dy).bind(&now).bind(node_id).bind(&cmd.board_id)
-                        .execute(&mut *tx).await?;
-                }
-            }
-            "add_node" => {
-                let node_id = undo["nodeId"].as_str().unwrap_or("");
-                if !node_id.is_empty() {
-                    sqlx::query(
-                        "UPDATE canvas_nodes SET visible=1, updated_at=? WHERE id=? AND board_id=?",
-                    )
-                    .bind(&now)
-                    .bind(node_id)
-                    .bind(&cmd.board_id)
-                    .execute(&mut *tx)
-                    .await?;
-                }
-            }
-            "delete_node" => {
-                let node_id = undo["nodeId"].as_str().unwrap_or("");
-                if !node_id.is_empty() {
-                    sqlx::query(
-                        "UPDATE canvas_nodes SET visible=0, updated_at=? WHERE id=? AND board_id=?",
-                    )
-                    .bind(&now)
-                    .bind(node_id)
-                    .bind(&cmd.board_id)
-                    .execute(&mut *tx)
-                    .await?;
-                }
-            }
-            _ => return Ok(false),
-        }
-
-        sqlx::query("UPDATE canvas_op_log SET undone=0, redone=1 WHERE id=?")
-            .bind(&log_id)
-            .execute(&mut *tx)
-            .await?;
-
-        tx.commit().await?;
-        Ok(true)
+        restore_history_group(tx, &cmd.board_id, true).await
     }
 }
 
@@ -1535,7 +1679,7 @@ mod g1_representation_tests {
 // ── G3：用户分组命令 ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GroupNodesCommand {
     pub board_id: String,
     pub node_ids: Vec<String>,
@@ -1550,6 +1694,19 @@ impl CommandHandler<'_> {
         project: &str,
         cmd: &GroupNodesCommand,
     ) -> Result<CanvasNode> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let result = self.group_nodes_cmd_tx(&mut tx, project, cmd, None).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    pub(crate) async fn group_nodes_cmd_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &GroupNodesCommand,
+        new_id: Option<&str>,
+    ) -> Result<CanvasNode> {
         if cmd.node_ids.is_empty() || cmd.node_ids.len() > 100 {
             return Err(AppError::new("VALIDATION_ERROR", "分组须包含 1–100 个节点"));
         }
@@ -1557,13 +1714,12 @@ impl CommandHandler<'_> {
         if label.is_empty() || label.chars().count() > 50 {
             return Err(AppError::new("VALIDATION_ERROR", "分组标签须为 1–50 字符"));
         }
-        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
         let board: Option<String> =
             sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
                 .bind(&cmd.board_id)
                 .bind(project)
-                .fetch_optional(&mut *tx)
+                .fetch_optional(&mut **tx)
                 .await?;
         if board.is_none() {
             return Err(AppError::new("NOT_FOUND", "画布不存在"));
@@ -1575,7 +1731,7 @@ impl CommandHandler<'_> {
             )
             .bind(nid)
             .bind(&cmd.board_id)
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await?;
             if exists == 0 {
                 return Err(AppError::new(
@@ -1590,18 +1746,18 @@ impl CommandHandler<'_> {
         )
         .bind(&cmd.board_id)
         .bind(serde_json::to_string(&cmd.node_ids).unwrap_or_default())
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await?;
         let Some((min_x, min_y, max_x, max_y)) = bbox else {
             return Err(AppError::new("VALIDATION_ERROR", "无法计算分组包围盒"));
         };
-        let id = domain::id();
+        let id = new_id.map(str::to_owned).unwrap_or_else(domain::id);
         let now = domain::timestamp();
         let z: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
         )
         .bind(&cmd.board_id)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut **tx)
         .await?;
         let content = serde_json::json!({"label": label}).to_string();
         let children = serde_json::to_string(&cmd.node_ids)
@@ -1620,11 +1776,11 @@ impl CommandHandler<'_> {
         .bind(&children)
         .bind(&now)
         .bind(&now)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
         // 撤销日志
         Self::log_canvas_op(
-            &mut tx,
+            tx,
             project,
             &cmd.board_id,
             "add_node",
@@ -1632,7 +1788,6 @@ impl CommandHandler<'_> {
             &serde_json::json!({"nodeId": id}),
         )
         .await?;
-        tx.commit().await?;
         Ok(CanvasNode {
             id,
             board_id: cmd.board_id.clone(),
@@ -1760,7 +1915,7 @@ mod board_revision_tests {
 // ── G3：节点 Resize 与锁定 ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ResizeNodesCommand {
     pub board_id: String,
     /// 单节点 resize（多节点独立 resize 无明确语义，不支持）
@@ -1770,7 +1925,7 @@ pub struct ResizeNodesCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetNodeLockedCommand {
     pub board_id: String,
     pub node_id: String,
@@ -1780,39 +1935,81 @@ pub struct SetNodeLockedCommand {
 impl CommandHandler<'_> {
     /// 调整节点尺寸（最小 20x20，最大 10000x10000）。
     pub async fn resize_node(&self, project: &str, cmd: &ResizeNodesCommand) -> Result<()> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        self.resize_node_tx(&mut tx, project, cmd).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn resize_node_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &ResizeNodesCommand,
+    ) -> Result<()> {
+        validate_rectangle(0.0, 0.0, cmd.width, cmd.height)?;
         if cmd.width < 20.0 || cmd.height < 20.0 || cmd.width > 10000.0 || cmd.height > 10000.0 {
             return Err(AppError::new("VALIDATION_ERROR", "尺寸须在 20–10000 之间"));
         }
-        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
+        let before: Option<(f64, f64)> = sqlx::query_as(
+            "SELECT width,height FROM canvas_nodes WHERE id=? AND board_id=? AND visible=1 AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+        ).bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
+            .fetch_optional(&mut **tx).await?;
+        let (width, height) =
+            before.ok_or_else(|| AppError::new("NOT_FOUND", "节点不存在或已锁定"))?;
+        if (width, height) == (cmd.width, cmd.height) {
+            return Ok(());
+        }
         let result = sqlx::query(
-            "UPDATE canvas_nodes SET width=?, height=?, updated_at=? WHERE id=? AND board_id=? AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+            "UPDATE canvas_nodes SET width=?, height=?, updated_at=? WHERE id=? AND board_id=? AND visible=1 AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
         )
         .bind(cmd.width).bind(cmd.height).bind(domain::timestamp())
         .bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
-        .execute(&mut *tx).await?;
+        .execute(&mut **tx).await?;
         if result.rows_affected() == 0 {
             return Err(AppError::new("NOT_FOUND", "节点不存在或已锁定"));
         }
-        tx.commit().await?;
+        let data = serde_json::json!({"nodeId":cmd.node_id,"before":{"width":width,"height":height},"after":{"width":cmd.width,"height":cmd.height}});
+        Self::log_canvas_op(tx, project, &cmd.board_id, "resize", &data, &data).await?;
         Ok(())
     }
 
     /// 锁定/解锁节点（锁定后不可拖动/resize/删除）。
     pub async fn set_node_locked(&self, project: &str, cmd: &SetNodeLockedCommand) -> Result<()> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
+        self.set_node_locked_tx(&mut tx, project, cmd).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn set_node_locked_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &SetNodeLockedCommand,
+    ) -> Result<()> {
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
+        let before: Option<bool> = sqlx::query_scalar(
+            "SELECT locked FROM canvas_nodes WHERE id=? AND board_id=? AND visible=1 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+        ).bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
+            .fetch_optional(&mut **tx).await?;
+        let before = before.ok_or_else(|| AppError::new("NOT_FOUND", "节点不存在"))?;
+        if before == cmd.locked {
+            return Ok(());
+        }
         let result = sqlx::query(
             "UPDATE canvas_nodes SET locked=?, updated_at=? WHERE id=? AND board_id=? AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
         )
         .bind(if cmd.locked { 1 } else { 0 })
         .bind(domain::timestamp())
         .bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
-        .execute(&mut *tx).await?;
+        .execute(&mut **tx).await?;
         if result.rows_affected() == 0 {
             return Err(AppError::new("NOT_FOUND", "节点不存在"));
         }
-        tx.commit().await?;
+        let data = serde_json::json!({"nodeId":cmd.node_id,"before":before,"after":cmd.locked});
+        Self::log_canvas_op(tx, project, &cmd.board_id, "set_lock", &data, &data).await?;
         Ok(())
     }
 }

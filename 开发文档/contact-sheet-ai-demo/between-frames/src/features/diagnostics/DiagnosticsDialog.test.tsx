@@ -13,10 +13,11 @@ function mount(query = vi.fn().mockResolvedValue(diagnosticsFixture())) {
   return { query, onClose };
 }
 describe('本地存储诊断', () => {
-  it('账户服务显示 FocalRoom 和 DeepSeek，不声称用户配置了 OpenAI 密钥', async () => {
+  it('存储界面不显示服务商配置、密钥和数据结构', async () => {
     const fixture=diagnosticsFixture();fixture.provider={providerId:'openai',ready:true,keySource:'focalroom'};
     mount(vi.fn().mockResolvedValue(fixture));
-    expect(await screen.findByText(/提供方 FocalRoom AI · DeepSeek/)).toBeVisible();
+    expect(await screen.findByText(/FocalRoom /)).toBeVisible();
+    expect(screen.queryByText(/提供方|WAL|已应用迁移|JSON/)).not.toBeInTheDocument();
     expect(screen.queryByText(/密钥已配置/)).not.toBeInTheDocument();
   });
   it('先查看统计，主动复制已显示的快照，刷新更新数据', async () => {
@@ -25,9 +26,9 @@ describe('本地存储诊断', () => {
     await screen.findByText('存储统计');
     expect(within(screen.getByRole('row', { name: /图片缓存/ })).getByText('2.0 KiB')).toBeVisible();
     const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
-    await user.click(screen.getByRole('button', { name: '复制诊断信息' }));
+    await user.click(screen.getByRole('button', { name: '复制支持信息' }));
     expect(JSON.parse(copy.mock.calls[0][0])).toEqual(diagnosticsFixture());
-    expect(await screen.findByText(/诊断信息已复制/)).toBeVisible();
+    expect(await screen.findByText(/支持信息已复制/)).toBeVisible();
     await user.click(screen.getByRole('button', { name: '刷新统计' }));
     await waitFor(() => expect(query).toHaveBeenCalledTimes(2));
   });
@@ -40,20 +41,20 @@ describe('本地存储诊断', () => {
     mount(vi.fn().mockResolvedValue(data));
     await screen.findByText('暂不可用');
     expect(screen.getByText('至少 2.0 KiB')).toBeVisible();
-    expect(screen.getByText(/部分条目不可读取/)).toBeVisible();
+    expect(screen.getByText(/部分内容暂时无法统计/)).toBeVisible();
   });
-  it('读取失败可重试，复制失败保留手动复制入口，Escape 关闭', async () => {
+  it('读取失败可重试，复制失败保留重试入口，Escape 关闭', async () => {
     const user = userEvent.setup();
     const { onClose } = mount(vi.fn().mockRejectedValueOnce(new Error('unavailable')).mockResolvedValue(diagnosticsFixture()));
     expect(await screen.findByRole('alert')).toHaveTextContent('读取失败，请重试');
-    expect(screen.getByRole('button', { name: '复制诊断信息' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '复制支持信息' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: '刷新统计' }));
     await screen.findByText('存储统计');
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
-    await user.click(screen.getByRole('button', { name: '复制诊断信息' }));
-    expect(await screen.findByText(/剪贴板写入失败/)).toBeVisible();
-    await user.click(screen.getByText('检查诊断 JSON'));
-    expect(screen.getByLabelText('脱敏诊断 JSON')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: '复制支持信息' }));
+    expect(await screen.findByText(/无法复制/)).toBeVisible();
+    expect(screen.getByRole('button', { name: '复制支持信息' })).toBeEnabled();
+    expect(screen.queryByLabelText('脱敏诊断 JSON')).not.toBeInTheDocument();
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalled();
   });

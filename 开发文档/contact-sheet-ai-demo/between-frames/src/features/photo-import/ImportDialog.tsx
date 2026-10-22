@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { userFacingError } from '../../services/userFacingError';
 import type { DesktopProjectRepository, ImportJob } from '../../domain/models';
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
@@ -43,7 +44,7 @@ export function ImportDialog({ repository, projectId, onClose, onChanged }: {
       <p role="status">{job?.status === 'cancelled' ? '已取消；已完成照片保留' : job?.status === 'completed' ? '导入完成' : job && job.total === 0 ? '正在扫描图库' : '正在导入'} · {job?.completed || 0} / {job ? job.total : '…'}</p>
       <p className="muted">新增 {job?.imported || 0} 张 · 重复跳过 {job?.skipped || 0} 张 · 失败 {job?.failures.length || 0} 张</p>
       {running && <Button onClick={() => { void repository.cancelImport(jobId).catch(failure => setError(String(failure))); }}>取消导入</Button>}
-      {!!job?.failures.length && <ul className="import-failures">{job.failures.map((failure, index) => <li key={`${failure.path}-${index}`}><strong>{failure.path.split('/').pop()}</strong><p>{failure.message}</p></li>)}</ul>}
+      {!!job?.failures.length && <ul className="import-failures">{job.failures.map((failure, index) => <li key={`${failure.path}-${index}`}><strong>{failure.path.split('/').pop()}</strong><p>{userFacingError(new Error(failure.message), '无法读取这张照片，请确认文件完整且格式受支持。')}</p></li>)}</ul>}
       {!running && !!job?.failures.length && <Button onClick={() => { void repository.retryImport(jobId).then(id => { setJob(null); setJobId(id); setError(''); }).catch(failure => setError(String(failure))); }}>重试失败照片</Button>}
     </section>}
     {error && <p role="alert" className="error-message">{error}</p>}

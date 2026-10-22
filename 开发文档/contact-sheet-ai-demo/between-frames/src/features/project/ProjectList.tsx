@@ -19,7 +19,7 @@ export function ProjectList({ projects, onOpen, onCreate, onQuickStart, local = 
     <div className="project-list-tools">{!local && <p className="preview-banner">{zh.preview}</p>}{local && <Button size="small" onClick={onToggleArchive}>{archived ? '返回项目' : '归档项目'}</Button>}</div>
     {visible.length ? <div className="project-cards">{visible.map(project => <article className="project-card" key={project.id}><button className="project-open" onClick={() => { if (archived) onRestore?.(project); else onOpen(project.id); }}>
       <div className="project-cover">{project.photos[0] ? <img src={project.photos[0].src} alt={project.photos[0].name} /> : <span>暂无照片</span>}</div>
-      <div className="project-card-body">{(archived || !local) && <span className="eyebrow">{archived ? '已归档' : project.id === 'sample-project' ? '示例项目' : '预览项目'}</span>}<h2>{project.title}<ArrowUpRight size={19} /></h2>
+      <div className="project-card-body">{(archived || !local) && <span className="eyebrow">{archived ? '已归档' : '演示项目'}</span>}<h2>{project.title}<ArrowUpRight size={19} /></h2>
         <p>{project.photos.length} 张照片 · {project.sequence.length} 张入选</p>
         {(project.tags?.length ?? 0) > 0 && <p className="tag-chips">{project.tags!.map(tag => <span key={tag}>{tag}</span>)}</p>}{project.updatedAt && <p>最近修改 {new Date(project.updatedAt).toLocaleString('zh-CN')}</p>}</div></button>
       {local && <div className="project-card-actions"><Button size="small" onClick={() => { if (archived) onRestore?.(project); else onArchive?.(project); }}>{archived ? '恢复项目' : '归档项目'}</Button></div>}

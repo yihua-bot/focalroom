@@ -1,0 +1,336 @@
+[
+  {
+    "schemaVersion": 3,
+    "commandId": "c0fa48d4-0c80-5971-86db-ceaeda033539",
+    "idempotencyKey": "ef2ee833-7507-596d-9503-1e79f10b2824",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 0,
+    "operations": [
+      {
+        "opId": "25780505-c678-5a35-b713-ae6e2688ca95",
+        "action": {
+          "type": "CreateBoard",
+          "data": {
+            "title": "摄影叙事"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "acb68eaf-a9c7-5ef9-bd3a-9c5fe64661f9",
+    "idempotencyKey": "212c85be-c5e9-587e-a79a-a3eb2920e5e6",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "f4d76d41-b9f5-5886-b4aa-0bf8772107d5",
+        "action": {
+          "type": "PlacePhoto",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "assetId": "ccf5edcc-c20a-4c06-9061-f867ab93d14a",
+            "x": 20.0,
+            "y": 30.0,
+            "width": 200.0,
+            "height": 160.0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "29069283-b3bf-584f-b407-04287ce9d9d1",
+    "idempotencyKey": "ebbb2a82-4337-5e46-881c-96ebf786a14d",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "56838513-2b6e-52f3-bbfd-3395e3a60b1b",
+        "action": {
+          "type": "MoveNodes",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "nodeIds": [
+              "ccf5edcc-c20a-4c06-9061-f867ab93d14a",
+              "2b59f4f4-670d-4b3d-996b-30900da31ef6"
+            ],
+            "dx": 20.0,
+            "dy": -10.0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "bc7056d4-7fc8-5bbc-bdf7-22b2fce2baad",
+    "idempotencyKey": "2d1555b7-518f-5906-aa8a-b162e24d2048",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "edff18f6-3809-596b-8345-0277048de5a9",
+        "action": {
+          "type": "AddText",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "nodeType": "sticky",
+            "content": "编排想法",
+            "x": 20.0,
+            "y": 30.0,
+            "width": 200.0,
+            "height": 160.0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "ff28d5d1-ad97-5b3e-ab60-76643867642a",
+    "idempotencyKey": "1581e2ce-e89f-52a4-98e6-6abd05094c79",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "a6f81169-2976-5bb6-8e17-f6f3b1f8d02c",
+        "action": {
+          "type": "DeleteNode",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "nodeId": "ccf5edcc-c20a-4c06-9061-f867ab93d14a"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "025cd4c5-69d7-5a16-a52a-ce3d8cdd0d4b",
+    "idempotencyKey": "07c431d4-5de0-5ff2-acc4-5269a12c2941",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "b4eeef6c-fc7b-5a0e-8f01-105449c6c7fb",
+        "action": {
+          "type": "AddAnnotation",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "x": 20.0,
+            "y": 30.0,
+            "body": "开篇讨论"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "0b9a5cba-c214-562b-930f-b854b538f536",
+    "idempotencyKey": "7dd0b5b2-ed8c-5f83-aad0-854395ba3529",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "fdd2a5dd-c893-5b71-872f-57b1bc78da20",
+        "action": {
+          "type": "ResolveAnnotation",
+          "data": {
+            "annotationId": "ccf5edcc-c20a-4c06-9061-f867ab93d14a",
+            "resolved": true
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "397c2ef1-3142-539f-b8fe-00962c204ef8",
+    "idempotencyKey": "1f521cbe-ff2c-5243-bc13-2fe7e84510a0",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "d8080bbe-b7e3-539f-bd31-38c80d40e56a",
+        "action": {
+          "type": "AddArrow",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "fromNodeId": "ccf5edcc-c20a-4c06-9061-f867ab93d14a",
+            "toNodeId": "2b59f4f4-670d-4b3d-996b-30900da31ef6"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "8959ac3c-ffde-53db-b9af-dd093c67f9f9",
+    "idempotencyKey": "4f7c3031-67a2-51ad-b668-a4c06fff6ed3",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "878de011-dfe5-566a-95a6-777d04f32699",
+        "action": {
+          "type": "AddInk",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "points": [
+              {
+                "x": 0.0,
+                "y": 0.0
+              },
+              {
+                "x": 20.0,
+                "y": 20.0,
+                "pressure": 0.5
+              }
+            ],
+            "x": 20.0,
+            "y": 30.0,
+            "width": 200.0,
+            "height": 160.0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "224f67b6-bbc0-501d-b818-3ad3c2922534",
+    "idempotencyKey": "e9019aea-0ba4-5a6d-87da-2e37924df56f",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "9918dc53-1b39-572d-86cb-e6dade93a5b2",
+        "action": {
+          "type": "GroupNodes",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "nodeIds": [
+              "ccf5edcc-c20a-4c06-9061-f867ab93d14a",
+              "2b59f4f4-670d-4b3d-996b-30900da31ef6"
+            ],
+            "label": "第一章"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "e548a552-90ba-52fc-aa28-6d6acb05d78d",
+    "idempotencyKey": "0f86aabe-1460-5b8d-830e-5168175ace1d",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "27d53888-a0f8-508a-ada9-2ee119003b5b",
+        "action": {
+          "type": "ResizeNode",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "nodeId": "ccf5edcc-c20a-4c06-9061-f867ab93d14a",
+            "width": 240.0,
+            "height": 180.0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "7af2f977-3ca1-5a58-8324-bce4a2cd8d7d",
+    "idempotencyKey": "6366e914-c79b-5556-8850-3b507345d3f9",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "db9cfe13-aed9-5103-9a07-98227a7f7e3a",
+        "action": {
+          "type": "SetNodeLocked",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "nodeId": "ccf5edcc-c20a-4c06-9061-f867ab93d14a",
+            "locked": true
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "d518f556-9637-5cf5-a19a-0fed7c139204",
+    "idempotencyKey": "594de1f7-c3f1-53aa-8b04-b37372d23551",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "9ccf1219-13f8-575e-8dd6-691520d72fc2",
+        "action": {
+          "type": "Undo",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "c27ffad3-802c-531d-92de-2006ac3180b5",
+    "idempotencyKey": "411aa4a0-fdd3-509b-a291-f6091ee767c3",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "088b8702-b7c8-548d-8554-1c557e8c8ea1",
+        "action": {
+          "type": "Redo",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "fd40c7fb-2ecf-502b-8d76-e4e9a2f43d97",
+    "idempotencyKey": "9977a3ef-3294-542a-9ad9-270b435a9731",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "393b5a45-1962-5955-981c-94d74fa1a828",
+        "action": {
+          "type": "AdoptBoard",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7"
+          }
+        }
+      }
+    ]
+  }
+]

@@ -695,12 +695,74 @@ pub async fn cloud_login_logout(app: AppHandle, state: State<'_, Backend>) -> Re
 // ── G3 Narrative Canvas IPC ──
 
 #[tauri::command]
-pub async fn canvas_create_board(
+pub async fn billing_catalog(state: State<'_, Backend>) -> Result<serde_json::Value> {
+    state.cloud_auth.billing_catalog().await
+}
+#[tauri::command]
+pub async fn billing_overview(state: State<'_, Backend>) -> Result<serde_json::Value> {
+    state.cloud_auth.billing_overview().await
+}
+#[tauri::command]
+pub async fn billing_checkout(
+    state: State<'_, Backend>,
+    price_id: String,
+    request_id: String,
+) -> Result<()> {
+    let account = state.cloud_auth.account_id()?;
+    let value = state
+        .cloud_auth
+        .billing_checkout(&price_id, &request_id)
+        .await?;
+    if state.cloud_auth.account_id()? != account {
+        return Err(AppError::new(
+            "AUTH_REQUIRED",
+            "账户已变更，请重新打开订阅页面",
+        ));
+    }
+    crate::billing::open_payment(&value, false).await
+}
+#[tauri::command]
+pub async fn billing_manage(state: State<'_, Backend>) -> Result<()> {
+    let account = state.cloud_auth.account_id()?;
+    let value = state.cloud_auth.billing_manage().await?;
+    if state.cloud_auth.account_id()? != account {
+        return Err(AppError::new(
+            "AUTH_REQUIRED",
+            "账户已变更，请重新打开订阅页面",
+        ));
+    }
+    crate::billing::open_payment(&value, true).await
+}
+#[tauri::command]
+pub async fn billing_cancel_checkout(state: State<'_, Backend>) -> Result<()> {
+    state.cloud_auth.billing_cancel_checkout().await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn canvas_execute(
+    state: State<'_, Backend>,
+    request: crate::canvas_commands::CanvasCommandRequest,
+) -> Result<crate::canvas_commands::CanvasReceipt> {
+    state.store.execute_canvas(request).await
+}
+
+#[tauri::command]
+pub async fn canvas_comparison(
     state: State<'_, Backend>,
     project_id: String,
-    title: String,
-) -> Result<crate::canvas::Board> {
-    state.store.create_board(&project_id, &title).await
+    board_id: String,
+) -> Result<crate::canvas_review::CanvasComparison> {
+    state.store.canvas_comparison(&project_id, &board_id).await
+}
+
+#[tauri::command]
+pub async fn canvas_snapshot(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+) -> Result<crate::canvas_commands::CanvasSnapshot> {
+    state.store.canvas_snapshot(&project_id, &board_id).await
 }
 
 #[tauri::command]
@@ -709,38 +771,6 @@ pub async fn canvas_list_boards(
     project_id: String,
 ) -> Result<Vec<crate::canvas::Board>> {
     state.store.list_boards(&project_id).await
-}
-
-#[tauri::command]
-pub async fn canvas_place_photo(
-    state: State<'_, Backend>,
-    project_id: String,
-    cmd: crate::canvas::PlacePhotoNodeCommand,
-) -> Result<crate::canvas::CanvasNode> {
-    state.store.place_photo_node(&project_id, &cmd).await
-}
-
-#[tauri::command]
-pub async fn canvas_move_nodes(
-    state: State<'_, Backend>,
-    project_id: String,
-    board_id: String,
-    node_ids: Vec<String>,
-    dx: f64,
-    dy: f64,
-) -> Result<()> {
-    state
-        .store
-        .move_nodes(
-            &project_id,
-            &crate::canvas::MoveNodesCommand {
-                board_id,
-                node_ids,
-                dx,
-                dy,
-            },
-        )
-        .await
 }
 
 #[tauri::command]
@@ -760,84 +790,11 @@ pub async fn canvas_get_photo_sources(
 }
 
 #[tauri::command]
-pub async fn canvas_add_text(
-    state: State<'_, Backend>,
-    project_id: String,
-    cmd: crate::canvas::AddTextNodeCommand,
-) -> Result<crate::canvas::CanvasNode> {
-    state.store.add_text_node(&project_id, &cmd).await
-}
-
-#[tauri::command]
-pub async fn canvas_delete_node(
-    state: State<'_, Backend>,
-    project_id: String,
-    board_id: String,
-    node_id: String,
-) -> Result<()> {
-    state
-        .store
-        .delete_node(
-            &project_id,
-            &crate::canvas::DeleteNodeCommand { board_id, node_id },
-        )
-        .await
-}
-
-#[tauri::command]
-pub async fn canvas_add_annotation(
-    state: State<'_, Backend>,
-    project_id: String,
-    cmd: crate::canvas::AddAnnotationCommand,
-) -> Result<crate::canvas::BoardAnnotation> {
-    state.store.add_annotation(&project_id, &cmd).await
-}
-
-#[tauri::command]
-pub async fn canvas_resolve_annotation(
-    state: State<'_, Backend>,
-    project_id: String,
-    cmd: crate::canvas::ResolveAnnotationCommand,
-) -> Result<()> {
-    state.store.resolve_annotation(&project_id, &cmd).await
-}
-
-#[tauri::command]
 pub async fn canvas_get_annotations(
     state: State<'_, Backend>,
     board_id: String,
 ) -> Result<Vec<crate::canvas::BoardAnnotation>> {
     state.store.get_annotations(&board_id).await
-}
-
-#[tauri::command]
-pub async fn canvas_add_arrow(
-    state: State<'_, Backend>,
-    project_id: String,
-    cmd: crate::canvas::AddArrowCommand,
-) -> Result<crate::canvas::CanvasNode> {
-    state.store.add_arrow(&project_id, &cmd).await
-}
-
-#[tauri::command]
-pub async fn canvas_undo(
-    state: State<'_, Backend>,
-    project_id: String,
-    board_id: String,
-) -> Result<bool> {
-    state
-        .store
-        .undo_canvas(&project_id, &crate::canvas::UndoCanvasCommand { board_id })
-        .await
-}
-
-#[tauri::command]
-pub async fn canvas_add_ink(
-    state: State<'_, Backend>,
-    project_id: String,
-    cmd: crate::canvas::AddInkCommand,
-) -> Result<crate::canvas::CanvasNode> {
-    state.store.add_ink(&project_id, &cmd).await
 }
 
 // ── G7 Publishing IPC ──
@@ -878,84 +835,4 @@ pub async fn pub_generate(
     cmd: crate::publishing::GenerateFromSequenceCommand,
 ) -> Result<i64> {
     state.store.generate_from_sequence(&project_id, &cmd).await
-}
-
-#[tauri::command]
-pub async fn canvas_adopt_board_draft(
-    state: State<'_, Backend>,
-    project_id: String,
-    board_id: String,
-) -> Result<()> {
-    state
-        .store
-        .adopt_board_draft(
-            &project_id,
-            &crate::canvas::AdoptBoardDraftCommand { board_id },
-        )
-        .await
-}
-
-#[tauri::command]
-pub async fn canvas_redo(
-    state: State<'_, Backend>,
-    project_id: String,
-    board_id: String,
-) -> Result<bool> {
-    state
-        .store
-        .redo_canvas(&project_id, &crate::canvas::RedoCanvasCommand { board_id })
-        .await
-}
-
-#[tauri::command]
-pub async fn canvas_group_nodes(
-    state: State<'_, Backend>,
-    project_id: String,
-    cmd: crate::canvas::GroupNodesCommand,
-) -> Result<crate::canvas::CanvasNode> {
-    state.store.group_nodes_cmd(&project_id, &cmd).await
-}
-
-#[tauri::command]
-pub async fn canvas_resize_node(
-    state: State<'_, Backend>,
-    project_id: String,
-    board_id: String,
-    node_id: String,
-    width: f64,
-    height: f64,
-) -> Result<()> {
-    state
-        .store
-        .resize_node(
-            &project_id,
-            &crate::canvas::ResizeNodesCommand {
-                board_id,
-                node_id,
-                width,
-                height,
-            },
-        )
-        .await
-}
-
-#[tauri::command]
-pub async fn canvas_set_node_locked(
-    state: State<'_, Backend>,
-    project_id: String,
-    board_id: String,
-    node_id: String,
-    locked: bool,
-) -> Result<()> {
-    state
-        .store
-        .set_node_locked(
-            &project_id,
-            &crate::canvas::SetNodeLockedCommand {
-                board_id,
-                node_id,
-                locked,
-            },
-        )
-        .await
 }

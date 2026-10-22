@@ -15,6 +15,7 @@ import { Button } from '../components/shared/Button';
 import { SharedReviewLink } from '../components/shared/SharedReviewLink';
 import type { CanvasRepository } from '../domain/canvas';
 import type { PublicationRepository } from '../domain/publication';
+import { useAccount } from '../features/cloud-login/AccountProvider';
 
 export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, onCopyPlan, onAICompare, onAIOrder, local = false, sharing, canvas, publication }: {
   project: Project; visible: Photo[]; kept: Photo[]; active?: Photo; busy: boolean;
@@ -30,10 +31,12 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   publication?: PublicationRepository;
 }) {
   const ui = useUIStore();
+  const account = useAccount();
+  const openAI = () => { if (account) void account.requireSignIn('ai', ui.openAgent); else ui.openAgent(); };
   const filters: PhotoFilter[] = ['all', 'keep', 'undecided', 'reject'];
   const readOnly = !!sharing && sharing.authority !== 'local';
-  return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={ui.openAgent} readOnly={readOnly} />
-    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 桌面只读，请在 Web 继续评片。' : '迁移未完成 · 编辑已暂停，请在导出窗口继续或取消迁移。'}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
+  return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={openAI} readOnly={readOnly} />
+    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 请在线继续审稿，本机项目仅供查看。' : '共享尚未完成 · 编辑已暂停，请在导出窗口继续或取消共享。'}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
     {(ui.view === 'grid' || ui.view === 'sequence') && <div className="history-toolbar" role="group" aria-label="编辑历史">
       <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">撤销</Button>
       <Button size="small" disabled={busy || !project.history?.redoGroupId} onClick={onRedo} title="⌘ / Ctrl Shift Z">重做</Button>

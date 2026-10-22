@@ -186,8 +186,12 @@ pub(crate) async fn tool(
                 "同 call_id 参数不一致",
             ));
         }
-        return serde_json::from_str(&row.get::<String, _>("result_json"))
-            .map_err(crate::command_audit::serialization);
+        let saved: ToolResult = serde_json::from_str(&row.get::<String, _>("result_json"))
+            .map_err(crate::command_audit::serialization)?;
+        if saved.ok {
+            super::task_scope::require_tool(&mut tx, &t, &call.name).await?;
+        }
+        return Ok(saved);
     }
     if t.state != "running" {
         return Err(AppError::new("CANCELLED", "任务已停止"));

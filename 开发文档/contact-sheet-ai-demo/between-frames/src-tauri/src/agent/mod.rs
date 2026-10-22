@@ -1,5 +1,6 @@
 pub mod anthropic;
 pub mod billing;
+mod canvas_edit;
 pub mod capabilities;
 mod cloud;
 pub mod comments;
@@ -29,6 +30,7 @@ pub mod runtime;
 mod semantic;
 mod semantic_index;
 pub(crate) mod store;
+pub mod task_scope;
 mod tools;
 pub mod types;
 pub mod vision;

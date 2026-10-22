@@ -26,7 +26,7 @@ export function ActivityDialog({ project, onClose }: { project: Project; onClose
       && (kind === 'all' || event.type === kind)
       && (!since || event.at >= since))
     .sort((a, b) => b.at.localeCompare(a.at)), [project.events, actor, kind, since]);
-  return <Modal title="操作历史" description="按操作者与版本恢复点查看全部正式变更；回滚走版本恢复，不改写历史。" onClose={onClose}>
+  return <Modal title="操作历史" description="按操作者与作品版本查看修改记录。" onClose={onClose}>
     <div className="activity-filters">
       <label>操作者
         <select aria-label="按操作者筛选" value={actor} onChange={event => setActor(event.target.value as ActorFilter)}>
@@ -36,7 +36,7 @@ export function ActivityDialog({ project, onClose }: { project: Project; onClose
       <label>类型
         <select aria-label="按类型筛选" value={kind} onChange={event => setKind(event.target.value)}>
           <option value="all">全部类型</option>
-          {kinds.map(item => <option key={item} value={item}>{EVENT_KIND_LABELS[item] ?? item}</option>)}
+          {kinds.map(item => <option key={item} value={item}>{EVENT_KIND_LABELS[item] ?? '其他更改'}</option>)}
         </select>
       </label>
       <label>版本
@@ -54,7 +54,7 @@ export function ActivityDialog({ project, onClose }: { project: Project; onClose
         </span>
         <span className="activity-body">
           <strong>{event.description}</strong>
-          {event.photoId && <small> · {project.photos.find(photo => photo.id === event.photoId)?.name ?? event.photoId}</small>}
+          {event.photoId && <small> · {project.photos.find(photo => photo.id === event.photoId)?.name ?? '照片暂不可用'}</small>}
           {event.type === 'version_save' && <em className="activity-restore-point">恢复点</em>}
         </span>
         <time>{new Date(event.at).toLocaleString('zh-CN')}</time>

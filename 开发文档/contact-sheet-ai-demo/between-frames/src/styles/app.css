@@ -116,8 +116,8 @@ label { display: block; color: #b6b7af; margin: 16px 0 9px; font-size: 12px; }
 .empty-state p { max-width: 400px; font-size: 12px; line-height: 1.9; margin-bottom: 20px; }
 .inspector .empty-state { min-height: 160px; padding: 24px 12px; }
 .inspector .empty-state h2 { font-size: 19px; }
-.modal-overlay { position: fixed; inset: 0; z-index: 20; background: #000b; }
-.modal { position: fixed; z-index: 21; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(700px, calc(100vw - 48px)); max-height: calc(100dvh - 48px); overflow: auto; padding: 26px; background: #191b1b; border: 1px solid #454743; border-radius: 8px; box-shadow: 0 24px 100px #000b; }
+.modal-overlay { position: fixed; inset: 0; z-index: 129; background: #000b; }
+.modal { position: fixed; z-index: 130; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(700px, calc(100vw - 48px)); max-height: calc(100dvh - 48px); overflow: auto; padding: 26px; background: #191b1b; border: 1px solid #454743; border-radius: 8px; box-shadow: 0 24px 100px #000b; }
 .modal-wide { width: min(1080px, calc(100vw - 48px)); }
 .modal-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; gap: 16px; }
 .modal-head h2 { font: 28px var(--serif); margin-top: 10px; }
@@ -550,9 +550,9 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .canvas-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border,#2a2a40);background:var(--bg-secondary,#14141f)}
 .canvas-toolbar select{background:var(--bg-secondary,#14141f);color:var(--text,#e8e8f0);border:1px solid var(--border,#2a2a40);border-radius:6px;padding:4px 8px;font-size:13px}
 .canvas-zoom-label{margin-left:auto;font-size:12px;color:var(--text2,#888);font-variant-numeric:tabular-nums}
-.canvas-surface{flex:1;min-height:360px;overflow:hidden;cursor:grab;background:var(--bg-primary,#0d0d14);background-image:radial-gradient(circle at 20px 20px, #1a1a28 1px, transparent 1px);background-size:40px 40px;position:relative;touch-action:none}
+.canvas-surface{flex:1;min-height:0;overflow:hidden;cursor:grab;background:var(--bg-primary,#0d0d14);background-image:radial-gradient(circle at 20px 20px, #1a1a28 1px, transparent 1px);background-size:40px 40px;position:relative;touch-action:none}
 .canvas-surface:active{cursor:grabbing}
-.canvas-board{position:absolute;top:0;left:0;width:0;height:0}
+.canvas-board{position:absolute;top:0;left:0;width:1px;height:1px}
 .canvas-photo-node{position:absolute;background:var(--bg-secondary,#1a1a28);border:1px solid var(--border,#2a2a40);border-radius:8px;overflow:hidden;cursor:move;user-select:none;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 .canvas-photo-node.dragging{border-color:var(--accent,#6c5ce7);box-shadow:0 8px 24px rgba(108,92,231,.4);opacity:.9;z-index:9999!important}
 .canvas-photo-node img{width:100%;height:100%;object-fit:cover;pointer-events:none}
@@ -588,6 +588,8 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .canvas-note-editor{display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
 .canvas-note-editor textarea{flex:1;min-height:64px;resize:vertical;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)}
 .canvas-notice{padding:8px 16px;margin:0}
+.canvas-toolbar,.canvas-pending,.canvas-note-editor,.canvas-notice{flex-shrink:0}
+.canvas-note-editor textarea{max-height:160px}
 
 .publication-pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;padding-top:12px}
 .publication-page-preview{margin:0;max-width:240px}
@@ -600,5 +602,42 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .canvas-group-node{position:absolute;border:2px dashed rgba(108,92,231,.5);border-radius:12px;background:rgba(108,92,231,.05);pointer-events:none}
 .canvas-group-node.selected{border-color:var(--accent,#6c5ce7);background:rgba(108,92,231,.12)}
 .canvas-group-label{position:absolute;top:-24px;left:8px;font-size:12px;color:var(--accent,#a29bfe);background:var(--bg-secondary,#1a1a28);padding:2px 8px;border-radius:4px;white-space:nowrap}
-.canvas-resize-handle{position:absolute;right:-4px;bottom:-4px;width:12px;height:12px;background:var(--accent,#6c5ce7);border:2px solid #fff;border-radius:50%;cursor:nwse-resize;z-index:10}
+.canvas-resize-handle{position:absolute;right:3px;bottom:3px;width:14px;height:14px;background:var(--accent,#6c5ce7);border:2px solid #fff;border-radius:50%;cursor:nwse-resize;z-index:10}
 .canvas-lock-badge{position:absolute;top:4px;right:4px;font-size:12px;background:rgba(0,0,0,.5);border-radius:4px;padding:1px 4px;pointer-events:none}
+
+/* 账户入口与订阅 */
+.cloud-account .cloud-account-dropdown { width: 310px; max-height: calc(100dvh - 110px); overflow-y: auto; padding: 8px; border-radius: 18px; background: var(--surface-raised); border-color: var(--border); box-shadow: 0 20px 60px #0006; }
+.cloud-account .cloud-account-dropdown-head { display: flex; align-items: center; gap: 13px; padding: 16px 12px; margin: 0 4px 5px; border-bottom: 1px solid var(--border); }
+.cloud-account-dropdown-head > div { min-width: 0; }
+.cloud-account .cloud-account-dropdown-head .cloud-avatar { width: 42px; height: 42px; }
+.cloud-account .cloud-account-name { font-size: 17px; font-weight: 550; max-width: 215px; line-height: 1.5; }
+.cloud-account-plan { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.cloud-account .cloud-account-email { font-size: 11px; max-width: 215px; line-height: 1.5; }
+.cloud-account .cloud-account-dropdown [role="menuitem"] { min-height: 43px; padding: 10px 13px; gap: 12px; font-size: 13px; border-radius: 9px; }
+.cloud-account-dropdown [role="menuitem"] > span { flex: 1; }
+.cloud-account-dropdown [role="menuitem"] > svg { flex: 0 0 auto; opacity: .85; }
+.cloud-account .cloud-account-signout { color: var(--text) !important; }
+.account-menu-divider { height: 1px; margin: 7px 12px; background: var(--border); }
+.cloud-account-profile { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.cloud-account-profile input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.login-prompt { display: grid; gap: 18px; padding: 8px 0; }
+.login-prompt-mark { width: 58px; height: 58px; object-fit: contain; border-radius: 13px; background: #fafafa; }
+.login-benefit { display: flex; align-items: flex-start; gap: 11px; font-size: 13px; line-height: 1.7; color: var(--muted); }
+.login-benefit svg { flex: 0 0 auto; margin-top: 3px; }
+.login-prompt > small { text-align: center; color: var(--muted); margin-top: -7px; }
+.login-prompt > .button { min-height: 44px; justify-content: center; }
+.login-waiting { padding: 18px; border-radius: 12px; background: var(--surface-raised); text-align: center; line-height: 1.8; }
+.login-waiting p { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.login-spinner { display: block; width: 22px; height: 22px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; margin: 0 auto 12px; animation: account-spin .9s linear infinite; }
+@keyframes account-spin { to { transform: rotate(360deg); } }
+@media(max-width:700px) { .cloud-account .cloud-account-dropdown { left: auto; right: 12px; top: 75px; bottom: auto; } }
+@media(prefers-reduced-motion:reduce) { .login-spinner { animation: none; } }
+.canvas-pending { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+
+.canvas-review{flex-shrink:0;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;line-height:1.6}
+.canvas-review-summary{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.canvas-review-summary label{margin-left:auto;display:flex;align-items:center;gap:6px}
+.canvas-review p{margin-top:8px;color:var(--text2)}
+.canvas-baseline-node{position:absolute;pointer-events:none;opacity:.3;border:2px dashed var(--accent);border-radius:8px;overflow:hidden;z-index:0}
+.canvas-baseline-node img{width:100%;height:100%;object-fit:cover}
+.canvas-baseline-node span{display:block;padding:12px}

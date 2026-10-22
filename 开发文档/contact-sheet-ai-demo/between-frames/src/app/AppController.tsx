@@ -33,6 +33,7 @@ import { VersionsDialog } from '../features/project/VersionsDialog';
 import { ActivityDialog } from '../features/project/ActivityDialog';
 import { Lightbox } from '../components/inspector/Lightbox';
 import type { SelectionGesture } from '../domain/selection';
+import { useAccount } from '../features/cloud-login/AccountProvider';
 
 type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' | 'activity' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
 
@@ -41,6 +42,8 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const local = isDesktopRepository(repository);
   const route = useRoute(local);
   const ui = useUIStore();
+  const account = useAccount();
+  const openAI = () => { if (ui.aiOpen) { ui.closeAgent(); return; } if (account) void account.requireSignIn('ai', ui.openAgent); else ui.openAgent(); };
   const shortcutConfig = useShortcutConfig();
   const client = useQueryClient();
   const [archived, setArchived] = useState(false);
@@ -89,7 +92,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
   const select = (id: string, gesture?: SelectionGesture) => ui.selectRange(id, navigable.map(photo => photo.id), gesture);
   const act = (task: () => Promise<Project>, success?: string, close = false, onDone?: () => void) => {
     if (mutation.isPending) return;
-    if (readOnly) { setNotice('共享迁移中的项目暂停本地编辑；完成后请在 Web 评片中修改正式作品。'); return; }
+    if (readOnly) { setNotice('共享项目已暂停本机编辑，请在线继续审稿。'); return; }
     mutation.mutate(task, { onSuccess: () => { if (success) setNotice(success); if (close) setDialog(null); onDone?.(); } });
   };
   const decide = (id: string, status: PhotoStatus) => { if (project) act(() => repository.decide(project.id, id, status)); };
@@ -107,12 +110,12 @@ export function AppController({ repository }: { repository: ProjectRepository })
     const [a, b] = selectedIds;
     setQuickAction({ projectId: project.id, id: crypto.randomUUID(), count: 1, photoIds: [a, b],
       goal: `比较照片「${photoName(a)}」与「${photoName(b)}」：哪一张更能推动叙事主线？给出结论、理由与各自适合的位置；不直接修改选片状态。` });
-    ui.openAgent();
+    openAI();
   } : undefined;
   const aiOrder = local && project && selectedIds.length >= 2 ? () => {
     setQuickAction({ projectId: project.id, id: crypto.randomUUID(), count: selectedIds.length, photoIds: [...selectedIds],
       goal: `为选中的 ${selectedIds.length} 张照片生成两版不同的作品顺序方案（方案 A / 方案 B），各自解释编排逻辑、开合节奏与适用场景；输出为可审阅草案。` });
-    ui.openAgent();
+    openAI();
   } : undefined;
   const reorder = (ids: string[]) => { if (project) act(() => repository.reorder(project.id, ids), local ? '作品顺序已保存' : zh.savedSequence); };
   const compare = () => {
@@ -132,7 +135,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
     onCommandPalette: () => setDialog(current => current?.kind === 'palette' ? null : { kind: 'palette' }),
     onSelect: select, onSelectAll: ui.selectAll, onClear: ui.clearSelection, onDecide: (_id, status) => decideSelection(status), onRate: rateSelection,
     onCompare: compare, onEnlarge: () => { if (active) setDialog({ kind: 'enlarge', photo: active }); }, onView: ui.setView,
-    onUndo: undo, onRedo: redo, onSearch: () => document.getElementById('photo-search')?.focus(), onAgent: ui.toggleAgent, onMove: offset => {
+    onUndo: undo, onRedo: redo, onSearch: () => document.getElementById('photo-search')?.focus(), onAgent: openAI, onMove: offset => {
       const from = kept.findIndex(photo => photo.id === active?.id);
       const to = from + offset;
       if (from >= 0 && to >= 0 && to < kept.length) reorder(arrayMove(kept.map(photo => photo.id), from, to));
@@ -161,7 +164,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       { id: 'select-all', group: '选择', label: '选择当前视图全部照片', hint: hint('selectAll'), run: () => ui.selectAll(navigable.map(photo => photo.id)) },
       { id: 'clear-selection', group: '选择', label: '清除选区', hint: hint('clearSelection'), run: ui.clearSelection },
       { id: 'search', group: '导航', label: '聚焦搜索框', hint: hint('search'), run: () => document.getElementById('photo-search')?.focus() },
-      { id: 'agent', group: '导航', label: '打开/关闭 AI 智能选片', hint: hint('toggleAgent'), run: ui.toggleAgent },
+      { id: 'agent', group: '导航', label: '打开/关闭 AI 智能选片', hint: hint('toggleAgent'), run: openAI },
       { id: 'versions', group: '项目', label: '查看/保存作品版本', run: () => setDialog({ kind: 'versions' }) },
       { id: 'activity', group: '项目', label: '按操作者浏览操作历史', run: () => setDialog({ kind: 'activity' }) },
       { id: 'copy-plan', group: '项目', label: '复制当前序列方案', run: copyPlan },
@@ -194,7 +197,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />
       : project ? <Workspace key={project.id} canvas={local ? repository.canvas : undefined} publication={local ? repository.publication : undefined} project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending || readOnly} local={local} sharing={sharing.data ?? undefined} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
         onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCopyPlan={copyPlan} onAICompare={aiCompare} onAIOrder={aiOrder} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
-        : <EmptyState title={local ? '项目未找到' : '项目不在本次预览中'} hint={local ? '项目可能已归档，请返回项目列表查看。' : '内存项目在刷新后重置，请返回项目列表。'} action={<Button onClick={() => navigate(null)}>{zh.projects}</Button>} />}
+        : <EmptyState title={local ? '项目未找到' : '项目未找到'} hint={local ? '项目可能已归档，请返回项目列表查看。' : '请返回项目列表查看。'} action={<Button onClick={() => navigate(null)}>{zh.projects}</Button>} />}
   </AppShell>
     {ui.aiOpen && project && route.page === 'workspace' && <AISelectionDrawer projectTitle={project.title} onClose={ui.closeAgent}>
       {(settingsOpen, closeSettings) => <AIPanel key={project.id} repository={local ? repository : undefined} project={project} selectedIds={selectedIds}
@@ -205,9 +208,9 @@ export function AppController({ repository }: { repository: ProjectRepository })
         onUpdated={updated => { client.setQueryData<Project[]>(['projects', false], previous => previous?.map(item => item.id === updated.id ? updated : item)); refresh(); }}>
         <ProposalsPanel project={project} enabled={local} /></AIPanel>}
     </AISelectionDrawer>}
-    {local && project && !ui.aiOpen && <AgentStatus repository={repository} projectId={project.id} onOpen={() => ui.openAgent()} />}
+    {local && project && !ui.aiOpen && <AgentStatus repository={repository} projectId={project.id} onOpen={openAI} />}
     {notice && <div role="status" className="toast">{notice}</div>}
-    {dialog?.kind === 'quickStart' && local && <QuickStartModal busy={mutation.isPending} onClose={() => setDialog(null)} onCreate={(title, goal, count) => { mutation.mutate(() => repository.create(title, goal), { onSuccess: created => { setPendingGoal({ projectId: created.id, goal, count }); ui.reset(); ui.openAgent(); navigate(created.id); setDialog({ kind: 'import' }); } }); }} />}
+    {dialog?.kind === 'quickStart' && local && <QuickStartModal busy={mutation.isPending} onClose={() => setDialog(null)} onCreate={(title, goal, count) => { mutation.mutate(() => repository.create(title, goal), { onSuccess: created => { setPendingGoal({ projectId: created.id, goal, count }); ui.reset(); navigate(created.id); setDialog({ kind: 'import' }); } }); }} />}
       {(dialog?.kind === 'create' || dialog?.kind === 'edit') && <ProjectDialog project={dialog.kind === 'edit' ? project : undefined} busy={mutation.isPending} onClose={() => setDialog(null)} onSave={(title, brief, tags) => {
       if (dialog.kind === 'edit' && project) act(async () => { const updated = await repository.edit(project.id, title, brief); if (tags) await repository.setTags(project.id, tags); return updated; }, local ? '项目已保存到本地' : zh.savedProject, true);
       else mutation.mutate(() => repository.create(title, brief), { onSuccess: created => { setDialog(null); ui.reset(); ui.select(null); navigate(created.id); } });

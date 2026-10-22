@@ -519,7 +519,7 @@
     },
     {
       "name": "create_board_draft",
-      "description": "创建一个画布草案（draft Board），用于摆放照片、探索视觉关系。Agent 只能创建 draft 状态的画布，不能修改 official Board。",
+      "description": "创建当前任务专属的独立画布草案。若绑定了原画布选区，会复制其固定布局；随后用 get_board 获取分支的新节点 ID，不要重复放置已复制的照片。绝不修改原版。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -563,28 +563,40 @@
                 },
                 "x": {
                   "type": "number",
-                  "description": "画布 X 坐标"
+                  "description": "画布 X 坐标",
+                  "minimum": -1000000000.0,
+                  "maximum": 1000000000.0
                 },
                 "y": {
                   "type": "number",
-                  "description": "画布 Y 坐标"
+                  "description": "画布 Y 坐标",
+                  "minimum": -1000000000.0,
+                  "maximum": 1000000000.0
                 },
                 "width": {
                   "type": "number",
-                  "description": "显示宽度（默认 220）"
+                  "description": "显示宽度（默认 220）",
+                  "minimum": 1,
+                  "maximum": 10000
                 },
                 "height": {
                   "type": "number",
-                  "description": "显示高度（默认 160）"
+                  "description": "显示高度（默认 160）",
+                  "minimum": 1,
+                  "maximum": 10000
                 }
               },
               "required": [
                 "photo_id",
                 "x",
-                "y"
+                "y",
+                "width",
+                "height"
               ],
               "additionalProperties": false
-            }
+            },
+            "minItems": 1,
+            "maxItems": 300
           },
           "project_id": {
             "type": "string"
@@ -602,7 +614,7 @@
     },
     {
       "name": "get_board",
-      "description": "获取画布的全部节点（照片位置、便签、箭头等），用于理解当前画布布局。",
+      "description": "按需读取用户委托时固定的画布选区，或当前任务自己创建的草案。不得读取其他画布。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -683,6 +695,255 @@
           "title"
         ],
         "additionalProperties": false
+      }
+    },
+    {
+      "name": "move_nodes",
+      "description": "移动当前任务草案节点。绝不修改正式画布；说明空间/叙事调整理由。",
+      "strict": true,
+      "access": "draft",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "board_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "minItems": 1,
+            "maxItems": 300,
+            "uniqueItems": true
+          },
+          "dx": {
+            "type": "number",
+            "minimum": -1000000000.0,
+            "maximum": 1000000000.0
+          },
+          "dy": {
+            "type": "number",
+            "minimum": -1000000000.0,
+            "maximum": 1000000000.0
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "project_id",
+          "board_id",
+          "node_ids",
+          "dx",
+          "dy",
+          "rationale"
+        ]
+      }
+    },
+    {
+      "name": "remove_nodes",
+      "description": "从当前任务草案隐藏节点，原版与源图保持不变。",
+      "strict": true,
+      "access": "draft",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "board_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "minItems": 1,
+            "maxItems": 300,
+            "uniqueItems": true
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "project_id",
+          "board_id",
+          "node_ids",
+          "rationale"
+        ]
+      }
+    },
+    {
+      "name": "create_connector",
+      "description": "在当前任务草案的两个节点间建立连接并说明呼应关系。",
+      "strict": true,
+      "access": "draft",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "board_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "from_node_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "to_node_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "project_id",
+          "board_id",
+          "from_node_id",
+          "to_node_id",
+          "rationale"
+        ]
+      }
+    },
+    {
+      "name": "add_editorial_note",
+      "description": "为当前任务草案添加编辑便签，引用范围内的照片事实与不确定性。",
+      "strict": true,
+      "access": "draft",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "board_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "x": {
+            "type": "number",
+            "minimum": -1000000000.0,
+            "maximum": 1000000000.0
+          },
+          "y": {
+            "type": "number",
+            "minimum": -1000000000.0,
+            "maximum": 1000000000.0
+          },
+          "photo_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "maxItems": 500,
+            "uniqueItems": true
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "project_id",
+          "board_id",
+          "text",
+          "x",
+          "y",
+          "photo_ids",
+          "rationale"
+        ]
+      }
+    },
+    {
+      "name": "finish_canvas_task",
+      "description": "提交当前任务的画布草案等待人工审阅，不改变正式作品。",
+      "strict": true,
+      "access": "draft",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "task_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "board_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "project_id",
+          "task_id",
+          "board_ids",
+          "summary"
+        ]
       }
     }
   ]

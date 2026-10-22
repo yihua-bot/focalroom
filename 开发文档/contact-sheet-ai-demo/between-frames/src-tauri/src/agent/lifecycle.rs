@@ -68,16 +68,41 @@ pub(crate) async fn request_bound(
         }
         t
     } else {
-        let TaskCommand::StartTask {
-            goal,
-            selected_photo_ids,
-            target_count,
-            budget,
-            consent_id,
-        } = &r.command
-        else {
-            unreachable!()
-        };
+        let (goal, selected_photo_ids, target_count, budget, consent_id, canvas, source) =
+            match &r.command {
+                TaskCommand::StartTask {
+                    goal,
+                    selected_photo_ids,
+                    target_count,
+                    budget,
+                    consent_id,
+                } => (
+                    goal,
+                    selected_photo_ids,
+                    target_count,
+                    budget,
+                    consent_id,
+                    false,
+                    None,
+                ),
+                TaskCommand::StartCanvasTask {
+                    goal,
+                    selected_photo_ids,
+                    target_count,
+                    budget,
+                    consent_id,
+                    source_board,
+                } => (
+                    goal,
+                    selected_photo_ids,
+                    target_count,
+                    budget,
+                    consent_id,
+                    true,
+                    source_board.as_ref(),
+                ),
+                _ => unreachable!(),
+            };
         budget.validate()?;
         if goal.trim().is_empty() {
             return Err(AppError::new("VALIDATION_ERROR", "编辑目标不能为空"));
@@ -161,13 +186,14 @@ pub(crate) async fn request_bound(
             created_at: now.clone(),
             updated_at: now,
         };
-        sqlx::query("INSERT INTO agent_tasks(id,project_id,goal,base_revision,allowed_ids_json,selected_ids_json,target_count,state,reason,budget_json,usage_json,provider_id,consent_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
- .bind(&t.id).bind(&t.project_id).bind(&t.goal).bind(t.base_revision).bind(encode(&t.allowed_photo_ids)?).bind(encode(&t.selected_photo_ids)?).bind(t.target_count as i64).bind(&t.state).bind(&t.reason).bind(encode(&t.budget)?).bind(encode(&t.usage)?).bind(&t.provider_id).bind(t.consent_id).bind(&t.created_at).bind(&t.updated_at).execute(&mut *tx).await?;
+        sqlx::query("INSERT INTO agent_tasks(id,project_id,goal,base_revision,allowed_ids_json,selected_ids_json,target_count,canvas_target_count,state,reason,budget_json,usage_json,provider_id,consent_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+ .bind(&t.id).bind(&t.project_id).bind(&t.goal).bind(t.base_revision).bind(encode(&t.allowed_photo_ids)?).bind(encode(&t.selected_photo_ids)?).bind(t.target_count.min(100) as i64).bind(canvas.then_some(t.target_count as i64)).bind(&t.state).bind(&t.reason).bind(encode(&t.budget)?).bind(encode(&t.usage)?).bind(&t.provider_id).bind(t.consent_id).bind(&t.created_at).bind(&t.updated_at).execute(&mut *tx).await?;
         sqlx::query("UPDATE agent_tasks SET memory_revision=? WHERE id=?")
             .bind(t.memory_revision)
             .bind(&t.id)
             .execute(&mut *tx)
             .await?;
+        super::task_scope::bind(&mut tx, &t, canvas, source).await?;
         if let Some(consent_id) = t.consent_id {
             sqlx::query("UPDATE privacy_consents SET task_id=? WHERE id=? AND mode='task' AND task_id IS NULL")
                 .bind(&t.id).bind(consent_id).execute(&mut *tx).await?;
@@ -224,7 +250,7 @@ pub(crate) async fn request_bound(
         store::settle_waiting(&mut tx, &mut task, "暂停/取消前结算未完成等待").await?;
     }
     match &r.command {
-        TaskCommand::StartTask { .. } => {}
+        TaskCommand::StartTask { .. } | TaskCommand::StartCanvasTask { .. } => {}
         TaskCommand::PauseTask { .. } => {
             store::transition(&mut tx, &mut task, "paused", "用户暂停；已完成操作保留").await?
         }

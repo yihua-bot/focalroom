@@ -22,12 +22,33 @@ function mount(repository = fixture(), props: Partial<React.ComponentProps<typeo
 const send = () => screen.getByRole('button', { name: '发送' });
 const ready = () => waitFor(() => expect(send()).toBeEnabled());
 function task(state: AgentTask['state']): AgentTask { return { id: 't1', state, goal: '旅行故事', baseRevision: 3, reason: '预算已用完', question: state === 'needs_input' ? '希望以人物为主吗？' : null, budget: defaultAgentBudget, usage: { modelTurns: 1, toolCalls: 1, inputEstimate: 1, outputEstimate: 1, cloudImages: 0, costMinorUsd: 0 }, elapsedMs: 1, finalDraftIds: [], providerId: 'test', steps: [], createdAt: 'now' }; }
-beforeEach(() => useUIStore.setState({ aiDrafts: {} }));
+beforeEach(() => { useUIStore.getState().reset(); useUIStore.setState({ aiDrafts: {} }); });
 describe('选片对话与本次预览使用', () => {
+ it('任务文字不扩大权限，画布编排需要明确选择', async () => {
+  const { repository } = mount(fixture(), { initialGoal: '给我一些画布布局思路' }); await ready();
+  expect(screen.getByRole('combobox', { name: '创作方向' })).toHaveValue('selection');
+  await userEvent.click(send());
+  expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'StartTask' }));
+ });
+ it('从当前画布发起时绑定原版与选区，不自动创建任务', async () => {
+  useUIStore.getState().openCanvasAgent({ boardId: 'board-1', revision: 8, selectedNodeIds: ['node-1'] });
+  const { repository } = mount(); await ready();
+  expect(repository.agent.request).not.toHaveBeenCalled();
+  expect(screen.getByRole('combobox', { name: '创作方向' })).toHaveValue('canvas');
+  await userEvent.click(send());
+  expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'StartCanvasTask', sourceBoard: { boardId: 'board-1', revision: 8, selectedNodeIds: ['node-1'] } }));
+ });
+ it('可从已完成任务打开画布方案，而不直接采纳', async () => {
+  const candidate = { ...task('review_ready'), canvasTask: true, boardDrafts: [{ id: 'draft-board', projectId: 'p1', title: '叙事分支', state: 'draft', owningTaskId: 't1', revision: 3 }] };
+  const { repository } = mount(fixture({}, { tasks: [candidate], drafts: [] })); await ready();
+  await userEvent.click(await screen.findByRole('button', { name: '查看画布方案' }));
+  expect(useUIStore.getState()).toMatchObject({ view: 'canvas', canvasBoardId: 'draft-board', aiOpen: false });
+  expect(repository.agent.request).not.toHaveBeenCalled();
+ });
  it('仅打开对话不会授权、发送任务或伪造回复', async () => { const { repository } = mount(); await ready(); expect(repository.agent.setConsent).not.toHaveBeenCalled(); expect(repository.agent.request).not.toHaveBeenCalled(); expect(screen.queryByText('管理图像授权')).not.toBeInTheDocument(); });
  it('发送时先绑定本次预览范围，再委托真实任务', async () => { const { repository } = mount(); await ready(); await userEvent.click(send()); await waitFor(() => expect(repository.agent.request).toHaveBeenCalled()); expect(repository.agent.setConsent).toHaveBeenCalledWith('p1', 'task', 2, readyConfig.consentProvider); expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'StartTask', consentId: 9, targetCount: 1, selectedPhotoIds: [], budget: expect.objectContaining({ maxCloudImages: 2 }) })); expect(repository.agent.setConsent.mock.invocationCallOrder[0]).toBeLessThan(repository.agent.request.mock.invocationCallOrder[0]); expect(screen.getByLabelText('选片消息')).toHaveValue(''); });
  it('授权写入失败时保留输入，不开始任务、不自动重试', async () => { const repo = fixture(); repo.agent.setConsent.mockRejectedValue(new Error('保存失败')); mount(repo); await ready(); await userEvent.click(send()); expect(await screen.findByRole('alert')).toHaveTextContent('保存失败'); expect(repo.agent.request).not.toHaveBeenCalled(); expect(repo.agent.setConsent).toHaveBeenCalledTimes(1); expect(screen.getByLabelText('选片消息')).not.toHaveValue(''); });
- it('服务身份在发送前改变时拒绝委托，不误发到新供应商', async () => { const repo = fixture(); mount(repo); await ready(); repo.agent.aiConfig.mockResolvedValue({ ...readyConfig, consentProvider: 'other' }); await userEvent.click(send()); expect(await screen.findByRole('alert')).toHaveTextContent('服务配置已变更'); expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).not.toHaveBeenCalled(); });
+ it('服务身份在发送前改变时拒绝委托，不误发到新供应商', async () => { const repo = fixture(); mount(repo); await ready(); repo.agent.aiConfig.mockResolvedValue({ ...readyConfig, consentProvider: 'other' }); await userEvent.click(send()); expect(await screen.findByRole('alert')).toHaveTextContent('AI 已更新'); expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).not.toHaveBeenCalled(); });
  it('未知视觉接收方不能授权或发送', async () => { const repo = fixture({ consentProvider: null }); mount(repo); await ready(); await userEvent.click(send()); await screen.findByRole('alert'); expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).not.toHaveBeenCalled(); });
  it('发送前配置查询失败时拒绝委托', async () => { const repo = fixture(); mount(repo); await ready(); repo.agent.aiConfig.mockRejectedValue(new Error('network')); await userEvent.click(send()); await screen.findAllByRole('alert'); expect(repo.agent.request).not.toHaveBeenCalled(); });
  it('文本服务不授权图片，明确提示且以零图像预算运行', async () => { const repo = fixture({ capabilities: ['tool_calling', 'instruction_following'] }); mount(repo); await ready(); expect(screen.getByText(/当前服务不支持看图/)).toBeVisible(); await userEvent.click(send()); await waitFor(() => expect(repo.agent.request).toHaveBeenCalled()); expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ consentId: null, budget: expect.objectContaining({ maxCloudImages: 0 }) })); });

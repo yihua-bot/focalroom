@@ -1,4 +1,4 @@
-export interface BoardInfo { id: string; projectId: string; title: string; state: string }
+export interface BoardInfo { id: string; projectId: string; title: string; state: string; owningTaskId?: string | null; revision?: number }
 export interface CanvasNodeInfo {
   id: string; boardId: string; nodeType: string;
   x: number; y: number; width: number; height: number;
@@ -19,6 +19,12 @@ export interface AnnotationInfo {
   author: string; body: string; resolved: boolean; createdAt: string;
 }
 export interface CanvasRepository {
+  compareDraft?(projectId: string, boardId: string): Promise<{ draftRevision: number; sourceBoardId: string | null; sourceChanged: boolean; baselineNodes: CanvasPhoto[]; changes: Array<{ id: string; nodeId: string; kind: 'add' | 'change' | 'remove'; nodeType: string }> }>;
+  getSnapshot?(boardId: string): Promise<{ board: BoardInfo; nodes: CanvasPhoto[]; annotations: AnnotationInfo[] }>;
+  pendingCommands?(projectId: string): Array<{ boardId: string }>;
+  retryPending?(projectId: string, boardId: string): Promise<void>;
+  placePhotos?(projectId: string, boardId: string, photos: Array<{ assetId: string; x: number; y: number; width: number; height: number }>): Promise<void>;
+  setNodesLocked?(projectId: string, boardId: string, nodeIds: string[], locked: boolean): Promise<void>;
   listBoards(projectId: string): Promise<BoardInfo[]>;
   createBoard(projectId: string, title: string): Promise<BoardInfo>;
   getNodes(boardId: string): Promise<CanvasPhoto[]>;
@@ -31,6 +37,8 @@ export interface CanvasRepository {
   getAnnotations(boardId: string): Promise<AnnotationInfo[]>;
   addArrow(projectId: string, boardId: string, fromNodeId: string, toNodeId: string, color?: string): Promise<void>;
   undo(projectId: string, boardId: string): Promise<boolean>;
+  redo(projectId: string, boardId: string): Promise<boolean>;
+  adoptBoard(projectId: string, boardId: string): Promise<void>;
   groupNodes(projectId: string, boardId: string, nodeIds: string[], label: string): Promise<void>;
   resizeNode(projectId: string, boardId: string, nodeId: string, width: number, height: number): Promise<void>;
   setNodeLocked(projectId: string, boardId: string, nodeId: string, locked: boolean): Promise<void>;

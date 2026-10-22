@@ -7,6 +7,7 @@ import { EmptyState } from '../../components/shared/EmptyState';
 
 const stateLabels: Record<string, string> = { draft: '草稿', submitted: '待审批', applied: '已执行', discarded: '已驳回' };
 const opLabels: Record<string, string> = { add: '加入序列', move: '移位', remove: '移出序列' };
+const authorLabel = (author: string) => author.startsWith('agent:') ? 'AI' : /^(human|user):/.test(author) ? '你' : author;
 
 export function ProposalsPanel({ project, enabled }: { project: Project; enabled: boolean }) {
   const client = useQueryClient();
@@ -14,7 +15,6 @@ export function ProposalsPanel({ project, enabled }: { project: Project; enabled
   const query = useQuery({ queryKey: ['proposals', project.id], queryFn: () => repository.query(project.id), enabled, staleTime: 5_000 });
   const [openId, setOpenId] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<Record<string, boolean>>({});
-  const [nonce, setNonce] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const projectRevision = () => {
@@ -35,9 +35,9 @@ export function ProposalsPanel({ project, enabled }: { project: Project; enabled
     {note && <p role="status">{note}</p>}
     {query.isError && <EmptyState title="选片方案加载失败" hint="请重试。" action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />}
     <ol className="proposal-list">{proposals.map(proposal => <li key={proposal.id}>
-      <button aria-expanded={openId === proposal.id} onClick={() => { setOpenId(openId === proposal.id ? null : proposal.id); setAccepted(Object.fromEntries(proposal.operations.map(op => [op.operationId, true]))); setNonce(proposal.approvalNonce); setNote(''); }}>
+      <button aria-expanded={openId === proposal.id} onClick={() => { setOpenId(openId === proposal.id ? null : proposal.id); setAccepted(Object.fromEntries(proposal.operations.map(op => [op.operationId, true]))); setNote(''); }}>
         <strong>{proposal.title}</strong>
-        <span className="micro">{stateLabels[proposal.state]} · {proposal.operations.length} 个操作 · {proposal.author} · v{proposal.revision}</span>
+        <span className="micro">{stateLabels[proposal.state]} · {proposal.operations.length} 项调整 · {authorLabel(proposal.author)} · 第 {proposal.revision} 版</span>
       </button>
     </li>)}</ol>
     {open && open.state === 'draft' && <div className="proposal-actions">
@@ -48,12 +48,11 @@ export function ProposalsPanel({ project, enabled }: { project: Project; enabled
       <h4>审批 · {open.title}</h4>
       <ul className="proposal-ops">{open.operations.map(op => <li key={op.operationId}>
         <label><input type="checkbox" checked={accepted[op.operationId] ?? false} onChange={event => setAccepted(previous => ({ ...previous, [op.operationId]: event.target.checked }))} />
-          {opLabels[op.op]} · {op.photoId.slice(0, 8)}{op.toIndex !== null ? ` → 第 ${op.toIndex + 1} 位` : ''}{op.reason ? ` · ${op.reason}` : ''}</label>
+          {opLabels[op.op]} · {project.photos.find(photo => photo.id === op.photoId)?.name ?? '照片暂不可用'}{op.toIndex !== null ? ` → 第 ${op.toIndex + 1} 位` : ''}{op.reason ? ` · ${op.reason}` : ''}</label>
       </li>)}</ul>
-      <label>审批确认码<input className="text-input" value={nonce} onChange={event => setNonce(event.target.value)} /></label>
       <p className="micro">不选择任何操作将驳回提案。</p>
       <div className="proposal-actions">
-        <Button size="small" variant="primary" disabled={busy} onClick={() => { const ids = Object.entries(accepted).filter(([, on]) => on).map(([id]) => id); void act(() => repository.apply(project.id, projectRevision(), open.id, open.revision, ids, nonce.trim(), `apply-${Date.now()}`).then(result => result.discarded ? '已驳回该提案' : `已执行 ${result.applied} 个操作`)); }}>
+        <Button size="small" variant="primary" disabled={busy} onClick={() => { const ids = Object.entries(accepted).filter(([, on]) => on).map(([id]) => id); void act(() => repository.apply(project.id, projectRevision(), open.id, open.revision, ids, open.approvalNonce, `apply-${Date.now()}`).then(result => result.discarded ? '已驳回该提案' : `已采纳 ${result.applied} 项调整`)); }}>
           {Object.values(accepted).some(Boolean) ? '执行所选操作' : '驳回提案'}
         </Button>
       </div>

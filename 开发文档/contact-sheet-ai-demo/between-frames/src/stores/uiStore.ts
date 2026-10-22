@@ -4,6 +4,11 @@ import type { InspectorPanel, PhotoFilter, WorkspaceView } from '../domain/model
 import { selectPhotos, type SelectionGesture } from '../domain/selection';
 
 interface UIState {
+  canvasTaskSource: import('../domain/agent').CanvasTaskSource | null;
+  canvasBoardId: string | null;
+  canvasBoardRequest: number;
+  openCanvasAgent: (source: import('../domain/agent').CanvasTaskSource) => void;
+  openCanvasBoard: (boardId: string) => void;
   aiOpen: boolean;
   openAgent: () => void;
   closeAgent: () => void;
@@ -37,7 +42,7 @@ interface UIState {
   toggleInspector: () => void;
   reset: () => void;
 }
-const initial = { aiOpen: false, activeId: null as string | null, selectedIds: [] as string[], anchorId: null as string | null, search: '', filmstripOpen: true, sidebarOpen: true, filter: 'all' as PhotoFilter, grouping: 'none' as GridGrouping, view: 'grid' as WorkspaceView, panel: 'photo' as InspectorPanel, dense: false, inspectorOpen: true };
+const initial = { canvasBoardRequest: 0, canvasTaskSource: null as import('../domain/agent').CanvasTaskSource | null, canvasBoardId: null as string | null, aiOpen: false, activeId: null as string | null, selectedIds: [] as string[], anchorId: null as string | null, search: '', filmstripOpen: true, sidebarOpen: true, filter: 'all' as PhotoFilter, grouping: 'none' as GridGrouping, view: 'grid' as WorkspaceView, panel: 'photo' as InspectorPanel, dense: false, inspectorOpen: true };
 export const useUIStore = create<UIState>(set => ({
   aiDrafts: {},
   saveAIDraft: (projectId, draft) => set(state => ({ aiDrafts: { ...state.aiDrafts, [projectId]: draft } })),
@@ -56,8 +61,10 @@ export const useUIStore = create<UIState>(set => ({
   toggleInspector: () => set(state => ({ inspectorOpen: !state.inspectorOpen })),
   toggleFilmstrip: () => set(state => ({ filmstripOpen: !state.filmstripOpen })),
   toggleSidebar: () => set(state => ({ sidebarOpen: !state.sidebarOpen })),
-  openAgent: () => set({ aiOpen: true, view: 'grid', panel: 'photo' }),
+  openCanvasAgent: canvasTaskSource => set({ aiOpen: true, canvasTaskSource, view: 'canvas', panel: 'photo' }),
+  openCanvasBoard: canvasBoardId => set(state => ({ canvasBoardId, canvasBoardRequest: state.canvasBoardRequest + 1, view: 'canvas', aiOpen: false, panel: 'photo', selectedIds: [], activeId: null })),
+  openAgent: () => set({ aiOpen: true, canvasTaskSource: null, view: 'grid', panel: 'photo' }),
   closeAgent: () => set({ aiOpen: false }),
-  toggleAgent: () => set(state => ({ aiOpen: !state.aiOpen, view: 'grid', panel: 'photo' })),
+  toggleAgent: () => set(state => ({ aiOpen: !state.aiOpen, canvasTaskSource: null, view: 'grid', panel: 'photo' })),
   reset: () => set({ ...initial, selectedIds: [...initial.selectedIds], filter: 'all', view: 'grid', panel: 'photo' }),
 }));

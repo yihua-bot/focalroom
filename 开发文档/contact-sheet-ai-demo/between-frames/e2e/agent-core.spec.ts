@@ -1,3 +1,4 @@
+import { installAccountFixture } from './account-fixture';
 import { test, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -19,6 +20,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
   if (['localhost','127.0.0.1','[::1]'].includes(new URL(route.request().url()).hostname)) return route.continue();
   outside.push(route.request().url()); return route.abort('internetdisconnected');
  });
+ await installAccountFixture(page);
  await page.addInitScript(() => {
   Object.assign(globalThis, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: {
    invoke: async (command: string, args: unknown) => {

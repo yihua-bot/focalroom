@@ -21,11 +21,21 @@ impl ToolRegistry {
             .unwrap()
             .iter()
             .filter(|tool| {
-                canvas || !matches!(tool["name"].as_str(), Some("create_board_draft" | "place_photos_on_board" | "get_board"))
+                canvas || !super::task_scope::CANVAS_TOOLS.contains(&tool["name"].as_str().unwrap_or(""))
             })
             .map(|tool| {
                 json!({"type":"function","name":tool["name"],"description":tool["description"],"parameters":tool["parameters"],"strict":true})
             })
+            .collect::<Vec<_>>()
+            .into()
+    }
+    pub fn model_specs_for_grant(grant: &super::task_scope::TaskGrant) -> Value {
+        Self::model_specs_for(true)
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|tool| grant.tools.iter().any(|name| tool["name"] == *name))
+            .cloned()
             .collect::<Vec<_>>()
             .into()
     }
@@ -116,6 +126,7 @@ impl PolicyGate {
                 AppError::new("VALIDATION_ERROR", format!("list_photos 参数不合法；status 仅允许 keep/reject/undecided 或 JSON null。首个分页可用以下完整参数：{}。null 不加引号，不能写成字符串。", json!({"project_id":task.project_id,"status":null,"limit":100,"cursor":null})))
             } else { error }
         })?;
+        super::task_scope::require_tool(tx, task, &call.name).await?;
         if call.args["project_id"] != task.project_id {
             return Err(AppError::new("PERMISSION_DENIED", "工具不能访问其他项目"));
         }
