@@ -170,7 +170,7 @@ function PromotionImport({
         files.length !== photos.length
       )
         throw new Error(
-          "请完整选择共享包内的 *.preview.jpg，照片数量须与清单一致",
+          "请完整选择共享包中的照片预览，数量须与项目清单一致",
         );
       const value = { ...manifest, workspace_id: workspace };
       const start = await request<{
@@ -219,7 +219,7 @@ function PromotionImport({
           </select>
         </label>
         <label>
-          manifest.json
+          项目清单文件
           <input
             type="file"
             accept="application/json,.json"
@@ -227,7 +227,7 @@ function PromotionImport({
           />
         </label>
         <label>
-          2048px JPEG 预览
+          照片预览文件
           <input
             type="file"
             accept="image/jpeg"

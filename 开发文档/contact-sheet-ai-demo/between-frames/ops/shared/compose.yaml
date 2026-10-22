@@ -32,6 +32,11 @@ services:
       # 官方 AI 密钥仅进入 API 容器；默认赠额为 0，运营明确分配后才可调用。
       FOCALROOM_DEEPSEEK_API_KEY: ${FOCALROOM_DEEPSEEK_API_KEY:-}
       FOCALROOM_AI_INITIAL_TOKENS: ${FOCALROOM_AI_INITIAL_TOKENS:-0}
+      # 订阅默认关闭；支付密钥仅进入 API，不打包到客户端或 Web。
+      FOCALROOM_BILLING_ENABLED: ${FOCALROOM_BILLING_ENABLED:-0}
+      FOCALROOM_STRIPE_SECRET_KEY: ${FOCALROOM_STRIPE_SECRET_KEY:-}
+      FOCALROOM_STRIPE_WEBHOOK_SECRET: ${FOCALROOM_STRIPE_WEBHOOK_SECRET:-}
+      FOCALROOM_BILLING_PRICES: ${FOCALROOM_BILLING_PRICES:-[]}
     volumes: [preview-data:/data/previews]
     depends_on:
       postgres: { condition: service_healthy }

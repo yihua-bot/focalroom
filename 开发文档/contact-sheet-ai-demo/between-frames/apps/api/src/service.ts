@@ -1,6 +1,8 @@
 import { requestMagicCode, verifyMagicCode, type MagicEmailDelivery } from "./magic-login.ts";
 import { loginWithGoogle } from "./google-login.ts";
 import { BoardService } from "./boards.ts";
+import { BillingService } from './billing.ts';
+import type { BillingConfig, BillingGateway } from './billing-gateway.ts';
 import { DesktopLoginService } from "./desktop-login.ts";
 import { HostedAiService, type HostedAiConfig, type HostedAiTransport } from "./hosted-ai.ts";
 import { AccountRecoveryService, type AccountEmailDelivery } from "./account-recovery.ts";
@@ -38,11 +40,13 @@ export class CloudService {
   readonly desktop: DesktopLoginService;
   readonly boards: BoardService;
   readonly ai: HostedAiService;
+  readonly billing: BillingService;
   private readonly magicEmail?: MagicEmailDelivery;
-  constructor(pool: Pool, origin: string, store: PreviewStore, email?: AccountEmailDelivery, magicEmail?: MagicEmailDelivery, hostedAi?: {config?:HostedAiConfig;transport?:HostedAiTransport}) {
+  constructor(pool: Pool, origin: string, store: PreviewStore, email?: AccountEmailDelivery, magicEmail?: MagicEmailDelivery, hostedAi?: {config?:HostedAiConfig;transport?:HostedAiTransport}, billing?: {config?:BillingConfig;gateway?:BillingGateway}) {
     this.pool = pool;
     this.magicEmail = magicEmail;
     this.auth = new AuthService(pool, origin);
+    this.billing = new BillingService(pool,this.auth,billing?.config,billing?.gateway,Boolean(hostedAi?.config));
     this.ai = new HostedAiService(pool,this.auth,hostedAi?.config,hostedAi?.transport);
     this.desktop = new DesktopLoginService(pool, this.auth);
     this.authority = new AuthorityService(pool, this.auth);

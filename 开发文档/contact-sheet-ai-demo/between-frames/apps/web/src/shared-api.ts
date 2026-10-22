@@ -1,3 +1,4 @@
+import { userFacingError } from '../../../src/services/userFacingError';
 import { z } from "zod";
 import { sharedSnapshotSchema } from "@betweenframes/contracts";
 export const sessionSchema = z.object({
@@ -134,4 +135,4 @@ export function commandFor(
 }
 
 export const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : "操作失败";
+  userFacingError(error);

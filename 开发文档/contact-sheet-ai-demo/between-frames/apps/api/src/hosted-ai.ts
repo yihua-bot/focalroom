@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import sharp from "sharp";
 import { z } from "zod";
 import { AuthService, type Headers } from "./auth.ts";
@@ -51,9 +51,13 @@ async function readReply(response: Response) {
 
 // 管理端离线分配入口；没有公开充值/赠送接口。grantId 由操作者保存用于幂等重试。
 export async function grantAiTokens(pool: Pool, userId: string, grantId: string, tokens: number, reason: string) {
+  return transaction(pool, tx => grantAiTokensTx(tx, userId, grantId, tokens, reason));
+}
+
+// 支付回执与额度发放共用调用者事务；避免支付已确认但额度漏发。
+export async function grantAiTokensTx(tx: PoolClient, userId: string, grantId: string, tokens: number, reason: string) {
   assert(Number.isSafeInteger(tokens) && tokens > 0 && tokens <= 1000000000 && reason.trim().length > 0 && reason.length <= 200 && grantId.length > 0 && grantId.length <= 160,
     400, "VALIDATION_ERROR", "额度分配参数不合法");
-  return transaction(pool, async tx => {
     await tx.query("INSERT INTO fr_ai_accounts(user_id) VALUES($1) ON CONFLICT DO NOTHING", [userId]);
     await tx.query("SELECT user_id FROM fr_ai_accounts WHERE user_id=$1 FOR UPDATE", [userId]);
     const old = (await tx.query("SELECT * FROM fr_ai_grants WHERE id=$1", [grantId])).rows[0];
@@ -64,7 +68,7 @@ export async function grantAiTokens(pool: Pool, userId: string, grantId: string,
     await tx.query("INSERT INTO fr_ai_grants(id,user_id,tokens,reason) VALUES($1,$2,$3,$4)", [grantId,userId,tokens,reason]);
     await tx.query("UPDATE fr_ai_accounts SET granted=granted+$2 WHERE user_id=$1", [userId,tokens]);
     return { applied: true };
-  });
+
 }
 
 // 只供线下核账后的管理操作；活跃请求不能提前退款，流水和账本在同一事务结算。

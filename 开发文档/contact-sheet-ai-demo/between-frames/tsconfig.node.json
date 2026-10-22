@@ -6,6 +6,7 @@
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true
   },
   "include": ["vite.config.ts", "vitest.config.ts", "playwright*.config.ts", "e2e", "scripts/workspace-vite.ts"]

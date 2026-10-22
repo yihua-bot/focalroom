@@ -24,6 +24,7 @@ import { attachRealtime } from "./realtime.ts";
 import { metricsAuthorized } from "./metrics.ts";
 import { migrate, assertSchema } from "./database.ts";
 import { hostedAiConfig, type HostedAiConfig, type HostedAiTransport } from "./hosted-ai.ts";
+import { billingConfig, type BillingConfig, type BillingGateway } from './billing-gateway.ts';
 
 class ApiController {
   readonly service: CloudService;
@@ -60,6 +61,15 @@ class ApiController {
       headers = req.headers,
       path = req.path.replace(/^\/api\/v2/, "");
     s.auth.checkOrigin(headers);
+    if (path === '/billing/catalog' && req.method === 'GET') return s.billing.catalog();
+    if (path === '/billing/overview' && req.method === 'GET') return s.billing.overview(headers);
+    if (path === '/billing/checkout' && req.method === 'POST') return s.billing.checkout(headers,req.body);
+    if (path === '/billing/manage' && req.method === 'POST') return s.billing.manage(headers);
+    if (path === '/billing/cancel-checkout' && req.method === 'POST') return s.billing.cancelCheckout(headers);
+    if (path === '/billing/webhook' && req.method === 'POST') {
+      assert(Buffer.isBuffer(req.body),400,'BILLING_SIGNATURE_INVALID','付款通知无效');
+      return s.billing.webhook(req.body,typeof headers['stripe-signature']==='string'?headers['stripe-signature']:'');
+    }
     if (path === "/ai/account" && req.method === "GET") return s.ai.account(headers);
     if (path === "/ai/deepseek-flash-v1/responses" && req.method === "POST") return s.ai.respond(headers,req.body);
     if (req.method === "POST" && path === "/auth/desktop/start")
@@ -288,9 +298,11 @@ export async function createApi(options: {
   magicEmail?: MagicEmailDelivery;
   hostedAi?: HostedAiConfig;
   hostedAiTransport?: HostedAiTransport;
+  billing?: BillingConfig;
+  billingGateway?: BillingGateway;
 }) {
   await assertSchema(options.pool);
-  const service = new CloudService(options.pool, options.origin, options.store, options.email, options.magicEmail,{config:options.hostedAi,transport:options.hostedAiTransport});
+  const service = new CloudService(options.pool, options.origin, options.store, options.email, options.magicEmail,{config:options.hostedAi,transport:options.hostedAiTransport},{config:options.billing,gateway:options.billingGateway});
   Module({
     controllers: [ApiController],
     providers: [{ provide: CloudService, useValue: service }],
@@ -325,6 +337,7 @@ export async function createApi(options: {
     });
     next();
   });
+  app.use('/api/v2/billing/webhook',raw({type:'application/json',limit:'1mb'}));
   app.use("/api/v2/ai/deepseek-flash-v1/responses",json({limit:"16mb"}));
   app.use(json({ limit: "2mb" }));
   app.use(raw({ type: "image/jpeg", limit: "8mb" }));
@@ -404,7 +417,7 @@ export async function main() {
   const store = config.r2_config
     ? await readR2Config(config.r2_config)
     : new LocalPreviewStore(config.preview_directory!);
-  const server = await createApi({ pool, store, origin: config.origin, hostedAi: hostedAiConfig() });
+  const server = await createApi({ pool, store, origin: config.origin, hostedAi: hostedAiConfig(), billing: billingConfig() });
   await server.app.listen(config.port, config.host);
   process.stdout.write(
     `FocalRoom API listening ${config.host}:${config.port}\n`,

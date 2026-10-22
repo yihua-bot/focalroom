@@ -13,7 +13,10 @@ import { ProjectReview } from "./shared/ProjectReview";
 import { AccountRecovery, readAccountLink, VerificationRequest } from "./shared/AccountRecovery";
 import { WebLanguageSwitcher,useWebI18n } from "./i18n";
 import "./shared.css";
-function AccountMenu({ session, onLogout, onChanged }: { session: Session; onLogout: () => void; onChanged: (s: Session) => void }) {
+import { BillingDialog } from './shared/BillingDialog';
+import { billingCopy } from '../../../src/features/subscription/copy';
+import type { SubscriptionPage } from '../../../src/features/subscription/SubscriptionDialog';
+function AccountMenu({ session, onLogout, onChanged, onBilling }: { session: Session; onLogout: () => void; onChanged: (s: Session) => void; onBilling: (page: SubscriptionPage) => void }) {
   const [open, setOpen] = useState(false);
   const { locale } = useWebI18n();
   const menuText={signout:{zh:"退出登录",en:"Sign out",ja:"ログアウト",ko:"로그아웃"},editName:{zh:"修改昵称",en:"Edit name",ja:"名前を変更",ko:"이름 변경"},editAvatar:{zh:"修改头像",en:"Edit avatar",ja:"アイコンを変更",ko:"프로필 사진 변경"},cancel:{zh:"取消修改",en:"Cancel",ja:"キャンセル",ko:"취소"},save:{zh:"保存",en:"Save",ja:"保存",ko:"저장"}};
@@ -45,7 +48,7 @@ function AccountMenu({ session, onLogout, onChanged }: { session: Session; onLog
         { ...(displayName !== undefined ? { display_name: displayName } : {}), ...(avatarUrl !== undefined ? { avatar_url: avatarUrl } : {}) });
       onChanged({ ...session, ...result, csrf: session.csrf });
       setEditing(null);
-    } catch (e) { setError(e instanceof Error ? e.message : "保存失败"); }
+    } catch (e) { setError(message(e)); }
     finally { setBusy(false); }
   };
   return <div className="fr-account-menu" ref={wrapRef}>
@@ -54,6 +57,9 @@ function AccountMenu({ session, onLogout, onChanged }: { session: Session; onLog
     </button>
     {open && <div className="fr-account-dropdown" role="menu">
       <div className="fr-account-head"><b>{session.name || session.email}</b><small>{session.email}</small></div>
+      <button type="button" role="menuitem" onClick={() => { setOpen(false); onBilling('usage'); }}>{billingCopy[locale].usage}</button>
+      <button type="button" role="menuitem" onClick={() => { setOpen(false); onBilling('billing'); }}>{billingCopy[locale].billing}</button>
+      <button type="button" role="menuitem" onClick={() => { setOpen(false); onBilling('plans'); }}>{billingCopy[locale].plans}</button>
       <button type="button" role="menuitem" onClick={() => { setEditing(editing === "name" ? null : "name"); setName(session.name); }}>{editing === "name" ? menuText.cancel[locale] : menuText.editName[locale]}</button>
       <button type="button" role="menuitem" onClick={() => fileRef.current?.click()}>{menuText.editAvatar[locale]}</button>
       <button type="button" role="menuitem" className="danger" onClick={onLogout}>{menuText.signout[locale]}</button>
@@ -77,6 +83,7 @@ function Brand() {
   );
 }
 export default function SharedApp() {
+  const [billingPage, setBillingPage] = useState<SubscriptionPage | null>(() => new URLSearchParams(location.hash.slice(1)).has('billing') ? 'billing' : null);
   const [accountLink, setAccountLink] = useState(() => readAccountLink(new URL(location.href)));
   const [session, setSession] = useState<Session | null>(null),
     [ready, setReady] = useState(false),
@@ -95,6 +102,7 @@ export default function SharedApp() {
       // 避免紧随 popstate 的事件误把刚打开的邮件页关闭。
       const url = new URL(event instanceof HashChangeEvent ? event.newURL : location.href);
       setRoute(url.hash);
+      if (new URLSearchParams(url.hash.slice(1)).has('billing')) setBillingPage('billing');
       const link = readAccountLink(url);
       if (link) setAccountLink(link);
       // 清理后的空地址不丢弃内存中的令牌；通过明确的返回按钮退出。
@@ -126,6 +134,7 @@ export default function SharedApp() {
     try {
       await request("/auth/logout", session, "POST");
       setSession(null);
+      setBillingPage(null);
       setAccountLink(null);
       if (!desktopIntent) openProject(null);
     } catch (error) {
@@ -139,7 +148,7 @@ export default function SharedApp() {
         <span className="fr-label">共享评片</span>
         <div className="fr-top-right">
           <WebLanguageSwitcher />
-          {session ? <AccountMenu session={session} onLogout={() => void logout()} onChanged={setSession} /> : null}
+          {session ? <AccountMenu session={session} onLogout={() => void logout()} onChanged={setSession} onBilling={setBillingPage} /> : null}
         </div>
       </header>
       {error && (
@@ -169,6 +178,10 @@ export default function SharedApp() {
       ) : (
         <><VerificationRequest session={session} /><ProjectHome key={route} session={session} onOpen={openProject} /></>
       )}
+      {session && billingPage && <BillingDialog key={session.id} session={session} page={billingPage} onClose={() => {
+        setBillingPage(null);
+        if (new URLSearchParams(location.hash.slice(1)).has('billing')) { history.replaceState(null, '', '/shared'); setRoute(''); }
+      }} />}
     </div>
   );
 }

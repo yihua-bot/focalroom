@@ -137,7 +137,7 @@ export class AuthService {
     );
     const row = (
       await tx.query(
-        "SELECT s.digest,s.csrf,u.id,u.email,u.display_name,u.avatar_url FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s",
+        "SELECT s.digest,s.csrf,u.id,u.email,u.display_name,u.avatar_url,u.email_verified_at FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s",
         [digest(token)],
       )
     ).rows[0];
@@ -155,6 +155,7 @@ export class AuthService {
       email: row.email,
       name: row.display_name,
       avatar_url: row.avatar_url,
+      email_verified_at: row.email_verified_at,
       session: row.digest,
       csrf: row.csrf,
     };
