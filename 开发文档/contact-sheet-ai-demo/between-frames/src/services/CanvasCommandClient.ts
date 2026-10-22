@@ -24,8 +24,7 @@ export class CanvasCommandClient {
     const parsed = canvasRequestSchema.safeParse({ schemaVersion: 3, commandId: this.newId(), idempotencyKey: this.newId(), projectId, boardId, baseRevision,
       operations: actions.map(action => ({ opId: this.newId(), action })) });
     if (!parsed.success) {
-      const detail = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
-      throw new Error(`画布操作内容无效（${detail}）。请重新选择后重试。`);
+      throw Object.assign(new Error('这次操作未能保存，请重新打开画布后重试。'), { cause: parsed.error });
     }
     const request = parsed.data;
     // 先落盘再发出；页面/应用退出后仍能重发完全相同的命令。

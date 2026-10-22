@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 const id = z.uuid();
+// 项目沿用既有稳定编号（包括内置演示项目），不能强制转换为 UUID。
+const projectId = z.string().min(1).max(160);
 const coordinate = z.number().finite().min(-1e9).max(1e9);
 const rectangle = { x: coordinate, y: coordinate, width: z.number().positive().max(1e9), height: z.number().positive().max(1e9) };
 const board = { boardId: id };
@@ -25,7 +27,7 @@ export const canvasActionSchema = z.discriminatedUnion('type', [
 ]);
 export const canvasRequestSchema = z.strictObject({
   schemaVersion: z.literal(3), commandId: id, idempotencyKey: z.string().min(1).max(160),
-  projectId: id, boardId: id, baseRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1000),
+  projectId, boardId: id, baseRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1000),
   operations: z.array(z.strictObject({ opId: id, action: canvasActionSchema })).min(1).max(300),
 }).superRefine((request, ctx) => {
   const seen = new Set<string>();
@@ -36,7 +38,7 @@ export const canvasRequestSchema = z.strictObject({
     if (['CreateBoard', 'Undo', 'Redo', 'AdoptBoard'].includes(op.action.type) && request.operations.length !== 1) ctx.addIssue({ code: 'custom', message: 'Must be a single operation' });
   });
 });
-export const canvasReceiptSchema = z.object({ commandId: id, projectId: id, boardId: id,
+export const canvasReceiptSchema = z.object({ commandId: id, projectId, boardId: id,
   baseRevision: z.number().int().nonnegative(), revision: z.number().int().positive(), changed: z.boolean(), results: z.array(z.unknown()) });
 export const canvasBoardRecordSchema = z.object({ id: z.string(), project_id: z.string(), title: z.string(), state: z.enum(['draft', 'official', 'frozen']),
   owning_task_id: z.string().nullable(), revision: z.number().int().positive() });

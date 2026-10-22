@@ -35,6 +35,41 @@ async function installDesktopBridge(page: Page) {
   });
 }
 
+test('内置演示项目：创建画布、放照片、便签、撤销重做与重启恢复', async ({ page }) => {
+  await rpc('test_seed_demo');
+  const projectId = 'demo-first-walk';
+  const project = await rpc<Project>('get_project', { projectId });
+  expect(project.photos).toHaveLength(1);
+  await installDesktopBridge(page);
+  await page.goto('/#/project/' + projectId);
+  await page.getByTestId('photo-1').getByRole('button', { name: /^查看第/ }).click();
+  await page.getByRole('button', { name: '叙事画布', exact: true }).click();
+  await page.getByRole('button', { name: '新建画布', exact: true }).click();
+  const boards = page.getByRole('combobox', { name: '选择画布' });
+  await expect(boards).toHaveValue(/.+/);
+  const boardId = await boards.inputValue();
+  await page.getByRole('button', { name: /放入选中照片/ }).click();
+  await expect(page.locator('.canvas-photo-node img')).toHaveCount(1);
+  await expect.poll(() => page.locator('.canvas-photo-node img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await page.getByRole('button', { name: '便签', exact: true }).click();
+  await page.getByRole('textbox', { name: '便签内容' }).fill('演示项目也可以编排');
+  await page.getByRole('button', { name: '保存便签', exact: true }).click();
+  await expect(page.locator('.canvas-sticky-node')).toHaveText('演示项目也可以编排');
+  await page.getByRole('button', { name: '撤销', exact: true }).click();
+  await expect(page.locator('.canvas-sticky-node')).toHaveCount(0);
+  await page.getByRole('button', { name: '重做', exact: true }).click();
+  await expect(page.locator('.canvas-sticky-node')).toHaveText('演示项目也可以编排');
+  const before = await rpc('canvas_snapshot', { projectId, boardId });
+  await page.goto('about:blank');
+  await rpc('test_process_restart');
+  await page.goto('/#/project/' + projectId);
+  await page.getByRole('button', { name: '叙事画布', exact: true }).click();
+  await expect(page.locator('.canvas-photo-node img')).toHaveCount(1);
+  await expect(page.locator('.canvas-sticky-node')).toHaveText('演示项目也可以编排');
+  expect(await rpc('canvas_snapshot', { projectId, boardId })).toEqual(before);
+  await page.screenshot({ path: '../docs/v3/evidence/canvas-demo-fix-2026-10-22/demo-canvas.png' });
+});
+
 test('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进程重启', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));

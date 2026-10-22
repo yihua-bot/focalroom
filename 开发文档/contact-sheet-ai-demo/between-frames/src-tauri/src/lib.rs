@@ -22,6 +22,8 @@ pub mod image_pipeline;
 pub mod importer;
 pub mod keychain;
 pub mod login_guard;
+#[cfg(target_os = "macos")]
+mod macos_menu;
 pub mod photo_inspection;
 pub mod product_links;
 pub mod publishing;
@@ -37,6 +39,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            macos_menu::install(app)?;
             let directory = app.path().app_data_dir()?.join("BetweenFrames");
             let cache = directory.join("cache");
             std::fs::create_dir_all(&cache)?;
@@ -145,6 +149,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            set_native_menu_locale,
             product_links::open_product_link,
             commands::agent_request,
             commands::get_agent_projection,
@@ -199,4 +204,18 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("无法启动 FocalRoom 桌面应用");
+}
+
+#[tauri::command]
+fn set_native_menu_locale(
+    app: tauri::AppHandle,
+    locale: String,
+) -> std::result::Result<(), String> {
+    #[cfg(target_os = "macos")]
+    return macos_menu::set_locale(&app, &locale).map_err(|_| "暂时无法更新应用菜单。".into());
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, locale);
+        Ok(())
+    }
 }

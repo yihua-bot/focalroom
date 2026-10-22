@@ -15,6 +15,30 @@ fn shared_protocol_examples_roundtrip_all_fifteen_actions_without_extra_fields()
     }
 }
 
+#[test]
+fn legacy_project_ids_do_not_relax_command_and_board_identity_validation() {
+    let b = domain::id();
+    let mut req = request(
+        "demo-first-walk",
+        &b,
+        0,
+        vec![CanvasAction::CreateBoard(CreateBoardCommand {
+            title: "演示画布".into(),
+        })],
+    );
+    validate(&req).unwrap();
+    for project in [String::new(), "p".repeat(161)] {
+        req.project_id = project;
+        assert_eq!(validate(&req).unwrap_err().code, "VALIDATION_ERROR");
+    }
+    req.project_id = "demo-first-walk".into();
+    req.command_id = "not-a-command".into();
+    assert!(validate(&req).is_err());
+    req.command_id = domain::id();
+    req.board_id = "not-a-board".into();
+    assert!(validate(&req).is_err());
+}
+
 fn request(p: &str, b: &str, revision: i64, actions: Vec<CanvasAction>) -> CanvasCommandRequest {
     CanvasCommandRequest {
         schema_version: 3,
@@ -67,6 +91,99 @@ async fn fixture() -> (tempfile::TempDir, Store, String, String) {
 }
 async fn revision(db: &Store, p: &str, b: &str) -> i64 {
     db.canvas_snapshot(p, b).await.unwrap().board.revision
+}
+
+#[tokio::test]
+async fn seeded_demo_supports_canvas_edit_undo_redo_and_replay_after_restart() {
+    let temp = tempfile::tempdir().unwrap();
+    let resources = temp.path().join("demo");
+    let cache = temp.path().join("cache");
+    std::fs::create_dir_all(&resources).unwrap();
+    image::RgbImage::from_pixel(32, 24, image::Rgb([20, 30, 40]))
+        .save(resources.join("demo.jpg"))
+        .unwrap();
+    let path = temp.path().join("demo.sqlite");
+    let db = Store::open(&path).await.unwrap();
+    crate::seed_demo::ensure_demo(&db, &resources, &cache)
+        .await
+        .unwrap();
+    let projects = db.list(false).await.unwrap();
+    assert_eq!(projects.len(), 1);
+    let p = &projects[0].id;
+    assert_eq!(p, "demo-first-walk");
+    let b = domain::id();
+    db.execute_canvas(request(
+        p,
+        &b,
+        0,
+        vec![CanvasAction::CreateBoard(CreateBoardCommand {
+            title: "演示画布".into(),
+        })],
+    ))
+    .await
+    .unwrap();
+    let asset_id: String = sqlx::query_scalar("SELECT id FROM source_assets WHERE project_id=?")
+        .bind(p)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    let edit = request(
+        p,
+        &b,
+        1,
+        vec![
+            CanvasAction::PlacePhoto(PlacePhotoNodeCommand {
+                board_id: b.clone(),
+                asset_id,
+                x: 0.,
+                y: 0.,
+                width: 200.,
+                height: 150.,
+            }),
+            text(&b, "演示照片"),
+        ],
+    );
+    let receipt = db.execute_canvas(edit.clone()).await.unwrap();
+    let snapshot = db.canvas_snapshot(p, &b).await.unwrap();
+    assert_eq!(snapshot.nodes.len(), 2);
+    assert_eq!(snapshot.photo_sources.len(), 1);
+    db.execute_canvas(request(
+        p,
+        &b,
+        2,
+        vec![CanvasAction::Undo(UndoCanvasCommand {
+            board_id: b.clone(),
+        })],
+    ))
+    .await
+    .unwrap();
+    assert!(db.canvas_snapshot(p, &b).await.unwrap().nodes.is_empty());
+    db.execute_canvas(request(
+        p,
+        &b,
+        3,
+        vec![CanvasAction::Redo(RedoCanvasCommand {
+            board_id: b.clone(),
+        })],
+    ))
+    .await
+    .unwrap();
+    db.pool.close().await;
+    let db = Store::open(&path).await.unwrap();
+    assert_eq!(
+        encode(&db.execute_canvas(edit).await.unwrap()).unwrap(),
+        encode(&receipt).unwrap()
+    );
+    let restored = db.canvas_snapshot(p, &b).await.unwrap();
+    assert_eq!(restored.nodes.len(), 2);
+    assert_eq!(restored.board.revision, 4);
+    // 项目编号格式兼容不授予其他项目的画布写权限。
+    let foreign = db
+        .execute_canvas(request("another-project", &b, 4, vec![text(&b, "拒绝")]))
+        .await
+        .unwrap_err();
+    assert_eq!(foreign.code, "NOT_FOUND");
+    assert_eq!(revision(&db, p, &b).await, 4);
 }
 
 #[tokio::test]

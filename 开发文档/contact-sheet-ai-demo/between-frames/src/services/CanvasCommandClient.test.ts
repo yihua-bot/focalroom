@@ -19,6 +19,31 @@ function receipt(request: CanvasCommandRequest) {
 }
 beforeEach(() => localStorage.clear());
 
+it('演示项目的待确认操作重启后可以原样恢复并接收回执', async () => {
+  const demoId = 'demo-first-walk';
+  const send = vi.fn<(request: CanvasCommandRequest) => Promise<unknown>>()
+    .mockRejectedValueOnce(new Error('connection closed after commit'))
+    .mockImplementation(async request => ({ ...receipt(request), projectId: demoId }));
+  const client = new CanvasCommandClient(send, localStorage);
+  await expect(client.execute(demoId, boardId, 2, actions)).rejects.toMatchObject({ code: 'CANVAS_PENDING' });
+  const reopened = new CanvasCommandClient(send, localStorage);
+  expect(reopened.pending(demoId)).toHaveLength(1);
+  await reopened.retry(demoId, boardId);
+  expect(send.mock.calls[1][0]).toEqual(send.mock.calls[0][0]);
+  expect(reopened.pending(demoId)).toEqual([]);
+});
+
+it('无效操作不外发，界面错误不包含内部校验字段', async () => {
+  const send = vi.fn();
+  const client = new CanvasCommandClient(send, localStorage);
+  const error = await client.execute('', boardId, 2, actions).catch((value: unknown) => value);
+  expect(error).toBeInstanceOf(Error);
+  expect((error as Error).message).toBe('这次操作未能保存，请重新打开画布后重试。');
+  expect(error).toMatchObject({ cause: expect.anything() });
+  expect(send).not.toHaveBeenCalled();
+  expect(localStorage.length).toBe(0);
+});
+
 it('丢失结果后阻止新编辑，刷新后以相同完整请求确认，不新建命令', async () => {
   let saved: CanvasCommandRequest | undefined;
   const firstSend = vi.fn(async (request: CanvasCommandRequest) => { saved = request; throw new Error('connection closed after commit'); });

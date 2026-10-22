@@ -575,6 +575,20 @@ impl Harness {
                 json!(true)
             }
             "test_fixture_info" => fixtures::info(&self.root)?,
+            "test_seed_demo" => {
+                let resources = self.root.join("demo-resources");
+                std::fs::create_dir_all(&resources)?;
+                image::RgbImage::from_pixel(32, 24, image::Rgb([20, 30, 40]))
+                    .save(resources.join("demo.jpg"))
+                    .map_err(|e| AppError::new("TEST_FIXTURE", e.to_string()))?;
+                between_frames_lib::seed_demo::ensure_demo(
+                    &self.store,
+                    &resources,
+                    &self.root.join("cache"),
+                )
+                .await?;
+                Value::Null
+            }
             "test_fixture_checksums" => {
                 let mut checks = Vec::new();
                 let mut directories = vec![self.root.join("fixtures")];

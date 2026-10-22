@@ -1,5 +1,6 @@
 import { setCopyLocale } from '../app/copy';
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 
 export type Locale = 'zh' | 'en' | 'ja' | 'ko';
 export const LOCALES: { code: Locale; label: string; flag: string }[] = [
@@ -40,6 +41,14 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     return 'en';
   });
   const [bundle, setBundle] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    if (isTauri()) {
+      void invoke('set_native_menu_locale', { locale }).catch(error => {
+        console.warn('Unable to update the native menu language', error);
+      });
+    }
+  }, [locale]);
 
   // 加载语言包 + 同步 copy locale
   useState(() => {

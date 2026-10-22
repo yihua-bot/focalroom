@@ -83,12 +83,15 @@ fn validate(request: &CanvasCommandRequest) -> Result<()> {
         || request.base_revision >= i64::MAX - 1000
         || request.idempotency_key.is_empty()
         || request.idempotency_key.len() > 160
+        || request.project_id.is_empty()
+        || request.project_id.encode_utf16().count() > 160
         || request.operations.is_empty()
         || request.operations.len() > 300
     {
         return Err(invalid("画布操作内容无效"));
     }
-    for id in [&request.command_id, &request.project_id, &request.board_id] {
+    // 项目保留既有稳定编号；新命令和画布本身仍要求 UUID。
+    for id in [&request.command_id, &request.board_id] {
         uuid::Uuid::parse_str(id).map_err(|_| invalid("画布操作标识无效"))?;
     }
     let mut ids = HashSet::new();

@@ -59,4 +59,5 @@ panic = "abort"
 strip = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
 security-framework = "3.7"
