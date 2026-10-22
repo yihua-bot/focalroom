@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-22",
+  "timezone": "Asia/Shanghai",
+  "headAtCollection": "94b5d48a306723410e1abb3ecf74a8f136e381a5",
+  "sourceSha256": {
+    "src-tauri/src/domain.rs": "65c24943cdc722a3b19c4ca7e463415c22be30e3f3f517db4e3486c7c1e4fe02",
+    "src-tauri/src/agent/budget.rs": "2ef0a79bab8339213a5ff2aae4e55c52a84719c375fbd7ceca6d51cf330f877f",
+    "src-tauri/src/agent/cloud.rs": "39670d0dc724befba4f1e41c9d06f8c8452eb78039d72b76e0f28f36ebdbcc63",
+    "src-tauri/src/agent/context.rs": "e8879983dd794d0bc5b42dfa2d3091b5c6ca7eff9b64bbccade8b161d618e84b",
+    "src-tauri/src/agent/execution.rs": "d597c0f0dae9eb1803c6d2bd7205e3cbb70346ee56c35848de45dd41f0477364",
+    "src-tauri/src/agent/openai.rs": "58e84ea0a3d8b9ffa8d3984e03ee6824a5d4063b58a4a204ff8e47241977818c",
+    "src-tauri/src/agent/policy.rs": "74d79b1aefc211649e7a9e88d0ee3d054f16e38a7580b0a526736dce3da6b634",
+    "src-tauri/src/agent/router.rs": "2bf9e86860d00f06af8e966a050d85475fc91a845b8daa756ef11737bc305067",
+    "src-tauri/src/agent/runtime.rs": "e8beda3a5da83e519a42af0d34623d60c79243794e53a3ff39432d11f147c481",
+    "src-tauri/src/agent/store.rs": "e4e8a37f43d2b9a436a6eec9987bbe899b6884f6f429df581d98069e457f80af",
+    "src-tauri/src/agent/types.rs": "7986a12ba43e3beaf3937804ec1bb0421a21970276e5a259e3acf65883616cab",
+    "src-tauri/src/agent/vision.rs": "ab6a90a1b00b84e0f40d9c33aa9c4d00cad30a5e5a67e07cf1b974924f5bfc19",
+    "src-tauri/tests/agent_vision.rs": "3adf005e98036372f0b7243b0564ed1a64611720da02acc60014c291e203be89",
+    "src-tauri/tests/hosted_ai.rs": "53d76ff06543d6990c37417f80d837be443e3ae8125e5974e5adab7d8ad97b2f",
+    "src/features/ai-editor/AIPanel.tsx": "d06279aacd5a28ac4bd88fda13899639e00f1a5206b4d3dc871d41faa833c8b8",
+    "src/features/ai-editor/AIPanel.test.tsx": "e3e1fc6f8b084cd391359913ea6f01b0d17a950e8382bae0de465ce5c35491bb",
+    "src/features/ai-editor/budgetRecovery.ts": "0763be33e80006130a268ec82f7cbf38d2b30fe668a28fb43133d96265c64a0d",
+    "src/domain/agent.ts": "c1a8917442cd1b77b6b336bd8d25a10f5dd066ea3abb388edbd282b3efb6a868",
+    "src/services/TauriAgentRepository.ts": "21e664fe95d48f9d0a864212dd316e2b0489a574801e2194c6cd77e223c05bfb",
+    "e2e/agent-core.spec.ts": "199e8b4a15417c54ae843d18107b5749e58d24aa7eb08919eb3e76a15757df05",
+    "src/i18n/locales/zh.json": "8888df8fcf7613e226c86e685a58e1c76316d3c3af850e6964b595947df62081",
+    "src/i18n/locales/en.json": "8f04e78a93ab515b101ef783ea87482d27293646032b2470c71a7b6d1467d8ca",
+    "src/i18n/locales/ja.json": "41ebf0c0f4effb7c376895e5104f4aa03da0d9d8d311b1efefa22a85c7dab880",
+    "src/i18n/locales/ko.json": "bb2eaa3f5e40beac377907f3d72223e44f9e3d6504fe3f001a3e31b7116b6263"
+  },
+  "verification": {
+    "frontendPassed": 318,
+    "rustPassed": 281,
+    "rustIgnored": 15,
+    "rustFailed": 0,
+    "rustResultSections": 37,
+    "browserJourneysPassed": 1,
+    "realUserPhotoUploads": 0
+  },
+  "logSha256": {
+    "rust-final.log": "b47a6bb82072ec73a40eb4e7059ba270820eda9d5a433b1490e1462ac74b9b3f",
+    "frontend-complete.log": "7ed9ac8237406b0a60382e595be3e6fd088af105b9474d39b0acdfde13067bb6",
+    "browser.log": "72233add201b20900ae62fdede2358752aa416f557f0af538dc1e20523441e7e",
+    "build-complete.log": "19f76fd18f2127c43a046e6af731acce950afd355309c99e03972b5e93253612",
+    "clippy-final.log": "0a000f0d4e9847fc4184f78a70c2b99d99ac28c0ac9cf2a39a7073b7ba50e9a5",
+    "lint-complete.log": "1cdbc38b5dc7e6206b5017e3189306f485b6ece325558dce7b751c6c0d726922",
+    "contracts.log": "04daf1240d7e8fb40e328eb5312c5e83d9ed6aa873a4d541a249660fbc6a6d95"
+  }
+}

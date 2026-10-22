@@ -24,10 +24,11 @@ const ready = () => waitFor(() => expect(send()).toBeEnabled());
 function task(state: AgentTask['state']): AgentTask { return { id: 't1', state, goal: '旅行故事', baseRevision: 3, reason: '预算已用完', question: state === 'needs_input' ? '希望以人物为主吗？' : null, budget: defaultAgentBudget, usage: { modelTurns: 1, toolCalls: 1, inputEstimate: 1, outputEstimate: 1, cloudImages: 0, costMinorUsd: 0 }, elapsedMs: 1, finalDraftIds: [], providerId: 'test', steps: [], createdAt: 'now' }; }
 beforeEach(() => { useUIStore.getState().reset(); useUIStore.setState({ aiDrafts: {} }); });
 describe('选片对话与本次预览使用', () => {
- it('达到等待时间后，明确延长并继续同一任务', async () => {
-  const paused = { ...task('paused'), elapsedMs: 480000, budgetIssue: { kind: 'time' as const, used: 480000, requested: 1, limit: 480000, stage: 'vision', requestNotSent: true } };
+ it.each([true, false])('达到等待时间后，明确延长并继续同一任务（请求未发送=%s）', async requestNotSent => {
+  const paused = { ...task('paused'), elapsedMs: 480000, budgetIssue: { kind: 'time' as const, used: 480000, requested: 1, limit: 480000, stage: requestNotSent ? 'vision' : 'model_response', requestNotSent } };
   const repo = fixture({}, { tasks: [paused], drafts: [] }); mount(repo); await ready();
-  expect(screen.getByText(/这一次照片请求尚未发送/)).toBeVisible();
+  if (requestNotSent) expect(screen.getByText(/这一次照片请求尚未发送/)).toBeVisible();
+  else expect(screen.queryByText(/这一次照片请求尚未发送/)).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: '延长时间并继续' }));
   expect(repo.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'ResumeTask', taskId: 't1', budget: expect.objectContaining({ maxDurationSeconds: 960, maxCloudImages: 0, maxCostMinorUsd: 100 }) }));
  });
@@ -54,8 +55,8 @@ describe('选片对话与本次预览使用', () => {
   expect(screen.queryByText(/视觉请求预留/)).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /^继续$/ })).not.toBeInTheDocument();
  });
- it('上传结果不明时说明可能的重复消耗，不显示未发送或继续按钮', async () => {
-  const repo = fixture({}, { tasks: [{ ...task('paused'), reason: '视觉请求的传输结果尚未确认；预算预留保留，请重新委托，恢复不会重复上传' }], drafts: [] });
+ it.each(['视觉请求的传输结果尚未确认；预算预留保留，请重新委托，恢复不会重复上传', '模型等待达到时间上限；未执行未确认工具'])('结果不明时说明可能的重复消耗，不显示未发送或继续按钮：%s', async reason => {
+  const repo = fixture({}, { tasks: [{ ...task('paused'), reason }], drafts: [] });
   mount(repo); await ready();
   expect(screen.getByText(/上次照片分析的结果尚未确认/)).toBeVisible();
   expect(screen.queryByText(/这一次照片请求尚未发送/)).not.toBeInTheDocument();

@@ -21,6 +21,7 @@ pub(crate) async fn budget_stop(db: &Store, id: &str, error: &AppError) -> Resul
         return Ok(());
     }
     record_budget_stop(&mut tx, &mut task, error).await?;
+    store::checkpoint(&mut tx, &task).await?;
     tx.commit().await?;
     Ok(())
 }
@@ -40,7 +41,6 @@ async fn record_budget_stop(
         .await?;
     }
     store::transition(tx, task, "paused", &error.message).await?;
-    store::checkpoint(tx, task).await?;
     Ok(())
 }
 pub(crate) async fn outcome(
@@ -147,13 +147,41 @@ pub(crate) async fn outcome(
             .saturating_add(t.usage.output_estimate)
             > t.budget.max_total_tokens
     {
-        store::transition(
-            &mut tx,
-            &mut t,
-            "paused",
-            "模型输出、费用或时间达到预算上限，未执行工具",
-        )
-        .await?;
+        use super::budget::LimitKind;
+        let (kind, used, requested, limit) = if i64::from(settled_output) > sent_output_limit {
+            (
+                LimitKind::Tokens,
+                0,
+                u64::from(settled_output),
+                sent_output_limit as u64,
+            )
+        } else if t.usage.cost_minor_usd > t.budget.max_cost_minor_usd.min(cost_limit) {
+            (
+                LimitKind::Cost,
+                u64::from(t.usage.cost_minor_usd),
+                0,
+                u64::from(t.budget.max_cost_minor_usd.min(cost_limit)),
+            )
+        } else if t.elapsed_ms >= u64::from(t.budget.max_duration_seconds) * 1000 {
+            (
+                LimitKind::Time,
+                t.elapsed_ms,
+                1,
+                u64::from(t.budget.max_duration_seconds) * 1000,
+            )
+        } else {
+            (
+                LimitKind::Tokens,
+                u64::from(t.usage.input_estimate) + u64::from(t.usage.output_estimate),
+                0,
+                u64::from(t.budget.max_total_tokens),
+            )
+        };
+        let mut error = super::budget::exceeded(kind, used, requested, limit, "model_response");
+        if let Some(body) = error.details.as_mut() {
+            body["budgetIssue"]["requestNotSent"] = false.into();
+        }
+        record_budget_stop(&mut tx, &mut t, &error).await?;
     } else {
         if let ModelOutcome::ToolCalls { calls } = &result
             && (calls.is_empty()
@@ -249,6 +277,7 @@ pub(crate) async fn tool(
             )
         };
         record_budget_stop(&mut tx, &mut t, &error).await?;
+        store::checkpoint(&mut tx, &t).await?;
         tx.commit().await?;
         return Err(error);
     }

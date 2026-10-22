@@ -284,7 +284,7 @@ async fn affordable_vision_request_shrinks_reply_and_uploads_once_without_raisin
     let _guard = ENV_LOCK.lock().await;
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
     let temp = tempfile::tempdir().unwrap();
-    let (db, project) = setup(temp.path(), 1).await;
+    let (db, project) = setup(temp.path(), 2).await;
     let (base, state) = spawn_server(Script {
         main: vec![
             "tool:list_photos".into(),
@@ -299,12 +299,16 @@ async fn affordable_vision_request_shrinks_reply_and_uploads_once_without_raisin
             request_id: domain::id(),
             project_id: project.id.clone(),
             command: TaskCommand::StartTask {
-                goal: "观察这张照片".into(),
-                selected_photo_ids: vec![project.photos[0].id.clone()],
-                target_count: 1,
+                goal: "观察这两张照片".into(),
+                selected_photo_ids: project
+                    .photos
+                    .iter()
+                    .map(|photo| photo.id.clone())
+                    .collect(),
+                target_count: 2,
                 budget: Budget {
-                    max_cloud_images: 1,
-                    max_cost_minor_usd: 15,
+                    max_cloud_images: 2,
+                    max_cost_minor_usd: 20,
                     ..Budget::default()
                 },
                 consent_id: Some(consent.id),
@@ -318,18 +322,23 @@ async fn affordable_vision_request_shrinks_reply_and_uploads_once_without_raisin
         .iter()
         .filter(|request| request["text"]["format"].is_object())
         .collect();
-    assert_eq!(visual.len(), 1);
+    assert_eq!(
+        visual.len(),
+        1,
+        "task: {:?}",
+        agent::projection(&db, &project.id).await.unwrap().tasks
+    );
     assert!(visual[0]["max_output_tokens"].as_u64().unwrap() < 8192);
     let view = agent::projection(&db, &project.id).await.unwrap();
-    assert_eq!(view.tasks[0].usage.cloud_images, 1);
-    assert_eq!(view.tasks[0].budget.max_cost_minor_usd, 15);
+    assert_eq!(view.tasks[0].usage.cloud_images, 2);
+    assert_eq!(view.tasks[0].budget.max_cost_minor_usd, 20);
     assert_eq!(view.tasks[0].budget.max_output_tokens, 8192);
-    assert!(view.tasks[0].usage.cost_minor_usd <= 15);
+    assert!(view.tasks[0].usage.cost_minor_usd <= 20);
     let observations: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations")
         .fetch_one(&db.pool)
         .await
         .unwrap();
-    assert_eq!(observations, 1);
+    assert_eq!(observations, 2);
     unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
 }
 
