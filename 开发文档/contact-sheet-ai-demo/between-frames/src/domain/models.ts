@@ -108,6 +108,7 @@ export interface DesktopProjectRepository extends ProjectRepository, DraftReposi
   importJob(jobId: string): Promise<ImportJob>;
   cancelImport(jobId: string): Promise<void>;
   retryImport(jobId: string): Promise<string>;
+  editorVersions?: import('./editorVersions').EditorVersionsRepository;
   relink(id: string, photoId: string): Promise<Project | null>;
   export(id: string, format: 'json' | 'csv' | 'html' | 'print' | 'sidecar' | 'shared', includePaths?: boolean): Promise<ExportReceipt | null>;
 }

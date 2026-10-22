@@ -1,4 +1,5 @@
 import { TauriDiagnosticsRepository } from './TauriDiagnosticsRepository';
+import { TauriEditorVersionsRepository } from './TauriEditorVersionsRepository';
 import { TauriAgentRepository } from './TauriAgentRepository';
 import { TauriMemoryRepository } from './TauriMemoryRepository';
 import { TauriSharingRepository } from './TauriSharingRepository';
@@ -33,6 +34,7 @@ export const EVENT_KIND_LABELS: Record<string, string> = {
 };
 
 export class TauriRepository implements DesktopProjectRepository {
+  readonly editorVersions = new TauriEditorVersionsRepository();
   readonly canvas = new TauriCanvasRepository();
   readonly publication = new TauriPublicationRepository();
   readonly sharing = new TauriSharingRepository();

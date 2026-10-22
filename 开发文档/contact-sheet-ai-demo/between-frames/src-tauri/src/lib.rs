@@ -16,6 +16,7 @@ pub mod diagnostics;
 pub mod domain;
 mod edit_commands;
 mod edit_state;
+pub mod editor_bridge;
 pub mod export;
 pub mod external_edit;
 pub mod image_pipeline;
@@ -173,6 +174,8 @@ pub fn run() {
             commands::get_original_photo,
             commands::execute_gui_command,
             commands::choose_import,
+            editor_bridge::import_editor_results,
+            editor_bridge::list_editor_versions,
             commands::import_photos,
             commands::get_import_job,
             commands::cancel_import,

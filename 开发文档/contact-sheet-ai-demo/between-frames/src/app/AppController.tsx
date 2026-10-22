@@ -29,6 +29,7 @@ import { Modal } from '../components/shared/Modal';
 import { Button } from '../components/shared/Button';
 import { isDesktopRepository } from '../services/TauriRepository';
 import { ImportDialog } from '../features/photo-import/ImportDialog';
+import { EditorVersionsDialog } from '../features/photo-import/EditorVersionsDialog';
 import { VersionsDialog } from '../features/project/VersionsDialog';
 import { ActivityDialog } from '../features/project/ActivityDialog';
 import { Lightbox } from '../components/inspector/Lightbox';
@@ -36,7 +37,7 @@ import type { SelectionGesture } from '../domain/selection';
 import { useAccount } from '../features/cloud-login/AccountProvider';
 import { UpdateCheck } from '../components/shared/UpdateCheck';
 
-type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'versions' | 'activity' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
+type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'editorVersions' | 'versions' | 'activity' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
 
 export function AppController({ repository }: { repository: ProjectRepository }) {
   useI18n();
@@ -197,7 +198,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
         onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })}
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />
       : project ? <Workspace key={project.id} canvas={local ? repository.canvas : undefined} publication={local ? repository.publication : undefined} project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending || readOnly} local={local} sharing={sharing.data ?? undefined} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
-        onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCopyPlan={copyPlan} onAICompare={aiCompare} onAIOrder={aiOrder} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
+        onEditorVersions={local && repository.editorVersions ? () => setDialog({ kind: 'editorVersions' }) : undefined} onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCopyPlan={copyPlan} onAICompare={aiCompare} onAIOrder={aiOrder} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
         : <EmptyState title={local ? '项目未找到' : '项目未找到'} hint={local ? '项目可能已归档，请返回项目列表查看。' : '请返回项目列表查看。'} action={<Button onClick={() => navigate(null)}>{zh.projects}</Button>} />}
   </AppShell>
     {ui.aiOpen && project && route.page === 'workspace' && <AISelectionDrawer projectTitle={project.title} onClose={ui.closeAgent}>
@@ -230,6 +231,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       }}>确认归档</Button></div></Modal>}
     {dialog?.kind === 'enlarge' && <Lightbox photos={navigable} activeId={dialog.photo.id} onClose={() => setDialog(null)} onNavigate={photo => { ui.select(photo.id); setDialog({ kind: 'enlarge', photo }); }} onDecide={(id, status) => decide(id, status)} onRate={(id, rating) => project && act(() => repository.rate(project.id, [id], rating), rating ? `人工评分已保存：${rating} 星` : '人工评分已清除')} />}
     {dialog?.kind === 'palette' && <CommandPalette commands={paletteCommands} onClose={() => setDialog(null)} />}
+    {dialog?.kind === 'editorVersions' && local && project && repository.editorVersions && <EditorVersionsDialog repository={repository.editorVersions} projectId={project.id} readOnly={readOnly} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'help' && <Modal title={zh.help} description={zh.helpHint} onClose={() => setDialog(null)}>
       <div style={{marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border, #2a2a40)'}}><UpdateCheck /></div>
       <ShortcutEditor shortcuts={shortcutConfig.shortcuts} overrides={shortcutConfig.overrides} save={shortcutConfig.save} reset={shortcutConfig.reset} />

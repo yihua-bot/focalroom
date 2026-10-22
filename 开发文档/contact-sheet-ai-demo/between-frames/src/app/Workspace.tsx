@@ -16,8 +16,9 @@ import { SharedReviewLink } from '../components/shared/SharedReviewLink';
 import type { CanvasRepository } from '../domain/canvas';
 import type { PublicationRepository } from '../domain/publication';
 import { useAccount } from '../features/cloud-login/AccountProvider';
+import { useI18n } from '../i18n';
 
-export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, onCopyPlan, onAICompare, onAIOrder, local = false, sharing, canvas, publication }: {
+export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, onCopyPlan, onAICompare, onAIOrder, onEditorVersions, local = false, sharing, canvas, publication }: {
   project: Project; visible: Photo[]; kept: Photo[]; active?: Photo; busy: boolean;
   selectedIds: string[]; onSelect: (id: string, gesture?: SelectionGesture) => void;
   onBatchDecide: (status: PhotoStatus) => void; onBatchRate: (rating: number) => void;
@@ -25,12 +26,14 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   onDecide: (id: string, status: PhotoStatus) => void; onReorder: (ids: string[]) => void; onEnlarge: (photo: Photo) => void;
   onUndo: () => void; onRedo: () => void; onVersions: () => void; onActivity: () => void; onCopyPlan: () => void;
   onAICompare?: () => void; onAIOrder?: () => void;
+  onEditorVersions?: () => void;
   local?: boolean;
   sharing?: import('../domain/sharing').SharingStatus;
   canvas?: CanvasRepository;
   publication?: PublicationRepository;
 }) {
   const ui = useUIStore();
+  const { t } = useI18n();
   const account = useAccount();
   const openAI = () => { if (account) void account.requireSignIn('ai', ui.openAgent); else ui.openAgent(); };
   const filters: PhotoFilter[] = ['all', 'keep', 'undecided', 'reject'];
@@ -41,6 +44,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
       <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">撤销</Button>
       <Button size="small" disabled={busy || !project.history?.redoGroupId} onClick={onRedo} title="⌘ / Ctrl Shift Z">重做</Button>
       <Button size="small" disabled={busy} onClick={onVersions}>作品版本{project.versions?.length ? ` · ${project.versions.length}` : ''}</Button>
+      {onEditorVersions && <Button size="small" onClick={onEditorVersions}>{t('editor.title', '调色版本')}</Button>}
       <Button size="small" disabled={busy} onClick={onActivity}>操作历史{project.events.length ? ` · ${project.events.length}` : ''}</Button>
       <span className="micro">{project.history?.undoCount ?? 0} 次可撤销编辑</span>
     </div>}
