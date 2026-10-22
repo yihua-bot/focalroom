@@ -12,6 +12,7 @@ import { Modal } from '../../components/shared/Modal';
 import { DraftReview } from './DraftReview';
 import { TaskProgress } from './TaskProgress';
 import { useAccount } from '../cloud-login/AccountProvider';
+import { FocalChat } from './FocalChat';
 
 export const taskLabels: Record<TaskState, string> = { queued: '排队中', planning: '准备中', running: '执行中', needs_input: '等待答复', review_ready: '待审核', completed: '已完成', paused: '已暂停', stale: '项目已更新', failed: '失败', cancelled: '已取消', interrupted: '已中断' };
 export interface QuickAgentAction { id: string; goal: string; count: number; photoIds: string[] }
@@ -36,6 +37,7 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
  const canvasSource = useUIStore(state => state.canvasTaskSource);
  const openCanvasBoard = useUIStore(state => state.openCanvasBoard);
  const [output, setOutput] = useState<'selection' | 'canvas'>(canvasSource ? 'canvas' : 'selection');
+ const [mode, setMode] = useState<'chat' | 'task'>('task');
  const query = useQuery({ queryKey: ['agent', project.id], queryFn: () => repository!.agent.query(project.id), enabled: Boolean(repository), refetchInterval: repository ? 1000 : false, refetchIntervalInBackground: true, refetchOnWindowFocus: 'always' });
  const configQuery = useQuery({ queryKey: ['ai-config', project.id], queryFn: () => repository!.agent.aiConfig(project.id), enabled: Boolean(repository), staleTime: 10_000, refetchInterval: 15_000 });
  const config = configQuery.data;
@@ -139,6 +141,12 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
   { label: zh.chatSuggestSequence, goal: zh.chatGoalSequence },
  ];
  return <section className="ai-chat">
+  <div className="focal-mode-tabs" role="tablist" aria-label="Focal AI 模式">
+    <button role="tab" aria-selected={mode === 'chat'} className={mode === 'chat' ? 'active' : ''} tabIndex={0} onClick={() => setMode('chat')}>对话</button>
+    <button role="tab" aria-selected={mode === 'task'} className={mode === 'task' ? 'active' : ''} onClick={() => setMode('task')}>选片任务</button>
+  </div>
+  {mode === 'chat' && repository && <FocalChat projectId={project.id} selectedPhotoIds={selectedIds} prefill={initialGoal} onSuggestTask={goal => { setMessage(goal); setMode('task'); }} />}
+  {mode === 'task' && <>
   <div className="ai-chat-feed" role="log" aria-label={zh.chatHistory} aria-live="polite">
    {!tasks.length && <div className="ai-chat-welcome"><span className="chat-welcome-mark"><Sparkles size={27} /></span><h3>{zh.chatWelcome}</h3><p>{zh.chatWelcomeHint}</p>
     <div className="chat-suggestions">{suggestions.map(item => <button key={item.label} onClick={() => updateMessage(item.goal)}>{item.label}<span>↗</span></button>)}</div>
@@ -204,5 +212,6 @@ export function AIPanel({ repository, project, selectedIds, onUpdated, initialGo
    </div>
   </Modal>}
   {draft && repository && <DraftReview key={draft.id + ':' + draft.revision} draft={draft} project={project} repository={repository} onClose={() => setDraftId(null)} onUpdated={updated => { onUpdated(updated); void query.refetch(); }} />}
- </section>;
+ </>}
+</section>;
 }

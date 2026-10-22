@@ -836,3 +836,14 @@ pub async fn pub_generate(
 ) -> Result<i64> {
     state.store.generate_from_sequence(&project_id, &cmd).await
 }
+
+// ── Focal AI 自由对话 ──
+
+#[tauri::command]
+pub async fn focal_chat(
+    state: State<'_, Backend>,
+    cmd: crate::focal_chat::FocalChatCommand,
+) -> Result<crate::focal_chat::FocalChatReply> {
+    let auth = state.cloud_auth.clone();
+    state.store.focal_chat(&auth, &cmd).await
+}

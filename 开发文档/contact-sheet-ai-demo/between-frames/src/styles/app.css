@@ -654,3 +654,24 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .chat-task-progress { margin: 10px 0; padding: 10px 12px; border-left: 2px solid var(--accent); background: var(--surface); border-radius: 0 6px 6px 0; }
 .chat-task-progress p + p { margin-top: 5px; font-size: 12px; }
 .chat-progress-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--accent); }
+
+/* Focal AI 对话 */
+.focal-chat{display:flex;flex-direction:column;height:100%;min-height:0}
+.focal-chat-scroll{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.focal-chat-hint{margin:auto;text-align:center;color:var(--text,#e8e8f0)}
+.focal-chat-hint .muted{color:var(--text2,#888);font-size:12px;line-height:1.8}
+.focal-chat-msg{display:flex;gap:8px;max-width:92%}
+.focal-chat-msg.user{align-self:flex-end;flex-direction:row-reverse}
+.focal-chat-avatar{flex:none;width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-top:2px}
+.focal-chat-bubble{padding:10px 14px;border-radius:14px;background:var(--bg-secondary,#1a1a28);border:1px solid var(--border,#2a2a40);font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.focal-chat-msg.user .focal-chat-bubble{background:rgba(108,92,231,.22);border-color:rgba(108,92,231,.4)}
+.focal-chat-bubble.thinking{color:var(--text2,#888);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.4}}
+.focal-chat-input{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border,#2a2a40);align-items:flex-end}
+.focal-chat-input textarea{flex:1;background:var(--bg-secondary,#14141f);border:1px solid var(--border,#2a2a40);border-radius:10px;color:var(--text,#e8e8f0);font-size:13px;padding:10px 12px;resize:none;font-family:inherit}
+.focal-chat-input textarea:focus{outline:none;border-color:var(--accent,#6c5ce7)}
+.focal-chat-input .send{flex:none;width:36px;height:36px;border-radius:50%;border:none;background:var(--accent,#6c5ce7);color:#fff;font-size:16px;cursor:pointer}
+.focal-chat-input .send:disabled{opacity:.4;cursor:default}
+.focal-mode-tabs{display:flex;gap:0;padding:8px 12px 0;border-bottom:1px solid var(--border,#2a2a40)}
+.focal-mode-tabs button{flex:1;padding:8px 12px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text2,#888);font-size:13px;cursor:pointer}
+.focal-mode-tabs button.active{color:var(--text,#e8e8f0);border-bottom-color:var(--accent,#6c5ce7);font-weight:600}

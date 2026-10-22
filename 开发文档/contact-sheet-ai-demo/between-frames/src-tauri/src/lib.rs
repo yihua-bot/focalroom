@@ -19,6 +19,7 @@ mod edit_state;
 pub mod editor_bridge;
 pub mod export;
 pub mod external_edit;
+pub mod focal_chat;
 pub mod image_pipeline;
 pub mod importer;
 pub mod keychain;
