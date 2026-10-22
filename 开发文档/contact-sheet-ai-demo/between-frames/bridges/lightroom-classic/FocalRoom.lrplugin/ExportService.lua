@@ -76,7 +76,7 @@ function Service.processRenderedPhotos(_, context)
     local id = LrUUID.generateUUID()
     local input = LrPathUtils.child(temp, 'focalroom-request-' .. id .. '.json')
     local result = LrPathUtils.child(temp, 'focalroom-result-' .. id .. '.json')
-    local ok, errorMessage = pcall(function()
+    local ok, errorMessage = LrTasks.pcall(function()
         write(input, Json.encode {
             provider = 'LIGHTROOM_CLASSIC', catalogId = LrApplication.activeCatalog():getPath(),
             destination = destinations[1], items = entries,

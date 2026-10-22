@@ -1,0 +1,17 @@
+{
+  "head": "4ae4f1718d7800fca642598e4ffd24a513a2eb41",
+  "files": {
+    "bridges/macos/Bridge.swift": "2a3b2dd39bc0da00cff3158aca984e08c2353238c0a3cf145ce28555f94bdea4",
+    "bridges/lightroom-classic/FocalRoom.lrplugin/Info.lua": "09a75adee17e682bcc036215672c928bddec49d6f23546f60d9447f8e7b6bdde",
+    "bridges/lightroom-classic/FocalRoom.lrplugin/Json.lua": "17349965aa418710d9e01a88ea788d1c1dca588ed7e8d1bd0ee2f03fadbeb5aa",
+    "bridges/lightroom-classic/FocalRoom.lrplugin/ExportService.lua": "6af7ff4f105a57d5cfe9730b518ad3c8ddd022f01ceeb0647cc52e80b147d218",
+    "src-tauri/src/editor_bridge.rs": "1f432f0c6b822156c341471db84edf5d75d334a08d694b5abf9bc313a4014818",
+    "src/features/photo-import/EditorVersionsDialog.tsx": "059b6fed0a38cba7449223e24e0a6790eca5968bfd268c933a3272e5f0ee2ad9"
+  },
+  "publicWebsiteUploaded": false,
+  "nativeEditorAcceptance": false,
+  "websiteDeploymentArchive": {
+    "bytes": 12403044,
+    "sha256": "a8f0bef600b4aa423c25b92f716022656b58287bed4f2d08bfd63d355803d52a"
+  }
+}

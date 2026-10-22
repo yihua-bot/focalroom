@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parent.parent / 'dist'
 ORIGIN = 'https://focroom.cc'
 LANGUAGES = {'zh': 'zh-CN', 'en': 'en', 'ja': 'ja', 'ko': 'ko'}
-PAGES = ('home', 'workflow', 'guide', 'privacy')
+PAGES = ('home', 'workflow', 'guide', 'privacy', 'plugins')
 
 
 def route(page, language):
@@ -140,7 +140,7 @@ for urlpath, doc in documents.items():
 
 sitemap = ET.fromstring((ROOT / 'sitemap.xml').read_text())
 locations = [x.text for x in sitemap.findall('{*}url/{*}loc')]
-if len(locations) != 16 or set(locations) != {ORIGIN + key for key in documents}:
+if len(locations) != len(LANGUAGES) * len(PAGES) or set(locations) != {ORIGIN + key for key in documents}:
     errors.append('sitemap: canonical URL coverage mismatch')
 if 'Sitemap: https://focroom.cc/sitemap.xml' not in (ROOT / 'robots.txt').read_text():
     errors.append('robots: missing sitemap')

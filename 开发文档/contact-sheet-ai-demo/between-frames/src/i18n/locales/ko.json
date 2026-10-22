@@ -286,5 +286,18 @@
   "error.NOT_IMPLEMENTED": "이 기능은 아직 구현되지 않았습니다",
   "error.CONFIG_INVALID": "설정이 올바르지 않습니다",
   "error.MEDIA_POLICY": "미디어 정책 제한",
-  "error.CLOUD_CONFIG": "클라우드 설정 오류"
+  "error.CLOUD_CONFIG": "클라우드 설정 오류",
+  "editor.title": "색 보정 버전",
+  "editor.description": "Lightroom Classic 또는 Capture One에서 내보낸 사진을 확인하세요. 원본과 작품 시퀀스는 유지됩니다.",
+  "editor.loadError": "버전을 불러올 수 없습니다. 닫은 후 다시 시도하세요.",
+  "editor.imported": "색 보정 버전을 저장했습니다. 원본과 선택은 유지됩니다.",
+  "editor.duplicate": "이미 가져온 버전입니다.",
+  "editor.importError": "가져오지 못했습니다. 사진 폴더가 온전한지 확인하세요.",
+  "editor.guide": "다운로드 및 설치",
+  "editor.working": "사진 준비 중…",
+  "editor.import": "보정한 사진 가져오기",
+  "editor.loading": "버전 불러오는 중…",
+  "editor.empty": "브리지로 내보낸 뒤 생성된 FocalRoom 폴더를 선택하세요. 해당 원본을 현재 프로젝트에 먼저 가져오세요.",
+  "editor.collapse": "확대 사진 닫기",
+  "editor.done": "완료"
 }

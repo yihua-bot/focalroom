@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "signed": true,
+  "files": [
+    {
+      "file": "FocalRoom-Lightroom-Classic-1.0.0-macos.zip",
+      "bytes": 152500,
+      "sha256": "27cb07671a59305d71749e2f3fc82786851a85b0606e76d26249f7912b018265"
+    },
+    {
+      "file": "FocalRoom-Capture-One-Bridge-1.0.0-macos.zip",
+      "bytes": 720926,
+      "sha256": "5f0b8cbd77821fc21afce89b8d5dfd8f9de556d4a3331ce371b081bc6c185973"
+    }
+  ],
+  "notarization": {
+    "captureOne": {
+      "id": "06850244-ce61-42de-87b0-44d2630b0028",
+      "status": "Accepted",
+      "stapled": true
+    },
+    "lightroom": {
+      "id": "593b2115-e91a-445d-b3ed-7a8c726f3e05",
+      "status": "Accepted"
+    }
+  }
+}

@@ -286,5 +286,18 @@
   "error.NOT_IMPLEMENTED": "この機能はまだ実装されていません",
   "error.CONFIG_INVALID": "設定が無効です",
   "error.MEDIA_POLICY": "メディアポリシー制限",
-  "error.CLOUD_CONFIG": "クラウド設定エラー"
+  "error.CLOUD_CONFIG": "クラウド設定エラー",
+  "editor.title": "カラー調整バージョン",
+  "editor.description": "Lightroom ClassicやCapture Oneから書き出した写真を確認します。元写真と作品シーケンスは変更されません。",
+  "editor.loadError": "バージョンを読み込めません。閉じてから再度お試しください。",
+  "editor.imported": "バージョンを保存しました。元写真と選択は変更されません。",
+  "editor.duplicate": "これらのバージョンはすでに読み込み済みです。",
+  "editor.importError": "読み込みが完了しませんでした。フォルダの内容を確認してください。",
+  "editor.guide": "ダウンロードとインストール",
+  "editor.working": "写真を準備中…",
+  "editor.import": "調整済み写真を読み込む",
+  "editor.loading": "バージョンを読み込み中…",
+  "editor.empty": "プラグインで書き出し、生成されたFocalRoomフォルダを選択してください。対応する元写真を先にこのプロジェクトに読み込んでください。",
+  "editor.collapse": "拡大表示を閉じる",
+  "editor.done": "完了"
 }

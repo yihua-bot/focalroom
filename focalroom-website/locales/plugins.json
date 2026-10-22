@@ -1,0 +1,206 @@
+[
+  [
+    "插件与安装说明 · FocalRoom",
+    "Plugins and installation · FocalRoom",
+    "プラグインとインストール · FocalRoom",
+    "플러그인 및 설치 · FocalRoom"
+  ],
+  [
+    "下载 Lightroom Classic 导出插件与 Capture One macOS 桥接应用，了解安装、导出和导入调色结果的步骤。",
+    "Download the Lightroom Classic export plug-in and Capture One macOS bridge, with installation and edited-photo import instructions.",
+    "Lightroom Classic書き出しプラグインとCapture One macOSブリッジのダウンロード、導入と写真の読み込み手順。",
+    "Lightroom Classic 내보내기 플러그인과 Capture One macOS 브리지 다운로드, 설치 및 보정 사진 가져오기 안내."
+  ],
+  [
+    "插件与安装说明",
+    "Plugins and installation",
+    "プラグインとインストール",
+    "플러그인 및 설치"
+  ],
+  [
+    "在熟悉的软件调色，把照片带回 FocalRoom。",
+    "Edit in the tools you know. Bring the photographs back to FocalRoom.",
+    "使い慣れたソフトで調整し、写真をFocalRoomへ。",
+    "익숙한 도구로 보정하고, 사진을 FocalRoom으로 가져오세요."
+  ],
+  [
+    "macOS 11+ · Apple Silicon / Intel · 版本 1.0.0",
+    "macOS 11+ · Apple Silicon / Intel · Version 1.0.0",
+    "macOS 11以降 · Apple Silicon / Intel · バージョン1.0.0",
+    "macOS 11 이상 · Apple Silicon / Intel · 버전 1.0.0"
+  ],
+  [
+    "支持范围",
+    "What is included",
+    "対応範囲",
+    "지원 범위"
+  ],
+  [
+    "Lightroom Classic 提供导出插件；Capture One 使用独立桥接应用。结果保存在本机，不上传照片，也不改动原片。",
+    "Lightroom Classic uses an export plug-in; Capture One uses a separate bridge application. Results stay on your Mac. No photo uploads or original-file changes.",
+    "Lightroom Classicは書き出しプラグイン、Capture Oneは独立したブリッジアプリを使用。結果はMac内に保存し、写真のアップロードや原写真の変更は行いません。",
+    "Lightroom Classic은 내보내기 플러그인, Capture One은 별도 브리지 앱을 사용합니다. 결과는 Mac에 저장되며 사진을 업로드하거나 원본을 수정하지 않습니다."
+  ],
+  [
+    "当前不包含双向目录同步、自动回写评分或印刷色彩保证。尚未完成实际 Lightroom / Capture One 环境验证，请先用少量照片副本确认结果。",
+    "Two-way catalog sync, rating write-back and print-color guarantees are not included. Real Lightroom/Capture One installations have not yet been verified. Start with copies of a few photographs.",
+    "双方向カタログ同期、評価の書き戻し、印刷色の保証は含みません。実際のLightroom/Capture One環境での動作確認は未完了です。まず少数の写真のコピーで確認してください。",
+    "양방향 카탈로그 동기화, 별점 되쓰기, 인쇄 색상 보장은 포함되지 않습니다. 실제 Lightroom/Capture One 환경 확인은 아직 완료되지 않았습니다. 먼저 소수 사진의 사본으로 확인하세요."
+  ],
+  [
+    "下载 Lightroom 插件",
+    "Download Lightroom plug-in",
+    "Lightroomプラグインをダウンロード",
+    "Lightroom 플러그인 다운로드"
+  ],
+  [
+    "下载 Capture One 桥接应用",
+    "Download Capture One bridge",
+    "Capture Oneブリッジをダウンロード",
+    "Capture One 브리지 다운로드"
+  ],
+  [
+    "安装与导出",
+    "Install and export",
+    "インストールと書き出し",
+    "설치 및 내보내기"
+  ],
+  [
+    "解压下载包，保留完整的 FocalRoom.lrplugin 文件夹。",
+    "Unzip the download and keep the complete FocalRoom.lrplugin folder.",
+    "ダウンロードを展開し、FocalRoom.lrpluginフォルダをそのまま保存します。",
+    "다운로드 파일을 풀고 FocalRoom.lrplugin 폴더 전체를 보관하세요."
+  ],
+  [
+    "打开 Lightroom Classic → 文件 → 增效工具管理器 → 添加，选择该文件夹并启用。",
+    "Open Lightroom Classic → File → Plug-in Manager → Add. Select the folder and enable the plug-in.",
+    "Lightroom Classic → ファイル → プラグインマネージャー → 追加でフォルダを選び、有効にします。",
+    "Lightroom Classic → 파일 → 플러그인 관리자 → 추가에서 폴더를 선택하고 활성화하세요."
+  ],
+  [
+    "选中照片 → 文件 → 导出，在“导出到”选择 FocalRoom。选择 JPEG 或 TIFF，完成导出后按提示选择保存位置。",
+    "Select photos → File → Export → Export To: FocalRoom. Choose JPEG or TIFF, then choose a save location when prompted.",
+    "写真を選択 → ファイル → 書き出し → 書き出し先：FocalRoom。JPEGまたはTIFFを選び、案内に従って保存先を選択します。",
+    "사진 선택 → 파일 → 내보내기 → 내보낼 위치: FocalRoom. JPEG 또는 TIFF를 선택하고 안내에 따라 저장 위치를 선택하세요."
+  ],
+  [
+    "仅支持 Lightroom Classic，不适用于云端版 Lightroom 或移动版。插件会读取原片确认对应关系，请确保原片在线。",
+    "Lightroom Classic only; not the cloud-based Lightroom or mobile app. Keep originals online so the plug-in can verify their identity.",
+    "Lightroom Classic専用です。クラウド版やモバイル版には対応していません。元写真を照合するため、ファイルにアクセスできる状態にしてください。",
+    "Lightroom Classic 전용입니다. 클라우드 Lightroom 또는 모바일 앱은 지원하지 않습니다. 원본 확인을 위해 파일에 접근할 수 있어야 합니다."
+  ],
+  [
+    "解压下载包，把 FocalRoom Capture One Bridge.app 拖入“应用程序”，打开一次。",
+    "Unzip the download, move FocalRoom Capture One Bridge.app to Applications and open it once.",
+    "展開後、FocalRoom Capture One Bridge.appをアプリケーションへ移動し、一度起動します。",
+    "압축을 풀고 FocalRoom Capture One Bridge.app을 응용 프로그램으로 옮긴 후 한 번 실행하세요."
+  ],
+  [
+    "在 Capture One 导出调色后的 JPEG、PNG 或单页 TIFF，等待导出完成。",
+    "Export edited JPEG, PNG or single-page TIFF files from Capture One and wait for completion.",
+    "Capture Oneから調整済みのJPEG、PNG、または単一ページTIFFを書き出し、完了を待ちます。",
+    "Capture One에서 보정한 JPEG, PNG 또는 단일 페이지 TIFF를 내보내고 완료될 때까지 기다리세요."
+  ],
+  [
+    "在桥接应用点击“添加导出的照片”，逐行选择对应原照片，然后点击“保存并带回 FocalRoom”。",
+    "In the bridge, click Add exported photos, select the matching original for each row, then Save and bring to FocalRoom.",
+    "ブリッジで「書き出した写真を追加」を押し、各行に対応する元写真を選択して保存します。",
+    "브리지에서 내보낸 사진 추가를 누르고 각 행의 해당 원본을 선택한 뒤 저장하세요."
+  ],
+  [
+    "也可在访达中选择已经导出的照片，通过“打开方式”交给桥接应用。它不是 Capture One 原生插件，不应放入 Plugins 文件夹。",
+    "You can also open already-exported photographs with the bridge from Finder. This is not a native Capture One plug-in; do not place it in the Plugins folder.",
+    "Finderで書き出し済み写真の「このアプリケーションで開く」からブリッジを選べます。Capture Oneネイティブプラグインではないため、Pluginsフォルダには入れません。",
+    "Finder에서 이미 내보낸 사진의 다음으로 열기로 브리지를 선택할 수도 있습니다. Capture One 네이티브 플러그인이 아니므로 Plugins 폴더에 넣지 마세요."
+  ],
+  [
+    "Capture One 的原图“Open With”不会包含调色。请先导出，或使用“Edit With”生成 JPEG / TIFF 后交给桥接应用。",
+    "Open With on an original in Capture One does not include adjustments. Export first, or use Edit With to render JPEG/TIFF for the bridge.",
+    "Capture Oneの元写真に対するOpen Withには調整が含まれません。先に書き出すか、Edit WithでJPEG/TIFFを生成してください。",
+    "Capture One 원본의 Open With에는 보정이 포함되지 않습니다. 먼저 내보내거나 Edit With로 JPEG/TIFF를 생성하세요."
+  ],
+  [
+    "该桥接需要手动确认原片，不读取 Catalog / Session / Variant，也不会自动同步这些内容。",
+    "The bridge requires explicit original-file pairing. It does not read or automatically sync Catalog, Session or Variant data.",
+    "元写真の対応は手動で確認します。Catalog、Session、Variantの読み取りや自動同期は行いません。",
+    "원본을 직접 연결해야 합니다. Catalog, Session, Variant를 읽거나 자동 동기화하지 않습니다."
+  ],
+  [
+    "带回 FocalRoom",
+    "Bring results to FocalRoom",
+    "FocalRoomへ読み込む",
+    "FocalRoom으로 가져오기"
+  ],
+  [
+    "有“调色版本”入口的客户端",
+    "Clients with Color versions",
+    "カラー調整バージョン対応クライアント",
+    "색 보정 버전 메뉴가 있는 클라이언트"
+  ],
+  [
+    "先在当前项目导入对应原片，再打开选片工作台 → 调色版本 → 导入调色结果，选择插件生成的 FocalRoom 文件夹。结果单独保存，可点击放大；原片、选片与序列不变。",
+    "Import the matching originals into the project first. Open the selection workspace → Color versions → Import edited photos, then select the generated FocalRoom folder. Results are saved separately and can be enlarged; originals, selections and sequences stay unchanged.",
+    "まず対応する元写真をプロジェクトへ読み込みます。選定ワークスペース → カラー調整バージョン → 調整済み写真を読み込むから、生成されたFocalRoomフォルダを選択。結果は別に保存され、元写真と選択、シーケンスは変更されません。",
+    "먼저 해당 원본을 프로젝트에 가져오세요. 선별 작업대 → 색 보정 버전 → 보정한 사진 가져오기에서 생성된 FocalRoom 폴더를 선택하세요. 결과는 별도로 저장되고 원본, 선택, 시퀀스는 유지됩니다."
+  ],
+  [
+    "没有该入口的已安装版本",
+    "Installed releases without that entry",
+    "対応メニューがない既存バージョン",
+    "해당 메뉴가 없는 설치 버전"
+  ],
+  [
+    "使用“导入照片 → 选择文件夹”导入结果。这会新增独立照片，不会与原片合并。调色版本入口需要包含此功能的新版客户端；本页插件不会自动升级客户端。",
+    "Use Import photos → Choose folder to import the results as separate new photographs. They will not be merged with originals. Linked color versions require a client release that includes that feature; these downloads do not upgrade the client.",
+    "写真を読み込む → フォルダを選択で、独立した新しい写真として読み込みます。元写真とは統合されません。関連付けには対応する新版クライアントが必要です。このプラグインはクライアントを更新しません。",
+    "사진 가져오기 → 폴더 선택으로 별도 새 사진으로 가져오세요. 원본과 합쳐지지 않습니다. 연결된 색 보정 버전은 해당 기능이 포함된 새 클라이언트가 필요하며 이 다운로드는 클라이언트를 업데이트하지 않습니다."
+  ],
+  [
+    "每批最多 500 张，单张导出结果不超过 512 MB。支持 JPEG、PNG 和单页 TIFF。16 位文件保留原始字节，当前查看使用缩小预览，不作为印刷软打样。",
+    "Up to 500 photos per batch and 512 MB per rendered file. JPEG, PNG and single-page TIFF are supported. 16-bit files retain their original bytes; viewing uses reduced previews and is not print soft proofing.",
+    "1回500枚まで、書き出し結果は1枚512 MBまで。JPEG、PNG、単一ページTIFFに対応。16ビットファイルは元のバイトを保持しますが、表示は縮小プレビューで、印刷用ソフトプルーフではありません。",
+    "한 번에 최대 500장, 렌더링 파일당 512 MB까지 지원합니다. JPEG, PNG, 단일 페이지 TIFF를 지원합니다. 16비트 파일의 원래 바이트는 보존되지만 화면은 축소 미리보기이며 인쇄 소프트 프루핑이 아닙니다."
+  ],
+  [
+    "遇到问题",
+    "Troubleshooting",
+    "問題が起きたら",
+    "문제 해결"
+  ],
+  [
+    "找不到对应照片：先检查项目，再确认选择的是最初导入的原文件。请勿按同名文件强行合并。",
+    "No matching photo: check the project and select the original file you first imported. Do not force a merge based on filenames.",
+    "対応写真がない場合はプロジェクトと最初に読み込んだ元ファイルを確認してください。同名だけで統合しないでください。",
+    "해당 사진이 없으면 프로젝트와 최초에 가져온 원본 파일을 확인하세요. 파일명만으로 강제 병합하지 마세요."
+  ],
+  [
+    "系统阻止打开：请记录提示并联系作者，不要关闭系统安全保护。",
+    "If macOS blocks the application, record the message and contact the author. Do not disable system security.",
+    "macOSにより起動がブロックされた場合は、表示内容を記録し作者へ連絡してください。システムの保護を無効にしないでください。",
+    "macOS가 실행을 차단하면 메시지를 기록하고 제작자에게 문의하세요. 시스템 보안을 끄지 마세요."
+  ],
+  [
+    "卸载：Lightroom 在增效工具管理器中移除插件；Capture One 桥接应用退出后从“应用程序”移除。已保存照片不受影响。",
+    "Uninstall: remove the Lightroom plug-in in Plug-in Manager; quit and remove the Capture One bridge from Applications. Saved photographs remain unaffected.",
+    "アンインストール：Lightroomはプラグインマネージャーで削除。ブリッジは終了後にアプリケーションから削除します。保存済み写真は影響を受けません。",
+    "제거: Lightroom 플러그인 관리자에서 제거하세요. Capture One 브리지는 종료 후 응용 프로그램에서 제거하세요. 저장한 사진은 영향을 받지 않습니다."
+  ],
+  [
+    "下载校验信息",
+    "Download checksums",
+    "ダウンロードのチェックサム",
+    "다운로드 체크섬"
+  ],
+  [
+    "官方操作参考",
+    "Official instructions",
+    "公式の操作説明",
+    "공식 사용 안내"
+  ],
+  [
+    "公证状态将在正式下载开放前核验。",
+    "Notarization will be verified before public downloads open.",
+    "公開ダウンロード前に公証を確認します。",
+    "공개 다운로드 전에 공증을 확인합니다."
+  ]
+]

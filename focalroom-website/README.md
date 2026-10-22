@@ -1,5 +1,13 @@
 # FocalRoom 官网
 
+## 2026-10-22 插件下载增量
+
+新增四语 `plugins/` 页面及页脚入口，提供 Lightroom Classic 导出插件和 Capture One 独立 macOS 桥接应用的安装、导出、导入及卸载说明。Capture One 不是原生 SDK 插件，页面明确标注手动原片对应和真实软件环境尚未验收的范围。客户端旧版使用普通照片导入；关联调色版本必须使用包含相应入口的新客户端，不暗示旧包已升级。
+
+源文件为 `templates/plugins.html`、`locales/plugins.json` 和 `public/download/plugins/`；全站现为 20 个静态语言页面。两个下载包已正式签名并通过 Apple 公证，Capture One 应用已附票据并通过最终 ZIP 解压后的 Gatekeeper 校验。`checksums.json` 保存最终字节数、SHA 与公证 ID。
+
+本轮 build/check、7 项语言测试及四语浏览器页面核对通过。公开 config.js 仍为既有 1.0.4，未修改客户端 ZIP 或下载指针。Cloudflare 登录失效，官方 OAuth 未收到授权而超时，**新插件页面尚未公开发布**。当前可直接部署的静态 ZIP 为 `artifacts/focalroom-website-plugins-20261022.zip`，不是新增 Sites 项目。完整结果见主项目 `docs/v3/EDITOR-BRIDGES-DELIVERY-2026-10-22.md`。
+
 中、英、日、韩四语摄影创作工作空间官网，正式域名为 https://focroom.cc。网站与桌面应用、团队 API 和数据库独立。无加入内测、申请表、邮箱收集或虚构评价。
 
 本次内容根据用户提供的创作工作流、v3 最终蓝图和 2026-10-21 创作工作空间补充文档更新。Research & Moodboard 为规划；完整画布、外部调色往返和出版制作仍在开发，不能用愿景冒充现有下载版能力。

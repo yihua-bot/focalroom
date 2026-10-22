@@ -286,5 +286,18 @@
   "error.NOT_IMPLEMENTED": "此功能尚未实现",
   "error.CONFIG_INVALID": "配置不合法",
   "error.MEDIA_POLICY": "媒体策略限制",
-  "error.CLOUD_CONFIG": "云端配置错误"
+  "error.CLOUD_CONFIG": "云端配置错误",
+  "editor.title": "调色版本",
+  "editor.description": "查看 Lightroom Classic 或 Capture One 导出的调色结果。原照片与正式作品序列保持不变。",
+  "editor.loadError": "调色版本暂时无法加载，请关闭后重试。",
+  "editor.imported": "调色版本已保存。原照片与选片保持不变。",
+  "editor.duplicate": "这些调色版本已经导入，无需重复添加。",
+  "editor.importError": "导入未完成，请确认照片文件夹完整。",
+  "editor.guide": "插件下载与安装说明",
+  "editor.working": "正在准备照片…",
+  "editor.import": "导入调色结果",
+  "editor.loading": "正在读取调色版本…",
+  "editor.empty": "先从插件导出照片，再选择生成的 FocalRoom 文件夹。请先在当前项目导入对应的原照片。",
+  "editor.collapse": "收起大图",
+  "editor.done": "完成"
 }

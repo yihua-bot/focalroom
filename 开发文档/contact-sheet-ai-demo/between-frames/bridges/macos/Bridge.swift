@@ -97,6 +97,9 @@ func createBatch(_ request: BatchRequest) throws -> BatchResult {
             let render = URL(fileURLWithPath: pair.renderPath).standardizedFileURL
             try regularFile(original)
             try regularFile(render)
+            guard try render.resourceValues(forKeys: [.fileSizeKey]).fileSize! <= 512 * 1024 * 1024 else {
+                throw BridgeFailure(message: "单张导出照片不能超过 512 MB。")
+            }
             let sourceSHA = try sha256(original)
             var item = try imageInfo(render)
             let renderSHA = try sha256(render)
@@ -164,6 +167,8 @@ final class BridgeApp: NSObject, NSApplicationDelegate, NSTableViewDataSource, N
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.heightAnchor.constraint(equalToConstant: 260).isActive = true
         view.addArrangedSubview(scroll)
+        scroll.widthAnchor.constraint(equalTo: view.widthAnchor, constant: -48).isActive = true
+        message.widthAnchor.constraint(equalTo: view.widthAnchor, constant: -48).isActive = true
         let buttons = NSStackView(); buttons.spacing = 12
         let add = NSButton(title: "添加导出的照片…", target: self, action: #selector(addRenders))
         let pair = NSButton(title: "选择对应原照片…", target: self, action: #selector(chooseOriginal))
@@ -194,7 +199,7 @@ final class BridgeApp: NSObject, NSApplicationDelegate, NSTableViewDataSource, N
         let alert = NSAlert(); alert.messageText = text; alert.runModal()
     }
     private func append(_ urls: [URL]) {
-        for url in urls {
+        for url in urls.prefix(500) {
             do {
                 try regularFile(url); _ = try imageInfo(url)
                 if !renders.contains(url) { renders.append(url) }
@@ -258,5 +263,6 @@ if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--request" {
 } else {
     let app = NSApplication.shared
     let delegate = BridgeApp()
-    app.delegate = delegate; app.setActivationPolicy(.regular); app.run()
+    app.delegate = delegate; app.setActivationPolicy(.regular)
+    withExtendedLifetime(delegate) { app.run() }
 }

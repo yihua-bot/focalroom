@@ -286,5 +286,18 @@
   "error.NOT_IMPLEMENTED": "This feature is not yet implemented",
   "error.CONFIG_INVALID": "Invalid configuration",
   "error.MEDIA_POLICY": "Media policy restriction",
-  "error.CLOUD_CONFIG": "Cloud configuration error"
+  "error.CLOUD_CONFIG": "Cloud configuration error",
+  "editor.title": "Color versions",
+  "editor.description": "Review edited photos from Lightroom Classic or Capture One. Originals and your formal sequence stay unchanged.",
+  "editor.loadError": "Unable to load color versions. Close and try again.",
+  "editor.imported": "Color versions saved. Originals and selections stay unchanged.",
+  "editor.duplicate": "These versions have already been imported.",
+  "editor.importError": "Import failed. Check that the photo folder is complete.",
+  "editor.guide": "Downloads and installation",
+  "editor.working": "Preparing photos…",
+  "editor.import": "Import edited photos",
+  "editor.loading": "Loading color versions…",
+  "editor.empty": "Export with the bridge, then select the generated FocalRoom folder. Import the matching originals into this project first.",
+  "editor.collapse": "Close enlarged photo",
+  "editor.done": "Done"
 }

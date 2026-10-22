@@ -254,7 +254,7 @@ pub async fn list_versions(
     storage: &Path,
 ) -> Result<Vec<EditorVersion>> {
     store.get(project).await?;
-    let rows = sqlx::query("SELECT r.id,r.sha256,r.created_at,v.external_software,p.name FROM renditions r JOIN edit_variants v ON v.id=r.variant_id JOIN source_assets a ON a.id=v.asset_id JOIN asset_aliases x ON x.asset_id=a.id JOIN photos p ON p.id=x.photo_id WHERE a.project_id=? AND r.source_type IN ('external_lightroom','external_capture_one') ORDER BY r.created_at DESC,r.id DESC LIMIT 500")
+    let rows = sqlx::query("SELECT r.id,r.sha256,r.created_at,CASE r.source_type WHEN 'external_lightroom' THEN 'lightroom_classic' ELSE 'capture_one' END AS provider,p.filename AS name FROM renditions r JOIN edit_variants v ON v.id=r.variant_id JOIN source_assets a ON a.id=v.asset_id JOIN asset_aliases x ON x.asset_id=a.id JOIN photos p ON p.id=x.photo_id WHERE a.project_id=? AND r.source_type IN ('external_lightroom','external_capture_one') ORDER BY r.created_at DESC,r.id DESC LIMIT 500")
         .bind(project).fetch_all(&store.pool).await?;
     let mut versions = Vec::new();
     for row in rows {
@@ -269,7 +269,7 @@ pub async fn list_versions(
         versions.push(EditorVersion {
             id: row.get("id"),
             photo_name: row.get("name"),
-            provider: row.get("external_software"),
+            provider: row.get("provider"),
             preview_path: preview.to_string_lossy().to_string(),
             created_at: row.get("created_at"),
         });

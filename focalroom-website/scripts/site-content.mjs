@@ -4,7 +4,7 @@ import path from 'node:path';
 export const root = path.resolve(import.meta.dirname, '..');
 export const origin = 'https://focroom.cc';
 export const languages = { zh: 'zh-CN', en: 'en', ja: 'ja', ko: 'ko' };
-export const pages = { home: 'index', workflow: 'workflow', guide: 'guide', privacy: 'privacy' };
+export const pages = { home: 'index', workflow: 'workflow', guide: 'guide', privacy: 'privacy', plugins: 'plugins' };
 export const pagePath = (page, language) => `${language === 'zh' ? '/' : `/${language}/`}${page === 'home' ? '' : `${page}/`}`;
 export const escapeHTML = value => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 export const decodeHTML = value => value.replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&#39;', "'").replaceAll('&lt;', '<').replaceAll('&gt;', '>');
@@ -13,7 +13,7 @@ export async function readCatalog() {
   const messages = {};
   const lines = (await fs.readFile(path.join(root, 'locales/messages.tsv'), 'utf8')).split('\n').filter(Boolean);
   const additions = JSON.parse(await fs.readFile(path.join(root, 'locales/workspace.json'), 'utf8'));
-  for (const rows of [lines.map(line => line.split('\t')), additions]) {
+  for (const rows of [lines.map(line => line.split('\t')), additions, JSON.parse(await fs.readFile(path.join(root, 'locales/plugins.json'), 'utf8'))]) {
     const seen = new Set();
     for (const row of rows) {
       const [zh, en, ja, ko] = row;
