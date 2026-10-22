@@ -258,7 +258,13 @@ async fn zero_cost_and_exhausted_tool_budget_stop_before_upload() {
         engine(&db, &base).run(&task.id).await.unwrap();
         let view = agent::projection(&db, &p.id).await.unwrap();
         assert_eq!(view.tasks[0].state, "paused");
-        assert!(view.tasks[0].budget_issue.as_ref().unwrap().request_not_sent);
+        assert!(
+            view.tasks[0]
+                .budget_issue
+                .as_ref()
+                .unwrap()
+                .request_not_sent
+        );
         assert_eq!(image_requests(&state.lock().unwrap()), 0);
         assert_eq!(
             consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
@@ -2676,14 +2682,22 @@ async fn cloud_image_budget_cap_pauses_task_before_any_upload() {
     engine(&db, &base).run(&task.id).await.unwrap();
     let projection = agent::projection(&db, &p.id).await.unwrap();
     assert_eq!(projection.tasks[0].state, "paused");
-    assert_eq!(projection.tasks[0].budget_issue.as_ref().unwrap().kind, agent::budget::LimitKind::Images);
+    assert_eq!(
+        projection.tasks[0].budget_issue.as_ref().unwrap().kind,
+        agent::budget::LimitKind::Images
+    );
     assert!(projection.tasks[0].reason.contains("照片次数"));
     assert_eq!(image_requests(&state.lock().unwrap()), 0);
     assert_eq!(projection.tasks[0].usage.cloud_images, 0);
     db.pool.close().await;
-    let reopened = Store::open(&temp.path().join("projects.sqlite")).await.unwrap();
+    let reopened = Store::open(&temp.path().join("projects.sqlite"))
+        .await
+        .unwrap();
     let restored = agent::projection(&reopened, &p.id).await.unwrap();
-    assert_eq!(restored.tasks[0].budget_issue.as_ref().unwrap().kind, agent::budget::LimitKind::Images);
+    assert_eq!(
+        restored.tasks[0].budget_issue.as_ref().unwrap().kind,
+        agent::budget::LimitKind::Images
+    );
     unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
 }
 

@@ -99,16 +99,40 @@ mod tests {
     use crate::agent::types::{Budget, Usage};
     fn task() -> Task {
         Task {
-            id: "task".into(), project_id: "project".into(), goal: "goal".into(), base_revision: 1,
-            memory_revision: 0, allowed_photo_ids: vec![], selected_photo_ids: vec![], target_count: 1,
-            state: "running".into(), reason: String::new(), budget: Budget { max_cloud_images: 20, ..Budget::default() },
-            usage: Usage::default(), elapsed_ms: 0, question: None, answer: None, final_draft_ids: vec![],
-            pending: None, provider_id: "openai".into(), consent_id: None, created_at: String::new(), updated_at: String::new(),
+            id: "task".into(),
+            project_id: "project".into(),
+            goal: "goal".into(),
+            base_revision: 1,
+            memory_revision: 0,
+            allowed_photo_ids: vec![],
+            selected_photo_ids: vec![],
+            target_count: 1,
+            state: "running".into(),
+            reason: String::new(),
+            budget: Budget {
+                max_cloud_images: 20,
+                ..Budget::default()
+            },
+            usage: Usage::default(),
+            elapsed_ms: 0,
+            question: None,
+            answer: None,
+            final_draft_ids: vec![],
+            pending: None,
+            provider_id: "openai".into(),
+            consent_id: None,
+            created_at: String::new(),
+            updated_at: String::new(),
         }
     }
     #[test]
     fn vision_stops_report_each_limit_without_combining_causes() {
-        for kind in [LimitKind::Images, LimitKind::Cost, LimitKind::Steps, LimitKind::Time] {
+        for kind in [
+            LimitKind::Images,
+            LimitKind::Cost,
+            LimitKind::Steps,
+            LimitKind::Time,
+        ] {
             let mut task = task();
             match kind {
                 LimitKind::Images => task.usage.cloud_images = 20,
@@ -132,6 +156,11 @@ mod tests {
         task.usage.cloud_images = 19;
         task.usage.cost_minor_usd = 49;
         vision_limits(&task, 1, 1, 50).unwrap();
-        assert_eq!(issue(&vision_limits(&task, u32::MAX, 1, 50).unwrap_err()).unwrap().kind, LimitKind::Images);
+        assert_eq!(
+            issue(&vision_limits(&task, u32::MAX, 1, 50).unwrap_err())
+                .unwrap()
+                .kind,
+            LimitKind::Images
+        );
     }
 }

@@ -24,6 +24,36 @@ const ready = () => waitFor(() => expect(send()).toBeEnabled());
 function task(state: AgentTask['state']): AgentTask { return { id: 't1', state, goal: '旅行故事', baseRevision: 3, reason: '预算已用完', question: state === 'needs_input' ? '希望以人物为主吗？' : null, budget: defaultAgentBudget, usage: { modelTurns: 1, toolCalls: 1, inputEstimate: 1, outputEstimate: 1, cloudImages: 0, costMinorUsd: 0 }, elapsedMs: 1, finalDraftIds: [], providerId: 'test', steps: [], createdAt: 'now' }; }
 beforeEach(() => { useUIStore.getState().reset(); useUIStore.setState({ aiDrafts: {} }); });
 describe('选片对话与本次预览使用', () => {
+ it('达到等待时间后，明确延长并继续同一任务', async () => {
+  const paused = { ...task('paused'), elapsedMs: 480000, budgetIssue: { kind: 'time' as const, used: 480000, requested: 1, limit: 480000, stage: 'vision', requestNotSent: true } };
+  const repo = fixture({}, { tasks: [paused], drafts: [] }); mount(repo); await ready();
+  expect(screen.getByText(/这一次照片请求尚未发送/)).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: '延长时间并继续' }));
+  expect(repo.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'ResumeTask', taskId: 't1', budget: expect.objectContaining({ maxDurationSeconds: 960, maxCloudImages: 0, maxCostMinorUsd: 100 }) }));
+ });
+ it('步骤耗尽后继续会实际增加额度，不重复提交原来的上限', async () => {
+  const paused = { ...task('paused'), usage: { ...task('paused').usage, toolCalls: 40 }, budgetIssue: { kind: 'steps' as const, used: 40, requested: 1, limit: 40, stage: 'vision', requestNotSent: true } };
+  const repo = fixture({}, { tasks: [paused], drafts: [] }); mount(repo); await ready();
+  await userEvent.click(screen.getByRole('button', { name: '继续', exact: true }));
+  expect(repo.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'ResumeTask', budget: expect.objectContaining({ maxToolCalls: 80, maxCloudImages: 0, maxCostMinorUsd: 100 }) }));
+ });
+ it.each(['images', 'cost', 'context', 'tokens'] as const)('%s 不自动提额，调整范围只填写要求，由用户再次发送', async kind => {
+  const paused = { ...task('paused'), budgetIssue: { kind, used: 20, requested: 1, limit: 20, stage: 'vision', requestNotSent: true } };
+  const repo = fixture({}, { tasks: [paused], drafts: [] }); mount(repo); await ready();
+  expect(screen.queryByRole('button', { name: '继续', exact: true })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: '调整照片范围' }));
+  expect(screen.getByLabelText('选片消息')).toHaveValue('旅行故事');
+  expect(screen.getByLabelText('照片范围')).toHaveValue('selected');
+  expect(repo.agent.request).not.toHaveBeenCalled();
+  expect(repo.agent.setConsent).not.toHaveBeenCalled();
+ });
+ it('旧版混合报错显示可读提示，不暴露内部预算术语', async () => {
+  mount(fixture({}, { tasks: [{ ...task('paused'), reason: '视觉请求预留超过图像、费用、工具或时间预算；未上传' }], drafts: [] }));
+  await ready();
+  expect(screen.getByText('这次分析已暂停。已保留进度，请调整照片范围后重新开始。')).toBeVisible();
+  expect(screen.queryByText(/视觉请求预留/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '继续', exact: true })).not.toBeInTheDocument();
+ });
  it('任务文字不扩大权限，画布编排需要明确选择', async () => {
   const { repository } = mount(fixture(), { initialGoal: '给我一些画布布局思路' }); await ready();
   expect(screen.getByRole('combobox', { name: '创作方向' })).toHaveValue('selection');
@@ -46,7 +76,7 @@ describe('选片对话与本次预览使用', () => {
   expect(repository.agent.request).not.toHaveBeenCalled();
  });
  it('仅打开对话不会授权、发送任务或伪造回复', async () => { const { repository } = mount(); await ready(); expect(repository.agent.setConsent).not.toHaveBeenCalled(); expect(repository.agent.request).not.toHaveBeenCalled(); expect(screen.queryByText('管理图像授权')).not.toBeInTheDocument(); });
- it('发送时先绑定本次预览范围，再委托真实任务', async () => { const { repository } = mount(); await ready(); await userEvent.click(send()); await waitFor(() => expect(repository.agent.request).toHaveBeenCalled()); expect(repository.agent.setConsent).toHaveBeenCalledWith('p1', 'task', 2, readyConfig.consentProvider); expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'StartTask', consentId: 9, targetCount: 1, selectedPhotoIds: [], budget: expect.objectContaining({ maxCloudImages: 2 }) })); expect(repository.agent.setConsent.mock.invocationCallOrder[0]).toBeLessThan(repository.agent.request.mock.invocationCallOrder[0]); expect(screen.getByLabelText('选片消息')).toHaveValue(''); });
+ it('发送时先绑定本次预览范围，再委托真实任务', async () => { const { repository } = mount(); await ready(); await userEvent.click(send()); await waitFor(() => expect(repository.agent.request).toHaveBeenCalled()); expect(repository.agent.setConsent).toHaveBeenCalledWith('p1', 'task', 100, readyConfig.consentProvider); expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'StartTask', consentId: 9, targetCount: 1, selectedPhotoIds: [], budget: expect.objectContaining({ maxCloudImages: 100 }) })); expect(repository.agent.setConsent.mock.invocationCallOrder[0]).toBeLessThan(repository.agent.request.mock.invocationCallOrder[0]); expect(screen.getByLabelText('选片消息')).toHaveValue(''); });
  it('授权写入失败时保留输入，不开始任务、不自动重试', async () => { const repo = fixture(); repo.agent.setConsent.mockRejectedValue(new Error('保存失败')); mount(repo); await ready(); await userEvent.click(send()); expect(await screen.findByRole('alert')).toHaveTextContent('保存失败'); expect(repo.agent.request).not.toHaveBeenCalled(); expect(repo.agent.setConsent).toHaveBeenCalledTimes(1); expect(screen.getByLabelText('选片消息')).not.toHaveValue(''); });
  it('服务身份在发送前改变时拒绝委托，不误发到新供应商', async () => { const repo = fixture(); mount(repo); await ready(); repo.agent.aiConfig.mockResolvedValue({ ...readyConfig, consentProvider: 'other' }); await userEvent.click(send()); expect(await screen.findByRole('alert')).toHaveTextContent('AI 已更新'); expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).not.toHaveBeenCalled(); });
  it('未知视觉接收方不能授权或发送', async () => { const repo = fixture({ consentProvider: null }); mount(repo); await ready(); await userEvent.click(send()); await screen.findByRole('alert'); expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).not.toHaveBeenCalled(); });
@@ -55,12 +85,12 @@ describe('选片对话与本次预览使用', () => {
  it('独立视觉模型的能力用于实际预览预算', async () => { const repo = fixture({ capabilities: ['tool_calling'], observation: { modelId: 'observer', capabilities: ['vision', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null } }); mount(repo); await ready(); await userEvent.click(send()); await waitFor(() => expect(repo.agent.setConsent).toHaveBeenCalled()); });
  it.each([{ ready: false }, { configurationError: '配置无效' }, { keySource: 'focalroom', hostedError: '请先登录' }, { keySource: 'focalroom', hostedAccount: { enabled: true, verified: true, available: 0 } }, { keySource: 'focalroom', hostedAccount: { enabled: false, verified: true, available: 100 } }])('未就绪/未登录/零额度阻止发送：%j', async config => { const repo = fixture(config as Partial<AiConfig>); mount(repo); await screen.findByRole('status'); expect(send()).toBeDisabled(); fireEvent.submit(send().closest('form')!); expect(repo.agent.request).not.toHaveBeenCalled(); });
  it('选区为空不会隐式扩大为全项目', async () => { const { repository, rerender, panel } = mount(); await ready(); await userEvent.selectOptions(screen.getByLabelText('照片范围'), 'selected'); rerender(panel({ selectedIds: [] })); expect(send()).toBeDisabled(); fireEvent.submit(send().closest('form')!); expect(repository.agent.request).not.toHaveBeenCalled(); });
- it('选区发送只携带选中的 ID 和对应预算', async () => { const { repository } = mount(); await ready(); await userEvent.selectOptions(screen.getByLabelText('照片范围'), 'selected'); await userEvent.click(send()); await waitFor(() => expect(repository.agent.request).toHaveBeenCalled()); expect(repository.agent.setConsent).toHaveBeenCalledWith('p1', 'task', 1, readyConfig.consentProvider); expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ selectedPhotoIds: ['a'] })); });
+ it('选区发送只携带选中的 ID 和对应预算', async () => { const { repository } = mount(); await ready(); await userEvent.selectOptions(screen.getByLabelText('照片范围'), 'selected'); await userEvent.click(send()); await waitFor(() => expect(repository.agent.request).toHaveBeenCalled()); expect(repository.agent.setConsent).toHaveBeenCalledWith('p1', 'task', 100, readyConfig.consentProvider); expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ selectedPhotoIds: ['a'] })); });
  it('连续提交只创建一次授权与任务', async () => { const { repository } = mount(); await ready(); fireEvent.submit(send().closest('form')!); fireEvent.submit(send().closest('form')!); await waitFor(() => expect(repository.agent.request).toHaveBeenCalledTimes(1)); expect(repository.agent.setConsent).toHaveBeenCalledTimes(1); });
  it('自然语言中明确的张数同步到保留选项', async () => { mount(); await ready(); fireEvent.change(screen.getByLabelText('选片消息'), { target: { value: '给旅行摄影书选出 7 张照片' } }); expect(screen.getByLabelText('保留张数')).toHaveValue(7); });
  it('快捷比较只填写消息，等待用户发送', async () => { const { repository } = mount(fixture(), { quickAction: { id: 'q1', goal: '比较这两张', count: 1, photoIds: ['a'] } }); await ready(); expect(screen.getByLabelText('选片消息')).toHaveValue('比较这两张'); expect(screen.getByLabelText('照片范围')).toHaveValue('selected'); expect(repository.agent.request).not.toHaveBeenCalled(); });
  it('追问回答发送反馈，不创建新任务或图片授权', async () => { const repo = fixture({}, { tasks: [task('needs_input')], drafts: [] }); mount(repo); await ready(); expect(screen.getByText('希望以人物为主吗？')).toBeVisible(); await userEvent.click(send()); await waitFor(() => expect(repo.agent.request).toHaveBeenCalledWith('p1', { type: 'SubmitFeedback', taskId: 't1', answer: '选出有叙事力的照片' })); expect(repo.agent.setConsent).not.toHaveBeenCalled(); });
  it('补充要求保留上一轮目标', async () => { const repo = fixture({}, { tasks: [task('review_ready')], drafts: [] }); mount(repo); await ready(); await userEvent.click(send()); await waitFor(() => expect(repo.agent.request).toHaveBeenCalled()); expect(repo.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ goal: '旅行故事\n\n补充要求：选出有叙事力的照片' })); });
  it('运行中的任务禁用再次发送，暂停按钮传递真实任务 ID', async () => { const repo = fixture({}, { tasks: [task('running')], drafts: [] }); mount(repo); await screen.findByText('执行中'); expect(send()).toBeDisabled(); await userEvent.click(screen.getByRole('button', { name: '暂停' })); await waitFor(() => expect(repo.agent.request).toHaveBeenCalledWith('p1', { type: 'PauseTask', taskId: 't1' })); });
- it('设置只提供照片数与等待时间，不暴露引擎参数', async () => { mount(fixture(), { settingsOpen: true }); expect(await screen.findByRole('dialog', { name: '设置' })).toBeVisible(); expect(screen.getByLabelText('每次最多分析照片')).toBeVisible(); expect(screen.getByLabelText('最长等待时间')).toBeVisible(); expect(screen.queryByLabelText('模型轮次上限')).not.toBeInTheDocument(); });
+ it('设置只提供照片数与等待时间，不暴露引擎参数', async () => { mount(fixture(), { settingsOpen: true }); expect(await screen.findByRole('dialog', { name: '设置' })).toBeVisible(); expect(screen.getByLabelText('本次分析次数上限')).toBeVisible(); expect(screen.getByLabelText('最长等待时间')).toBeVisible(); expect(screen.queryByLabelText('模型轮次上限')).not.toBeInTheDocument(); });
 });
