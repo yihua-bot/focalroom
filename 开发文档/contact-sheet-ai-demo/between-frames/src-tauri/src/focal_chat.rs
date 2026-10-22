@@ -72,10 +72,16 @@ impl Store {
                 .await?;
         let brief = brief.unwrap_or_default();
 
+        let total_photos: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM photos WHERE project_id=?")
+                .bind(&cmd.project_id)
+                .fetch_one(&self.pool)
+                .await?;
         let photo_rows: Vec<(String, String, i64, Option<String>)> = sqlx::query_as(
-            "SELECT p.id, p.filename, d.rating, d.user_note FROM photos p JOIN photo_decisions d ON d.photo_id=p.id AND d.project_id=p.project_id WHERE p.project_id=? LIMIT 200",
+            "SELECT p.id, p.filename, d.rating, d.user_note FROM photos p JOIN photo_decisions d ON d.photo_id=p.id AND d.project_id=p.project_id WHERE p.project_id=? AND p.id IN (SELECT value FROM json_each(?)) LIMIT 50",
         )
         .bind(&cmd.project_id)
+        .bind(serde_json::to_string(&cmd.photo_ids).unwrap_or_else(|_| "[]".into()))
         .fetch_all(&self.pool)
         .await?;
         let selected: std::collections::HashSet<&str> =
@@ -97,7 +103,7 @@ impl Store {
         let ctx = json!({
             "项目简介": if brief.is_empty() { "（未填写）" } else { &brief },
             "选中照片": if photo_ctx.is_empty() { json!("（无）") } else { json!(photo_ctx) },
-            "项目照片总数": photo_rows.len(),
+            "项目照片总数": total_photos,
         });
 
         // 构造 Responses API 请求（网关兼容格式）
@@ -105,8 +111,16 @@ impl Store {
             json!({"role": "system", "content": SYSTEM_PROMPT}),
             json!({"role": "system", "content": format!("项目上下文：{ctx}")}),
         ];
-        for turn in cmd.history.iter().take(MAX_HISTORY) {
-            input.push(json!({"role": turn.role, "content": turn.content}));
+        // P1-1：后端从 SQLite 读权威历史（不信任前端传入）
+        let stored: Vec<(String, String)> = sqlx::query_as(
+            "SELECT role, content FROM focal_chat_messages WHERE project_id=? ORDER BY id DESC LIMIT ?",
+        )
+        .bind(&cmd.project_id)
+        .bind(MAX_HISTORY as i64)
+        .fetch_all(&self.pool)
+        .await?;
+        for (role, content) in stored.iter().rev() {
+            input.push(json!({"role": role, "content": content}));
         }
         // 多模态：选中照片附预览图（最多 6 张，1400px JPEG）
         let mut user_content: Vec<serde_json::Value> = vec![json!({
@@ -136,6 +150,7 @@ impl Store {
             "model": "deepseek-flash",
             "input": input,
             "max_output_tokens": 1024,
+            "store": false,
         });
 
         let origin = auth.origin().to_owned();
@@ -150,6 +165,14 @@ impl Store {
             .bearer_auth(token)
             .header("x-focalroom-ai-policy", "deepseek-flash-v1")
             .header("x-focalroom-request-id", uuid::Uuid::new_v4().to_string())
+            .header(
+                "x-focalroom-image-consent",
+                if cmd.include_images && !cmd.photo_ids.is_empty() {
+                    "granted"
+                } else {
+                    "denied"
+                },
+            )
             .json(&body)
             .send()
             .await
@@ -201,13 +224,9 @@ impl Store {
             }
         }
 
-        // SQLite 持久化（发送前存 user，回复后存 assistant）
-        let _ = self
-            .save_message(&cmd.project_id, "user", message, "")
-            .await;
-        let _ = self
-            .save_message(&cmd.project_id, "assistant", &reply_text, &suggestion)
-            .await;
+        // SQLite 持久化：事务原子写入（失败报错，不静默丢失）
+        self.save_chat_turn(&cmd.project_id, message, &reply_text, &suggestion)
+            .await?;
 
         Ok(FocalChatReply {
             reply: reply_text,
@@ -290,23 +309,35 @@ impl Store {
     }
 
     /// 写入单条消息（内部）。
-    async fn save_message(
+    async fn save_chat_turn(
         &self,
         project_id: &str,
-        role: &str,
-        content: &str,
+        user_msg: &str,
+        assistant_msg: &str,
         suggestion: &str,
     ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        let now = crate::domain::timestamp();
+        sqlx::query(
+            "INSERT INTO focal_chat_messages(project_id, role, content, suggestion, created_at) VALUES(?,?,?,'',?)",
+        )
+        .bind(project_id)
+        .bind("user")
+        .bind(user_msg)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
         sqlx::query(
             "INSERT INTO focal_chat_messages(project_id, role, content, suggestion, created_at) VALUES(?,?,?,?,?)",
         )
         .bind(project_id)
-        .bind(role)
-        .bind(content)
+        .bind("assistant")
+        .bind(assistant_msg)
         .bind(suggestion)
-        .bind(crate::domain::timestamp())
-        .execute(&self.pool)
+        .bind(&now)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(())
     }
 }
