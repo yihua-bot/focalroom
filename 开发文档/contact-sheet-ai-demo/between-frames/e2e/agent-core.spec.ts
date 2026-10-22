@@ -41,7 +41,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  await page.goto('/#/project/' + project.id);
  await expect(page.getByRole('heading', { name: 'M2 · 草案与人工决定' })).toBeVisible();
  await page.screenshot({ path: resolve(screenshots, 'workspace.png') });
- await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+ await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
  // 低预算通过测试 RPC 创建，生产界面不暴露模型轮次参数。
  await rpc('agent_request', { request: { requestId: crypto.randomUUID(), projectId: project.id, command: { type: 'StartTask', goal: '给两版 25 张序列', selectedPhotoIds: [], targetCount: 25, budget: { ...defaultAgentBudget, maxModelTurns: 2 } } } });
  await expect(page.locator('.chat-task-status')).toHaveText('已暂停', { timeout: 15000 });
@@ -51,7 +51,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  await expect(page.locator('.chat-task-status')).toBeInViewport();
  await page.screenshot({ path: resolve(screenshots, 'paused.png') });
  await page.reload();
- await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+ await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
  await page.getByRole('button', { name: '继续', exact: true }).click();
  await expect(page.locator('.chat-task-status')).toHaveText('待审核', { timeout: 20000 });
  const resumed = (await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0];
@@ -69,7 +69,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  // 在任务完成后人工保留一张未在候选中的照片，两个草案必须过期。
  project = await rpc<Project>('update_photo_decision', { projectId: project.id, expectedRevision: project.revision, photoId: project.photos[199].id, status: 'keep' });
  await page.reload();
- await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+ await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
  await expect(page.locator('.chat-task-status')).toHaveText('项目已更新');
  await page.getByRole('button', { name: '查看方案' }).first().click();
  const dialog = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: '清除选择', exact: true }) });
@@ -122,7 +122,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  await rpc('agent_request', { request: { requestId: crypto.randomUUID(), projectId: project.id, command: { type: 'CancelTask', taskId: task.id } } });
  expect((await rpc<AgentProjection>('get_agent_projection', { projectId: project.id })).tasks[0].state).toBe('cancelled');
  // 选片对话不再提供独立的授权管理；本地 Mock 任务仍保持零图片外发。
- await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+ await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
  await expect(page.getByRole('button', { name: '管理图像授权' })).toHaveCount(0);
  expect((await rpc<AgentProjection>('get_agent_projection', {projectId: project.id})).tasks[0].usage.cloudImages).toBe(0);
  expect(await rpc<string[][]>('test_fixture_checksums')).toEqual(beforeHash);

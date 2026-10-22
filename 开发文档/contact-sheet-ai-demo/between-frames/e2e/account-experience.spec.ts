@@ -17,9 +17,9 @@ test('SIMULATED 访客、登录恢复、账户菜单、订阅与账单完整旅�
   await page.getByRole('textbox', { name: '项目名称' }).fill('光的日记');
   await page.getByRole('button', { name: '创建并打开' }).click();
   await expect(page).toHaveURL(/#\/project\//);
-  await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
   const login = page.getByRole('dialog', { name: '登录 FocalRoom' });
-  await expect(login).toContainText('登录后即可使用 AI 智能选片，查看可用额度并管理订阅。');
+  await expect(login).toContainText('登录后即可使用 Focal AI，查看可用额度并管理订阅。');
   await expect(login).toContainText('登录不会自动上传照片。');
   expect(account.calls).not.toContain('cloud_login_open');
   await page.screenshot({ animations: 'disabled', path: `${evidence}/login-reason.png` });
@@ -27,8 +27,8 @@ test('SIMULATED 访客、登录恢复、账户菜单、订阅与账单完整旅�
   await expect(login).toContainText('请在浏览器完成登录');
   await account.signIn();
   await expect(login).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: 'AI 智能选片', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '关闭 AI 智能选片' }).click();
+  await expect(page.getByRole('dialog', { name: 'Focal AI', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '关闭 Focal AI' }).click();
   const trigger = page.getByRole('button', { name: '账户菜单' });
   await trigger.click();
   const menu = page.getByRole('menu');

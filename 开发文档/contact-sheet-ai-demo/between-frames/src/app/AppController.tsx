@@ -166,7 +166,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       { id: 'select-all', group: '选择', label: '选择当前视图全部照片', hint: hint('selectAll'), run: () => ui.selectAll(navigable.map(photo => photo.id)) },
       { id: 'clear-selection', group: '选择', label: '清除选区', hint: hint('clearSelection'), run: ui.clearSelection },
       { id: 'search', group: '导航', label: '聚焦搜索框', hint: hint('search'), run: () => document.getElementById('photo-search')?.focus() },
-      { id: 'agent', group: '导航', label: '打开/关闭 AI 智能选片', hint: hint('toggleAgent'), run: openAI },
+      { id: 'agent', group: '导航', label: '打开/关闭 Focal AI', hint: hint('toggleAgent'), run: openAI },
       { id: 'versions', group: '项目', label: '查看/保存作品版本', run: () => setDialog({ kind: 'versions' }) },
       { id: 'activity', group: '项目', label: '按操作者浏览操作历史', run: () => setDialog({ kind: 'activity' }) },
       { id: 'copy-plan', group: '项目', label: '复制当前序列方案', run: copyPlan },

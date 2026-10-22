@@ -49,7 +49,7 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   // 3. 委托 Agent（本地 Mock，零图像）。
   await page.goto('/#/project/' + project.id);
   await expect(page.getByRole('heading', { name: '成长的摄影书' })).toBeVisible();
-  await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
   await page.getByRole('textbox', { name: '选片消息' }).fill('整理成长的摄影书，突出窗边的光线');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.locator('.chat-task-status')).toHaveText('待审核', { timeout: 30000 });
@@ -72,7 +72,7 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   expect(after?.disabled).toBe(true);
   await page.screenshot({ path: resolve(screenshots, 'journey-memory.png') });
   // 5. 局部采纳一份草案的部分照片。
-  await page.getByRole('main').getByRole('button', { name: 'AI 智能选片', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
   await page.getByRole('button', { name: '查看方案' }).first().click();
   await page.getByRole('button', { name: '清除选择' }).click();
   const checkboxes = page.locator('.draft-items input[type="checkbox"]');
@@ -86,7 +86,7 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   const exported = await rpc<{ path: string }>('export_project', { projectId: project.id, format: 'csv', includePaths: false });
   expect(await readFile(exported.path, 'utf8')).not.toContain('original_path');
   // 6.1 关闭选片抽屉后从工作台导出。
-  await page.getByRole('button', { name: '关闭 AI 智能选片' }).click();
+  await page.getByRole('button', { name: '关闭 Focal AI' }).click();
   // 印刷参考走当前 GUI、IPC 和 Rust 导出器。
   await page.getByRole('button', { name: '导出 ↗' }).click();
   await page.getByRole('button', { name: '印刷参考', exact: true }).click();

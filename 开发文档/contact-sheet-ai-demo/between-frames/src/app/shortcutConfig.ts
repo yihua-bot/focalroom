@@ -18,7 +18,7 @@ export const SHORTCUT_ACTIONS = [
   { id: 'clearSelection', label: '清除选区', defaultKey: 'escape', group: '选择' },
   { id: 'selectAll', label: '选择当前视图全部照片', defaultKey: 'mod+a', group: '选择' },
   { id: 'search', label: '聚焦搜索框', defaultKey: 'mod+f', group: '导航' },
-  { id: 'toggleAgent', label: '打开/关闭 AI 智能选片', defaultKey: 'mod+shift+a', group: '导航' },
+  { id: 'toggleAgent', label: '打开/关闭 Focal AI', defaultKey: 'mod+shift+a', group: '导航' },
   { id: 'commandPalette', label: '打开命令面板', defaultKey: 'mod+k', group: '导航' },
   { id: 'undo', label: '撤销上一步人工编辑', defaultKey: 'mod+z', group: '历史' },
   { id: 'redo', label: '重做', defaultKey: 'mod+shift+z', group: '历史' },

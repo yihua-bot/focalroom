@@ -66,8 +66,8 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
         <span className="micro">⌘ / Ctrl 点选 · Shift 连选</span></div>
       {selectedIds.length > 1 && <div className="selection-tools" role="group" aria-label="批量选片"><span>已选 {selectedIds.length} 张</span>{(['keep', 'reject', 'undecided'] as const).map(status => <Button key={status} size="small" disabled={busy} onClick={() => onBatchDecide(status)}>{status === 'keep' ? '保留选区' : status === 'reject' ? '淘汰选区' : '选区待定'}</Button>)}
         <select aria-label="批量人工评分" disabled={busy} value="" onChange={event => onBatchRate(Number(event.target.value))}><option value="" disabled>人工评分…</option>{[0, 1, 2, 3, 4, 5].map(rating => <option key={rating} value={rating}>{rating ? `${rating} 星` : '清除评分'}</option>)}</select>
-        {onAICompare && selectedIds.length === 2 && <Button size="small" disabled={busy} onClick={onAICompare} title="把两张选区照片交给AI 智能选片，比较叙事价值">AI 比较叙事价值</Button>}
-        {onAIOrder && <Button size="small" disabled={busy} onClick={onAIOrder} title="把选区交给AI 智能选片，生成两版顺序方案">生成两版顺序</Button>}
+        {onAICompare && selectedIds.length === 2 && <Button size="small" disabled={busy} onClick={onAICompare} title="把两张选区照片交给Focal AI，比较叙事价值">AI 比较叙事价值</Button>}
+        {onAIOrder && <Button size="small" disabled={busy} onClick={onAIOrder} title="把选区交给Focal AI，生成两版顺序方案">生成两版顺序</Button>}
         <Button size="small" variant="quiet" onClick={ui.clearSelection}>清除选区</Button></div>}
     </div>
     <div className="canvas-area"><div className="workspace-scroll"><div className="canvas-label"><span>{ui.view === 'grid' ? 'CONTACT SHEET' : ui.view === 'canvas' ? 'NARRATIVE CANVAS' : ui.view === 'publication' ? 'PUBLICATIONS' : 'SEQUENCE BOARD'}</span>

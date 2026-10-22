@@ -6,10 +6,10 @@ test('工作台对话抽屉保留选区、输入和关闭焦点，不增加 AI �
  await page.goto('/');
  const nav = page.getByRole('navigation', { name: '未命名的日常' });
  await expect(nav).toBeVisible();
- await expect(nav.getByRole('button', { name: 'AI 智能选片' })).toHaveCount(0);
- const open = page.getByRole('main').getByRole('button', { name: 'AI 智能选片' });
+ await expect(nav.getByRole('button', { name: 'Focal AI' })).toHaveCount(0);
+ const open = page.getByRole('main').getByRole('button', { name: 'Focal AI' });
  await open.click();
- const drawer = page.getByRole('dialog', { name: 'AI 智能选片', exact: true });
+ const drawer = page.getByRole('dialog', { name: 'Focal AI', exact: true });
  await expect(drawer.getByRole('textbox', { name: '选片消息' })).toBeFocused();
  await drawer.getByRole('textbox').fill('做一组克制、连贯的城市散步作品');
  await page.getByRole('button', { name: '查看第 2 张 交错的视线', exact: true }).click();
