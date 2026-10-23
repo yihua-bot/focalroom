@@ -11,6 +11,9 @@ import { checkRateLimit } from "./rate-limit.ts";
 export const HOSTED_AI_POLICY = "deepseek-flash-v1";
 export const HOSTED_AI_MODEL = "deepseek-flash";
 const MAX_BODY = 16 * 1024 * 1024, MAX_REPLY = 2 * 1024 * 1024;
+const REQUEST_TIMEOUT_MS = 300000;
+// 超出上游截止时间再留结算余量；进程中断不重放，也不凭超时退款。
+const STALE_REQUEST_MS = REQUEST_TIMEOUT_MS + 60000;
 const inputSchema = z.strictObject({
   model: z.literal(HOSTED_AI_MODEL),
   input: z.array(z.record(z.string(), z.unknown())).min(1).max(400),
@@ -22,9 +25,13 @@ const inputSchema = z.strictObject({
 });
 export type HostedAiConfig = { key: string; initialTokens: number };
 export type HostedAiTransport = (body: unknown, key: string) => Promise<Response>;
+type PreparedRequest = {
+  userId: string; requestId: string; headers: Headers;
+  body: z.infer<typeof inputSchema>; images: number; reservation: number; hash: string;
+};
 const productionTransport: HostedAiTransport = (body, key) => fetch("https://api.deepseek.com/responses", {
   method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-  body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(300000),
+  body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 });
 export function hostedAiConfig(): HostedAiConfig | undefined {
   const key = process.env.FOCALROOM_DEEPSEEK_API_KEY?.trim();
@@ -48,7 +55,6 @@ async function readReply(response: Response) {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } finally { await reader.cancel().catch(() => {}); }
 }
-
 // 管理端离线分配入口；没有公开充值/赠送接口。grantId 由操作者保存用于幂等重试。
 export async function grantAiTokens(pool: Pool, userId: string, grantId: string, tokens: number, reason: string) {
   return transaction(pool, tx => grantAiTokensTx(tx, userId, grantId, tokens, reason));
@@ -97,8 +103,15 @@ export class HostedAiService {
   private readonly auth: AuthService;
   private readonly config?: HostedAiConfig;
   private readonly transport: HostedAiTransport;
+  private readonly pending = new Set<Promise<void>>();
+  private readonly resultCleanup: ReturnType<typeof setInterval>;
   constructor(pool: Pool, auth: AuthService, config?: HostedAiConfig, transport: HostedAiTransport = productionTransport) {
     this.pool = pool; this.auth = auth; this.config = config; this.transport = transport;
+    // 异步回执是短期恢复缓存，不是无限期云端对话历史。失败时下一周期重试。
+    const cleanup = () => { void this.expireResults().catch(() => {}); };
+    this.resultCleanup = setInterval(cleanup, 3600000);
+    this.resultCleanup.unref();
+    cleanup();
   }
   async account(headers: Headers) {
     return transaction(this.pool, async tx => {
@@ -116,7 +129,7 @@ export class HostedAiService {
         unit: "tokens", granted, spent, reserved, available: granted - spent - reserved };
     });
   }
-  async respond(headers: Headers, input: unknown) {
+  private async prepare(headers: Headers, input: unknown): Promise<PreparedRequest> {
     const user = await this.auth.authenticate(headers, true);
     assert(this.config, 503, "AI_NOT_CONFIGURED", "FocalRoom AI 暂未开放");
     const quota = await this.account(headers);
@@ -162,43 +175,95 @@ export class HostedAiService {
     assert(textBytes <= 200000,413,"AI_INPUT_TOO_LARGE","文本上下文超过上限");
     const reservation = textBytes + images * 8192 + body.max_output_tokens + 8192;
     const hash = digest(original);
-    await transaction(this.pool, async tx => {
+    return { userId: user.id, requestId, headers, body, images, reservation, hash };
+  }
+  private async reserve(request: PreparedRequest, allowReplay: boolean): Promise<boolean> {
+    const { userId, requestId, headers, reservation, hash } = request;
+    return transaction(this.pool, async tx => {
       // 会话校验与预留同事务；额度行锁串行化跨进程请求，不能超额透支。
       await this.auth.authenticate(headers,true,tx);
-      const verified = (await tx.query("SELECT email_verified_at FROM fr_users WHERE id=$1",[user.id])).rows[0]?.email_verified_at;
+      const verified = (await tx.query("SELECT email_verified_at FROM fr_users WHERE id=$1",[userId])).rows[0]?.email_verified_at;
       assert(verified,403,"AI_EMAIL_UNVERIFIED","请先验证邮箱");
-      const account = (await tx.query("SELECT * FROM fr_ai_accounts WHERE user_id=$1 FOR UPDATE",[user.id])).rows[0];
-      const old = (await tx.query("SELECT body_hash,state FROM fr_ai_requests WHERE user_id=$1 AND request_id=$2",[user.id,requestId])).rows[0];
+      const account = (await tx.query("SELECT * FROM fr_ai_accounts WHERE user_id=$1 FOR UPDATE",[userId])).rows[0];
+      const old = (await tx.query("SELECT body_hash,state,policy FROM fr_ai_requests WHERE user_id=$1 AND request_id=$2",[userId,requestId])).rows[0];
+      if (old && allowReplay) {
+        assert(old.body_hash === hash && old.policy === HOSTED_AI_POLICY,409,"AI_REQUEST_CONFLICT","请求编号已用于其他内容，未重复调用模型");
+        return false;
+      }
       assert(!old,409,old?.body_hash === hash ? "AI_REQUEST_REPLAY" : "AI_REQUEST_CONFLICT","此请求已处理或结果待确认，未重复调用模型");
       assert(account && Number(account.granted)-Number(account.spent)-Number(account.reserved) >= reservation,402,"AI_QUOTA_EXHAUSTED","AI 额度不足，请联系 FocalRoom");
-      const active = Number((await tx.query("SELECT count(*) FROM fr_ai_requests WHERE user_id=$1 AND state='PENDING'",[user.id])).rows[0].count);
+      const active = Number((await tx.query("SELECT count(*) FROM fr_ai_requests WHERE user_id=$1 AND state='PENDING'",[userId])).rows[0].count);
       assert(active < 2,429,"AI_BUSY","正在处理其他 AI 请求，请稍后再试");
-      await tx.query("INSERT INTO fr_ai_requests(user_id,request_id,body_hash,policy,reserved,state) VALUES($1,$2,$3,$4,$5,'PENDING')",[user.id,requestId,hash,HOSTED_AI_POLICY,reservation]);
-      await tx.query("UPDATE fr_ai_accounts SET reserved=reserved+$2 WHERE user_id=$1",[user.id,reservation]);
+      await tx.query("INSERT INTO fr_ai_requests(user_id,request_id,body_hash,policy,reserved,state) VALUES($1,$2,$3,$4,$5,'PENDING')",[userId,requestId,hash,HOSTED_AI_POLICY,reservation]);
+      await tx.query("UPDATE fr_ai_accounts SET reserved=reserved+$2 WHERE user_id=$1",[userId,reservation]);
+      return true;
     });
-    const settle = async (state: string, charged: number | null) => transaction(this.pool,async tx => {
-      await tx.query("SELECT user_id FROM fr_ai_accounts WHERE user_id=$1 FOR UPDATE",[user.id]);
-      const changed = await tx.query("UPDATE fr_ai_requests SET state=$3,charged=$4,finished_at=now() WHERE user_id=$1 AND request_id=$2 AND state='PENDING' RETURNING reserved",[user.id,requestId,state,charged]);
-      if (changed.rowCount && charged !== null) await tx.query("UPDATE fr_ai_accounts SET reserved=reserved-$2,spent=spent+$3 WHERE user_id=$1",[user.id,reservation,charged]);
+  }
+  async respond(headers: Headers, input: unknown) {
+    const request = await this.prepare(headers, input);
+    await this.reserve(request, false);
+    return this.execute(request, false);
+  }
+  async submit(headers: Headers, input: unknown) {
+    const request = await this.prepare(headers, input);
+    if (await this.reserve(request, true)) {
+      // 仅本次成功预留者执行。跨实例/断线重提只读同一回执，不再发图。
+      const work = this.execute(request, true).then(() => {}, () => {});
+      this.pending.add(work);
+      void work.then(() => this.pending.delete(work));
+    }
+    return this.job(headers, request.requestId);
+  }
+  async drain() {
+    clearInterval(this.resultCleanup);
+    await Promise.all([...this.pending]);
+  }
+  private async expireResults() {
+    await this.pool.query("UPDATE fr_ai_requests SET result_json=NULL,error_code='AI_RESULT_EXPIRED' WHERE result_json IS NOT NULL AND finished_at < now()-interval '24 hours'");
+  }
+  async job(headers: Headers, value: unknown) {
+    const user = await this.auth.authenticate(headers, false);
+    const requestId = z.uuid().parse(value);
+    const rate = await checkRateLimit(this.pool,`hosted-ai-poll:${user.id}`,120);
+    assert(rate.allowed,429,"AI_RATE_LIMITED","查询过于频繁，请稍后再试");
+    // 包括重启遗留的 PENDING。仅转换结果不明状态；预留仍待有凭据的结算。
+    await this.pool.query("UPDATE fr_ai_requests SET state='UNKNOWN',error_code='AI_RESULT_UNKNOWN',finished_at=now() WHERE user_id=$1 AND request_id=$2 AND state='PENDING' AND created_at < now()-($3 * interval '1 millisecond')",[user.id,requestId,STALE_REQUEST_MS]);
+    await this.pool.query("UPDATE fr_ai_requests SET result_json=NULL,error_code='AI_RESULT_EXPIRED' WHERE user_id=$1 AND request_id=$2 AND result_json IS NOT NULL AND finished_at < now()-interval '24 hours'",[user.id,requestId]);
+    const row = (await this.pool.query("SELECT state,result_json,error_code FROM fr_ai_requests WHERE user_id=$1 AND request_id=$2 AND policy=$3",[user.id,requestId,HOSTED_AI_POLICY])).rows[0];
+    assert(row,404,"NOT_FOUND","任务不存在");
+    return { jobId: requestId, state: row.state as string,
+      pollUrl: `/api/v2/ai/deepseek-flash-v1/responses/async/${requestId}`,
+      result: row.result_json ? JSON.parse(row.result_json) : null,
+      error: row.error_code ?? (row.state === 'UNKNOWN' ? 'AI_RESULT_UNKNOWN' : row.state === 'REJECTED' ? 'AI_PROVIDER_REJECTED' : row.state === 'COMPLETED' && !row.result_json ? 'AI_RESULT_UNAVAILABLE' : null),
+    };
+  }
+  private async execute(request: PreparedRequest, persistResult: boolean) {
+    const { userId, requestId, body, images, reservation } = request;
+    const settle = async (state: string, charged: number | null, result: unknown = null, error: string | null = null) => transaction(this.pool,async tx => {
+      await tx.query("SELECT user_id FROM fr_ai_accounts WHERE user_id=$1 FOR UPDATE",[userId]);
+      const changed = await tx.query("UPDATE fr_ai_requests SET state=$3,charged=$4,result_json=$5,error_code=$6,finished_at=now() WHERE user_id=$1 AND request_id=$2 AND state IN ('PENDING','UNKNOWN') AND charged IS NULL RETURNING reserved",[userId,requestId,state,charged,persistResult && result !== null ? JSON.stringify(result) : null,error]);
+      if (changed.rowCount && charged !== null) await tx.query("UPDATE fr_ai_accounts SET reserved=reserved-$2,spent=spent+$3 WHERE user_id=$1",[userId,reservation,charged]);
+      assert(changed.rowCount,409,"AI_RESULT_UNKNOWN","请求状态已变更，请先核对结果");
     });
     try {
       // 图像观察只需简短事实；DeepSeek 默认为 high thinking，会挤占同步请求等待时间。
       // 编排请求保持原样；不允许客户端借此切换模型、服务或扩大权限。
       const upstream = images ? {...body, reasoning: {effort: "none"}} : body;
-      const response = await this.transport(upstream,this.config.key);
+      const response = await this.transport(upstream,this.config!.key);
       if ([400,401,403,404,422].includes(response.status)) {
-        await response.body?.cancel(); await settle("REJECTED",0);
+        await response.body?.cancel(); await settle("REJECTED",0,null,"AI_PROVIDER_REJECTED");
         throw new ApiError(502,"AI_PROVIDER_REJECTED","模型服务拒绝了请求，额度已释放");
       }
       assert(response.ok,502,"AI_RESULT_UNKNOWN","模型结果无法确认，请勿重复提交");
       const result = await readReply(response);
       const usage = z.object({input_tokens:z.number().int().nonnegative(),output_tokens:z.number().int().nonnegative(),total_tokens:z.number().int().nonnegative()}).parse(result.usage);
       assert(usage.total_tokens === usage.input_tokens+usage.output_tokens && usage.total_tokens <= reservation && usage.output_tokens <= body.max_output_tokens && result.status === "completed" && !result.error && Array.isArray(result.output),502,"AI_RESULT_UNKNOWN","模型结果或计量无法确认，请勿重复提交");
-      await settle("COMPLETED",usage.total_tokens);
-      return {id: typeof result.id === "string" ? result.id : randomUUID(),object:"response",status:"completed",model:HOSTED_AI_MODEL,output:result.output,usage};
+      const reply = {id: typeof result.id === "string" ? result.id : randomUUID(),object:"response",status:"completed",model:HOSTED_AI_MODEL,output:result.output,usage};
+      await settle("COMPLETED",usage.total_tokens,reply);
+      return reply;
     } catch(error) {
       // 网络中断、无计量或进程退出不退款/重发；PENDING/UNKNOWN 额度留待人工对账。
-      await settle("UNKNOWN",null);
+      if (!(error instanceof ApiError && error.code === 'AI_PROVIDER_REJECTED')) await settle("UNKNOWN",null,null,"AI_RESULT_UNKNOWN");
       if (error instanceof ApiError) throw error;
       throw new ApiError(502,"AI_RESULT_UNKNOWN","模型结果无法确认，预留额度暂未释放，请联系 FocalRoom");
     }

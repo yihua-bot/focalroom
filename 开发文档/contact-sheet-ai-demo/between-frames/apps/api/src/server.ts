@@ -93,6 +93,15 @@ class ApiController {
     }
     if (path === "/ai/account" && req.method === "GET") return s.ai.account(headers);
     if (path === "/ai/deepseek-flash-v1/responses" && req.method === "POST") return s.ai.respond(headers,req.body);
+    // 提交与查询仍经过统一鉴权、策略、图像和额度边界。
+    if (path === "/ai/deepseek-flash-v1/responses/async" && req.method === "POST") {
+      const job = await s.ai.submit(headers, req.body);
+      res.status(job.state === "PENDING" ? 202 : 200);
+      return job;
+    }
+    if (path.startsWith("/ai/deepseek-flash-v1/responses/async/") && req.method === "GET") {
+      return s.ai.job(headers, path.slice("/ai/deepseek-flash-v1/responses/async/".length));
+    }
     if (req.method === "POST" && path === "/auth/desktop/start")
       return s.desktop.begin(req.body, req.socket.remoteAddress ?? "unknown");
     if (req.method === "POST" && path === "/auth/desktop/authorize")
@@ -386,6 +395,7 @@ export async function createApi(options: {
     close: async () => {
       await closeRealtime();
       await app.close();
+      await service.ai.drain();
     },
   };
 }

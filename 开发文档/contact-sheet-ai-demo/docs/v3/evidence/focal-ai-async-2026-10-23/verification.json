@@ -1,0 +1,58 @@
+{
+  "checkedAtAsiaShanghai": "2026-10-23T18:10:46.362328+08:00",
+  "head": "9a00be8ee880ff55d96372eefe0922fb02c64804",
+  "includesUncommittedWork": true,
+  "postgres": {
+    "suites": 13,
+    "passed": 96,
+    "failed": 0,
+    "perSuitePassed": [
+      17,
+      4,
+      10,
+      12,
+      9,
+      3,
+      7,
+      8,
+      10,
+      2,
+      5,
+      3,
+      6
+    ],
+    "rawLog": "postgres-full.log"
+  },
+  "rustTargeted": {
+    "agent_vision": 46,
+    "hosted_ai": 7,
+    "passed": 53,
+    "failed": 0,
+    "source": "exec session 87226 returned exit 0; not full Rust suite"
+  },
+  "typecheck": "passed",
+  "lint": "passed",
+  "clippy": "all-targets + integration-harness passed, exec session 3767 exit 0",
+  "fmt": "passed",
+  "gitDiffCheck": "passed",
+  "productionCalls": 0,
+  "realModelCalls": 0,
+  "imageUploads": 0,
+  "productionSchemaChanges": 0,
+  "deployed": false,
+  "committed": false,
+  "sourceSha256": {
+    "AGENTS.md": "c6a03351af23d5e903d5ba3e17851cb9d3996b97ca3e0884f6cd75b241e2c6e0",
+    "apps/api/src/server.ts": "b4fd9931641f69524a0113b0906c2a8b89ce7ad4113e6f896dc81f6f134638d1",
+    "apps/api/src/hosted-ai.ts": "dd92c3b68b87a0d71877f06641cf0b5ef0a482989ed2ca352e05ee21fd375795",
+    "apps/api/src/database.ts": "1b23806402f1123fdcb3bfec84cbbd41adcc0531034efdd6e068dc064461fc21",
+    "apps/api/migrations/0021_ai_async.sql": "77d54f2cf1eac21cf501c95cd1408f832af61a03ce84a3cff0ce343724e8b583",
+    "apps/api/test/hosted-ai-async.mjs": "6326757f984694322ba994ddfcdade86a2e083bd6c42b74ff7d255f2116c0acb",
+    "apps/api/test/account-security.mjs": "016aadc50f6e3816415de39723b9fc8c619c990e4a6721a62d96127e41328103",
+    "apps/api/test/min_privilege.mjs": "bd626fa18c8108498bac6a38deb8f610aa1ac220f76ab6c7be67bf4a69fb6594",
+    "apps/api/test/run.mjs": "7f29b8bf118fbc8b03e95ebf6601c2a36529f360e3e13b7c2f52028c290f667f",
+    "src-tauri/src/agent/openai.rs": "b06bc5aa3bdb9356f1f2912b9b0a4c48956b14e99a4b544de367c3933c01eaac",
+    "src-tauri/src/agent/openai/hosted_async.rs": "53ffc317edd1b7082cd436fd08848b1d04dac78561558a1268e6c2c112b1a7c6",
+    "src-tauri/tests/hosted_ai.rs": "f2637dc85181e0eb453f6864761da2d1c720bf37ea8394003fe62d9aba1b5b7c"
+  }
+}

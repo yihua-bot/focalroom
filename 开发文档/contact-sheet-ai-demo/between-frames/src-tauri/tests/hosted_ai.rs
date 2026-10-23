@@ -36,6 +36,7 @@ struct Server {
     origin: String,
     calls: Arc<AtomicU32>,
     auth_calls: Arc<AtomicU32>,
+    polls: Arc<AtomicU32>,
     mode: Arc<AtomicU32>,
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -48,10 +49,13 @@ impl Server {
         let calls = Arc::new(AtomicU32::new(0));
         let auth_calls = Arc::new(AtomicU32::new(0));
         let auth_count = auth_calls.clone();
+        let polls = Arc::new(AtomicU32::new(0));
+        let poll_count = polls.clone();
         let mode = Arc::new(AtomicU32::new(0));
         let stop = Arc::new(AtomicBool::new(false));
         let (count, status, stopping) = (calls.clone(), mode.clone(), stop.clone());
         let thread = std::thread::spawn(move || {
+            let mut job_id = String::new();
             while !stopping.load(Ordering::SeqCst) {
                 let (mut stream, _) = match listener.accept() {
                     Ok(s) => s,
@@ -90,7 +94,10 @@ impl Server {
                     assert!(n > 0);
                     bytes.extend_from_slice(&buffer[..n]);
                 }
-                let ai = headers.starts_with("post /api/v2/ai/deepseek-flash-v1/responses ");
+                let async_submit =
+                    headers.starts_with("post /api/v2/ai/deepseek-flash-v1/responses/async ");
+                let ai = async_submit
+                    || headers.starts_with("post /api/v2/ai/deepseek-flash-v1/responses ");
                 let (code, response) = if ai {
                     count.fetch_add(1, Ordering::SeqCst);
                     assert!(headers.contains("x-focalroom-ai-policy: deepseek-flash-v1"));
@@ -100,6 +107,31 @@ impl Server {
                         serde_json::from_slice(&bytes[boundary..boundary + len]).unwrap();
                     assert_eq!(body["model"], "deepseek-flash");
                     assert!(!body.to_string().contains("hostedAccountId"));
+                    if async_submit {
+                        assert!(
+                            body["input"][0]["content"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .any(|part| part["type"] == "input_image")
+                        );
+                        job_id = headers
+                            .lines()
+                            .find_map(|line| line.strip_prefix("x-focalroom-request-id: "))
+                            .unwrap()
+                            .to_owned();
+                        if status.load(Ordering::SeqCst) == 7 {
+                            continue;
+                        }
+                        let ack_id = if status.load(Ordering::SeqCst) == 8 {
+                            "wrong-job-id"
+                        } else {
+                            &job_id
+                        };
+                        let reply = json!({"jobId":ack_id,"state":"PENDING","result":null,"error":null,"pollUrl":"https://untrusted.invalid/not-followed"}).to_string();
+                        write!(stream,"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}",reply.len()).unwrap();
+                        continue;
+                    }
                     match status.load(Ordering::SeqCst) {
                         1 => (402, json!({"error":{"code":"AI_QUOTA_EXHAUSTED"}})),
                         2 => {
@@ -110,6 +142,24 @@ impl Server {
                             json!({"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"fixture"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}),
                         ),
                     }
+                } else if headers.starts_with("get /api/v2/ai/deepseek-flash-v1/responses/async/") {
+                    assert!(headers.starts_with(&format!(
+                        "get /api/v2/ai/deepseek-flash-v1/responses/async/{job_id} "
+                    )));
+                    let previous = poll_count.fetch_add(1, Ordering::SeqCst);
+                    let mode = status.load(Ordering::SeqCst);
+                    if mode == 11 && previous == 0 {
+                        continue;
+                    }
+                    if mode == 10 {
+                        write!(stream,"HTTP/1.1 401 Unauthorized\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
+                        continue;
+                    }
+                    let observation = json!({"observations":[{"photo_id":"photo-1","visible_facts":["fixture only"],"interpretation":"fixture","uncertainty":"not real vision"}]}).to_string();
+                    (
+                        200,
+                        json!({"jobId":job_id,"state":if mode == 9 {"UNKNOWN"} else {"COMPLETED"},"error":if mode == 9 {json!("AI_RESULT_UNKNOWN")} else {Value::Null},"result":{"status":"completed","model":"deepseek-flash","output":[{"type":"message","content":[{"type":"output_text","text":observation}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}),
+                    )
                 } else if headers.starts_with("get /api/v2/ai/account ") {
                     (
                         200,
@@ -143,10 +193,79 @@ impl Server {
             origin,
             calls,
             auth_calls,
+            polls,
             mode,
             stop,
             thread: Some(thread),
         }
+    }
+}
+#[tokio::test]
+async fn hosted_images_submit_once_and_poll_known_job_even_when_ack_or_read_is_lost() {
+    for mode in [6, 7, 11] {
+        let server = Server::new();
+        let vault = Arc::new(Vault::default());
+        vault.write("", &session("user-a")).unwrap();
+        let provider = OpenAiProvider::hosted(Arc::new(
+            CloudAuth::new(&server.origin, "fixture", vault).unwrap(),
+        ))
+        .bind_account()
+        .unwrap();
+        server.mode.store(mode, Ordering::SeqCst);
+        let (result, tokens) = provider
+            .observe(
+                "fixture",
+                "fixture",
+                &[("photo-1".into(), "fixture-pixels".into())],
+                128,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result["observations"][0]["photo_id"], "photo-1");
+        assert_eq!(tokens, 15);
+        assert_eq!(server.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            server.polls.load(Ordering::SeqCst),
+            if mode == 11 { 2 } else { 1 }
+        );
+    }
+}
+#[tokio::test]
+async fn hosted_async_rejects_wrong_job_unknown_outcome_and_revoked_session_without_reposting() {
+    for mode in [8, 9, 10] {
+        let server = Server::new();
+        let vault = Arc::new(Vault::default());
+        vault.write("", &session("user-a")).unwrap();
+        let provider = OpenAiProvider::hosted(Arc::new(
+            CloudAuth::new(&server.origin, "fixture", vault).unwrap(),
+        ))
+        .bind_account()
+        .unwrap();
+        server.mode.store(mode, Ordering::SeqCst);
+        let error = provider
+            .observe(
+                "fixture",
+                "fixture",
+                &[("photo-1".into(), "fixture-pixels".into())],
+                128,
+            )
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(
+            error.code,
+            if mode == 10 {
+                "AUTH_REQUIRED"
+            } else {
+                "AI_RESULT_UNKNOWN"
+            }
+        );
+        assert!(!error.retriable);
+        assert_eq!(server.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            server.polls.load(Ordering::SeqCst),
+            if mode == 8 { 0 } else { 1 }
+        );
     }
 }
 impl Drop for Server {

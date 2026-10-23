@@ -2,6 +2,7 @@ use super::{context::ModelTurnRequest, provider::ModelProvider, types::*};
 use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 use std::{future::Future, pin::Pin};
+mod hosted_async;
 
 /// API key 只经环境变量进入进程内存：不写 SQLite、不进日志、不回传前端（仅脱敏尾号）。
 pub const KEY_ENV: &str = "BETWEEN_FRAMES_OPENAI_API_KEY";
@@ -255,6 +256,9 @@ impl OpenAiProvider {
         super::pricing::RateCard::for_endpoint(&self.base_url, &self.model)
     }
     async fn post(&self, body: &Value) -> Result<Value> {
+        if self.is_hosted() && hosted_async::has_images(body) {
+            return hosted_async::post(self, body).await;
+        }
         let mut request = self
             .client
             .post(format!("{}/responses", self.base_url))
@@ -303,21 +307,7 @@ impl OpenAiProvider {
         })?;
         if !status.is_success() {
             if self.is_hosted() {
-                let (code, message) = match status.as_u16() {
-                    401 => ("AUTH_REQUIRED", "请登录 FocalRoom 后重新委托"),
-                    402 => ("AI_QUOTA_EXHAUSTED", "AI 额度不足，请联系 FocalRoom"),
-                    403 => ("AI_PERMISSION_DENIED", "请确认邮箱已验证，并重新授权"),
-                    409 => (
-                        "AI_REQUEST_CONFLICT",
-                        "服务配置或请求状态已改变，请重新委托",
-                    ),
-                    503 => ("AI_NOT_CONFIGURED", "FocalRoom AI 暂未开放"),
-                    _ => (
-                        "AI_RESULT_UNKNOWN",
-                        "AI 请求未完成；请先刷新额度，勿重复提交",
-                    ),
-                };
-                return Err(AppError::new(code, message));
+                return Err(hosted_async::http_error(status));
             }
             let is_retriable =
                 status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS;

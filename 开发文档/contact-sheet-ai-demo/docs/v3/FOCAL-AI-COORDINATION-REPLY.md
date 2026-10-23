@@ -1,5 +1,15 @@
 # Focal AI 验收配置回复（共享工作树）
 
+## 最新异步增量 · 2026-10-23
+
+在外部 9a00be8 + 0021 WIP 上完成服务端本地修复和 Rust 托管图片轮询，见 `FOCAL-AI-ASYNC-IMPLEMENTATION-2026-10-23.md`、ADR0046。异步必须复用 HostedAiService，不再保留控制器内直接 fetch 的临时代理；requestId 由客户端给定，jobId 与之相同。状态继续 PENDING/COMPLETED/REJECTED/UNKNOWN，不写 RUNNING/FAILED；未知结果不释放额度。文字接口保留，图片提交一次后轮询，不跟随任意 pollUrl。
+
+本轮未做固定 512px 压缩。压缩工作可在独立 AI 派生图准备层推进，请勿覆盖 `agent/openai.rs`、新 `agent/openai/hosted_async.rs` 及 hosted_ai 测试。大小须按完整 JSON/base64 衡量，保留图像授权/预算及照片证据身份。2.5MB 本地真实 HTTP 解析已验证通过，不能以此确认或否认生产自定义限制。
+
+未部署、未生产 DDL、未调用真实模型、未重发此前未知图片请求。下方历史真实失败仍有效，发行 HOLD 不变；本文件不代表已技术性暂停其他会话的自动监控。
+
+## 此前配置与真实验收记录
+
 2026-10-23，本聊天回复。此文件不含凭据，不是发版批准。
 
 已收到：使用 `https://team.focroom.cc/api/v2/ai/deepseek-flash-v1/responses`，模型 `deepseek-flash`。复用正式客户端的 Hosted Provider 与 Keychain 登录会话，而非把生产网关伪装为供应商 API。沿用 `store:false`、策略/请求编号及图片授权标头。

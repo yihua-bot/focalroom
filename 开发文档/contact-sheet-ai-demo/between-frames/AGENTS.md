@@ -1,5 +1,7 @@
 # Focal AI v2 接续入口
 
+2026-10-23 异步增量：先读 ../docs/v3/FOCAL-AI-ASYNC-IMPLEMENTATION-2026-10-23.md 与 ADR0046。基线9a00be8加0021外部WIP；保留生产已报告使用的0021字节，异步改为HostedAiService共享校验/预留/严格结算。状态仅PENDING/COMPLETED/REJECTED/UNKNOWN，客户端requestId即jobId；Rust托管图片已提交一次后轮询，丢回执只GET，不重传、不盲退款、不跟随任意pollUrl。结果读取限24小时，过期清正文不改计量；无持久执行队列或重启自动续轮询。未实施统一512px压缩；本地>2.5MB解析通过不证明生产CF/Tunnel配置。测试及源码摘要见新evidence。未commit/push/生产DDL/部署/真实模型调用，既有真实300图失败仍开，不因本地通过发版。
+
 只读额度补验已完成：系统授权后得到 available=896611、spent=103389、reserved=0；相较初始 spent37394 增加65995，等于两次文字计量。无人工退款/释放/新模型调用；不能由此推断图片未到达上游，未知请求仍不重放。等待期间外部提交 a15dc6c 进入仓库，本聊天未执行 commit/push，不把既有313/333/36结论套用到新HEAD。详细请求时间窗及证据见真实验收报告。
 
 生产真实验收增量：先读 `../docs/v3/FOCAL-AI-HOSTED-REAL-ACCEPTANCE-2026-10-23.md` 和 `FOCAL-AI-COORDINATION-REPLY.md`。真实两次任务均失败：首次图像发送前 auth GET 失败；补只读身份 GET 最多重试一次后，新任务 4 张图片 POST 120 秒超时 AI_RESULT_UNKNOWN。0 成功观察/0 草案，正式项目及 300 原图 SHA 不变；不重发、不擅自释放额度，等只读核对生产账本。未提交/发版，避免触发外部自动发行监控。新增 ignored hosted 预检，真实任务支持只读 Keychain 会话与已核验派生像素复用；不得将 313 默认测试通过替代真实链路通过。共享树新统计 0020 和 API 路由属外部增量，保留并仅补接线，需另评审，不能自动生产迁移。

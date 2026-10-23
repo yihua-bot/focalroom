@@ -55,7 +55,8 @@ after(async () => { await api?.close(); await second?.end(); await pool?.end(); 
 
 test('M4 explicit migrations create account/limiter tables and remain idempotent', async () => {
   await migrate(pool); await assertSchema(pool);
-  assert.deepEqual((await pool.query('SELECT version FROM fr_migrations ORDER BY version')).rows.map(r => r.version), ['0001', '0002', '0006', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015', '0017', '0018', '0019']);
+  assert.deepEqual((await pool.query('SELECT version FROM fr_migrations ORDER BY version')).rows.map(r => r.version), ['0001', '0002', '0006', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015', '0017', '0018', '0019', '0020', '0021']);
+  assert.deepEqual((await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='fr_ai_requests' AND column_name IN ('result_json','error_code') ORDER BY column_name")).rows.map(r => r.column_name), ['error_code', 'result_json']);
   for (const table of ['fr_source_assets', 'fr_asset_aliases', 'fr_edit_variants', 'fr_renditions', 'fr_boards', 'fr_canvas_nodes', 'fr_board_annotations']) {
     assert.equal((await pool.query('SELECT to_regclass($1) AS name', [table])).rows[0].name, table);
   }
