@@ -332,5 +332,33 @@
         }
       }
     ]
+  },
+  {
+    "schemaVersion": 3,
+    "commandId": "eac9c0ab-b3b6-4d2b-b351-1cf59455328c",
+    "idempotencyKey": "0617d7b1-b56e-4493-b4bd-4e389ae28ada",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 4,
+    "operations": [
+      {
+        "opId": "f009ead0-1532-4bac-a60f-2ba4f6f3d8a6",
+        "action": {
+          "type": "ApplyEditorialChanges",
+          "data": {
+            "selection": {
+              "draftId": "c53f729f-8b57-4b84-a681-46a830eb16b9",
+              "draftRevision": 3,
+              "targetBoardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+              "expectedTargetRevision": 4,
+              "selectedChangeIds": [
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              ]
+            },
+            "simulationId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      }
+    ]
   }
 ]

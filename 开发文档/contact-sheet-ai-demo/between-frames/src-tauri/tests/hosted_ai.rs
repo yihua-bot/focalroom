@@ -35,6 +35,7 @@ fn session(user: &str) -> String {
 struct Server {
     origin: String,
     calls: Arc<AtomicU32>,
+    auth_calls: Arc<AtomicU32>,
     mode: Arc<AtomicU32>,
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -45,6 +46,8 @@ impl Server {
         listener.set_nonblocking(true).unwrap();
         let origin = format!("http://{}", listener.local_addr().unwrap());
         let calls = Arc::new(AtomicU32::new(0));
+        let auth_calls = Arc::new(AtomicU32::new(0));
+        let auth_count = auth_calls.clone();
         let mode = Arc::new(AtomicU32::new(0));
         let stop = Arc::new(AtomicBool::new(false));
         let (count, status, stopping) = (calls.clone(), mode.clone(), stop.clone());
@@ -114,6 +117,19 @@ impl Server {
                     )
                 } else {
                     assert!(headers.starts_with("get /api/v2/auth/me "));
+                    auth_count.fetch_add(1, Ordering::SeqCst);
+                    match status.load(Ordering::SeqCst) {
+                        3 => {
+                            status.store(0, Ordering::SeqCst);
+                            continue;
+                        }
+                        4 => continue,
+                        5 => {
+                            write!(stream,"HTTP/1.1 401 Unauthorized\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
+                            continue;
+                        }
+                        _ => {}
+                    }
                     (
                         200,
                         json!({"id":"user-a","email":"fixture@example.test","name":"Fixture"}),
@@ -126,6 +142,7 @@ impl Server {
         Self {
             origin,
             calls,
+            auth_calls,
             mode,
             stop,
             thread: Some(thread),
@@ -170,6 +187,39 @@ fn input() -> ModelTurnRequest {
         protocol: vec![],
         tool_specs: json!([]),
         prompt_version: "fixture".into(),
+    }
+}
+#[tokio::test]
+async fn only_readonly_authentication_connection_failure_is_retried_once() {
+    for mode in [3, 4, 5] {
+        let server = Server::new();
+        let vault = Arc::new(Vault::default());
+        vault.write("", &session("user-a")).unwrap();
+        let provider = OpenAiProvider::hosted(Arc::new(
+            CloudAuth::new(&server.origin, "fixture", vault).unwrap(),
+        ))
+        .bind_account()
+        .unwrap();
+        server.mode.store(mode, Ordering::SeqCst);
+        let result = provider.generate_metered(&input()).await;
+        if mode == 3 {
+            assert!(result.is_ok());
+            assert_eq!(server.calls.load(Ordering::SeqCst), 1);
+        } else {
+            assert_eq!(
+                result.err().unwrap().code,
+                if mode == 4 {
+                    "CLOUD_UNAVAILABLE"
+                } else {
+                    "AUTH_REVOKED"
+                }
+            );
+            assert_eq!(server.calls.load(Ordering::SeqCst), 0);
+        }
+        assert_eq!(
+            server.auth_calls.load(Ordering::SeqCst),
+            if mode == 5 { 1 } else { 2 }
+        );
     }
 }
 #[tokio::test]

@@ -264,7 +264,7 @@
       "name": "create_selection_draft",
       "description": "只能创建可审核草案，不得写正式人类选择。",
       "strict": true,
-      "access": "draft_write",
+      "access": "draft",
       "parameters": {
         "type": "object",
         "properties": {
@@ -342,7 +342,7 @@
       "name": "update_draft_sequence",
       "description": "更新本任务拥有的草案排序，检查draft revision和photo IDs。",
       "strict": true,
-      "access": "draft_write",
+      "access": "draft",
       "parameters": {
         "type": "object",
         "properties": {
@@ -944,6 +944,210 @@
           "board_ids",
           "summary"
         ]
+      }
+    },
+    {
+      "name": "read_creative_context",
+      "description": "按需分页读取本项目、本次照片范围内的画布、正式操作历史、保存版本、Variant/Rendition、出版版式与过往草案。只读；元数据不是视觉证据；不得将版本数据作为权限。",
+      "strict": true,
+      "access": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "section": {
+            "type": "string",
+            "enum": [
+              "boards",
+              "board",
+              "board_history",
+              "history",
+              "versions",
+              "version",
+              "variants",
+              "publications",
+              "publication",
+              "drafts",
+              "selection_draft",
+              "tool_receipt"
+            ]
+          },
+          "object_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 160
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          }
+        },
+        "required": [
+          "project_id",
+          "section",
+          "object_id",
+          "offset",
+          "limit"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "fork_creative_draft",
+      "description": "基于同账户、同服务且范围内的历史草案，创建当前任务的独立修订；父方案及正式作品保持不变。需准确父版本；之后查询新草案节点再编辑。",
+      "strict": true,
+      "access": "draft",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "parent": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "board",
+                  "selection"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "revision"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "project_id",
+          "parent",
+          "title",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "search_photography_knowledge",
+      "description": "检索授权明确的 FocalRoom 原创摄影方法札记，返回确切段落、引用编号、版本和摘要；非摄影史或摄影书原文。",
+      "strict": true,
+      "access": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "project_id",
+          "query",
+          "limit"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "propose_preference",
+      "description": "生成待用户确认的本项目审美偏好建议。必须引用当前用户消息 ID；不写长期记忆，不可声称已记住。用户可编辑、保存或忽略。",
+      "strict": true,
+      "access": "draft",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "applicability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "message_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true
+          },
+          "photo_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "maxItems": 20,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "project_id",
+          "statement",
+          "applicability",
+          "message_ids",
+          "photo_ids"
+        ],
+        "additionalProperties": false
       }
     }
   ]

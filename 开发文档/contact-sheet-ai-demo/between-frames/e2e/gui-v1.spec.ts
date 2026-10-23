@@ -124,8 +124,9 @@ test('搜索快捷键、当前视图全选、面板折叠和双尺寸可用性',
   await expect(page.locator('.app-shell')).toHaveClass(/sidebar-collapsed/);
   await page.getByRole('button', { name: '展开导航' }).click();
   await page.keyboard.press('Control+Shift+a');
-  await expect(page.locator('.ai-drawer')).toBeVisible();
-  await page.keyboard.press('Control+Shift+a');
+  await expect(page.getByRole('dialog', { name: '登录 FocalRoom' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: '登录 FocalRoom' })).toHaveCount(0);
   await expect(page.locator('.ai-drawer')).toHaveCount(0);
   await expect(page.locator('.inspector')).toBeVisible();
   for (const width of [1920, 1280]) {

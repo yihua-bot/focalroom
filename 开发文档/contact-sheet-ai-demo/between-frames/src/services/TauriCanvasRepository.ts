@@ -1,7 +1,7 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { invokeCommand as invoke } from './tauriCommand';
 import { z } from 'zod';
-import type { CanvasRepository } from '../domain/canvas';
+import type { CanvasRepository, EditorialSelection } from '../domain/canvas';
 import type { CanvasAction, CanvasReceipt } from '../domain/canvasCommands';
 import { CanvasCommandClient } from './CanvasCommandClient';
 import { canvasBoardRecordSchema, canvasNodeRecordSchema as nodeSchema, canvasAnnotationRecordSchema as annotationSchema } from '@betweenframes/contracts';
@@ -10,12 +10,25 @@ const boardSchema = canvasBoardRecordSchema.transform(value => ({ id: value.id, 
 const photoSourceSchema = z.object({ assetId: z.string(), thumbnailPath: z.string() });
 
 export class TauriCanvasRepository implements CanvasRepository {
+  private photoPaths = new Map<string, string>();
+  private photos<T extends { assetId: string | null }>(nodes: T[]) {
+    return nodes.map(node => ({ ...node, thumbnailPath: node.assetId ? this.photoPaths.get(node.assetId) : undefined }));
+  }
   async compareDraft(projectId: string, boardId: string) {
-    const comparison = z.object({ draft: boardSchema, sourceBoardId: z.string().nullable(), sourceChanged: z.boolean(), baselineNodes: z.array(nodeSchema),
-      changes: z.array(z.object({ id: z.string(), nodeId: z.string(), kind: z.enum(['add', 'change', 'remove']), nodeType: z.string() })), photoSources: z.array(photoSourceSchema) }).parse(await invoke('canvas_comparison', { projectId, boardId }));
+    const comparison = z.object({ draft: boardSchema, sourceBoardId: z.string().nullable(), sourceRevision: z.number().nullable(), currentSourceRevision: z.number().nullable(), sourceChanged: z.boolean(), baselineNodes: z.array(nodeSchema), draftNodes: z.array(nodeSchema),
+      changes: z.array(z.object({ id: z.string(), nodeId: z.string(), sourceNodeId: z.string().nullable(), kind: z.enum(['add', 'change', 'remove']), nodeType: z.string(), before: nodeSchema.nullable(), after: nodeSchema.nullable(), kinds: z.array(z.string()), requiredDependencies: z.array(z.string()) })), photoSources: z.array(photoSourceSchema) }).parse(await invoke('canvas_comparison', { projectId, boardId }));
     if (comparison.draft.id !== boardId || comparison.draft.projectId !== projectId) throw new Error('无法读取这份画布方案。');
-    const photos = new Map(comparison.photoSources.map(photo => [photo.assetId, convertFileSrc(photo.thumbnailPath)]));
-    return { ...comparison, draftRevision: comparison.draft.revision, baselineNodes: comparison.baselineNodes.map(node => ({ ...node, thumbnailPath: node.assetId ? photos.get(node.assetId) : undefined })) };
+    for (const photo of comparison.photoSources) this.photoPaths.set(photo.assetId, convertFileSrc(photo.thumbnailPath));
+    return { ...comparison, draftRevision: comparison.draft.revision, baselineNodes: this.photos(comparison.baselineNodes), draftNodes: this.photos(comparison.draftNodes), changes: comparison.changes.map(change => ({ ...change, before: change.before ? this.photos([change.before])[0] : null, after: change.after ? this.photos([change.after])[0] : null })) };
+  }
+  async simulateMerge(projectId: string, selection: EditorialSelection) {
+    const result = z.object({ simulationId: z.string(), draftRevision: z.number(), targetRevision: z.number(), effectiveChangeIds: z.array(z.string()), autoIncludedChangeIds: z.array(z.string()), conflicts: z.array(z.string()), mergedNodes: z.array(nodeSchema), canApply: z.boolean(), nodeIdMap: z.record(z.string(), z.string()) }).parse(await invoke('canvas_simulate_merge', { projectId, selection }));
+    if (result.draftRevision !== selection.draftRevision) throw new Error('方案已有修订，请重新打开审稿。');
+    return { ...result, mergedNodes: this.photos(result.mergedNodes) };
+  }
+  async applyMerge(projectId: string, selection: EditorialSelection, simulationId: string) {
+    const receipt = await this.commands.execute(projectId, selection.targetBoardId, selection.expectedTargetRevision, [{ type: 'ApplyEditorialChanges', data: { selection, simulationId } }]);
+    this.remember(receipt);
   }
   private versions = new Map<string, { projectId: string; revision: number }>();
   private annotationBoards = new Map<string, string>();

@@ -411,11 +411,14 @@ pub(crate) async fn final_outcome(db: &Store, id: &str, outcome: ModelOutcome) -
             if question.is_empty() || question.chars().count() > 2000 {
                 return Err(AppError::new("VALIDATION_ERROR", "问题不合法"));
             }
+            sqlx::query("INSERT INTO task_messages(task_id,kind,body,created_at) VALUES(?,'clarification_question',?,?)")
+                .bind(&t.id).bind(&question).bind(crate::domain::timestamp()).execute(&mut *tx).await?;
             t.question = Some(question);
             store::transition(&mut tx, &mut t, "needs_input", "等待人工答复").await?;
         }
         ModelOutcome::FinalDrafts { draft_ids, summary } => {
             tools::validate_final(&mut tx, &t, &draft_ids).await?;
+            crate::focal_chat::assistant(&mut tx, id, &summary).await?;
             t.final_draft_ids = draft_ids;
             store::transition(&mut tx, &mut t, "review_ready", &summary).await?;
             let revision: i64 = sqlx::query_scalar("SELECT revision FROM projects WHERE id=?")
@@ -427,6 +430,7 @@ pub(crate) async fn final_outcome(db: &Store, id: &str, outcome: ModelOutcome) -
             }
         }
         ModelOutcome::NoAction { reason } => {
+            crate::focal_chat::assistant(&mut tx, id, &reason).await?;
             store::transition(&mut tx, &mut t, "completed", &reason).await?
         }
         _ => return Err(AppError::new("VALIDATION_ERROR", "不是最终结果")),

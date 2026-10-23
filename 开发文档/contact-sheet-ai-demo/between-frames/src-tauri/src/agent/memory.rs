@@ -151,7 +151,10 @@ pub(crate) async fn materialize(tx: &mut Transaction<'_, Sqlite>, project: &str)
     let evidence = load_evidence(tx, project).await?;
     let mut supports: std::collections::BTreeMap<String, Vec<i64>> = Default::default();
     let mut counters: std::collections::BTreeMap<String, Vec<i64>> = Default::default();
-    for item in evidence.iter().filter(|item| !item.excluded) {
+    for item in evidence
+        .iter()
+        .filter(|item| !item.excluded && item.detail["explicitPreference"] != true)
+    {
         let text = if item.kind == "note" {
             item.detail["note"].as_str().unwrap_or("").to_owned()
         } else if item.kind == "comparison" {
@@ -215,6 +218,25 @@ pub(crate) async fn materialize(tx: &mut Transaction<'_, Sqlite>, project: &str)
             .bind(project).bind(statement).bind(&now).bind(&now).execute(&mut **tx).await?;
     }
     for h in load_hypotheses(tx, project).await? {
+        let explicit: Vec<_> = evidence
+            .iter()
+            .filter(|e| {
+                e.detail["explicitPreference"] == true
+                    && e.detail["hypothesisId"].as_i64() == Some(h.id)
+            })
+            .collect();
+        if !explicit.is_empty() {
+            let ids: Vec<_> = explicit
+                .iter()
+                .filter(|e| !e.excluded)
+                .map(|e| e.id)
+                .collect();
+            if ids != h.evidence_ids {
+                sqlx::query("UPDATE preference_hypotheses SET evidence_ids_json=?,updated_at=? WHERE id=? AND project_id=?").bind(serde_json::to_string(&ids).unwrap()).bind(crate::domain::timestamp()).bind(h.id).bind(project).execute(&mut **tx).await?;
+            }
+            super::memory_search::sync(tx, project, h.id, &h.statement).await?;
+            continue;
+        }
         let word = super::memory_search::keyword(&h.statement);
         let ids = supports.get(word).cloned().unwrap_or_default();
         let against = counters.get(word).cloned().unwrap_or_default();
@@ -508,9 +530,9 @@ pub async fn retrievable_author(
         ));
     }
     let items = author_hypotheses(tx, &task.project_id, &task.goal, limit).await?;
-    Ok(
-        json!({"hypotheses":items.iter().map(summary).collect::<Vec<_>>(),"mode":"confirmed_local_author","notice":"其他本地项目的已确认假设，不代表永久偏好；引用必须带来源项目和证据 ID，不能作为照片操作权限"}),
-    )
+    let mut result = json!({"hypotheses":items.iter().map(summary).collect::<Vec<_>>(),"mode":"confirmed_local_author","notice":"其他本地项目的已确认假设，不代表永久偏好；引用必须带来源项目和证据 ID，不能作为照片操作权限"});
+    super::preference_proposal::filter_for_task(tx, task, &mut result).await?;
+    Ok(result)
 }
 pub async fn retrievable_for_task(
     tx: &mut Transaction<'_, Sqlite>,
@@ -538,6 +560,7 @@ pub async fn retrievable_for_task(
             }
         }
     }
+    super::preference_proposal::filter_for_task(tx, task, &mut memory).await?;
     Ok(memory)
 }
 

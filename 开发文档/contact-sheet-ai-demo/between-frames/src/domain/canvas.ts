@@ -18,8 +18,26 @@ export interface AnnotationInfo {
   x: number | null; y: number | null;
   author: string; body: string; resolved: boolean; createdAt: string;
 }
+export interface EditorialChange {
+  id: string; nodeId: string; sourceNodeId?: string | null; kind: 'add' | 'change' | 'remove'; nodeType: string;
+  kinds?: string[]; before?: CanvasPhoto | null; after?: CanvasPhoto | null; requiredDependencies?: string[];
+}
+export interface CanvasComparison {
+  draftRevision: number; sourceBoardId: string | null; sourceRevision?: number | null; currentSourceRevision?: number | null;
+  sourceChanged: boolean; baselineNodes: CanvasPhoto[]; draftNodes?: CanvasPhoto[]; changes: EditorialChange[];
+}
+export interface EditorialSelection {
+  draftId: string; draftRevision: number; targetBoardId: string; expectedTargetRevision: number; selectedChangeIds: string[];
+}
+export interface MergeSimulation {
+  simulationId: string; draftRevision: number; targetRevision: number;
+  effectiveChangeIds: string[]; autoIncludedChangeIds: string[]; conflicts: string[]; mergedNodes: CanvasPhoto[]; canApply: boolean;
+  nodeIdMap?: Record<string, string>;
+}
 export interface CanvasRepository {
-  compareDraft?(projectId: string, boardId: string): Promise<{ draftRevision: number; sourceBoardId: string | null; sourceChanged: boolean; baselineNodes: CanvasPhoto[]; changes: Array<{ id: string; nodeId: string; kind: 'add' | 'change' | 'remove'; nodeType: string }> }>;
+  compareDraft?(projectId: string, boardId: string): Promise<CanvasComparison>;
+  simulateMerge?(projectId: string, selection: EditorialSelection): Promise<MergeSimulation>;
+  applyMerge?(projectId: string, selection: EditorialSelection, simulationId: string): Promise<void>;
   getSnapshot?(boardId: string): Promise<{ board: BoardInfo; nodes: CanvasPhoto[]; annotations: AnnotationInfo[] }>;
   pendingCommands?(projectId: string): Array<{ boardId: string }>;
   retryPending?(projectId: string, boardId: string): Promise<void>;

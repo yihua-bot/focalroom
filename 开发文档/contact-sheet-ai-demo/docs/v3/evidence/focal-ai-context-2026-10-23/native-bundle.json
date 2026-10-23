@@ -1,0 +1,19 @@
+{
+  "path": "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/src-tauri/target/debug/bundle/macos/FocalRoom Context Review.app",
+  "identifier": "studio.focalroom.contextreview",
+  "version": "1.1.5",
+  "urlTypes": [
+    {
+      "CFBundleURLSchemes": [
+        "focalroom-context-review"
+      ],
+      "CFBundleURLName": "studio.focalroom.contextreview focalroom-context-review",
+      "CFBundleTypeRole": "Editor"
+    }
+  ],
+  "bytes": 78153908,
+  "executableSha256": "9272b8f2703527056b0b0fcf04dc3cf7b491fc09d1f982e9bdb1b3f447184bc4",
+  "signed": false,
+  "launched": false,
+  "published": false
+}

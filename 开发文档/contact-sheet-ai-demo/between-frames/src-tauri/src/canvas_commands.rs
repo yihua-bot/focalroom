@@ -47,6 +47,7 @@ pub enum CanvasAction {
     Undo(UndoCanvasCommand),
     Redo(RedoCanvasCommand),
     AdoptBoard(AdoptBoardDraftCommand),
+    ApplyEditorialChanges(crate::canvas_review::ApplyEditorialChanges),
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -112,6 +113,7 @@ fn validate(request: &CanvasCommandRequest) -> Result<()> {
                 | CanvasAction::Undo(_)
                 | CanvasAction::Redo(_)
                 | CanvasAction::AdoptBoard(_)
+                | CanvasAction::ApplyEditorialChanges(_)
         ) && request.operations.len() != 1
         {
             return Err(invalid("此操作须单独提交"));
@@ -345,6 +347,14 @@ impl CommandHandler<'_> {
             .fetch_one(&mut **tx)
             .await?;
         let result = match &op.action {
+            CanvasAction::ApplyEditorialChanges(cmd) => {
+                if cmd.selection.expected_target_revision != request.base_revision {
+                    return Err(invalid("预览与当前画布不一致，请重新比较"));
+                }
+                self.apply_editorial_tx(tx, p, &request.board_id, cmd)
+                    .await?;
+                Value::Null
+            }
             CanvasAction::CreateBoard(cmd) => serde_json::to_value(
                 self.create_board_tx(tx, p, &cmd.title, Some(&request.board_id))
                     .await?,

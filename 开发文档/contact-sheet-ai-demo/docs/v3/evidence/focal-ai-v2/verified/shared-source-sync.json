@@ -1,0 +1,34 @@
+[
+  {
+    "path": "src-tauri/src/agent/context.rs",
+    "status": "updated after exact snapshot match"
+  },
+  {
+    "path": "src-tauri/src/agent/runtime.rs",
+    "status": "updated after exact snapshot match"
+  },
+  {
+    "path": "src-tauri/src/focal_chat.rs",
+    "status": "updated after exact snapshot match"
+  },
+  {
+    "path": "src-tauri/src/focal_chat_tests.rs",
+    "status": "updated after exact snapshot match"
+  },
+  {
+    "path": "prompts/focal-agent-v2.md",
+    "status": "updated after exact snapshot match"
+  },
+  {
+    "path": "playwright.focal-agent.config.ts",
+    "status": "updated after exact snapshot match"
+  },
+  {
+    "path": "src-tauri/src/focal_chat_tests.rs",
+    "status": "final boundary test synced after exact prior-content match"
+  },
+  {
+    "path": "src-tauri/src/agent/lifecycle.rs",
+    "status": "already matches final candidate"
+  }
+]

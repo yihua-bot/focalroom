@@ -1,0 +1,59 @@
+{
+  "createdAt": "2026-10-23T10:51:50.075024+08:00",
+  "head": "b108065b32aa6703b7dba32dd6169a347b9d7a71",
+  "uncommitted": true,
+  "sourceFiles": 510,
+  "rust": {
+    "passed": 313,
+    "ignored": 17,
+    "failed": 0
+  },
+  "frontend": {
+    "passed": 333,
+    "files": 50,
+    "failed": 0
+  },
+  "browserJourneys": {
+    "integrationIncludingAccounts": 13,
+    "focal": 3,
+    "editorial": 2,
+    "preview": 18,
+    "total": 36
+  },
+  "isolatedHostedPg": 7,
+  "realModelRun": false,
+  "productionModified": false,
+  "nativeLaunched": false,
+  "evidenceSha256": {
+    "account.log": "306149c322e3e5ab19d5b0af4e452a89843c53632f0420757bbff0df5a00f9de",
+    "browser/knowledge-and-memory.png": "47d0163f54c318f88af2c767669500f5b49d838c9a569353fae3879a47d17ead",
+    "browser/revision-history.png": "30a7cf65dd2c48dcd804275cfe53e03c8c34966c459a5b3a8f35a898091e3946",
+    "clippy.log": "4758f2ad9e66a04bb6718ca5b30df72da4c6ea50d9a8bb9f2b9fda6a268703a3",
+    "contracts.log": "04daf1240d7e8fb40e328eb5312c5e83d9ed6aa873a4d541a249660fbc6a6d95",
+    "creative-targeted.log": "396937c9daa7e18caf95bab43675197ebc2d468f0e50a0a132ba0a31406abc00",
+    "editorial.log": "2fdce19c5f44fc2e87b377dca45267666b04fd0de33d003c1e4993a72c5d254f",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "focal-journeys.log": "57f7ba44b5c420db7a3b0ae24507a08bb54118d18c56115fbcf98c3b852aaa39",
+    "frontend.log": "bef3fb051852afb06af3fd295d8e3eba14f3694b804f679f47a2997421510ac3",
+    "hosted-ai.log": "408d3da5bc0ce5c6af99a83fea752eee452d072ea730b580694c460095e5b00b",
+    "hygiene.log": "ec01b1a1501607d4f0c12e361b81020131ba6c2bc02a4a292289f721037dccb1",
+    "initial-account-missing-web.log": "970f29887102c3c6f1839ef9464be7f9e60ac09bbb4ac7d5f649fc848b2cdfb9",
+    "initial-front-selectors.log": "c832c3145de42816f5cf02227da2177b28fd47bf364ab18102fc12f051b20ea1",
+    "initial-integration-export-failure.log": "90cc3930460ecf9e015974e29ced0d88e1764b21842cd7b5fdc89882ae364906",
+    "initial-native-typecheck.log": "cf4ea59169a1714874128a3d32986db7cb5b82f1c1c74d18f305c5998805f37a",
+    "initial-preview-guest-login.log": "5ee454e439c679cc87aaf0a5cdc282cd4c0440433dcd643a51967998bc0aae1f",
+    "initial-preview-no-backend.log": "cc8b68bb6fcf980c2a22ce1a808bcd85eb64442f2fdb175ce9cd2e886c6ecebf",
+    "initial-preview-project-name.log": "fbaaf3d71ab488b84bbc41f49081bf8ab84f09f08dec0a413825bd11057c7c17",
+    "initial-preview-shortcut.log": "f116fceef4777aa7b52a42b3fd046014c01d9f7613a3651717fe81cc2483352f",
+    "integration-before-project-label.log": "46e44b18fb86b9b5845a65746522a7ebb793da39f6d46434bf0374ad627832bc",
+    "integration.log": "aabb363f92484f9f93470024c3137b738f29ff38afd76ebd80773b3399bbf78d",
+    "lint.log": "1cdbc38b5dc7e6206b5017e3189306f485b6ece325558dce7b751c6c0d726922",
+    "native-build.log": "f5addf84c058e3c084759751d7b75e83b31506869fd90e0aebcfc5bf69c2df35",
+    "native-bundle.json": "4e63cfa026b03ec6cde22b7ffffae9446788c458a4526e9fdde68736b3bbd528",
+    "native-review-config.json": "6923c63e1b032c520380004380732e5d33a3ff40038c76aa7a8755ee32005b57",
+    "preview.log": "70bb83a405bf6d04912e7cdb58eb6a6a200b9cb5491b5039bc77e1deafe30cad",
+    "rust-full.log": "1c4d046808be5f3a12efaa238f416ab48d31d1fa86aab7da917c060142213f98",
+    "source-sha256.json": "658bffc8ff4a1d27b912688feb7cbdeee3c22fcc04aea181711c84938c2292a7",
+    "typecheck.log": "3f04615bb538f00e0881dfdabedddcdea12d85441bc4705dc9db7f61efe13b1b"
+  }
+}

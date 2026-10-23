@@ -32,6 +32,12 @@ pub(crate) struct ConversationContext {
     pub focus_photo_ids: Vec<String>,
     pub history: Vec<ConversationMessage>,
 }
+pub(crate) fn same_recipient(left: &ConversationContext, right: &ConversationContext) -> bool {
+    left.owner == right.owner && left.recipient == right.recipient
+}
+pub(crate) fn owner(context: &ConversationContext) -> Option<&str> {
+    context.owner.as_deref()
+}
 
 pub(crate) async fn load(
     tx: &mut Transaction<'_, Sqlite>,
@@ -111,6 +117,10 @@ pub(crate) async fn bind(
     let mut history = Vec::new();
     let mut chars = 0;
     for id in ids {
+        // 未绑定真实服务的非离线任务不能推断收件方相同，也就不能复用历史。
+        if identity.is_none() && task.provider_id != crate::agent::PROVIDER_ID {
+            break;
+        }
         let Some(previous) = load(tx, &id).await? else {
             continue;
         };
@@ -118,6 +128,9 @@ pub(crate) async fn bind(
             continue;
         }
         let prior = crate::agent::store::load(tx, &id).await?;
+        if prior.memory_revision != task.memory_revision {
+            continue;
+        }
         if prior
             .allowed_photo_ids
             .iter()
@@ -187,4 +200,23 @@ pub(crate) async fn inspected(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> 
         }
     }
     Ok(found.into_values().take(100).collect())
+}
+
+/// 工具可见性随真实草案状态展开；授权始终由冻结 TaskGrant 决定，不能由模型升级。
+pub(crate) fn advertised_tools(
+    mut specs: Value,
+    selection: bool,
+    canvas: bool,
+    source: bool,
+) -> Value {
+    if let Some(tools) = specs.as_array_mut() {
+        tools.retain(|tool| match tool["name"].as_str().unwrap_or("") {
+            "update_draft_sequence" | "evaluate_draft" | "finish_task" => selection,
+            "get_board" => canvas || source,
+            "create_board_draft" => true,
+            name if crate::agent::task_scope::CANVAS_TOOLS.contains(&name) => canvas,
+            _ => true,
+        });
+    }
+    specs
 }

@@ -1,0 +1,131 @@
+[
+  {
+    "label": "first",
+    "privateEvidenceDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focal-real-300-Sei0mv",
+    "taskId": "20d840d2-8446-454e-ae5b-2ea3c7551a4c",
+    "state": "failed",
+    "reason": "CLOUD_UNAVAILABLE：无法连接云端，请检查网络后重试",
+    "textReportedTokens": 21201,
+    "reportedUsage": [
+      {
+        "inputTokens": 5946,
+        "modelId": "deepseek-flash",
+        "outputTokens": 1024,
+        "totalTokens": 6970
+      },
+      {
+        "inputTokens": 12715,
+        "modelId": "deepseek-flash",
+        "outputTokens": 1516,
+        "totalTokens": 14231
+      }
+    ],
+    "usage": {
+      "cloudImages": 12,
+      "costMinorUsd": 5,
+      "inputEstimate": 18661,
+      "modelTurns": 2,
+      "outputEstimate": 2540,
+      "toolCalls": 3
+    },
+    "successfullyObserved": 0,
+    "boardDrafts": 0,
+    "sourceCount": 300,
+    "sourceHashesUnchanged": true,
+    "originalUnchanged": true,
+    "quotaBefore": {
+      "available": 962606,
+      "enabled": true,
+      "granted": 1000000,
+      "model": "deepseek-flash",
+      "policy": "deepseek-flash-v1",
+      "provider": "DeepSeek",
+      "reserved": 0,
+      "spent": 37394,
+      "unit": "tokens",
+      "verified": true
+    },
+    "quotaAfter": {
+      "available": 941405,
+      "enabled": true,
+      "granted": 1000000,
+      "model": "deepseek-flash",
+      "policy": "deepseek-flash-v1",
+      "provider": "DeepSeek",
+      "reserved": 0,
+      "spent": 58595,
+      "unit": "tokens",
+      "verified": true
+    },
+    "createdAtUtc": "2026-10-23T05:43:55.919863+00:00",
+    "finishedAtUtc": "2026-10-23T05:44:19.008321+00:00",
+    "elapsedMs": 22720,
+    "imageTransmission": "not_sent_auth_get_failed",
+    "humanQualityAccepted": false
+  },
+  {
+    "label": "authorized-new-task",
+    "privateEvidenceDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focal-real-300-QuVmDJ",
+    "taskId": "66d59971-40df-49b5-96e5-3b34f7c5d691",
+    "state": "failed",
+    "reason": "AI_RESULT_UNKNOWN：AI 请求连接中断；请刷新额度，勿重复提交",
+    "textReportedTokens": 44794,
+    "reportedUsage": [
+      {
+        "inputTokens": 5954,
+        "modelId": "deepseek-flash",
+        "outputTokens": 184,
+        "totalTokens": 6138
+      },
+      {
+        "inputTokens": 11717,
+        "modelId": "deepseek-flash",
+        "outputTokens": 189,
+        "totalTokens": 11906
+      },
+      {
+        "inputTokens": 11873,
+        "modelId": "deepseek-flash",
+        "outputTokens": 130,
+        "totalTokens": 12003
+      },
+      {
+        "inputTokens": 14509,
+        "modelId": "deepseek-flash",
+        "outputTokens": 238,
+        "totalTokens": 14747
+      }
+    ],
+    "usage": {
+      "cloudImages": 4,
+      "costMinorUsd": 5,
+      "inputEstimate": 44053,
+      "modelTurns": 4,
+      "outputEstimate": 741,
+      "toolCalls": 4
+    },
+    "successfullyObserved": 0,
+    "boardDrafts": 0,
+    "sourceCount": 300,
+    "sourceHashesUnchanged": true,
+    "originalUnchanged": true,
+    "quotaBefore": {
+      "available": 941405,
+      "enabled": true,
+      "granted": 1000000,
+      "model": "deepseek-flash",
+      "policy": "deepseek-flash-v1",
+      "provider": "DeepSeek",
+      "reserved": 0,
+      "spent": 58595,
+      "unit": "tokens",
+      "verified": true
+    },
+    "quotaAfter": null,
+    "createdAtUtc": "2026-10-23T05:55:50.264329+00:00",
+    "finishedAtUtc": "2026-10-23T05:58:24.443543+00:00",
+    "elapsedMs": 153565,
+    "imageTransmission": "unknown_do_not_replay",
+    "humanQualityAccepted": false
+  }
+]

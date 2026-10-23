@@ -2,6 +2,8 @@ export interface MemoryEvidence { id: number; projectId: string; photoId: string
 export interface MemoryHypothesis { id: number; projectId: string; scope: 'project_local' | 'cross_project'; statement: string; evidenceIds: number[]; counterexampleIds: number[]; status: 'unconfirmed' | 'confirmed' | 'corrected' | 'retired'; confidence: 'tentative' | 'moderate'; userCorrection: string | null; disabled: boolean; createdAt: string; updatedAt: string }
 export interface MemoryProjection { evidence: MemoryEvidence[]; hypotheses: MemoryHypothesis[]; notice: string; crossProjectEnabled?: boolean; authorHypotheses?: MemoryHypothesis[]; authorMemoryNotice?: string }
 export type MemoryCommand =
+  | { type: 'RememberPreference'; taskId: string; proposalId: string; statement: string; expectedAccountId: string | null }
+  | { type: 'DismissPreferenceProposal'; taskId: string; proposalId: string; expectedAccountId: string | null }
   | { type: 'SetCrossProjectMemory'; enabled: boolean }
   | { type: 'SetEvidenceExcluded'; evidenceId: number; excluded: boolean }
   | { type: 'ConfirmHypothesis' | 'RetireHypothesis' | 'RestoreHypothesis'; hypothesisId: number }

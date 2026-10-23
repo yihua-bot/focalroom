@@ -1,0 +1,16 @@
+{
+  "version": "2026-10-23.1",
+  "author": "FocalRoom",
+  "license": "CC0-1.0",
+  "source": "FocalRoom original editorial method notes; not quotations or art-history references",
+  "entries": [
+    {"id":"FR-K001","title":"观看距离与叙事节奏 / Viewing distance and rhythm","tags":"叙事 节奏 远景 近景 rhythm sequence distance narrative リズム 距離 리듬 거리","text":"先按近、中、远的观看距离标记序列，再检查相邻照片是否重复提供同一种空间信息。重复不一定需要删除：它可以建立持续、等待或压迫感。提出调整时先说明创作目的，再比较原版与替代版；不要把远近交替当作必须遵守的规则。"},
+    {"id":"FR-K002","title":"三种创作线索 / Alternative narrative threads","tags":"线索 主题 三种 方案 thread alternatives narrative テーマ 서사 주제","text":"从同一批素材寻找不同线索时，可以分别试验空间关系、人物关系和时间或动作的变化。每条线索先写一句可被照片验证的问题，再选择支持、转折与反例。只有标题不同而照片和顺序几乎相同，不足以证明方案具有实质差异。"},
+    {"id":"FR-K003","title":"视觉事实与编辑判断 / Facts and editorial interpretation","tags":"证据 幻觉 观察 事实 evidence observation uncertainty 観察 관찰 근거","text":"把可见事实、解释和不确定性分别记录。人物身份、拍摄意图和情绪不能只凭画面断言；文件名和人工评分也不证明照片中出现了什么。引用已观察的具体照片，并说明没有观察的范围。"},
+    {"id":"FR-K004","title":"色彩与版本比较 / Comparing color versions","tags":"色彩 调色 ICC 软打样 rendition color proof 色 カラー 색상 컬러","text":"比较两个调色版本前，核对它们是否来自同一母版、使用哪个渲染版本，以及显示链路是否一致。界面差异标记应放在照片之外，避免透明叠加改变颜色判断。缩略预览只能支持编排讨论，不能单独证明印刷颜色、细节或高位深输出合格。"},
+    {"id":"FR-K005","title":"摄影书初稿 / Photobook draft","tags":"摄影书 出版 页面 跨页 留白 photobook publishing layout 写真集 사진집 출판","text":"先明确读者、观看尺度和翻页节奏，再把序列分配到页面。每次比较开篇、转折与结尾的关系；图片框裁切应单独核对。屏幕布局可帮助讨论，不等于纸张、装订、出血和印刷合同已经验收。"},
+    {"id":"FR-K006","title":"从反馈提炼偏好 / Learning preferences from feedback","tags":"记忆 偏好 反馈 反例 memory preference feedback 記憶 好み 기억 취향","text":"一次决定先保留在当前项目语境中。只有用户明确确认、或有多次可核对的人工证据时，才提出可复用的偏好。保存时带适用范围、来源、时间和反例；后续否定应更正或停用，不能把旧假设当作永久审美定论。"},
+    {"id":"FR-K007","title":"重复照片的取舍 / Editing repetitions","tags":"重复 相似 连拍 去重 duplicate repetition similarity 重複 유사 중복","text":"区分文件内容完全相同、画面相似与叙事功能重复。哈希只能证明文件内容一致；相似观察只能提供比较线索。保留一张或多张，应依据动作变化、空间信息和观看意图，并通过相邻照片比较验证。"},
+    {"id":"FR-K008","title":"先保留原版 / Iterating without losing the original","tags":"版本 草案 迭代 修订 冲突 version draft revision conflict 改訂 버전 수정","text":"每轮修改保留父方案和来源版本，在独立分支里尝试。评审时查看具体变化和未采纳项，原作品有更新时重新比较；不能把旧方案整板覆盖当前编辑。没有明确收到保存确认时，先查询原操作回执，避免重复提交。"}
+  ]
+}

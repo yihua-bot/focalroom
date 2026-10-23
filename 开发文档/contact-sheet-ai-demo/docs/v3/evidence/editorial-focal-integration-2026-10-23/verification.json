@@ -1,0 +1,43 @@
+{
+  "createdAt": "2026-10-23T01:47:51.322257+08:00",
+  "scope": "Combined Focal AI S1 + Editorial v3.1 local first slice",
+  "checks": {
+    "frontendPassed": 331,
+    "rustPassed": 305,
+    "rustIgnored": 16,
+    "rustFailed": 0,
+    "unifiedBrowserPassed": 7,
+    "editorialBrowserPassed": 2,
+    "typecheck": true,
+    "lint": true,
+    "contracts": true
+  },
+  "initialFailures": [
+    "ambiguous text matched both draft node and review inspector",
+    "obsolete creation-direction combobox assertion"
+  ],
+  "changedFiles": {
+    "e2e/focal-agent.spec.ts": "2d921985a5e75b8eb61937861d416472190635ae271c94457a16d6bac3b2a2fc",
+    "e2e/v3-workspace.spec.ts": "4960ca62e37865717d9dc1b22c1d19e9c43abf2a7ccdec931ab0d7522bd55feb"
+  },
+  "logSha256": {
+    "contracts.log": "04daf1240d7e8fb40e328eb5312c5e83d9ed6aa873a4d541a249660fbc6a6d95",
+    "lint.log": "1cdbc38b5dc7e6206b5017e3189306f485b6ece325558dce7b751c6c0d726922",
+    "frontend.log": "f5cd33ad68c95f7114e97f13649ba0ff1f133bb7089eecc19261f1407a57ff5c",
+    "harness-build.log": "b044b686545063d2efb30743d4912d946e225031646f564596a096d69a6fa615",
+    "typecheck.log": "3f04615bb538f00e0881dfdabedddcdea12d85441bc4705dc9db7f61efe13b1b",
+    "browser-first.log": "bebe477180a448d82b4f5927e3e540a72057036650cdfe22104df7550b44b5df",
+    "browser-editorial.log": "7942cf445af3868afd8af62bd672e8c2e3aa324e7428a41d7fd233989ed41312",
+    "browser-unified.log": "094adcf971f808fec94cf1c21bad4ea699da0888215c9d629d4635d670a52e38",
+    "rust.log": "3ffd52d5447826b4635933261645aea7429c07bf094ec6c2b612c89ca0940b2a"
+  },
+  "boundaries": {
+    "productionCalls": false,
+    "realModelCalls": false,
+    "userDatabaseOpened": false,
+    "nativeAcceptance": false,
+    "committed": false,
+    "deployed": false,
+    "fullV31Complete": false
+  }
+}

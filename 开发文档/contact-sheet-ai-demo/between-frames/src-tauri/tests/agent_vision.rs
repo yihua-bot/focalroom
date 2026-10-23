@@ -3320,3 +3320,113 @@ async fn http_redirect_does_not_forward_preview_or_authorization_to_another_serv
         "未授权目的端点不能收到任何请求"
     );
 }
+
+// 一段会话先回答摄影问题，再经过真实 HTTP 协议/工具循环查看照片并生成可审核草案。
+// 图片为测试生成的色块，模型响应来自回环夹具；不计真人摄影质量评测。
+#[tokio::test]
+async fn unified_conversation_answers_then_inspects_and_creates_a_reviewable_draft() {
+    let _guard = ENV_LOCK.lock().await;
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: [
+            "text",
+            "tool:list_photos",
+            "tool:inspect_from_history",
+            "tool:create_from_history",
+            "tool:finish_from_history",
+        ]
+        .into_iter()
+        .map(|s| format!("metered:{s}"))
+        .collect(),
+        vision: VisionReply::Valid,
+    });
+    let runtime = engine(&db, &base);
+    let make_request = |goal: &str, consent_id, images| AgentRequest {
+        request_id: domain::id(),
+        project_id: p.id.clone(),
+        command: TaskCommand::StartConversation {
+            continuation: None,
+            expected_account_id: None,
+            goal: goal.into(),
+            selected_photo_ids: vec![],
+            focus_photo_ids: p.photos.iter().map(|p| p.id.clone()).collect(),
+            target_count: 2,
+            budget: Budget {
+                max_cloud_images: images,
+                ..Budget::default()
+            },
+            consent_id,
+            source_board: None,
+        },
+    };
+    let first = runtime
+        .request(make_request("摄影叙事中的节奏是什么？", None, 0))
+        .await
+        .unwrap();
+    runtime.run(&first.id).await.unwrap();
+    let first_view = agent::projection(&db, &p.id).await.unwrap();
+    assert_eq!(first_view.tasks[0].state, "completed");
+    assert_eq!(first_view.tasks[0].messages.len(), 2);
+    assert_eq!(first_view.tasks[0].usage.tool_calls, 0);
+    assert_eq!(state.lock().unwrap().requests.len(), 1);
+    assert!(
+        !state.lock().unwrap().requests[0]
+            .to_string()
+            .contains("input_image")
+    );
+    let consent = grant(&db, &p, "task", &base).await;
+    let second = runtime
+        .request(make_request(
+            "看看这两张，给我一个选片草案",
+            Some(consent.id),
+            2,
+        ))
+        .await
+        .unwrap();
+    let before = between_frames_lib::agent::context::ContextBuilder::build(&db, &second.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        before.layers["conversation"]["history"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(
+        before
+            .tool_specs
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["name"] == "create_board_draft")
+    );
+    runtime.run(&second.id).await.unwrap();
+    let view = agent::projection(&db, &p.id).await.unwrap();
+    assert_eq!(view.tasks[0].id, second.id);
+    assert_eq!(view.tasks[0].state, "review_ready", "{:?}", view.tasks[0]);
+    assert_eq!(view.tasks[0].usage.cloud_images, 2);
+    assert_eq!(view.tasks[0].inspected_photos.len(), 2);
+    assert_eq!(view.tasks[0].messages[1].content, "两张草案待人类评审");
+    assert_eq!(
+        view.tasks[0].final_draft_ids,
+        vec![view.drafts[0].id.clone()]
+    );
+    assert_eq!(view.drafts[0].items.len(), 2);
+    assert_eq!(
+        serde_json::to_value(db.get(&p.id).await.unwrap()).unwrap(),
+        serde_json::to_value(&p).unwrap()
+    );
+    let requests = state.lock().unwrap();
+    assert_eq!(requests.requests.len(), 6);
+    assert_eq!(
+        requests
+            .requests
+            .iter()
+            .filter(|r| r["text"]["format"].is_object())
+            .count(),
+        1
+    );
+    assert!(requests.requests.iter().all(|r| r["store"] == false));
+}

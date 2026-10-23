@@ -22,6 +22,11 @@ pub(crate) async fn execute(
     let canonical = super::policy::ToolRegistry::canonical(&call.name);
     let name = canonical.as_deref().unwrap_or(call.name.as_str());
     match name {
+        "read_creative_context" | "fork_creative_draft" => {
+            return super::creative::execute(tx, task, call).await;
+        }
+        "search_photography_knowledge" => super::knowledge::search(a),
+        "propose_preference" => return super::preference_proposal::propose(tx, task, a).await,
         "create_board_draft" | "place_photos_on_board" | "get_board" => {
             return execute_canvas_tool(tx, name, &call.args, task).await;
         }
@@ -155,9 +160,10 @@ pub(crate) async fn execute(
                     json!({"hypotheses":memory["hypotheses"],"human_facts":[],"mode":memory["mode"],"notice":memory["notice"]}),
                 );
             }
-            let memory =
+            let mut memory =
                 super::memory::retrievable_for_goal(tx, &task.project_id, limit, &task.goal)
                     .await?;
+            super::preference_proposal::filter_for_task(tx, task, &mut memory).await?;
             let mut facts = photos(tx, task).await?;
             facts.retain(|p| {
                 p["rating"].as_i64().unwrap_or(0) > 0
@@ -422,6 +428,7 @@ pub(crate) async fn execute(
             let ids: Vec<String> =
                 serde_json::from_value(a["draft_ids"].clone()).map_err(serialization)?;
             validate_final(tx, task, &ids).await?;
+            crate::focal_chat::assistant(tx, &task.id, a["summary"].as_str().unwrap()).await?;
             task.final_draft_ids = ids;
             store::transition(tx, task, "review_ready", a["summary"].as_str().unwrap()).await?;
             let revision: i64 = sqlx::query_scalar("SELECT revision FROM projects WHERE id=?")
@@ -451,6 +458,12 @@ pub(crate) async fn execute(
             for id in &ids {
                 require_task_board(tx, id, task).await?;
             }
+            crate::focal_chat::assistant(
+                tx,
+                &task.id,
+                a["summary"].as_str().unwrap_or("画布方案已准备好"),
+            )
+            .await?;
             store::transition(
                 tx,
                 task,

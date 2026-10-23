@@ -171,7 +171,7 @@ test('新建项目的空状态截图与项目导航', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '暂无照片' })).toBeVisible();
   await page.screenshot({ path: resolve(screenshots, 'empty.png') });
   await page.getByRole('button', { name: '项目列表', exact: true }).click();
-  await page.getByRole('button', { name: /示例项目|SAMPLE PROJECT/ }).click();
+  await page.getByRole('button', { name: '未命名的日常', exact: true }).click();
   await expect(page.locator('.tile')).toHaveCount(28);
 });
 
@@ -194,8 +194,9 @@ test('AI、导入和导出边界明示；没有外部请求', async ({ page }) =
   page.on('request', request => { if (!request.url().startsWith('http://localhost:1420')) external.push(request.url()); });
   await ready(page);
   await page.getByRole('main').getByRole('button', { name: 'Focal AI' }).click();
-  await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: '关闭 Focal AI' }).click();
+  const login = page.getByRole('dialog', { name: '登录 FocalRoom' });
+  await expect(login).toContainText('登录不会自动上传照片。');
+  await login.getByRole('button', { name: '暂不登录' }).click();
   await page.getByRole('button', { name: '导出 ↗' }).click();
   await expect(page.getByRole('button', { name: '共享预览包' })).toBeDisabled();
   await page.keyboard.press('Escape');

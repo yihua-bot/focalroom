@@ -9,6 +9,10 @@ const board = { boardId: id };
 const nodeIds = z.array(id).min(1).max(300).refine(ids => new Set(ids).size === ids.length);
 const color = z.string().max(100).optional();
 const action = <T extends string, S extends z.ZodRawShape>(type: T, shape: S) => z.strictObject({ type: z.literal(type), data: z.strictObject(shape) });
+export const editorialSelectionSchema = z.strictObject({
+  draftId: id, draftRevision: z.number().int().positive(), targetBoardId: id,
+  expectedTargetRevision: z.number().int().positive(), selectedChangeIds: z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(300),
+});
 export const canvasActionSchema = z.discriminatedUnion('type', [
   action('CreateBoard', { title: z.string().trim().min(1).max(200) }),
   action('PlacePhoto', { ...board, assetId: z.string().min(1), ...rectangle }),
@@ -24,6 +28,7 @@ export const canvasActionSchema = z.discriminatedUnion('type', [
   action('ResizeNode', { ...board, nodeId: id, width: z.number().min(20).max(10000), height: z.number().min(20).max(10000) }),
   action('SetNodeLocked', { ...board, nodeId: id, locked: z.boolean() }),
   action('Undo', board), action('Redo', board), action('AdoptBoard', board),
+  action('ApplyEditorialChanges', { selection: editorialSelectionSchema, simulationId: z.string().regex(/^[a-f0-9]{64}$/) }),
 ]);
 export const canvasRequestSchema = z.strictObject({
   schemaVersion: z.literal(3), commandId: id, idempotencyKey: z.string().min(1).max(160),
@@ -35,7 +40,8 @@ export const canvasRequestSchema = z.strictObject({
     if (seen.has(op.opId)) ctx.addIssue({ code: 'custom', message: 'Duplicate operation', path: ['operations', i, 'opId'] });
     seen.add(op.opId);
     if ('boardId' in op.action.data && op.action.data.boardId !== request.boardId) ctx.addIssue({ code: 'custom', message: 'Board mismatch' });
-    if (['CreateBoard', 'Undo', 'Redo', 'AdoptBoard'].includes(op.action.type) && request.operations.length !== 1) ctx.addIssue({ code: 'custom', message: 'Must be a single operation' });
+    if (['CreateBoard', 'Undo', 'Redo', 'AdoptBoard', 'ApplyEditorialChanges'].includes(op.action.type) && request.operations.length !== 1) ctx.addIssue({ code: 'custom', message: 'Must be a single operation' });
+    if (op.action.type === 'ApplyEditorialChanges' && (op.action.data.selection.targetBoardId !== request.boardId || op.action.data.selection.expectedTargetRevision !== request.baseRevision)) ctx.addIssue({ code: 'custom', message: 'Preview mismatch' });
   });
 });
 export const canvasReceiptSchema = z.object({ commandId: id, projectId, boardId: id,

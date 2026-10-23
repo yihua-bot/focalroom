@@ -16,6 +16,19 @@ pub(crate) async fn request_bound(
     r: AgentRequest,
     identity: Option<&super::model_binding::ModelIdentity>,
 ) -> Result<Task> {
+    if let TaskCommand::StartConversation {
+        expected_account_id,
+        ..
+    } = &r.command
+    {
+        let owner = identity.and_then(|i| i.account_id.as_ref());
+        if identity.is_some() && expected_account_id.as_ref() != owner {
+            return Err(AppError::new(
+                "AUTH_REQUIRED",
+                "账户已改变，请重新发送这条消息",
+            ));
+        }
+    }
     validate_schema(
         &serde_json::from_str(include_str!(
             "../../../contracts/agent-task-request.schema.json"
@@ -68,8 +81,28 @@ pub(crate) async fn request_bound(
         }
         t
     } else {
+        let conversation = matches!(r.command, TaskCommand::StartConversation { .. });
+        let local = super::promotion::local_state(&mut tx, &r.project_id).await?
+            == betweenframes_local_domain::LocalState::LOCAL;
         let (goal, selected_photo_ids, target_count, budget, consent_id, canvas, source) =
             match &r.command {
+                TaskCommand::StartConversation {
+                    goal,
+                    selected_photo_ids,
+                    target_count,
+                    budget,
+                    consent_id,
+                    source_board,
+                    ..
+                } => (
+                    goal,
+                    selected_photo_ids,
+                    target_count,
+                    budget,
+                    consent_id,
+                    local,
+                    source_board.as_ref(),
+                ),
                 TaskCommand::StartTask {
                     goal,
                     selected_photo_ids,
@@ -152,7 +185,7 @@ pub(crate) async fn request_bound(
         } else {
             selected_photo_ids.clone()
         };
-        if allowed.is_empty() || allowed.len() > 500 {
+        if (!conversation && allowed.is_empty()) || allowed.len() > 500 {
             return Err(AppError::new(
                 "VALIDATION_ERROR",
                 "任务需限定 1–500 张照片；较大图库请先选择照片",
@@ -187,13 +220,13 @@ pub(crate) async fn request_bound(
             updated_at: now,
         };
         sqlx::query("INSERT INTO agent_tasks(id,project_id,goal,base_revision,allowed_ids_json,selected_ids_json,target_count,canvas_target_count,state,reason,budget_json,usage_json,provider_id,consent_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
- .bind(&t.id).bind(&t.project_id).bind(&t.goal).bind(t.base_revision).bind(encode(&t.allowed_photo_ids)?).bind(encode(&t.selected_photo_ids)?).bind(t.target_count.min(100) as i64).bind(canvas.then_some(t.target_count as i64)).bind(&t.state).bind(&t.reason).bind(encode(&t.budget)?).bind(encode(&t.usage)?).bind(&t.provider_id).bind(t.consent_id).bind(&t.created_at).bind(&t.updated_at).execute(&mut *tx).await?;
+ .bind(&t.id).bind(&t.project_id).bind(&t.goal).bind(t.base_revision).bind(encode(&t.allowed_photo_ids)?).bind(encode(&t.selected_photo_ids)?).bind(t.target_count.min(100) as i64).bind((canvas || conversation).then_some(t.target_count as i64)).bind(&t.state).bind(&t.reason).bind(encode(&t.budget)?).bind(encode(&t.usage)?).bind(&t.provider_id).bind(t.consent_id).bind(&t.created_at).bind(&t.updated_at).execute(&mut *tx).await?;
         sqlx::query("UPDATE agent_tasks SET memory_revision=? WHERE id=?")
             .bind(t.memory_revision)
             .bind(&t.id)
             .execute(&mut *tx)
             .await?;
-        super::task_scope::bind(&mut tx, &t, canvas, source).await?;
+        super::task_scope::bind_creative(&mut tx, &t, canvas, source, conversation).await?;
         if let Some(consent_id) = t.consent_id {
             sqlx::query("UPDATE privacy_consents SET task_id=? WHERE id=? AND mode='task' AND task_id IS NULL")
                 .bind(&t.id).bind(consent_id).execute(&mut *tx).await?;
@@ -210,6 +243,23 @@ pub(crate) async fn request_bound(
         if let Some(identity) = identity {
             super::model_binding::ensure(&mut tx, &t, identity).await?;
             super::consent::ensure_task_recipient(&mut tx, &t, identity).await?;
+        }
+        if let TaskCommand::StartConversation {
+            focus_photo_ids,
+            continuation,
+            ..
+        } = &r.command
+        {
+            if source.is_some() && !local {
+                return Err(AppError::new(
+                    "PERMISSION_DENIED",
+                    "共享项目的画布请在协作页面查看",
+                ));
+            }
+            crate::focal_chat::bind(&mut tx, &t, identity, focus_photo_ids).await?;
+            if let Some(parent) = continuation {
+                super::creative::bind_continuation(&mut tx, &t, parent).await?;
+            }
         }
         super::memory_scope::bind(&mut tx, &t).await?;
         t
@@ -250,7 +300,9 @@ pub(crate) async fn request_bound(
         store::settle_waiting(&mut tx, &mut task, "暂停/取消前结算未完成等待").await?;
     }
     match &r.command {
-        TaskCommand::StartTask { .. } | TaskCommand::StartCanvasTask { .. } => {}
+        TaskCommand::StartConversation { .. }
+        | TaskCommand::StartTask { .. }
+        | TaskCommand::StartCanvasTask { .. } => {}
         TaskCommand::PauseTask { .. } => {
             store::transition(&mut tx, &mut task, "paused", "用户暂停；已完成操作保留").await?
         }

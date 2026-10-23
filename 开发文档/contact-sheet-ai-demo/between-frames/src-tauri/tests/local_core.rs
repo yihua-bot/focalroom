@@ -289,7 +289,7 @@ async fn rating_migration_upgrades_old_database_without_changing_legacy_data() {
             .fetch_one(&store.pool)
             .await
             .unwrap(),
-        31
+        32
     );
     store.pool.close().await;
     let reopened = Store::open(&database).await.unwrap();

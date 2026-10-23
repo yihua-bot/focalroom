@@ -128,6 +128,8 @@ pub(crate) async fn protocol(
 }
 pub(crate) async fn checkpoint(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<()> {
     let history = protocol(tx, &task.id).await?;
+    let conversation_binding = crate::focal_chat::binding(tx, &task.id).await?;
+    let creative_binding = super::creative::binding(tx, task).await?;
     let grant_binding = super::task_scope::binding(tx, task).await?;
     let author_binding =
         super::memory_scope::binding_value(super::memory_scope::load(tx, &task.id).await?);
@@ -145,10 +147,24 @@ pub(crate) async fn checkpoint(tx: &mut Transaction<'_, Sqlite>, task: &Task) ->
             .bind(&task.id)
             .fetch_all(&mut **tx)
             .await?;
-    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"taskGrantBinding":grant_binding,"authorMemoryBinding":author_binding,"memoryRevision":task.memory_revision,"providerId":task.provider_id,"modelId":model,"modelIdentity":identity,"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO agent_checkpoints(task_id,state,context_json,completed_calls_json,budget_json,created_at) VALUES(?,?,?,?,?,?)").bind(&task.id).bind(&task.state).bind(json!({"creativeBinding":creative_binding,"conversationBinding":conversation_binding,"taskGrantBinding":grant_binding,"authorMemoryBinding":author_binding,"memoryRevision":task.memory_revision,"providerId":task.provider_id,"modelId":model,"modelIdentity":identity,"promptVersion":super::prompt_version(&task.provider_id),"goal":task.goal,"projectId":task.project_id,"baseRevision":task.base_revision,"allowedPhotoIds":task.allowed_photo_ids,"selectedPhotoIds":task.selected_photo_ids,"pending":task.pending,"protocol":history,"question":task.question,"answer":task.answer,"finalDraftIds":task.final_draft_ids}).to_string()).bind(encode(&ids)?).bind(json!({"limits":task.budget,"usage":task.usage,"elapsedMs":task.elapsed_ms}).to_string()).bind(domain::timestamp()).execute(&mut **tx).await?;
     Ok(())
 }
 pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection> {
+    projection_filtered(store, project, None).await
+}
+pub async fn projection_for_account(
+    store: &Store,
+    project: &str,
+    account: &str,
+) -> Result<AgentProjection> {
+    projection_filtered(store, project, Some(account)).await
+}
+async fn projection_filtered(
+    store: &Store,
+    project: &str,
+    account: Option<&str>,
+) -> Result<AgentProjection> {
     let mut tx = store.pool.begin().await?;
     let revision: i64 =
         sqlx::query_scalar("SELECT revision FROM projects WHERE id=? AND deleted_at IS NULL")
@@ -160,6 +176,14 @@ pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection>
     let mut tasks = vec![];
     for id in ids {
         let t = load(&mut tx, &id).await?;
+        if let Some(account) = account {
+            let owner = super::model_binding::load(&mut tx, &id)
+                .await?
+                .and_then(|i| i.account_id);
+            if owner.as_deref() != Some(account) {
+                continue;
+            }
+        }
         let grant = super::task_scope::load(&mut tx, &t).await?;
         let boards=sqlx::query_as("SELECT b.* FROM boards b JOIN board_draft_tasks d ON d.board_id=b.id WHERE b.project_id=? AND d.task_id=? ORDER BY b.created_at,b.rowid")
             .bind(&t.project_id).bind(&t.id).fetch_all(&mut *tx).await?;
@@ -187,6 +211,13 @@ pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection>
             None
         };
         tasks.push(TaskView {
+            creative_references: super::creative::references(&mut tx, &t.id).await?,
+            draft_lineage: super::creative::lineage(&mut tx, &t.id).await?,
+            preference_proposals: super::preference_proposal::projection(&mut tx, &t.id).await?,
+            continuation: super::creative::continuation(&mut tx, &t.id).await?,
+            inspected_photos: crate::focal_chat::inspected(&mut tx, &t).await?,
+            conversation: crate::focal_chat::load(&mut tx, &t.id).await?.is_some(),
+            messages: crate::focal_chat::messages(&mut tx, &t.id).await?,
             budget_issue,
             canvas_task: grant.canvas,
             canvas_source: grant.source,
@@ -214,6 +245,9 @@ pub async fn projection(store: &Store, project: &str) -> Result<AgentProjection>
     .fetch_all(&mut *tx)
     .await?
     {
+        if account.is_some() && !tasks.iter().any(|t| t.id == r.get::<String, _>("task_id")) {
+            continue;
+        }
         let id: String = r.get("id");
         let items = items(&mut tx, &id).await?;
         let base_revision = r.get("base_revision");

@@ -39,6 +39,16 @@ impl Harness {
         let revision = args["expectedRevision"].as_i64().unwrap_or(0);
         let photo = args["photoId"].as_str().unwrap_or("");
         let value = match command {
+            "canvas_simulate_merge" => json!(
+                self.store
+                    .simulate_editorial_merge(
+                        id,
+                        &serde_json::from_value(args["selection"].clone()).map_err(|error| {
+                            AppError::new("VALIDATION_ERROR", error.to_string())
+                        })?
+                    )
+                    .await?
+            ),
             "canvas_comparison" => json!(
                 self.store
                     .canvas_comparison(id, string(args, "boardId")?)
@@ -301,9 +311,22 @@ impl Harness {
             )
             .unwrap(),
             "execute_memory_command" => {
-                let request: between_frames_lib::agent::memory_control::MemoryRequest =
+                let mut request: between_frames_lib::agent::memory_control::MemoryRequest =
                     serde_json::from_value(args["request"].clone())
                         .map_err(|error| AppError::new("VALIDATION_ERROR", error.to_string()))?;
+                // 浏览器账户是界面夹具；本服务只运行无账户的离线 Provider，不冒充真实登录。
+                use between_frames_lib::agent::memory_control::MemoryCommand;
+                match &mut request.command {
+                    MemoryCommand::RememberPreference {
+                        expected_account_id,
+                        ..
+                    }
+                    | MemoryCommand::DismissPreferenceProposal {
+                        expected_account_id,
+                        ..
+                    } => *expected_account_id = None,
+                    _ => {}
+                }
                 let request_id = request.request_id.clone();
                 let result = between_frames_lib::command_handler::CommandHandler::new(&self.store)
                     .execute_memory(request)

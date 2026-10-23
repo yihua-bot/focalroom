@@ -56,7 +56,7 @@ console.log('Agent contracts: OK');
 // 人工记忆控制只接受明确的项目归属及目标 ID，不能声明权限来源。
 const memorySchema = JSON.parse(await readFile(new URL('../contracts/memory-command-request.schema.json', import.meta.url), 'utf8'));
 const memoryVariants = memorySchema.properties.command.oneOf;
-const memoryNames = ['SetEvidenceExcluded', 'ConfirmHypothesis', 'RetireHypothesis', 'RestoreHypothesis', 'CorrectHypothesis', 'SetHypothesisEnabled', 'DeleteHypothesis', 'DeleteEvidence', 'PurgeObservationCache', 'SetCrossProjectMemory'];
+const memoryNames = ['RememberPreference', 'DismissPreferenceProposal', 'SetEvidenceExcluded', 'ConfirmHypothesis', 'RetireHypothesis', 'RestoreHypothesis', 'CorrectHypothesis', 'SetHypothesisEnabled', 'DeleteHypothesis', 'DeleteEvidence', 'PurgeObservationCache', 'SetCrossProjectMemory'];
 if (memorySchema.additionalProperties !== false || memoryVariants.length !== memoryNames.length) throw new Error('memory-command-request：请求结构漂移');
 for (const name of memoryNames) {
   const branch = memoryVariants.find(item => item.properties?.type?.const === name);

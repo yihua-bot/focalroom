@@ -416,7 +416,25 @@ pub async fn get_agent_projection(
     state: State<'_, Backend>,
     project_id: String,
 ) -> Result<crate::agent::types::AgentProjection> {
-    crate::agent::store::projection(&state.store, &project_id).await
+    let account = match state.cloud_auth.account_id() {
+        Ok(id) => id,
+        Err(e) if e.code == "AUTH_REQUIRED" => {
+            return Ok(crate::agent::types::AgentProjection {
+                tasks: vec![],
+                drafts: vec![],
+            });
+        }
+        Err(e) => return Err(e),
+    };
+    let projection =
+        crate::agent::store::projection_for_account(&state.store, &project_id, &account).await?;
+    if state.cloud_auth.account_id()? != account {
+        return Err(AppError::new(
+            "AUTH_REQUIRED",
+            "账户已改变，请重新打开 Focal AI",
+        ));
+    }
+    Ok(projection)
 }
 #[tauri::command]
 pub async fn get_ai_config(
@@ -554,6 +572,21 @@ pub async fn execute_memory_command(
     state: State<'_, Backend>,
     request: crate::agent::memory_control::MemoryRequest,
 ) -> Result<serde_json::Value> {
+    if let crate::agent::memory_control::MemoryCommand::RememberPreference {
+        expected_account_id,
+        ..
+    }
+    | crate::agent::memory_control::MemoryCommand::DismissPreferenceProposal {
+        expected_account_id,
+        ..
+    } = &request.command
+        && expected_account_id.as_ref() != Some(&state.cloud_auth.account_id()?)
+    {
+        return Err(AppError::new(
+            "AUTH_REQUIRED",
+            "账户已改变，请重新打开这条建议",
+        ));
+    }
     let request_id = request.request_id.clone();
     let project_id = request.project_id.clone();
     let result = crate::command_handler::CommandHandler::new(&state.store)
@@ -757,6 +790,18 @@ pub async fn canvas_comparison(
 }
 
 #[tauri::command]
+pub async fn canvas_simulate_merge(
+    state: State<'_, Backend>,
+    project_id: String,
+    selection: crate::canvas_review::EditorialSelection,
+) -> Result<crate::canvas_review::MergeSimulation> {
+    state
+        .store
+        .simulate_editorial_merge(&project_id, &selection)
+        .await
+}
+
+#[tauri::command]
 pub async fn canvas_snapshot(
     state: State<'_, Backend>,
     project_id: String,
@@ -835,32 +880,4 @@ pub async fn pub_generate(
     cmd: crate::publishing::GenerateFromSequenceCommand,
 ) -> Result<i64> {
     state.store.generate_from_sequence(&project_id, &cmd).await
-}
-
-// ── Focal AI 自由对话 ──
-
-#[tauri::command]
-pub async fn focal_chat(
-    state: State<'_, Backend>,
-    cmd: crate::focal_chat::FocalChatCommand,
-) -> Result<crate::focal_chat::FocalChatReply> {
-    let auth = state.cloud_auth.clone();
-    state.store.focal_chat(&auth, &cmd).await
-}
-
-#[tauri::command]
-pub async fn focal_chat_history(
-    state: State<'_, Backend>,
-    project_id: String,
-    limit: Option<usize>,
-) -> Result<Vec<crate::focal_chat::StoredMessage>> {
-    state
-        .store
-        .focal_chat_history(&project_id, limit.unwrap_or(100))
-        .await
-}
-
-#[tauri::command]
-pub async fn focal_chat_clear(state: State<'_, Backend>, project_id: String) -> Result<()> {
-    state.store.focal_chat_clear(&project_id).await
 }

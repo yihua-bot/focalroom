@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { NarrativeCanvas } from './NarrativeCanvas';
@@ -18,7 +18,7 @@ it('方案显示真实变化与原布局叠层，原版更新有提示', async (
   expect(screen.getAllByTestId('canvas-baseline-node')).toHaveLength(1);
   await user.click(screen.getByRole('checkbox', { name: '叠加原布局' }));
   expect(screen.queryByTestId('canvas-baseline-node')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '采纳画布' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: '另存为独立方案' })).toBeEnabled();
 });
 
 it('方案变化读取失败时不能跳过预览直接采纳', async () => {
@@ -27,7 +27,7 @@ it('方案变化读取失败时不能跳过预览直接采纳', async () => {
   repo.compareDraft = vi.fn().mockRejectedValue(new Error('方案暂时无法读取'));
   render(<NarrativeCanvas repository={repo} projectId="project" selectedPhotoIds={[]} />);
   expect(await screen.findByRole('status')).toHaveTextContent('方案暂时无法读取');
-  expect(screen.getByRole('button', { name: '采纳画布' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '另存为独立方案' })).toBeDisabled();
   expect(repo.adoptBoard).not.toHaveBeenCalled();
 });
 
@@ -127,14 +127,14 @@ it('编辑者先查看任务草案，确认采纳后才可编辑，取消不提�
   });
   const user = userEvent.setup();
   render(<NarrativeCanvas repository={repo} projectId="project" selectedPhotoIds={['photo']} />);
-  await user.click(await screen.findByRole('button', { name: '采纳画布' }));
+  await user.click(await screen.findByRole('button', { name: '另存为独立方案' }));
   expect(screen.getByRole('dialog')).toBeInTheDocument();
-  expect(screen.getByRole('dialog')).toHaveTextContent('采纳操作无法撤销');
+  expect(screen.getByRole('dialog')).toHaveTextContent('原画布');
   await user.click(screen.getByRole('button', { name: '取消' }));
   expect(repo.adoptBoard).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: /放入选中照片/ })).toBeDisabled();
-  await user.click(screen.getByRole('button', { name: '采纳画布' }));
-  await user.click(screen.getByRole('button', { name: '确认采纳' }));
+  await user.click(screen.getByRole('button', { name: '另存为独立方案' }));
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '另存为独立方案' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(repo.adoptBoard).toHaveBeenCalledWith('project', 'board-1');
   expect(screen.getByRole('button', { name: /放入选中照片/ })).toBeEnabled();

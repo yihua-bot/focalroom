@@ -21,7 +21,7 @@ impl ToolRegistry {
             .unwrap()
             .iter()
             .filter(|tool| {
-                canvas || !super::task_scope::CANVAS_TOOLS.contains(&tool["name"].as_str().unwrap_or(""))
+                canvas || !(super::task_scope::CANVAS_TOOLS.contains(&tool["name"].as_str().unwrap_or("")) || super::task_scope::CREATIVE_TOOLS.contains(&tool["name"].as_str().unwrap_or("")))
             })
             .map(|tool| {
                 json!({"type":"function","name":tool["name"],"description":tool["description"],"parameters":tool["parameters"],"strict":true})

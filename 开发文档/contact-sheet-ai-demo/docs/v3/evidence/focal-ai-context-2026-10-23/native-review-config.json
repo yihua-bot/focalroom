@@ -1,0 +1,10 @@
+{
+  "productName": "FocalRoom Context Review",
+  "identifier": "studio.focalroom.contextreview",
+  "app": { "windows": [{ "label": "main", "title": "FocalRoom Context Review", "width": 1440, "height": 960, "minWidth": 960, "minHeight": 680 }] },
+  "bundle": { "createUpdaterArtifacts": false },
+  "plugins": {
+    "deep-link": { "desktop": { "schemes": ["focalroom-context-review"] } },
+    "updater": { "active": false, "endpoints": [] }
+  }
+}

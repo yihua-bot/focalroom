@@ -1,0 +1,177 @@
+{
+  "baseCommit": "a140fea3f2c56e9b012a62d2738e552d35e977e4",
+  "worktree": "/Users/yihua/.codex/worktrees/focal-ai-unified/film/开发文档/contact-sheet-ai-demo/between-frames",
+  "createdAt": "2026-10-22T17:37:44.662233+00:00",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 36772,
+      "sha256": "a35f38a113ce9ef9be62368b059fcf103de80f0e00456b335c1ddbc0114d6574"
+    },
+    {
+      "path": "contracts/agent-task-request.schema.json",
+      "bytes": 15415,
+      "sha256": "51b32890f508575784d17b414c3982af877a686b085f905d95b2a74a55ad28f7"
+    },
+    {
+      "path": "e2e/beta-journey.spec.ts",
+      "bytes": 9198,
+      "sha256": "483fd860bcfb270680c6608cdf05c798279c23e6938ef9cdb03bfab32879f208"
+    },
+    {
+      "path": "e2e/chat-drawer.spec.ts",
+      "bytes": 3653,
+      "sha256": "a30e626682eea255e56aea95c2b26ae6f41059815e693f934374cdf899ab3284"
+    },
+    {
+      "path": "e2e/focal-agent.spec.ts",
+      "bytes": 3293,
+      "sha256": "9930230eb5699b0c8869d3f86acfaf45a13b5ea9564f70d9d9f5e3c780636407"
+    },
+    {
+      "path": "e2e/v3-workspace.spec.ts",
+      "bytes": 24145,
+      "sha256": "982ab0fe34052f47d17f8e84ead86a3d9b68b9b0df35dda70bc3058f246399a7"
+    },
+    {
+      "path": "playwright.focal-agent.config.ts",
+      "bytes": 416,
+      "sha256": "888ea20781363a8d6eafd43497cadd1729785b3c97f092353a80347eb4e92ec6"
+    },
+    {
+      "path": "prompts/focal-agent-v2.md",
+      "bytes": 3114,
+      "sha256": "27294b089c5e2e1ddb30ee4b764cfcb17a0b194b28bc94adc5e1b8b839131fc5"
+    },
+    {
+      "path": "src-tauri/src/agent/context.rs",
+      "bytes": 17618,
+      "sha256": "62022fb21ab803a3b19187b1b36322deb158e2252e6f6bafbde882c580b065a9"
+    },
+    {
+      "path": "src-tauri/src/agent/execution.rs",
+      "bytes": 20547,
+      "sha256": "ea4ac28986020ce8fb3e4ef8d7830a397e119d0e34e987ad39f6d7192d577e0b"
+    },
+    {
+      "path": "src-tauri/src/agent/lifecycle.rs",
+      "bytes": 15138,
+      "sha256": "d7bade7b681ea1761dd0a69a3720b29d455f888798861f7f96650b252893ed58"
+    },
+    {
+      "path": "src-tauri/src/agent/runtime.rs",
+      "bytes": 24078,
+      "sha256": "0c0cdc66359dbd25ff98e7f825c34b6fbf55bc15da896c0536df63a283ace334"
+    },
+    {
+      "path": "src-tauri/src/agent/store.rs",
+      "bytes": 13872,
+      "sha256": "4520ad0c010aa7da59f6c27ebcacccac8e93d76e4c7f7f2e3729c2e2ba65e195"
+    },
+    {
+      "path": "src-tauri/src/agent/tools.rs",
+      "bytes": 41154,
+      "sha256": "a9099224fcd62747a8899a23ad0c61d98cac4d9488491159d5b2a2ef84ce2cbe"
+    },
+    {
+      "path": "src-tauri/src/agent/types.rs",
+      "bytes": 9435,
+      "sha256": "5535937631f5a70b8d5832082914810206f357ca3c74f47e289891b1ae80d33a"
+    },
+    {
+      "path": "src-tauri/src/commands.rs",
+      "bytes": 27830,
+      "sha256": "7daaf3e81f22fc52b0f810fd8293bcb8eedde8e2b8d10c70aac3b2ccf01c3b2a"
+    },
+    {
+      "path": "src-tauri/src/focal_chat.rs",
+      "bytes": 8210,
+      "sha256": "c8c79aec448391e225e90bb5ae6a7d0525fb6f44ef6cde03848d1f57ea351c5e"
+    },
+    {
+      "path": "src-tauri/src/focal_chat_tests.rs",
+      "bytes": 19079,
+      "sha256": "9b647a10bf489382096b94e6bb236353cbcacefad3968cac5a3066cf1d12015c"
+    },
+    {
+      "path": "src-tauri/src/harness_canvas_provider.rs",
+      "bytes": 5176,
+      "sha256": "46c2eefc2f91b08abba6543291d0d7932348a27745ceb873b8501f7e6b90c20c"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "bytes": 9239,
+      "sha256": "48c701b1dd496a2d36e8cfa73434ff9f251481e90628ed34a561b89890963cfd"
+    },
+    {
+      "path": "src-tauri/tests/agent_vision.rs",
+      "bytes": 128975,
+      "sha256": "d1062a785d47116a61e661b9f8a6b95cea5c7009636a019b27d29a08fa0bac1e"
+    },
+    {
+      "path": "src/domain/agent.ts",
+      "bytes": 5120,
+      "sha256": "93bf3400241959c1693e6091633350029af3c256301e5edf34f5f2bd293a05c4"
+    },
+    {
+      "path": "src/features/ai-editor/AIPanel.test.tsx",
+      "bytes": 18606,
+      "sha256": "94aa6b28ce790ae4570ef426f45ba849df1204df87d899594fdcc195f1999987"
+    },
+    {
+      "path": "src/features/ai-editor/AIPanel.tsx",
+      "bytes": 18546,
+      "sha256": "69123098232b37d1a08d044f83228cfc3bf01442beaeae660ba823ac8865cd62"
+    },
+    {
+      "path": "src/features/ai-editor/FocalChat.tsx",
+      "bytes": 147,
+      "sha256": "6e90eed22ee3e5c8f113a2370a2a7fd2cc16a59937430f5629fe7ae434221853"
+    },
+    {
+      "path": "src/features/canvas/NarrativeCanvas.tsx",
+      "bytes": 33340,
+      "sha256": "d6f0074f940301373b93e7734abf2276d6cbd9cc2bfc42bc3b37501c912f95c7"
+    },
+    {
+      "path": "src/features/cloud-login/LoginDialog.tsx",
+      "bytes": 6039,
+      "sha256": "585c26997fd1dc5184a13612c39b7f1c4ca1010172f240cfa55df9635deab9b8"
+    },
+    {
+      "path": "src/i18n/locales/en.json",
+      "bytes": 14529,
+      "sha256": "3b335b1785d1eaf121a9b58152dc90f6557ea4c321f28598135cf5e6259001fb"
+    },
+    {
+      "path": "src/i18n/locales/ja.json",
+      "bytes": 17628,
+      "sha256": "8aef118e1876f160e1470f2f6b4b4033f5cb6ddb9dd962469d3ff74e888f071e"
+    },
+    {
+      "path": "src/i18n/locales/ko.json",
+      "bytes": 16734,
+      "sha256": "c3726d12d744df9565fd0e4f6127638937385a889d15c9a94079d617d71be91b"
+    },
+    {
+      "path": "src/i18n/locales/zh.json",
+      "bytes": 13970,
+      "sha256": "ae84b8b7bd0f62c291e453c1fbea427c7ce30c47121c43cd19aabbd4f0d908e8"
+    },
+    {
+      "path": "src/services/TauriAgentRepository.ts",
+      "bytes": 7076,
+      "sha256": "244af4d19474805a07827e086193b9a02e095b60d1cfcd5638271f0a53a91c11"
+    },
+    {
+      "path": "src/styles/app.css",
+      "bytes": 62256,
+      "sha256": "ac11cebf0af9a0e7cf4fdf5d59868d6ecc4f6f6403aac69e4ff00d71dbfb65c3"
+    },
+    {
+      "path": "src/test/App.test.tsx",
+      "bytes": 7780,
+      "sha256": "37728cabc43998bf67387a5f3b4e844685157cf34a888fe5aecd7a4f4b97f532"
+    }
+  ]
+}

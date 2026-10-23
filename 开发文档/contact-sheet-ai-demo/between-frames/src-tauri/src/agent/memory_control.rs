@@ -19,6 +19,17 @@ pub struct MemoryRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub enum MemoryCommand {
+    RememberPreference {
+        task_id: String,
+        proposal_id: String,
+        statement: String,
+        expected_account_id: Option<String>,
+    },
+    DismissPreferenceProposal {
+        task_id: String,
+        proposal_id: String,
+        expected_account_id: Option<String>,
+    },
     SetCrossProjectMemory {
         enabled: bool,
     },
@@ -114,6 +125,37 @@ pub(crate) async fn execute(db: &Store, request: MemoryRequest) -> Result<Memory
     }
     memory::materialize(&mut tx, &request.project_id).await?;
     let changed = match &request.command {
+        MemoryCommand::RememberPreference {
+            task_id,
+            proposal_id,
+            statement,
+            expected_account_id,
+        } => {
+            super::preference_proposal::confirm(
+                &mut tx,
+                &request.project_id,
+                task_id,
+                proposal_id,
+                Some(statement),
+                expected_account_id.as_deref(),
+            )
+            .await?
+        }
+        MemoryCommand::DismissPreferenceProposal {
+            task_id,
+            proposal_id,
+            expected_account_id,
+        } => {
+            super::preference_proposal::confirm(
+                &mut tx,
+                &request.project_id,
+                task_id,
+                proposal_id,
+                None,
+                expected_account_id.as_deref(),
+            )
+            .await?
+        }
         MemoryCommand::SetCrossProjectMemory { enabled } => {
             super::memory_scope::set_enabled(&mut tx, *enabled).await?
         }

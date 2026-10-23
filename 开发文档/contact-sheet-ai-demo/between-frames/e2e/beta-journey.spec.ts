@@ -50,7 +50,7 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   await page.goto('/#/project/' + project.id);
   await expect(page.getByRole('heading', { name: '成长的摄影书' })).toBeVisible();
   await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
-  await page.getByRole('textbox', { name: '选片消息' }).fill('整理成长的摄影书，突出窗边的光线');
+  await page.getByRole('textbox', { name: '消息' }).fill('整理成长的摄影书，突出窗边的光线');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.locator('.chat-task-status')).toHaveText('待审核', { timeout: 30000 });
   await expect(page.locator('.chat-draft-card')).toHaveCount(2);

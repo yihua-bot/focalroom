@@ -9,6 +9,8 @@ import { createInterface } from 'node:readline';
 const root = await realpath(await mkdtemp(join(tmpdir(), 'between-frames-m1-')));
 const fixtureProfile = process.argv.includes('--fixtures=m1-500') ? 'm1-500' : 'standard';
 const buildProfile = process.argv.includes('--release') ? 'release' : 'debug';
+const testPort = Number(process.env.FOCALROOM_TEST_RPC_PORT ?? 1422);
+const testOrigin = process.env.FOCALROOM_TEST_ORIGIN ?? 'http://localhost:1420';
 let sequence = 0;
 const pending = new Map();
 const originalGrants = new Set();
@@ -53,8 +55,8 @@ function rpc(command, args) {
 }
 const server = createServer(async (request, response) => {
   const origin = request.headers.origin;
-  if (origin && origin !== 'http://localhost:1420') { response.writeHead(403); response.end(); return; }
-  response.setHeader('Access-Control-Allow-Origin', 'http://localhost:1420');
+  if (origin && origin !== testOrigin) { response.writeHead(403); response.end(); return; }
+  response.setHeader('Access-Control-Allow-Origin', testOrigin);
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return; }
@@ -80,5 +82,5 @@ const server = createServer(async (request, response) => {
     response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(result));
   } catch (error) { response.writeHead(500, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ ok: false, error: { message: String(error) } })); }
 });
-server.listen(1422, '127.0.0.1', () => process.stdout.write(`测试服务 http://localhost:1422（${root}）\n`));
+server.listen(testPort, '127.0.0.1', () => process.stdout.write(`测试服务 http://localhost:${testPort}（${root}）\n`));
 process.on('SIGTERM', () => { child.kill(); server.close(); });

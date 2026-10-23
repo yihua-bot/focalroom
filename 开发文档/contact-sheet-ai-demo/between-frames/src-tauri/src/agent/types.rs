@@ -64,6 +64,19 @@ pub struct AgentRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub enum TaskCommand {
+    StartConversation {
+        expected_account_id: Option<String>,
+        goal: String,
+        selected_photo_ids: Vec<String>,
+        focus_photo_ids: Vec<String>,
+        target_count: u32,
+        budget: Budget,
+        consent_id: Option<i64>,
+        source_board: Option<super::task_scope::CanvasTaskSource>,
+        #[serde(default)]
+        continuation: Option<super::creative::DraftReference>,
+    },
+
     StartCanvasTask {
         goal: String,
         selected_photo_ids: Vec<String>,
@@ -100,7 +113,9 @@ pub enum TaskCommand {
 impl TaskCommand {
     pub fn task_id(&self) -> Option<&str> {
         match self {
-            Self::StartTask { .. } | Self::StartCanvasTask { .. } => None,
+            Self::StartConversation { .. }
+            | Self::StartTask { .. }
+            | Self::StartCanvasTask { .. } => None,
             Self::PauseTask { task_id }
             | Self::CancelTask { task_id }
             | Self::ResumeTask { task_id, .. }
@@ -249,6 +264,13 @@ pub struct AgentProjection {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskView {
+    pub creative_references: Vec<Value>,
+    pub draft_lineage: Vec<Value>,
+    pub preference_proposals: Vec<Value>,
+    pub continuation: Value,
+    pub inspected_photos: Vec<serde_json::Value>,
+    pub conversation: bool,
+    pub messages: Vec<crate::focal_chat::ConversationMessage>,
     pub budget_issue: Option<super::budget::BudgetIssue>,
     pub canvas_task: bool,
     pub canvas_source: Option<super::task_scope::CanvasTaskSource>,

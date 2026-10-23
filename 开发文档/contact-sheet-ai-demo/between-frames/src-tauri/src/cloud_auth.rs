@@ -460,7 +460,16 @@ impl CloudAuth {
             .session
             .as_ref()
             .ok_or_else(|| AppError::new("AUTH_REQUIRED", "请先登录"))?;
-        let user = Self::user(self.request("/auth/me", None, Some(&s.token)).await?)?;
+        // 这里只重试无副作用的身份 GET；尚未向 AI 网关发送任何请求。
+        // 401、协议错误不重试；模型/图片 POST 的结果不明仍由 Provider 保持不可重放。
+        let response = match self.request("/auth/me", None, Some(&s.token)).await {
+            Err(error) if error.code == "CLOUD_UNAVAILABLE" => {
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                self.request("/auth/me", None, Some(&s.token)).await?
+            }
+            result => result?,
+        };
+        let user = Self::user(response)?;
         if user.id != s.user.id {
             return Err(AppError::new("AUTH_REVOKED", "账户校验已失效"));
         }

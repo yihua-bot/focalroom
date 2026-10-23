@@ -43,6 +43,12 @@ pub const CANVAS_TOOLS: &[&str] = &[
     "add_editorial_note",
     "finish_canvas_task",
 ];
+pub const CREATIVE_TOOLS: &[&str] = &[
+    "read_creative_context",
+    "fork_creative_draft",
+    "search_photography_knowledge",
+    "propose_preference",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -137,7 +143,24 @@ pub async fn bind(
     canvas: bool,
     source: Option<&CanvasTaskSource>,
 ) -> Result<()> {
+    bind_creative(tx, task, canvas, source, false).await
+}
+pub async fn bind_creative(
+    tx: &mut Transaction<'_, Sqlite>,
+    task: &Task,
+    canvas: bool,
+    source: Option<&CanvasTaskSource>,
+    creative: bool,
+) -> Result<()> {
     let mut grant = defaults(task);
+    if creative {
+        grant.tools.extend(
+            CREATIVE_TOOLS
+                .iter()
+                .filter(|name| canvas || **name != "fork_creative_draft")
+                .map(|name| name.to_string()),
+        );
+    }
     grant.canvas = canvas;
     grant.canvas_prompt_sha256 = canvas.then(|| fingerprint(&json!(CANVAS_SYSTEM_PROMPT)));
     let mut snapshot = None;

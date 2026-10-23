@@ -6,6 +6,8 @@ import { Modal } from '../../components/shared/Modal';
 import { useUIStore } from '../../stores/uiStore';
 import { zh } from '../../app/copy';
 import { useAccount } from '../cloud-login/AccountProvider';
+import { CanvasNodes } from './CanvasNodes';
+import { EditorialReviewWorkspace } from './EditorialReviewWorkspace';
 import { Maximize } from 'lucide-react';
 
 import type { AnnotationInfo, BoardInfo, CanvasPhoto, CanvasRepository } from '../../domain/canvas';
@@ -48,6 +50,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [adopting, setAdopting] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [inkMode, setInkMode] = useState(false);
   const [inkPoints, setInkPoints] = useState<Array<{x:number;y:number}>>([]);
   const dragStart = useRef<{ x: number; y: number; nodeX: number; nodeY: number; positions: Map<string, { x: number; y: number }> } | null>(null);
@@ -99,11 +102,16 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   useEffect(() => {
     let active = true;
     if (repository?.compareDraft && activeBoard && board?.owningTaskId) {
-      repository.compareDraft(projectId, activeBoard).then(value => { if (active) setComparison({ boardId: activeBoard, value }); })
+      repository.compareDraft(projectId, activeBoard).then(value => {
+        if (active) {
+          setComparison({ boardId: activeBoard, value });
+          if (requestedBoard === activeBoard && repository.simulateMerge) setReviewing(true);
+        }
+      })
         .catch(error => { if (active) setNotice(error instanceof Error ? error.message : '读取方案失败'); });
     }
     return () => { active = false; };
-  }, [repository, projectId, activeBoard, board?.owningTaskId, board?.revision]);
+  }, [repository, projectId, activeBoard, board?.owningTaskId, board?.revision, requestedBoard, boardRequest]);
 
   const loadBoards = async () => {
     if (!repository) return;
@@ -423,7 +431,8 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
         </select>
         <Button size="small" disabled={creating || working || readOnly} onClick={() => void run(createBoard)}>新建画布</Button>
-        {board?.owningTaskId && <Button size="small" disabled={working || readOnly || Boolean(repository.compareDraft && !review)} onClick={() => setAdopting(true)}>采纳画布</Button>}
+        {board?.owningTaskId && repository.simulateMerge && <Button size="small" disabled={working || !review} onClick={() => setReviewing(true)}>{zh.editorialOpen}</Button>}
+        {board?.owningTaskId && <Button size="small" disabled={working || readOnly || Boolean(repository.compareDraft && !review)} onClick={() => setAdopting(true)}>{zh.editorialSaveIndependent}</Button>}
         <Button size="small" disabled={working || editLocked || !activeBoard || selectedPhotoIds.length === 0} onClick={() => void run(placeSelected)}>
           放入选中照片（{selectedPhotoIds.length}）
         </Button>
@@ -497,54 +506,17 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
         >
           {showBaseline && review?.baselineNodes.filter(node => node.nodeType !== 'arrow').map(node => <div key={'baseline-' + node.id} className="canvas-baseline-node" data-testid="canvas-baseline-node"
             style={{ left: node.x, top: node.y, width: node.width, height: node.height }}>
-            {node.thumbnailPath ? <img src={node.thumbnailPath} alt="" /> : <span>{zh.chatBoardOriginal}</span>}
+            <span>{zh.chatBoardOriginal}</span>
           </div>)}
-          {nodes.filter(node => node.nodeType === 'photo').map(node => (
-            <div
-              key={node.id}
-              data-node-id={node.id}
-              className={`canvas-photo-node ${dragging === node.id ? 'dragging' : ''} ${selectedNodeIds.has(node.id) ? 'selected' : ''}`}
-              onClick={() => void run(() => onNodeClick(node.id))}
-              style={{
-                left: node.x, top: node.y, width: node.width, height: node.height,
-                zIndex: node.zOrder,
-                transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
-              }}
-            >
-              {node.thumbnailPath
-                ? <img src={node.thumbnailPath} alt="" draggable={false} />
-                : <div className="canvas-photo-placeholder">📷</div>}
-              {!node.locked && !editLocked && <div
-                className="canvas-resize-handle"
-                onPointerDown={e => {
-                  e.stopPropagation();
-                  if (!node.locked && !working) {
-                    setResizing({ nodeId: node.id, startW: node.width, startH: node.height, x: e.clientX, y: e.clientY });
-                    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-                  }
-                }}
-              />}
-              {node.locked && <span className="canvas-lock-badge">🔒</span>}
-            </div>
-          ))}
-          {nodes.filter(n => ['sticky', 'text', 'shape', 'chapter'].includes(n.nodeType)).map(node => {
-            const content = node.contentJson ? (() => { try { return JSON.parse(node.contentJson!).text ?? ''; } catch { return ''; } })() : '';
-            const color = node.styleJson ? (() => { try { return JSON.parse(node.styleJson!).color ?? '#ffe082'; } catch { return '#ffe082'; } })() : '#ffe082';
-            return <div key={node.id} data-node-id={node.id}
-              onClick={() => void run(() => onNodeClick(node.id))}
-              className={`canvas-sticky-node ${dragging === node.id ? 'dragging' : ''}`}
-              style={{ left: node.x, top: node.y, width: node.width, height: node.height, zIndex: node.zOrder, background: color }}
-            >{content}</div>;
-          })}
-          {nodes.filter(n => n.nodeType === 'group').map(g => {
-            const label = g.contentJson ? (() => { try { return JSON.parse(g.contentJson!).label ?? ''; } catch { return ''; } })() : '';
-            return <div key={g.id} data-node-id={g.id}
-              className={`canvas-group-node ${selectedNodeIds.has(g.id) ? 'selected' : ''}`}
-              style={{ left: g.x, top: g.y, width: g.width, height: g.height, zIndex: -1 }}
-            >
-              <span className="canvas-group-label">{label}</span>
-            </div>;
-          })}
+          <CanvasNodes nodes={nodes} selected={selectedNodeIds} dragging={dragging} editable={!editLocked}
+            onNodeClick={id => void run(() => onNodeClick(id))}
+            onResize={(node, event) => {
+              event.stopPropagation();
+              if (!node.locked && !working) {
+                setResizing({ nodeId: node.id, startW: node.width, startH: node.height, x: event.clientX, y: event.clientY });
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }
+            }} />
           {marquee && (() => {
             const x = Math.min(marquee.x0, marquee.x1);
             const y = Math.min(marquee.y0, marquee.y1);
@@ -558,31 +530,6 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
               <path d={d} fill="none" stroke="#ff6b6b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
             </svg>;
           })()}
-          {nodes.filter(n => n.nodeType === 'ink').map(ink => {
-            const pts = ink.contentJson ? (() => { try { return (JSON.parse(ink.contentJson!).points ?? []) as Array<{x:number;y:number}>; } catch { return []; } })() : [];
-            if (pts.length < 2) return null;
-            const d = pts.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(' ');
-            const color = ink.styleJson ? (() => { try { return JSON.parse(ink.styleJson!).color ?? '#ff6b6b'; } catch { return '#ff6b6b'; } })() : '#ff6b6b';
-            const sw = ink.styleJson ? (() => { try { return JSON.parse(ink.styleJson!).strokeWidth ?? 2; } catch { return 2; } })() : 2;
-            return <svg key={ink.id} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: ink.zOrder, overflow: 'visible' }}>
-              <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
-            </svg>;
-          })}
-          {nodes.filter(n => n.nodeType === 'arrow').map(arrow => {
-            const ids = arrow.childrenJson ? (() => { try { return JSON.parse(arrow.childrenJson!) as string[]; } catch { return null; } })() : null;
-            if (!ids || ids.length !== 2) return null;
-            const from = nodes.find(n => n.id === ids[0]);
-            const to = nodes.find(n => n.id === ids[1]);
-            if (!from || !to) return null;
-            const x1 = from.x + from.width / 2;
-            const y1 = from.y + from.height / 2;
-            const x2 = to.x + to.width / 2;
-            const y2 = to.y + to.height / 2;
-            return <svg key={arrow.id} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: arrow.zOrder, overflow: 'visible' }}>
-              <defs><marker id={"ah-" + arrow.id} markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6c5ce7" /></marker></defs>
-              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#6c5ce7" strokeWidth={2} markerEnd={"url(#ah-" + arrow.id + ")"} />
-            </svg>;
-          })}
           {annotations.map(a => !a.resolved && (
             <div key={a.id} className="canvas-annotation-pin" title={a.body}
               style={{ left: a.x ?? 0, top: a.y ?? 0 }}>
@@ -596,8 +543,17 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           )}
         </div>
       </div>
-      {adopting && <Modal title="采纳这张画布？" description="采纳后可继续编辑，AI 将不再修改这张画布。采纳操作无法撤销。" onClose={() => { if (!working) setAdopting(false); }}>
-        <Button disabled={working || readOnly} onClick={() => void run(adoptBoard)}>确认采纳</Button>
+      {reviewing && review && board && <EditorialReviewWorkspace key={`${board.id}-${review.draftRevision}`} repository={repository} projectId={projectId} board={board} comparison={review} readOnly={readOnly}
+        onClose={() => { setReviewing(false); setPending(repository.pendingCommands?.(projectId) ?? []); }} onApplied={async target => {
+          const list = await repository.listBoards(projectId);
+          const snapshot = await readCanvas(repository, target);
+          setBoards(list.map(b => b.id === target && snapshot.board ? snapshot.board : b));
+          setNodes(snapshot.nodes); setAnnotations(snapshot.annotations); setLoadedBoard(target); setActiveBoard(target);
+          setSelectedNodeIds(new Set()); setReviewing(false); setNotice(zh.editorialApplied);
+        }}
+        onSaveIndependent={() => { setReviewing(false); setAdopting(true); }} />}
+      {adopting && <Modal title={zh.editorialSaveIndependent} description={zh.editorialIndependentDescription} onClose={() => { if (!working) setAdopting(false); }}>
+        <Button disabled={working || readOnly} onClick={() => void run(adoptBoard)}>{zh.editorialSaveIndependent}</Button>
         <Button disabled={working} onClick={() => setAdopting(false)}>取消</Button>
       </Modal>}
     </div>

@@ -1,0 +1,15 @@
+{
+  "checkedAtAsiaShanghai": "2026-10-23T15:20:56.175852+08:00",
+  "initialSpent": 37394,
+  "currentSpent": 103389,
+  "spentDelta": 65995,
+  "confirmedTextTokens": 65995,
+  "available": 896611,
+  "reserved": 0,
+  "extraChargeBeyondReportedTextObserved": false,
+  "imageRequestOutcome": "unknown_do_not_replay",
+  "modelCallsByThisPreflight": 0,
+  "previewsUploadedByThisPreflight": 0,
+  "manualLedgerChanges": false,
+  "acceptancePassed": false
+}

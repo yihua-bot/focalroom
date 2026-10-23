@@ -33,16 +33,30 @@ impl AgentEngine {
     pub async fn request(&self, request: AgentRequest) -> Result<Task> {
         let queues = matches!(
             request.command,
-            TaskCommand::StartTask { .. }
+            TaskCommand::StartConversation { .. }
+                | TaskCommand::StartTask { .. }
                 | TaskCommand::StartCanvasTask { .. }
                 | TaskCommand::ResumeTask { .. }
                 | TaskCommand::SubmitFeedback { .. }
         );
-        if queues && let Some(provider) = self.openai.as_ref().filter(|p| p.is_hosted()) {
+        if let Some(provider) = self.openai.as_ref().filter(|p| p.is_hosted()) {
             let bound = provider.bind_account()?;
-            bound.validate_hosted_account().await?;
+            if queues {
+                bound.validate_hosted_account().await?;
+            }
             return super::lifecycle::request_bound(&self.db, request, Some(&bound.identity()))
                 .await;
+        }
+        if matches!(request.command, TaskCommand::StartConversation { .. })
+            && self.openai.is_some()
+            && self.native.is_none()
+        {
+            return super::lifecycle::request_bound(
+                &self.db,
+                request,
+                Some(&self.model_binding()?),
+            )
+            .await;
         }
         CommandHandler::new(&self.db).agent_request(request).await
     }
@@ -299,19 +313,36 @@ impl AgentEngine {
         let id = id.to_owned();
         tokio::spawn(async move {
             loop {
-                let project = ContextBuilder::build(&engine.db, &id)
+                let project: Option<String> =
+                    sqlx::query_scalar("SELECT project_id FROM agent_tasks WHERE id=?")
+                        .bind(&id)
+                        .fetch_optional(&engine.db.pool)
+                        .await
+                        .unwrap_or(None);
+                let worker = engine.clone();
+                let task_id = id.clone();
+                // 工作循环异常退出也必须结束界面等待；不重放请求，不释放未知结果的预留。
+                if tokio::spawn(async move { worker.run(&task_id).await })
                     .await
-                    .ok()
-                    .map(|c| c.task.project_id);
-                let _ = engine.run(&id).await;
+                    .is_err()
+                {
+                    let _ = CommandHandler::new(&engine.db).agent_state(
+                        &id, "failed", "AI_RESULT_UNKNOWN：分析意外中断，已保留进度；请先查看用量，避免重复提交",
+                    ).await;
+                }
                 if let Some(p) = project {
                     (engine.notify)(&p);
                 }
                 // 恢复可能与旧 worker 退出同时发生；在调度锁内检查 queued，避免幽灵排队。
                 let mut active = engine.active.lock().await;
-                let queued = ContextBuilder::build(&engine.db, &id)
-                    .await
-                    .is_ok_and(|c| c.task.state == "queued");
+                let queued =
+                    sqlx::query_scalar::<_, String>("SELECT state FROM agent_tasks WHERE id=?")
+                        .bind(&id)
+                        .fetch_optional(&engine.db.pool)
+                        .await
+                        .ok()
+                        .flatten()
+                        .is_some_and(|state| state == "queued");
                 if queued {
                     drop(active);
                     continue;

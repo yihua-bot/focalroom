@@ -1123,6 +1123,9 @@ async fn apply_history(
     let conflict = || AppError::new("CONFLICT", "节点已变化或锁定，无法恢复此操作");
     let now = domain::timestamp();
     match kind {
+        "editorial_merge" => {
+            crate::canvas_review::merge::restore_merge(tx, board, data, redo).await?
+        }
         "move" => {
             let ids = data["nodeIds"].as_array().ok_or_else(conflict)?;
             let direction = if redo { 1.0 } else { -1.0 };
@@ -1250,7 +1253,7 @@ async fn restore_history_group(
 
 impl CommandHandler<'_> {
     /// 写撤销日志（H0-07：画布操作的逆操作记录，append-only）。
-    async fn log_canvas_op(
+    pub(crate) async fn log_canvas_op(
         tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
         project: &str,
         board_id: &str,

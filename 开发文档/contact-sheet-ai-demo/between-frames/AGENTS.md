@@ -1,3 +1,13 @@
+# Focal AI v2 接续入口
+
+只读额度补验已完成：系统授权后得到 available=896611、spent=103389、reserved=0；相较初始 spent37394 增加65995，等于两次文字计量。无人工退款/释放/新模型调用；不能由此推断图片未到达上游，未知请求仍不重放。等待期间外部提交 a15dc6c 进入仓库，本聊天未执行 commit/push，不把既有313/333/36结论套用到新HEAD。详细请求时间窗及证据见真实验收报告。
+
+生产真实验收增量：先读 `../docs/v3/FOCAL-AI-HOSTED-REAL-ACCEPTANCE-2026-10-23.md` 和 `FOCAL-AI-COORDINATION-REPLY.md`。真实两次任务均失败：首次图像发送前 auth GET 失败；补只读身份 GET 最多重试一次后，新任务 4 张图片 POST 120 秒超时 AI_RESULT_UNKNOWN。0 成功观察/0 草案，正式项目及 300 原图 SHA 不变；不重发、不擅自释放额度，等只读核对生产账本。未提交/发版，避免触发外部自动发行监控。新增 ignored hosted 预检，真实任务支持只读 Keychain 会话与已核验派生像素复用；不得将 313 默认测试通过替代真实链路通过。共享树新统计 0020 和 API 路由属外部增量，保留并仅补接线，需另评审，不能自动生产迁移。
+
+2026-10-23 S2/S4 增量入口：先读 `../docs/v3/FOCAL-AI-CONTEXT-ITERATION-2026-10-23.md` 及同日 CONTEXT-TEST-REPORT。新会话具备有范围的画布/版本/Variant/出版布局/工具回执读取，独立跨轮分支、原创方法来源及人工确认项目偏好。沿用任务表，不新增迁移，不放大预算；旧任务授权不回写。压缩必须保留工具批次关联，不能按工具名丢掉不同草案。真实 300 图验收入口默认 ignored，未运行不能记通过；偏好不得自动确认，不得扩大跨项目/云端授权。共享树含此前 S1/v3.1 WIP，保留全部，未提交、部署或发行。
+
+用户将 Unified Photography Agent 设为最高研发优先级。先读 ../docs/v3/FOCAL-AI-V2-IMPLEMENTATION.md 与 FOCAL-AI-V2-TEST-REPORT.md。新会话统一通过 StartConversation → AgentEngine，不恢复直连 focal_chat 推理或“聊天/任务”切换。conversation_context 仅投影已有任务记录；无新迁移，旧无账户归属的聊天不自动外发。保留账户、服务、照片范围、来源版本、预算、草案人工采纳和未知结果不重试边界。S1 工程连接与 S2–S5/真人质量/发行分开验收。本轮未提交或发布；工作树同时包含其他会话的画布审稿改动，不覆盖或当作已经完整验收。
+
 # AGENTS.md · FocalRoom 工程导航
 
 末次交接校验HEAD78bd018（Web纸感换肤，父发行f582ed2/1.0.2），外部提交收录了部分本聊天先行文档；仍有后续文档WIP，保留全部代码/设计改动。下文f582ed2指发行基线，当前开发接续看78bd018+WIP。本聊天未commit；新Web换肤未在本轮做GUI/生产验收。

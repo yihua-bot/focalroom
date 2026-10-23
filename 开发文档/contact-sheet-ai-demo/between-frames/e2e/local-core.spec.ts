@@ -130,11 +130,15 @@ test('v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、�
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await page.getByRole('button', { name: '导出 ↗' }).click();
+  const htmlResponse = page.waitForResponse(response => response.url().endsWith('/rpc') && response.request().method() === 'POST' && response.request().postDataJSON()?.command === 'export_project' && response.request().postDataJSON()?.args?.format === 'html');
   await page.getByRole('button', { name: '照片总览', exact: true }).click();
   await expect(page.locator('.export-receipt')).toContainText('已导出：');
   const htmlPath = (await page.locator('.export-receipt p').innerText()).replace('已导出：', '');
   const htmlBytes = await readFile(htmlPath);
-  await expect(page.locator('.export-receipt')).toContainText(createHash('sha256').update(htmlBytes).digest('hex'));
+  const htmlReceipt = await (await htmlResponse).json();
+  expect(htmlReceipt.ok).toBe(true);
+  expect(htmlReceipt.value.path).toBe(htmlPath);
+  expect(createHash('sha256').update(htmlBytes).digest('hex')).toBe(htmlReceipt.value.sha256);
   expect(htmlBytes.toString('utf8')).not.toContain(before.photos[0].originalPath);
   // JSON/CSV 保留后端兼容性校验，正式导出界面使用面向作品的选项。
   for (const format of ['json', 'csv']) {
@@ -162,7 +166,7 @@ test('v1.0 M1 真实 Store 离线旅程：200 张、批量选 25、Undo/Redo、�
   await expect(ownCard).toHaveCount(0);
   await page.locator('.project-list-tools').getByRole('button', { name: '归档项目', exact: true }).click();
   await ownCard.getByRole('button', { name: '恢复项目', exact: true }).click();
-  await expect(ownCard.getByRole('button', { name: /200 张照片/ })).toBeVisible();
+  await expect(ownCard.getByRole('button', { name: '光线的间隙 · M1 验收', exact: true })).toContainText('200 张照片');
   await expect(ownCard.getByRole('button', { name: '归档项目', exact: true })).toBeVisible();
   expect(errors).toEqual([]);
   expect(externalRequests).toEqual([]);

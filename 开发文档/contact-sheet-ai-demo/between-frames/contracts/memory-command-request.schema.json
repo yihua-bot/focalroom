@@ -192,6 +192,76 @@
             "type",
             "enabled"
           ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "RememberPreference"
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "proposalId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "expectedAccountId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 160
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "type",
+            "taskId",
+            "proposalId",
+            "expectedAccountId",
+            "statement"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "DismissPreferenceProposal"
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "proposalId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "expectedAccountId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "type",
+            "taskId",
+            "proposalId",
+            "expectedAccountId"
+          ]
         }
       ]
     }

@@ -18,6 +18,8 @@ for arg in "$@"; do
 done
 # 自动化默认离线；视觉测试使用显式注入的本地 HTTP Provider。
 export BETWEEN_FRAMES_OPENAI_API_KEY=''
+export BETWEEN_FRAMES_ANTHROPIC_API_KEY=''
+export BETWEEN_FRAMES_GEMINI_API_KEY=''
 
 step() { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
 
@@ -60,6 +62,10 @@ cargo build --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/targe
 if [ "$SKIP_INTEGRATION" = "0" ]; then
   step "真实后端集成 E2E（含 Beta 旅程）"
   CARGO_TARGET_DIR="target-v1" npm run test:integration
+  step "Focal AI 连续对话、修订与记忆确认（独立临时库）"
+  CARGO_TARGET_DIR="target-v1" npx playwright test --config "playwright.focal-agent.config.ts" "e2e/focal-agent.spec.ts" "e2e/focal-creative.spec.ts"
+  step "智能编辑审稿与采纳恢复（独立临时库）"
+  CARGO_TARGET_DIR="target-v1" npx playwright test --config "playwright.editorial.config.ts"
   step "M4/M5 PostgreSQL 与私有存储边界（全新临时 cluster）"
   npm run test:cloud:pg
   step "M4/M5 三会话 Web 与真实 Rust Promotion"

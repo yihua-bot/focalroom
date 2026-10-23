@@ -1,0 +1,52 @@
+import { test, expect } from '@playwright/test';
+import { installAccountFixture, installDesktopBridge } from './account-fixture';
+const rpc = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
+ const response = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
+ if (!response.ok) throw new Error(response.error.message); return response.value;
+};
+test.beforeEach(async ({ page }) => {
+ await page.route('**/*', route => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
+ await installAccountFixture(page); await installDesktopBridge(page);
+});
+test('跨轮修改保留父方案和正式项目，重启后可查看修订来源', async ({ page }) => {
+ const project = await rpc<{ id: string }>('create_project', { title: '修订旅程', brief: '保留每一轮尝试' });
+ await page.goto('/#/project/' + project.id); await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
+ const dialog = page.getByRole('dialog', { name: 'Focal AI', exact: true });
+ await dialog.getByRole('textbox', { name: '消息', exact: true }).fill('创建一个独立画布，给我一条编辑说明'); await dialog.getByRole('button', { name: '发送', exact: true }).click();
+ await expect(dialog.getByRole('button', { name: '继续修改', exact: true })).toBeEnabled();
+ const before = await rpc<{ tasks: { boardDrafts: { id: string }[] }[] }>('get_agent_projection', { projectId: project.id });
+ const parent = before.tasks[0].boardDrafts[0].id;
+ const snapshot = await rpc('canvas_snapshot', { projectId: project.id, boardId: parent });
+ const original = await rpc('get_project', { projectId: project.id });
+ await dialog.getByRole('button', { name: '继续修改', exact: true }).click();
+ await expect(dialog.getByRole('button', { name: '取消方案引用' })).toBeVisible();
+ await dialog.getByRole('textbox', { name: '消息', exact: true }).fill('增加一条关于停顿的说明，保留上一版'); await dialog.getByRole('button', { name: '发送', exact: true }).click();
+ await expect(dialog.getByText('新的修订方案已准备好，原方案保留', { exact: true })).toBeVisible();
+ await expect(dialog.getByRole('button', { name: '查看画布方案', exact: true })).toHaveCount(2);
+ expect(await rpc('canvas_snapshot', { projectId: project.id, boardId: parent })).toEqual(snapshot);
+ expect(await rpc('get_project', { projectId: project.id })).toEqual(original);
+ await page.goto('about:blank'); await rpc('test_process_restart'); await page.goto('/#/project/' + project.id); await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
+ await page.getByText('修订来源', { exact: true }).click(); await expect(page.getByText(/基于方案版本/)).toBeVisible();
+ await page.screenshot({ path: '../docs/v3/evidence/focal-ai-context-2026-10-23/browser/revision-history.png' });
+ expect(await rpc('canvas_snapshot', { projectId: project.id, boardId: parent })).toEqual(snapshot);
+});
+test('参考来源可核对，偏好可编辑确认并在重启后保留', async ({ page }) => {
+ const project = await rpc<{ id: string }>('create_project', { title: '知识与偏好', brief: '摄影书编辑' });
+ await page.goto('/#/project/' + project.id); await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
+ const dialog = page.getByRole('dialog', { name: 'Focal AI', exact: true });
+ await dialog.getByRole('textbox', { name: '消息', exact: true }).fill('这个项目请多留白，给我摄影书编辑的参考方法'); await dialog.getByRole('button', { name: '发送', exact: true }).click();
+ const proposal = dialog.getByRole('region', { name: '偏好建议' });
+ await expect(proposal.getByRole('button', { name: '保存到本项目', exact: true })).toBeEnabled();
+ const before = await rpc<{ evidence: unknown[] }>('get_memory_projection', { projectId: project.id }); expect(before.evidence).toHaveLength(0);
+ await dialog.getByText('查看参考来源', { exact: true }).click(); await expect(dialog.getByText(/FR-K005/)).toBeVisible();
+ await proposal.getByRole('textbox', { name: '偏好内容' }).fill('仅在这个项目的开篇保留更多留白'); await proposal.getByRole('button', { name: '保存到本项目', exact: true }).click();
+ await expect(proposal.getByRole('status')).toHaveText('已保存，可在审美记忆中管理');
+ const memory = await rpc<{ evidence: unknown[]; hypotheses: { statement: string; status: string }[] }>('get_memory_projection', { projectId: project.id });
+ expect(memory.evidence).toHaveLength(1); expect(memory.hypotheses).toEqual(expect.arrayContaining([expect.objectContaining({ statement: '仅在这个项目的开篇保留更多留白', status: 'confirmed' })]));
+ await page.goto('about:blank'); await rpc('test_process_restart'); await page.goto('/#/project/' + project.id); await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
+ await expect(page.getByRole('status').filter({ hasText: '已保存，可在审美记忆中管理' })).toBeVisible();
+ await expect(page.getByRole('region', { name: '偏好建议' }).getByText('仅在这个项目的开篇保留更多留白', { exact: true })).toBeVisible();
+ await page.getByText('查看参考来源', { exact: true }).click();
+ await page.screenshot({ path: '../docs/v3/evidence/focal-ai-context-2026-10-23/browser/knowledge-and-memory.png' });
+ expect((await rpc<typeof memory>('get_memory_projection', { projectId: project.id })).evidence).toHaveLength(1);
+});

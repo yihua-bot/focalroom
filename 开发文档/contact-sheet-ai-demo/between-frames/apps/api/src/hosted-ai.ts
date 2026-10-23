@@ -24,7 +24,7 @@ export type HostedAiConfig = { key: string; initialTokens: number };
 export type HostedAiTransport = (body: unknown, key: string) => Promise<Response>;
 const productionTransport: HostedAiTransport = (body, key) => fetch("https://api.deepseek.com/responses", {
   method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-  body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(100000),
+  body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(300000),
 });
 export function hostedAiConfig(): HostedAiConfig | undefined {
   const key = process.env.FOCALROOM_DEEPSEEK_API_KEY?.trim();
