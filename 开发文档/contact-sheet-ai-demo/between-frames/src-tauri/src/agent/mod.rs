@@ -37,6 +37,7 @@ pub(crate) mod store;
 pub mod task_scope;
 mod tools;
 pub mod types;
+pub mod upload_compress;
 pub mod vision;
 pub(crate) use drafts::human as apply_human_draft;
 

@@ -156,8 +156,7 @@ pub(crate) async fn prefetch(
     let brief = project_brief(db, task).await?;
     let mut images = vec![];
     for photo in &missing {
-        let data = std::fs::read(&photo.2)
-            .map_err(|e| AppError::new("RESOURCE_MISSING", format!("预览缓存缺失：{e}")))?;
+        let data = super::upload_compress::compress_for_upload(std::path::Path::new(&photo.2))?;
         let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data);
         images.push((photo.0.clone(), encoded));
     }
