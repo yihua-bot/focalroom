@@ -61,6 +61,27 @@ class ApiController {
       headers = req.headers,
       path = req.path.replace(/^\/api\/v2/, "");
     s.auth.checkOrigin(headers);
+    // ── 产品统计（admin only）──
+    if (path === "/stats/overview" && req.method === "GET") {
+      const u = await s.auth.authenticate(headers, true);
+      const role = (await s.pool.query("SELECT role FROM fr_users WHERE id=$1", [u.id])).rows[0]?.role;
+      assert(role === "admin", 403, "FORBIDDEN", "仅管理员可查看统计");
+      const [users, downloads] = await Promise.all([
+        s.pool.query("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE email_verified_at IS NOT NULL)::int AS verified FROM fr_users"),
+        s.pool.query("SELECT kind, COUNT(*)::int AS total FROM fr_download_events GROUP BY kind"),
+      ]);
+      return {
+        registrations: { total: users.rows[0].total, verified: users.rows[0].verified },
+        downloads: Object.fromEntries(downloads.rows.map((r: { kind: string; total: number }) => [r.kind, r.total])),
+        downloadsTotal: downloads.rows.reduce((a: number, r: { total: number }) => a + r.total, 0),
+      };
+    }
+    if (path === "/stats/download" && req.method === "POST") {
+      const kind = req.body?.kind === "updater" ? "updater" : "dmg";
+      await s.pool.query("INSERT INTO fr_download_events(kind) VALUES($1)", [kind]);
+      return { ok: true };
+    }
+
     if (path === '/billing/catalog' && req.method === 'GET') return s.billing.catalog();
     if (path === '/billing/overview' && req.method === 'GET') return s.billing.overview(headers);
     if (path === '/billing/checkout' && req.method === 'POST') return s.billing.checkout(headers,req.body);

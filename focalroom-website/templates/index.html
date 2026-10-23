@@ -110,5 +110,12 @@
 
   <dialog id="workspace-dialog" class="site-dialog" aria-labelledby="workspace-dialog-title"><div class="dialog-body"><button class="dialog-close" data-close aria-label="关闭工作区说明">×</button><p class="eyebrow">FOCALROOM / SHARED REVIEW</p><h2 id="workspace-dialog-title">让交流，围绕作品发生。</h2><p>共享评片已有登录、注册、私密邀请与提案审批。请使用项目负责人提供的可信地址和受邀邮箱进入。</p><div class="dialog-info"><strong id="workspace-state-title">https://team.focroom.cc/shared</strong><p id="workspace-state">在浏览器中登录，进入你有权限访问的项目。</p></div><div class="dialog-actions"><a class="button button-dark" id="workspace-action" href="https://team.focroom.cc/shared">打开团队评片 ↗</a><button class="button button-outline" data-close>返回官网</button></div></div></dialog>
   <noscript><div class="noscript">官网页面可直接阅读，无需开启 JavaScript；交互演示需要 JavaScript。</div></noscript>
+<script>
+document.querySelectorAll('a[href*=".dmg"]').forEach(function(a) {
+  a.addEventListener('click', function() {
+    navigator.sendBeacon && navigator.sendBeacon('https://team.focroom.cc/api/v2/stats/download', JSON.stringify({kind:'dmg'}));
+  });
+});
+</script>
 </body>
 </html>

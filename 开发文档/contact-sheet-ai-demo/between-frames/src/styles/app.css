@@ -683,3 +683,27 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .focal-chat-meta .cost{font-variant-numeric:tabular-nums}
 .focal-chat-meta .clear{background:none;border:none;color:var(--text2,#777);cursor:pointer;font-size:11px;text-decoration:underline}
 .focal-chat-meta .clear:hover{color:var(--text,#e8e8f0)}
+
+.focal-message-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.chat-count-options { color: #a6b4c1; font-size: 11px; }
+.chat-count-options summary, .chat-inspection summary { cursor: pointer; padding: 5px 0; }
+.chat-count-options[open] .chat-count { padding-top: 8px; }
+.chat-inspection { margin: 14px 0; padding: 10px 12px; border: 1px solid #ffffff15; border-radius: 10px; }
+.chat-inspection > div { padding: 12px 0; border-top: 1px solid #ffffff0d; }
+.chat-inspection button { border: 0; background: transparent; padding: 0; color: #9aceed; cursor: pointer; text-align: left; }
+.chat-inspection ul { padding-left: 20px; }
+.chat-inspection p { margin: 8px 0; }
+.chat-preference-card { margin: 16px 0; padding: 14px; border: 1px solid var(--border); border-radius: 10px; line-height: 1.7; }
+.chat-preference-card textarea { display: block; width: 100%; min-height: 72px; margin: 10px 0; padding: 10px; resize: vertical; background: var(--surface); color: inherit; border: 1px solid var(--border); border-radius: 6px; }
+.chat-preference-card blockquote { margin: 10px 0; padding-left: 10px; border-left: 2px solid var(--border); white-space: pre-wrap; }
+.chat-preference-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chat-lineage { margin: 12px 0; }
+
+/* 管理员统计面板 */
+.admin-stats{padding:12px;border-top:1px solid var(--border,#2a2a40);margin-top:8px}
+.admin-stats h4{margin:0 0 8px;font-size:12px;color:var(--text2,#888);text-transform:uppercase;letter-spacing:.5px}
+.admin-stats-grid{display:flex;gap:8px}
+.stat-card{flex:1;background:var(--bg-secondary,#1a1a28);border:1px solid var(--border,#2a2a40);border-radius:8px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.stat-number{font-size:24px;font-weight:700;color:var(--accent,#a29bfe);font-variant-numeric:tabular-nums}
+.stat-label{font-size:11px;color:var(--text,#e8e8f0)}
+.stat-sub{font-size:10px;color:var(--text2,#777)}
