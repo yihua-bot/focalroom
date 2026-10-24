@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { defaultAgentBudget, type AgentTask } from '../src/domain/agent';
 import { installAccountFixture } from './account-fixture';
+import { evidenceDirectory } from './evidence-directory';
 
 
 async function installSurface(page:Page){
@@ -62,7 +63,7 @@ test('未确认结果只查询，找回后必须明确继续，页面重开不�
  await page.getByRole('main').getByRole('button',{name:'Focal AI',exact:true}).click();
  await expect(drawer.getByRole('button',{name:'查询处理结果'})).toBeVisible();
  expect(lookups).toBe(1);expect(commands).toEqual([]);
- const evidence=resolve('../docs/v3/evidence/vision-recovery-2026-10-24/browser');await mkdir(evidence,{recursive:true});
+ const evidence=evidenceDirectory('vision-recovery');await mkdir(evidence,{recursive:true});
  await page.screenshot({path:resolve(evidence,'pending-result.png')});
  await drawer.getByRole('button',{name:'查询处理结果'}).click();
  await expect(drawer.getByRole('button',{name:'继续',exact:true})).toBeEnabled();
@@ -109,7 +110,7 @@ test('本次恢复许可默认关闭、明确发送、取消回执与下一轮�
  const toggle=settings.getByRole('checkbox',{name:'本次分析可在服务恢复后继续'});
  await expect(toggle).not.toBeChecked();expect(commands).toEqual([]);
  await toggle.check();await expect(settings).toContainText('备份可能保留加密副本');
- const evidence=resolve('../docs/v3/evidence/queue-client-2026-10-24/browser');await mkdir(evidence,{recursive:true});
+ const evidence=evidenceDirectory('queue-client');await mkdir(evidence,{recursive:true});
  await page.screenshot({path:resolve(evidence,'explicit-recovery-choice.png')});
  await settings.getByRole('button',{name:'关闭对话框',exact:true}).click();
  await drawer.getByRole('textbox',{name:'消息'}).fill('比较这组照片的叙事节奏');

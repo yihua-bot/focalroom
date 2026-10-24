@@ -102,6 +102,41 @@ it('同一属性冲突须明确选择，选择会绑定新的模拟与正式提�
   expect(repository.applyMerge).toHaveBeenCalledWith('project', expect.objectContaining({ resolutions: [{ changeId: 'change-a', field: 'position', choice: 'use_draft' }] }), 'resolved');
 });
 
+it('移除涉及分组和评论时先展示影响，明确确认后才允许采纳',async()=>{
+  const simulateMerge=vi.fn(async(_p:string,s:EditorialSelection):Promise<MergeSimulation>=>({simulationId:'structure-confirmed',draftRevision:3,targetRevision:12,effectiveChangeIds:s.selectedChangeIds,autoIncludedChangeIds:[],conflicts:[],mergedNodes:[],canApply:!!s.structuralResolutions?.length,structuralConflicts:s.selectedChangeIds.length?[{changeId:'change-a',nodeId:'a',kind:'remove_changed',currentModified:true,relatedNodes:[{nodeId:'g',nodeType:'group',effect:'detach'},{nodeId:'arrow',nodeType:'arrow',effect:'remove'}],preservedCommentCount:2,resolved:!!s.structuralResolutions?.length}]:[]}));
+  const {repository}=setup({simulateMerge});const user=userEvent.setup();
+  await user.click(screen.getByRole('checkbox',{name:'选择改动 1'}));
+  const region=await screen.findByRole('region',{name:'处理内容与关联变化'});
+  expect(within(region).getByText(/2 条评论将保留/)).toBeInTheDocument();
+  await user.click(within(region).getByText('一同调整的内容 · 2'));
+  expect(within(region).getByText(/移除失去端点的连接线/)).toBeVisible();
+  expect(screen.getByRole('button',{name:'采纳选中改动'})).toBeDisabled();expect(repository.applyMerge).not.toHaveBeenCalled();
+  await user.click(within(region).getByRole('button',{name:'确认移除并整理关联'}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'采纳选中改动'})).toBeEnabled());
+  expect(repository.applyMerge).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button',{name:'采纳选中改动'}));
+  expect(repository.applyMerge).toHaveBeenCalledWith('project',expect.objectContaining({structuralResolutions:[{changeId:'change-a',choice:'remove_proposed'}]}),'structure-confirmed');
+});
+
+it('保留当前只拒绝这一项，不会顺便采纳其他已勾选建议',async()=>{
+  const recordDecision=vi.fn().mockResolvedValue(undefined),compareDraft=vi.fn().mockResolvedValue({...comparison,changes:comparison.changes.map((c,i)=>({...c,decision:i?'pending':'rejected'}))});
+  const simulateMerge=vi.fn(async(_p:string,s:EditorialSelection):Promise<MergeSimulation>=>({simulationId:'missing',draftRevision:3,targetRevision:12,effectiveChangeIds:s.selectedChangeIds,autoIncludedChangeIds:[],conflicts:[],mergedNodes:[],canApply:false,structuralConflicts:s.selectedChangeIds.includes('change-a')?[{changeId:'change-a',nodeId:'a',kind:'current_removed',currentModified:false,relatedNodes:[],preservedCommentCount:0,resolved:false}]:[]}));
+  const {repository}=setup({simulateMerge,recordDecision,compareDraft});const user=userEvent.setup();
+  await user.click(screen.getByRole('checkbox',{name:'选择改动 1'}));await user.click(screen.getByRole('checkbox',{name:'选择改动 2'}));
+  await user.click(await screen.findByRole('button',{name:'保留当前，不采纳此项'}));
+  await waitFor(()=>expect(recordDecision).toHaveBeenCalledWith('project',expect.objectContaining({selectedChangeIds:['change-a']}),'rejected'));
+  expect(repository.applyMerge).not.toHaveBeenCalled();
+  expect(await screen.findByText(/未采纳/)).toBeInTheDocument();
+});
+
+it('恢复已移除内容必须单独确认，只读模式不允许恢复或拒绝',async()=>{
+  const recordDecision=vi.fn(),compareDraft=vi.fn();
+  setup({recordDecision,compareDraft,simulateMerge:vi.fn().mockResolvedValue({simulationId:'missing',draftRevision:3,targetRevision:12,effectiveChangeIds:['change-a'],autoIncludedChangeIds:[],conflicts:[],mergedNodes:[],canApply:false,structuralConflicts:[{changeId:'change-a',nodeId:'a',kind:'current_removed',currentModified:false,relatedNodes:[],preservedCommentCount:0,resolved:false}]})},comparison,true);
+  expect(await screen.findByRole('button',{name:'按建议恢复'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'保留当前，不采纳此项'})).toBeDisabled();
+  expect(recordDecision).not.toHaveBeenCalled();
+});
+
 it('分批采纳后留在审稿页，已采纳项禁选，下一批使用最新基线', async () => {
   const updated: CanvasComparison = { ...comparison, currentSourceRevision: 13, sourceChanged: true, changes: comparison.changes.map((c,i) => ({ ...c, decision: i ? 'pending' : 'accepted' })) };
   const compareDraft = vi.fn().mockResolvedValue(updated);

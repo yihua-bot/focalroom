@@ -1,36 +1,32 @@
-import { installAccountFixture } from './account-fixture';
+import { evidenceDirectory } from './evidence-directory';
+import { installAccountFixture, installDesktopBridge } from './account-fixture';
 // M5 Beta 完整旅程：意图 → 人工选片与备注 → Agent 委托 → 局部采纳 →
 // 记忆假设纠正 → 导出 → 重启一致性。真实 Rust 后端（stdio harness）。
 import { test, expect } from '@playwright/test';
 import { mkdir, readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 
+const rpcBase = process.env.FOCALROOM_TEST_RPC_BASE ?? 'http://localhost:1422';
 const rpc = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
-  const response = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
+  const response = await fetch(rpcBase + '/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
   if (!response.ok) throw new Error(response.error.message);
+  if (command === 'execute_gui_command') {
+    if (!response.value.ok || !response.value.data?.project) throw new Error(response.value.error?.message ?? '未取得人工操作回执');
+    return response.value.data.project;
+  }
   return response.value;
 };
 type Project = { id: string; revision: number; sequence: string[]; photos: { id: string; status: string; note: string; rating: number }[] };
 
 test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一致', async ({ page }) => {
-  const screenshots = resolve('../docs/screenshots/v1-m5');
+  const screenshots = evidenceDirectory('beta-journey');
   await mkdir(screenshots, { recursive: true });
   await page.route('**/*', route => {
     if (['localhost', '127.0.0.1', '[::1]'].includes(new URL(route.request().url()).hostname)) return route.continue();
     return route.abort('internetdisconnected');
   });
   await installAccountFixture(page);
- await page.addInitScript(() => {
-    Object.assign(globalThis, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: {
-      invoke: async (command: string, args: unknown) => {
-        if (command.startsWith('plugin:event|')) return 0;
-        const r = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
-        if (!r.ok) throw r.error;
-        return r.value;
-      },
-      convertFileSrc: (path: string) => 'http://localhost:1422/asset?path=' + encodeURIComponent(path), transformCallback: () => 0,
-    } });
-  });
+ await installDesktopBridge(page,rpcBase);
   // 1. 建项目 + 写创作意图。
   const project = await rpc<Project>('create_project', { title: '成长的摄影书', brief: '克制、日常、有时间感的家庭影像' });
   const token = await rpc<string>('choose_import', { projectId: project.id });
@@ -60,7 +56,7 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   await expect(page.getByText('人工证据')).toBeVisible();
   const memory = await rpc<{ evidence: unknown[]; hypotheses: { id: number; statement: string }[] }>('get_memory_projection', { projectId: project.id });
   expect(memory.evidence.length).toBeGreaterThanOrEqual(11);
-  const target = memory.hypotheses.find(h => h.statement.includes('层次') || memory.hypotheses[0]);
+  const target = memory.hypotheses[0];
   expect(target).toBeTruthy();
   await page.getByRole('button', { name: '纠正此假设' }).first().click();
   await page.getByRole('textbox', { name: '纠正说明' }).fill('光线只是巧合，不是我的稳定偏好');
@@ -72,14 +68,14 @@ test('Beta 旅程：选片、委托、采纳、纠正假设、导出与重启一
   expect(after?.disabled).toBe(true);
   await page.screenshot({ path: resolve(screenshots, 'journey-memory.png') });
   // 5. 局部采纳一份草案的部分照片。
-  await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
+  await page.getByRole('button', { name: '返回对话', exact: true }).click();
   await page.getByRole('button', { name: '查看方案' }).first().click();
   await page.getByRole('button', { name: '清除选择' }).click();
   const checkboxes = page.locator('.draft-items input[type="checkbox"]');
   const total = await checkboxes.count();
   expect(total).toBeGreaterThan(3);
   for (let i = 0; i < 3; i++) await checkboxes.nth(i).check();
-  await page.getByRole('button', { name: '采纳所选 3 项' }).click();
+  await page.getByRole('button', { name: '采纳所选 3 张' }).click();
   await page.waitForTimeout(2000);
   await page.screenshot({ path: resolve(screenshots, 'journey-applied.png') });
   // 6. 导出 CSV（默认私密）。

@@ -36,17 +36,18 @@ export async function installAccountFixture(page: Page, guest = false) {
   } };
 }
 
-export async function installDesktopBridge(page: Page) {
-  await page.addInitScript(() => {
+export async function installDesktopBridge(page: Page, rpcBase = 'http://localhost:1422') {
+  await page.addInitScript(({ rpcBase }) => {
+    if (!['http:', 'https:'].includes(window.location.protocol)) return;
     localStorage.setItem('focalroom-locale', 'zh');
     Object.assign(globalThis, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: {
       invoke: async (command: string, args: unknown) => {
-        if (command.startsWith('plugin:event|')) return 0;
-        const result = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
+        if (command.startsWith('plugin:event|') || command === 'set_native_menu_locale') return 0;
+        const result = await fetch(rpcBase + '/rpc', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
         if (!result.ok) throw result.error;
         return result.value;
       },
-      convertFileSrc: (path: string) => 'http://localhost:1422/asset?path=' + encodeURIComponent(path), transformCallback: () => 0,
+      convertFileSrc: (path: string) => rpcBase + '/asset?path=' + encodeURIComponent(path), transformCallback: () => 0,
     } });
-  });
+  }, { rpcBase });
 }

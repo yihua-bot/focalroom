@@ -1,0 +1,43 @@
+import { test,expect } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { defaultAgentBudget,type AgentProjection } from '../src/domain/agent';
+import { installAccountFixture,installDesktopBridge } from './account-fixture';
+import { evidenceDirectory } from './evidence-directory';
+
+const base='http://localhost:1447';
+const rpc=async<T>(command:string,args:Record<string,unknown>={}):Promise<T>=>{
+ const reply=await fetch(base+'/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({command,args})}).then(response=>response.json());if(!reply.ok)throw new Error(reply.error.message);return reply.value;
+};
+type LocalProject={id:string;revision:number;sequence:string[];photos:{id:string;name:string;status:string}[]};
+test('真实选片修订：部分采纳后另存、查看冻结依据、重启保持且不修改父版或作品',async({page})=>{
+ const outside:string[]=[],errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.route('**/*',route=>{if(['localhost','127.0.0.1','[::1]'].includes(new URL(route.request().url()).hostname))return route.continue();outside.push(route.request().url());return route.abort();});
+ await installAccountFixture(page);await installDesktopBridge(page,base);
+ const created=await rpc<LocalProject>('create_project',{title:'选片修订依据',brief:'保留每一轮选片和人工判断'});const projectId=created.id;
+ const token=await rpc<string>('choose_import',{projectId});const jobId=await rpc<string>('import_photos',{projectId,selectionToken:token});
+ await expect.poll(async()=>(await rpc<{status:string}>('get_import_job',{jobId})).status,{timeout:100000}).toBe('completed');
+ const project=await rpc<LocalProject>('get_project',{projectId});const originalHashes=await rpc('test_fixture_checksums');
+ const request=await rpc<{ok:boolean;data:{taskId:string};error:unknown}>('agent_request',{request:{requestId:randomUUID(),projectId,command:{type:'StartConversation',expectedAccountId:null,goal:'为开篇选择两张照片，先给方案',selectedPhotoIds:project.photos.slice(0,2).map(photo=>photo.id),focusPhotoIds:[],targetCount:2,budget:defaultAgentBudget,consentId:null,sourceBoard:null,continuation:null}}});expect(request.ok,JSON.stringify(request.error)).toBe(true);
+ await expect.poll(async()=>(await rpc<AgentProjection>('get_agent_projection',{projectId})).tasks.find(task=>task.id===request.data.taskId)?.state,{timeout:30000}).toBe('review_ready');
+ const initial=await rpc<AgentProjection>('get_agent_projection',{projectId});const parent=initial.drafts.find(draft=>draft.taskId===request.data.taskId)!;const approved=parent.items[0].photo_id;
+ const id=randomUUID();const accepted=await rpc<{ok:boolean}>('execute_gui_command',{request:{commandId:id,idempotencyKey:id,projectId,expectedProjectRevision:project.revision,causationId:id,command:{type:'ApplyDraft',draftId:parent.id,expectedDraftRevision:parent.revision,approvedPhotoIds:[approved],mode:'partial'}}});expect(accepted.ok).toBe(true);
+ const original=await rpc<LocalProject>('get_project',{projectId});expect(original.sequence).toEqual([approved]);const savedParent=(await rpc<AgentProjection>('get_agent_projection',{projectId})).drafts.find(draft=>draft.id===parent.id)!;
+ await page.goto('/#/project/'+projectId);await page.getByRole('main').getByRole('button',{name:'Focal AI',exact:true}).click();const ai=page.getByRole('dialog',{name:'Focal AI',exact:true});
+ await ai.locator('.chat-draft-card').filter({hasText:parent.title}).getByRole('button',{name:'继续修改',exact:true}).click();
+ await ai.getByRole('textbox',{name:'消息',exact:true}).fill('把顺序换一个方向，保留上一版和作品序列');await ai.getByRole('button',{name:'发送',exact:true}).click();
+ await expect(ai.getByText('新的选片修订已准备好，前版与作品序列保留',{exact:true})).toBeVisible({timeout:30000});
+ const result=await rpc<AgentProjection>('get_agent_projection',{projectId});const child=result.drafts.find(draft=>draft.taskId===result.tasks[0].id)!;expect(child.id).not.toBe(parent.id);expect(child.items.map(item=>item.photo_id)).toEqual([...parent.items.map(item=>item.photo_id)].reverse());
+ await ai.locator('.chat-draft-card').filter({hasText:'SIMULATED · 选片修订'}).getByRole('button',{name:'查看方案',exact:true}).click();
+ const review=page.getByRole('dialog',{name:'SIMULATED · 选片修订',exact:true});const context=review.locator('.selection-revision-context');await context.locator('summary').first().click();
+ await expect(context.getByText('采纳所选照片',{exact:true})).toBeVisible();const manual=context.locator('.revision-observation').filter({hasText:'采纳所选照片'});await manual.locator('summary').click();
+ await expect(manual.getByRole('listitem')).toHaveCount(1);await expect(manual.getByRole('listitem')).toHaveText(project.photos.find(photo=>photo.id===approved)!.name);
+ await expect(context.getByText('为开篇选择两张照片，先给方案',{exact:true})).toBeVisible();await expect(context.getByRole('checkbox')).toHaveCount(0);
+ const directory=evidenceDirectory('selection-revision');await mkdir(directory,{recursive:true});await context.scrollIntoViewIfNeeded();await page.screenshot({path:resolve(directory,'selection-context.png')});
+ expect(await rpc('get_project',{projectId})).toEqual(original);expect((await rpc<AgentProjection>('get_agent_projection',{projectId})).drafts.find(draft=>draft.id===parent.id)).toEqual(savedParent);
+ await page.goto('about:blank');await rpc('test_process_restart');await page.goto('/#/project/'+projectId);await page.getByRole('main').getByRole('button',{name:'Focal AI',exact:true}).click();
+ await page.getByRole('dialog',{name:'Focal AI',exact:true}).locator('.chat-draft-card').filter({hasText:'SIMULATED · 选片修订'}).getByRole('button',{name:'查看方案',exact:true}).click();
+ await page.getByRole('dialog',{name:'SIMULATED · 选片修订',exact:true}).locator('.selection-revision-context summary').first().click();await expect(page.getByText('采纳所选照片',{exact:true})).toBeVisible();
+ expect(await rpc('test_fixture_checksums')).toEqual(originalHashes);expect(await rpc('get_project',{projectId})).toEqual(original);expect(outside).toEqual([]);expect(errors).toEqual([]);
+});

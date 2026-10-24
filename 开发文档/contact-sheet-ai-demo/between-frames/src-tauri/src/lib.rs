@@ -202,6 +202,7 @@ pub fn run() {
             commands::canvas_comparison,
             commands::canvas_editorial_discussion,
             commands::canvas_editorial_revision_context,
+            commands::selection_revision_context,
             commands::canvas_editorial_history,
             commands::canvas_simulate_revert,
             commands::canvas_simulate_merge,

@@ -1,12 +1,13 @@
 import { userFacingError } from '../../services/userFacingError';
 import { useEffect, useRef, useState } from 'react';
-import type { BoardInfo, CanvasComparison, CanvasRepository, EditorialChange, EditorialSelection, EditorialResolution, MergeSimulation } from '../../domain/canvas';
+import type { BoardInfo, CanvasComparison, CanvasRepository, EditorialChange, EditorialSelection, EditorialResolution, MergeSimulation, StructuralResolution } from '../../domain/canvas';
 import { Modal } from '../../components/shared/Modal';
 import { Button } from '../../components/shared/Button';
 import { zh } from '../../app/copy';
 import { CanvasComparisonViewport } from './CanvasComparisonViewport';
 import { EditorialDiscussion } from './EditorialDiscussion';
 import { EditorialRevisionContext } from './EditorialRevisionContext';
+import { EditorialStructuralConflicts } from './EditorialStructuralConflicts';
 import './editorial-review.css';
 
 const title = (change: EditorialChange) => (change.kinds ?? [change.kind]).map(kind => zh[`editorialKind_${kind}`]).join(' · ');
@@ -28,6 +29,7 @@ export function EditorialReviewWorkspace({ repository, projectId, board, compari
   const [refreshedComparison, setRefreshedComparison] = useState<CanvasComparison>();
   const comparison = refreshedComparison ?? initialComparison;
   const [resolutions, setResolutions] = useState<EditorialResolution[]>([]);
+  const [structuralResolutions, setStructuralResolutions] = useState<StructuralResolution[]>([]);
   const [fieldsByChange, setFieldsByChange] = useState<Record<string, EditorialResolution['field'][]>>({});
   const [appliedTarget, setAppliedTarget] = useState<string>();
   const storageKey = `focalroom.editorial.selection.${projectId}.${board.id}.${comparison.draftRevision}`;
@@ -42,13 +44,14 @@ export function EditorialReviewWorkspace({ repository, projectId, board, compari
   const [failure, setFailure] = useState<{ key: string; message: string }>();
   const [applying, setApplying] = useState(false);
   const applyLock = useRef(false);
-  const key = JSON.stringify([selectionVersion, selected, comparison.currentSourceRevision, comparison.draftRevision, resolutions, fieldsByChange]);
+  const key = JSON.stringify([selectionVersion, selected, comparison.currentSourceRevision, comparison.draftRevision, resolutions, fieldsByChange, structuralResolutions]);
   const canSimulate = Boolean(comparison.sourceBoardId && comparison.currentSourceRevision && repository.simulateMerge);
   const selection: EditorialSelection = {
     draftId: board.id, draftRevision: comparison.draftRevision, targetBoardId: comparison.sourceBoardId ?? '',
     expectedTargetRevision: comparison.currentSourceRevision ?? 0, selectedChangeIds: selected,
     ...(resolutions.length ? { resolutions } : {}),
     ...(Object.keys(fieldsByChange).length ? { fieldsByChange } : {}),
+    ...(structuralResolutions.length ? { structuralResolutions } : {}),
   };
   const simulation = result?.key === key ? result.value : undefined;
   const error = failure?.key === key ? failure.message : undefined;
@@ -60,7 +63,7 @@ export function EditorialReviewWorkspace({ repository, projectId, board, compari
     if (!canSimulate) return;
     let active = true;
     const captured = JSON.parse(key);
-    const request: EditorialSelection = { draftId: board.id, draftRevision: comparison.draftRevision, targetBoardId: comparison.sourceBoardId!, expectedTargetRevision: comparison.currentSourceRevision!, selectedChangeIds: captured[1], ...(captured[4].length ? { resolutions: captured[4] } : {}), ...(Object.keys(captured[5]).length ? { fieldsByChange: captured[5] } : {}) };
+    const request: EditorialSelection = { draftId: board.id, draftRevision: comparison.draftRevision, targetBoardId: comparison.sourceBoardId!, expectedTargetRevision: comparison.currentSourceRevision!, selectedChangeIds: captured[1], ...(captured[4].length ? { resolutions: captured[4] } : {}), ...(Object.keys(captured[5]).length ? { fieldsByChange: captured[5] } : {}), ...(captured[6].length ? {structuralResolutions:captured[6]} : {}) };
     repository.simulateMerge!(projectId, request).then(value => { if (active) setResult({ key, value }); })
       .catch(error => { if (active) setFailure({ key, message: userFacingError(error, zh.editorialPreviewFailed) }); });
     return () => { active = false; };
@@ -69,6 +72,7 @@ export function EditorialReviewWorkspace({ repository, projectId, board, compari
   const select = (ids: string[]) => {
     if (applyLock.current) return;
     setSelected(ids); setResolutions(values => values.filter(r => ids.includes(r.changeId))); setSelectionVersion(version => version + 1);
+    setStructuralResolutions(values => values.filter(r => ids.includes(r.changeId)));
     setFieldsByChange(values => Object.fromEntries(ids.flatMap(id => {
       const change = comparison.changes.find(c => c.id === id);
       const fields = values[id] ?? (change?.acceptedFields?.length ? change.fields?.filter(f => !change.acceptedFields?.includes(f)) : undefined);
@@ -86,28 +90,28 @@ export function EditorialReviewWorkspace({ repository, projectId, board, compari
       if (repository.compareDraft) {
         setAppliedTarget(selection.targetBoardId);
         setRefreshedComparison(await repository.compareDraft(projectId, board.id));
-        setSelected([]); setResolutions([]); setFieldsByChange({}); setSelectionVersion(v => v + 1);
+        setSelected([]); setResolutions([]); setStructuralResolutions([]); setFieldsByChange({}); setSelectionVersion(v => v + 1);
       } else await onApplied(selection.targetBoardId);
     } catch (error) { setFailure({ key, message: userFacingError(error, zh.editorialApplyFailed) }); }
     finally { applyLock.current = false; setApplying(false); }
   };
-  const decide = async (decision: 'pending'|'rejected'|'deferred') => {
-    if (!repository.recordDecision || !repository.compareDraft || applyLock.current || readOnly || pending || !selected.length) return;
+  const decide = async (decision: 'pending'|'rejected'|'deferred', ids = selected) => {
+    if (!repository.recordDecision || !repository.compareDraft || applyLock.current || readOnly || pending || !ids.length) return;
     applyLock.current = true; setApplying(true);
     try {
-      await repository.recordDecision(projectId, selection, decision);
+      await repository.recordDecision(projectId, {...selection,selectedChangeIds:ids,fieldsByChange:Object.fromEntries(Object.entries(fieldsByChange).filter(([id]) => ids.includes(id)))}, decision);
       setRefreshedComparison(await repository.compareDraft(projectId, board.id));
       selectAfterDecision();
     } catch (error) { setFailure({ key, message: userFacingError(error, zh.editorialApplyFailed) }); }
     finally { applyLock.current = false; setApplying(false); }
   };
   const selectAfterDecision = () => {
-    setSelected([]); setResolutions([]); setFieldsByChange({}); setSelectionVersion(v => v + 1);
+    setSelected([]); setResolutions([]); setStructuralResolutions([]); setFieldsByChange({}); setSelectionVersion(v => v + 1);
     try { localStorage.removeItem(storageKey); } catch { /* 决定已保存至命令回执。 */ }
   };
   const close = () => { if (!applyLock.current) { if (appliedTarget) void onApplied(appliedTarget); else onClose(); } };
   const rationale = (() => { try { const value = JSON.parse(change?.after?.contentJson ?? '{}').rationale; return typeof value === 'string' ? value : ''; } catch { return ''; } })();
-  const status = applying ? zh.editorialApplying : error ?? (pending ? zh.editorialPending : !canSimulate ? zh.editorialNoSource : simulation?.conflicts.length ? simulation.conflicts.join('；') : simulation?.attributeConflicts?.length ? zh.editorialResolveConflicts : !selected.length ? zh.editorialNone : !simulation ? zh.editorialSimulating : zh.editorialPreviewReady);
+  const status = applying ? zh.editorialApplying : error ?? (pending ? zh.editorialPending : !canSimulate ? zh.editorialNoSource : simulation?.conflicts.length ? simulation.conflicts.join('；') : simulation?.attributeConflicts?.length || simulation?.structuralConflicts?.some(c => !c.resolved) ? zh.editorialResolveConflicts : !selected.length ? zh.editorialNone : !simulation ? zh.editorialSimulating : zh.editorialPreviewReady);
 
   return <Modal title={zh.editorialTitle} className="editorial-workspace" onClose={close}>
     <div className="editorial-layout" onKeyDown={event => {
@@ -153,6 +157,10 @@ export function EditorialReviewWorkspace({ repository, projectId, board, compari
             <p>{zh.editorialCurrent}: {conflictValue(conflict.field, conflict.current)}</p><p>{zh.editorialProposed}: {conflictValue(conflict.field, conflict.proposed)}</p>
             {(['keep_current','use_draft'] as const).map(choice => <Button key={choice} size="small" disabled={applying} onClick={() => { setResolutions(values => [...values.filter(r => r.changeId !== conflict.changeId || r.field !== conflict.field), { changeId: conflict.changeId, field: conflict.field, choice }]); setSelectionVersion(v => v + 1); }}>{zh[`editorialChoice_${choice}`]}</Button>)}
           </fieldset>)}</section>}
+          <EditorialStructuralConflicts conflicts={simulation?.structuralConflicts ?? []} disabled={applying || readOnly || Boolean(pending)} canKeep={Boolean(repository.recordDecision && repository.compareDraft)} onChoose={resolution => {
+            if (applyLock.current || readOnly) return;
+            setStructuralResolutions(values => [...values.filter(r => r.changeId !== resolution.changeId),resolution]); setSelectionVersion(v => v + 1);
+          }} onKeep={id => void decide('rejected',[id])} />
           <EditorialDiscussion key={`${projectId}:${board.id}:${comparison.draftRevision}`} repository={repository} projectId={projectId} draftId={board.id} revision={comparison.draftRevision} changeId={change?.id} changeTitles={Object.fromEntries(comparison.changes.map((item,index) => [item.id,`${index+1} · ${title(item)}`]))} readOnly={readOnly} onRevise={onRevise} />
           <EditorialRevisionContext key={`context:${projectId}:${board.id}`} repository={repository} projectId={projectId} draftId={board.id} />
         </aside>

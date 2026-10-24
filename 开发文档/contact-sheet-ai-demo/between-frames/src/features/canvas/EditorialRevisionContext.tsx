@@ -1,24 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { useRevisionContext } from '../../components/review/useRevisionContext';
+import { HistoricalObservations } from '../../components/review/HistoricalObservations';
 import type { CanvasRepository, EditorialMessage, EditorialRevisionContext as RevisionContext } from '../../domain/canvas';
 import { Button } from '../../components/shared/Button';
 import { zh } from '../../app/copy';
 
 export function EditorialRevisionContext({ repository, projectId, draftId }: { repository: CanvasRepository; projectId: string; draftId: string }) {
-  const [location, setLocation] = useState({ draftId, offset: 0, trail: [] as string[], generation: 0 });
-  const [page, setPage] = useState<RevisionContext | null>();
-  const [busy, setBusy] = useState(true), [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let active = true;
-    if (!repository.editorialRevisionContext) return;
-    repository.editorialRevisionContext(projectId, location.draftId, location.offset).then(value => {
-      if (active) setPage(value);
-    }).catch(() => { if (active) setFailed(true); }).finally(() => { if (active) setBusy(false); });
-    return () => { active = false; };
-  }, [repository, projectId, location.draftId, location.offset, location.generation]);
+  const load = useCallback((project: string, draft: string, offset: number) => repository.editorialRevisionContext!(project, draft, offset), [repository]);
+  const { location, page, busy, failed, navigate } = useRevisionContext<RevisionContext>(repository.editorialRevisionContext ? load : undefined, projectId, draftId);
   if (!repository.editorialRevisionContext || page === null) return null;
-  const navigate = (draft: string, offset: number, trail = location.trail) => {
-    setBusy(true); setFailed(false); setPage(undefined); setLocation(previous => ({ draftId: draft, offset, trail, generation: previous.generation + 1 }));
-  };
   const threads = new Map<string, EditorialMessage[]>();
   for (const message of page?.discussion.messages ?? []) threads.set(message.threadId, [...(threads.get(message.threadId) ?? []), message]);
   return <details className="editorial-revision-context">
@@ -39,13 +29,7 @@ export function EditorialRevisionContext({ repository, projectId, draftId }: { r
         {messages[0].resolved && <small>{zh.editorialThreadResolved}</small>}
         {messages.filter(message => message.isReply).map(message => <blockquote key={message.id}><p>{message.body}</p></blockquote>)}
       </article>)}
-      <h5>{zh.editorialRevisionObservations} · {page.totalObservations}</h5>
-      <p className="muted">{zh.editorialRevisionObservationHint}</p>
-      {page.observations.map(photo => <article className="editorial-comment-thread" key={`${photo.taskId}:${photo.callId}:${photo.photoId}`}>
-        {!photo.currentHashMatches && <p role="status">{zh.editorialRevisionPhotoChanged}</p>}
-        <ul>{photo.visibleFacts.map((fact, index) => <li key={index}>{fact}</li>)}</ul>
-        <p>{photo.interpretation}</p><p className="muted">{photo.uncertainty}</p>
-      </article>)}
+      <HistoricalObservations observations={page.observations} total={page.totalObservations} />
       <div className="editorial-comment-actions">
         {location.offset > 0 && <Button size="small" disabled={busy} onClick={() => navigate(location.draftId, Math.max(0, location.offset - 30))}>{zh.editorialRevisionPreviousPage}</Button>}
         {page.nextOffset !== null && <Button size="small" disabled={busy} onClick={() => navigate(location.draftId, page.nextOffset!)}>{zh.editorialRevisionNextPage}</Button>}

@@ -96,6 +96,10 @@ function localCounts(root,id){
  const db=new DatabaseSync(join(root,'projects.sqlite'),{readOnly:true});
  try{return {observations:db.prepare('SELECT count(*) AS count FROM photo_observations').get().count,settlements:db.prepare("SELECT count(*) AS count FROM agent_steps WHERE task_id=? AND kind='vision_settled'").get(id).count};}finally{db.close();}
 }
+function observationReceipt(root,id){
+ const db=new DatabaseSync(join(root,'projects.sqlite'),{readOnly:true});
+ try{return JSON.parse(db.prepare("SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name='inspect_photos'").get(id).result_json);}finally{db.close();}
+}
 before(async()=>{
  assert.ok(process.env.FOCALROOM_TEST_DATABASE_URL);assert.ok(process.env.FOCALROOM_TEST_DIRECTORY);await access(binary);
  pool=new Pool({connectionString:process.env.FOCALROOM_TEST_DATABASE_URL});await migrate(pool);
@@ -123,6 +127,8 @@ test('native image job survives a killed client, completes through replacement w
  assert.equal((await jobFor(f.account)).payload,null);assert.equal((await jobFor(f.account)).attempts,1);
  await assert.rejects(client.rpc('query_vision_result',{projectId,taskId:f.id}));
  assert.deepEqual(localCounts(f.root,f.id),{observations:1,settlements:1});await assertOriginal(client,f);
+ const receipt=observationReceipt(f.root,f.id);assert.equal(receipt.result.provenance[0].photo_id,photoId);assert.equal(receipt.result.provenance[0].photo_hash,f.hash);
+ assert.equal(receipt.result.provenance[0].model_id,'deepseek-flash');assert.equal(JSON.stringify(receipt).includes('data:image'),false);
 });
 
 test('native cancellation after restart withdraws only the queued request and releases its server reservation',{timeout:60000},async()=>{

@@ -6,8 +6,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[path = "canvas_merge_fields.rs"]
 mod fields;
+#[path = "canvas_merge_structure.rs"]
+pub(crate) mod structure;
 pub(crate) use fields::changed_fields;
 pub use fields::{AttributeConflict, EditorialResolution, ResolutionChoice};
+pub use structure::{StructuralConflict, StructuralResolution};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -21,6 +24,8 @@ pub struct EditorialSelection {
     pub resolutions: Vec<EditorialResolution>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub fields_by_change: BTreeMap<String, Vec<String>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub structural_resolutions: Vec<StructuralResolution>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -38,9 +43,12 @@ pub struct MergeSimulation {
     pub auto_included_change_ids: Vec<String>,
     pub conflicts: Vec<String>,
     pub attribute_conflicts: Vec<AttributeConflict>,
+    pub structural_conflicts: Vec<StructuralConflict>,
     pub merged_nodes: Vec<CanvasNode>,
     pub can_apply: bool,
     pub node_id_map: HashMap<String, String>,
+    #[serde(skip)]
+    annotation_patches: Vec<structure::AnchorPatch>,
 }
 fn conflict(message: &str) -> AppError {
     AppError::new("CONFLICT", message)
@@ -149,6 +157,14 @@ async fn simulate_tx(
     {
         conflicts.push("关联建议已被暂缓或拒绝，请先明确选择这些改动".into());
     }
+    let mut structural_keys = BTreeSet::new();
+    if selection.structural_resolutions.len() > 300
+        || selection.structural_resolutions.iter().any(|r| {
+            !effective.contains(&r.change_id) || !structural_keys.insert(r.change_id.clone())
+        })
+    {
+        return Err(conflict("关联处理选择已变化，请重新比较"));
+    }
     let rows: Vec<CanvasNode> = sqlx::query_as(
         "SELECT * FROM canvas_nodes WHERE board_id=? AND visible=1 ORDER BY z_order,id LIMIT 5001",
     )
@@ -158,7 +174,8 @@ async fn simulate_tx(
     if rows.len() > 5000 {
         return Err(conflict("画布内容过多，请分成较小的方案"));
     }
-    let mut merged: BTreeMap<_, _> = rows.into_iter().map(|n| (n.id.clone(), n)).collect();
+    let original: BTreeMap<_, _> = rows.into_iter().map(|n| (n.id.clone(), n)).collect();
+    let mut merged = original.clone();
     let origins: Vec<(String, String)> = sqlx::query_as(
         "SELECT node_id,source_node_id FROM board_draft_node_origins WHERE board_id=?",
     )
@@ -167,6 +184,7 @@ async fn simulate_tx(
     .await?;
     let mut mapping: HashMap<String, String> = origins.into_iter().collect();
     let mut attribute_conflicts = Vec::new();
+    let mut structural_conflicts = Vec::new();
     for node in &comparison.draft_nodes {
         mapping
             .entry(node.id.clone())
@@ -184,8 +202,14 @@ async fn simulate_tx(
                 continue;
             }
             if current.is_none() && change.after.is_some() {
-                conflicts.push("这项建议涉及已移除的内容，请重新生成方案".into());
-                continue;
+                let found =
+                    structure::missing_node(tx, &target.id, change, selection, &mut conflicts)
+                        .await?;
+                let resolved = found.resolved;
+                structural_conflicts.push(found);
+                if !resolved {
+                    continue;
+                }
             }
             if let Some(current) = current
                 && (current.asset_id != before.asset_id || current.node_type != before.node_type)
@@ -206,6 +230,9 @@ async fn simulate_tx(
             let mut node = after.clone();
             node.id = target_id.clone();
             node.board_id = target.id.clone();
+            if let Some(before) = &change.before {
+                node.created_at = before.created_at.clone();
+            }
             node.children_json = after
                 .children_json
                 .as_ref()
@@ -240,19 +267,27 @@ async fn simulate_tx(
             }
             merged.insert(target_id.clone(), node);
         } else {
-            if let (Some(before), Some(current)) = (&change.before, merged.get(target_id))
-                && geometry(before, &HashMap::new())? != geometry(current, &HashMap::new())?
-            {
-                conflicts.push("准备移除的内容已有修改，请先处理这项建议".into());
-                continue;
-            }
             merged.remove(target_id);
-            let anchored: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM board_annotations WHERE board_id=? AND node_id=? AND visible=1)")
-                .bind(&target.id).bind(target_id).fetch_one(&mut **tx).await?;
-            if anchored {
-                conflicts.push("移除的节点有作品评论，请先处理评论再采纳".into());
-            }
         }
+    }
+    let selected_changes: Vec<_> = effective.iter().map(|id| changes[id]).collect();
+    let (removal_conflicts, annotation_patches) = structure::removals(
+        tx,
+        &target.id,
+        selection,
+        &selected_changes,
+        &original,
+        &mut merged,
+        &mut conflicts,
+    )
+    .await?;
+    structural_conflicts.extend(removal_conflicts);
+    if selection.structural_resolutions.iter().any(|r| {
+        !structural_conflicts
+            .iter()
+            .any(|c| c.change_id == r.change_id && c.resolved)
+    }) {
+        return Err(conflict("关联处理选择已失效，请重新比较后选择"));
     }
     if merged.len() > 5000 {
         conflicts.push("采纳后画布内容过多，请拆分为较小方案".into());
@@ -327,19 +362,24 @@ async fn simulate_tx(
     let effective_change_ids: Vec<_> = effective.iter().cloned().collect();
     let auto_included_change_ids = effective.difference(&selected).cloned().collect();
     let simulation_id = fingerprint(
-        &json!({"project":project,"selection":selection,"effective":effective_change_ids,"nodes":merged_nodes,"conflicts":conflicts,"attributeConflicts":attribute_conflicts}),
+        &json!({"project":project,"selection":selection,"effective":effective_change_ids,"nodes":merged_nodes,"conflicts":conflicts,"attributeConflicts":attribute_conflicts,"structuralConflicts":structural_conflicts,"annotationPatches":annotation_patches}),
     );
     Ok(MergeSimulation {
         simulation_id,
         draft_revision: comparison.draft.revision,
         target_revision: target.revision,
-        can_apply: !effective.is_empty() && conflicts.is_empty() && attribute_conflicts.is_empty(),
+        can_apply: !effective.is_empty()
+            && conflicts.is_empty()
+            && attribute_conflicts.is_empty()
+            && structural_conflicts.iter().all(|c| c.resolved),
         effective_change_ids,
         auto_included_change_ids,
         conflicts,
         attribute_conflicts,
+        structural_conflicts,
         merged_nodes,
         node_id_map: mapping,
+        annotation_patches,
     })
 }
 fn mapped_id(board: &str, node: &str) -> String {
@@ -396,7 +436,11 @@ impl CommandHandler<'_> {
         }
         let simulation = simulate_tx(tx, project, &cmd.selection).await?;
         if !simulation.can_apply {
-            let message = if simulation.conflicts.is_empty() {
+            let message = if simulation.structural_conflicts.iter().any(|c| !c.resolved)
+                || !simulation.attribute_conflicts.is_empty()
+            {
+                "请先选择冲突处理方式".to_owned()
+            } else if simulation.conflicts.is_empty() {
                 "请先选择要采纳的改动".to_owned()
             } else {
                 simulation.conflicts.join("；")
@@ -428,8 +472,9 @@ impl CommandHandler<'_> {
             write_node(tx, board, &id, new.as_ref()).await?;
             patches.push(json!({"id":id,"before":old,"after":new}));
         }
-        if !patches.is_empty() {
-            let history = json!({"draftId":cmd.selection.draft_id,"draftRevision":cmd.selection.draft_revision,"changes":simulation.effective_change_ids,"patches":patches});
+        structure::write_patches(tx, board, &simulation.annotation_patches).await?;
+        if !patches.is_empty() || !simulation.annotation_patches.is_empty() {
+            let history = json!({"draftId":cmd.selection.draft_id,"draftRevision":cmd.selection.draft_revision,"changes":simulation.effective_change_ids,"patches":patches,"annotationPatches":simulation.annotation_patches});
             Self::log_canvas_op(tx, project, board, "editorial_merge", &history, &history).await?;
         }
         Ok(())
@@ -511,9 +556,11 @@ pub(crate) async fn inverse_projection(
     if !acyclic(&merged)? {
         return Err(conflict("恢复后关联内容形成循环，无法撤回"));
     }
+    let annotation_patches = structure::history_patches(tx, board, data, redo, &merged).await?;
+    let patched: Vec<_> = annotation_patches.iter().map(|p| &p.id).collect();
     let ids: Vec<_> = merged.keys().collect();
-    let dangling: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM board_annotations WHERE board_id=? AND visible=1 AND node_id IS NOT NULL AND node_id NOT IN (SELECT value FROM json_each(?)))")
-        .bind(board).bind(encode(&ids)?).fetch_one(&mut **tx).await?;
+    let dangling: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM board_annotations WHERE board_id=? AND visible=1 AND node_id IS NOT NULL AND id NOT IN(SELECT value FROM json_each(?)) AND node_id NOT IN (SELECT value FROM json_each(?)))")
+        .bind(board).bind(encode(&patched)?).bind(encode(&ids)?).fetch_one(&mut **tx).await?;
     if dangling {
         return Err(conflict("相关内容已有作品评论，请先处理评论"));
     }
@@ -526,6 +573,7 @@ pub(crate) async fn restore_merge(
     redo: bool,
 ) -> Result<()> {
     let nodes = inverse_projection(tx, board, data, redo).await?;
+    let annotation_patches = structure::history_patches(tx, board, data, redo, &nodes).await?;
     for patch in data["patches"]
         .as_array()
         .ok_or_else(|| conflict("无法恢复这次采纳"))?
@@ -535,6 +583,7 @@ pub(crate) async fn restore_merge(
             .ok_or_else(|| conflict("节点记录不完整"))?;
         write_node(tx, board, id, nodes.get(id)).await?;
     }
+    structure::write_patches(tx, board, &annotation_patches).await?;
     Ok(())
 }
 async fn write_node(

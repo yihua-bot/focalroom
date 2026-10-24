@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultAgentBudget } from '../domain/agent';
 const ipc = vi.hoisted(() => vi.fn());
-vi.mock('@tauri-apps/api/core', () => ({ invoke: ipc }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: ipc, convertFileSrc: (path: string) => `local:${path}` }));
 import { TauriAgentRepository } from './TauriAgentRepository';
 
 const task = {
@@ -11,6 +11,22 @@ const task = {
  elapsedMs: 2000, question: null, finalDraftIds: [], steps: [], createdAt: 'now',
 };
 beforeEach(() => { ipc.mockReset(); });
+const selectionContext = {draftId:'child',parent:{kind:'selection',id:'parent',revision:2},parentTitle:'旧版',parentSummary:'保留开篇',parentState:'applied',parentBaseRevision:1,items:[{photoId:'a',photoHash:'a'.repeat(64),photoName:'a.jpg',position:0,action:'keep',rationale:'建议',currentHashMatches:true,thumbnailPath:'/cache/a.jpg'}],feedback:[],reviews:[{commandId:'review',kind:'apply',createdAt:'now',mode:'partial',photoIds:['a'],photoNames:['a.jpg'],partial:false,undoneAtDelegation:false}],observations:[],totalItems:1,totalFeedback:0,totalReviews:1,totalObservations:0,nextOffset:null,hasEarlier:false};
+it('选片修订依据保留部分采纳、父版和本地图片来源，旧方案没有记录时返回空',async()=>{
+ ipc.mockResolvedValue(selectionContext);const repository=new TauriAgentRepository();const page=await repository.selectionRevisionContext('p','child');
+ expect(page!.reviews[0].mode).toBe('partial');expect(page!.items[0].thumbnailPath).toBe('local:/cache/a.jpg');expect(ipc).toHaveBeenCalledWith('selection_revision_context',{projectId:'p',draftId:'child',offset:0});
+ ipc.mockResolvedValue(null);expect(await repository.selectionRevisionContext('p','child')).toBeNull();
+});
+it('选片依据拒绝串方案、错误种类、未知人工操作、倒退分页及不一致的采纳照片',async()=>{
+ const repository=new TauriAgentRepository();
+ for(const value of [{...selectionContext,draftId:'other'},{...selectionContext,parent:{...selectionContext.parent,kind:'board'}},{...selectionContext,nextOffset:0},{...selectionContext,reviews:[{...selectionContext.reviews[0],photoNames:[]}]},{...selectionContext,reviews:[{...selectionContext.reviews[0],kind:'unsafe'}]}]){
+  ipc.mockResolvedValue(value);await expect(repository.selectionRevisionContext('p','child')).rejects.toThrow();
+ }
+});
+it('选片依据中的照片版本不一致时隐藏当前像素，不能冒充旧照片',async()=>{
+ ipc.mockResolvedValue({...selectionContext,items:[{...selectionContext.items[0],currentHashMatches:false}]});
+ expect((await new TauriAgentRepository().selectionRevisionContext('p','child'))!.items[0].thumbnailPath).toBeNull();
+});
 it('独立观察配置按角色保留能力，并拒绝残缺的观察能力投影', async () => {
  const config = { observation: { modelId: 'observer', capabilities: ['vision', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null }, consentProvider: 'openai@' + 'a'.repeat(64), providerId: 'openai', modelId: 'curator', ready: true, apiKeyTail: null, keySource: null, baseUrl: 'https://example.invalid', promptVersion: 'm3-openai-9', consent: null, capabilities: ['tool_calling', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null };
  ipc.mockResolvedValue(config);

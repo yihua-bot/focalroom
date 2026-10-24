@@ -29,8 +29,10 @@ pub mod promotion;
 pub mod proposals;
 pub mod provider;
 pub mod quality;
+pub(crate) mod revision_observations;
 pub mod router;
 pub mod runtime;
+pub(crate) mod selection_revision_context;
 mod semantic;
 mod semantic_index;
 pub(crate) mod store;
@@ -41,6 +43,7 @@ pub mod upload_compress;
 pub mod vision;
 mod vision_recovery;
 pub(crate) use drafts::human as apply_human_draft;
+pub use selection_revision_context::SelectionContextPage;
 
 use crate::{command_handler::CommandHandler, domain::Result};
 use types::*;

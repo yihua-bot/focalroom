@@ -1,3 +1,4 @@
+import type { HistoricalPhotoObservation } from './revisionContext';
 export interface BoardInfo { id: string; projectId: string; title: string; state: string; owningTaskId?: string | null; revision?: number }
 export interface CanvasNodeInfo {
   id: string; boardId: string; nodeType: string;
@@ -31,29 +32,38 @@ export interface CanvasComparison {
 }
 export interface EditorialResolution { changeId: string; field: 'position'|'size'|'rotation'|'order'|'content'|'style'|'children'|'rendition'; choice: 'keep_current'|'use_draft' }
 export interface AttributeConflict { changeId: string; nodeId: string; field: EditorialResolution['field']; baseline: unknown; current: unknown; proposed: unknown }
+export interface StructuralResolution { changeId: string; choice: 'restore_proposed'|'remove_proposed' }
+export interface StructuralConflict {
+  changeId: string; nodeId: string; kind: 'current_removed'|'remove_changed'; currentModified: boolean;
+  relatedNodes: Array<{ nodeId: string; nodeType: string; effect: 'detach'|'remove' }>;
+  preservedCommentCount: number; resolved: boolean;
+}
 export interface EditorialSelection {
   draftId: string; draftRevision: number; targetBoardId: string; expectedTargetRevision: number; selectedChangeIds: string[];
   resolutions?: EditorialResolution[];
   fieldsByChange?: Record<string, EditorialResolution['field'][]>;
+  structuralResolutions?: StructuralResolution[];
 }
 export interface MergeSimulation {
   simulationId: string; draftRevision: number; targetRevision: number;
   effectiveChangeIds: string[]; autoIncludedChangeIds: string[]; conflicts: string[]; mergedNodes: CanvasPhoto[]; canApply: boolean;
   nodeIdMap?: Record<string, string>;
   attributeConflicts?: AttributeConflict[];
+  structuralConflicts?: StructuralConflict[];
 }
 export interface EditorialHistoryEntry {
   cursor: number; commandId: string; draftId: string; changeCount: number; createdAt: string; undone: boolean; compensated: boolean; isCompensation: boolean; nodeTypes: string[];
 }
 export interface RevertSimulation {
   mergeCommandId: string; targetRevision: number; simulationId: string; currentNodes: CanvasPhoto[]; mergedNodes: CanvasPhoto[]; conflicts: string[]; canApply: boolean;
+  restoredCommentCount?: number;
 }
 export interface EditorialMessage { id: string; threadId: string; changeId: string | null; body: string; rootBody: string; createdAt: string; resolved: boolean; isReply: boolean }
 export interface EditorialDiscussion { draftId: string; draftRevision: number; cursor: number; messages: EditorialMessage[]; totalMessages: number; eventCount: number; nextOffset: number | null }
 export interface EditorialRevisionContext {
   draftId: string; parent: { kind: 'board'; id: string; revision: number }; parentTitle: string; discussion: EditorialDiscussion;
   decisions: Array<{ changeId: string; nodeType: string; kind: string; decision: string; fieldDecisions: Record<string,string> }>;
-  observations: Array<{ photoId: string; photoHash: string; modelId: string; promptVersion: string; taskId: string; callId: string; visibleFacts: string[]; interpretation: string; uncertainty: string; currentHashMatches: boolean }>;
+  observations: HistoricalPhotoObservation[];
   totalDecisions: number; totalObservations: number; nextOffset: number | null; hasEarlier: boolean;
 }
 export interface CanvasRepository {

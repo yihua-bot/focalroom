@@ -604,7 +604,14 @@ async fn revision_context_preserves_frozen_decisions_discussion_and_hash_bound_o
         .as_str()
         .unwrap()
         .to_string();
+    let alternative=f.tool(&second,"fork_creative_draft",json!({"parent":{"kind":"board","id":root.id,"revision":root.revision},"title":"另一来源的方案","reason":"不能串用前版依据"})).await.result.unwrap()["board_id"].as_str().unwrap().to_string();
     f.finish(&second).await;
+    assert!(
+        f.db.editorial_revision_context(&f.p, &alternative, 0)
+            .await
+            .unwrap()
+            .is_none()
+    );
     let page =
         f.db.editorial_revision_context(&f.p, &child, 0)
             .await
@@ -674,14 +681,32 @@ async fn revision_context_preserves_frozen_decisions_discussion_and_hash_bound_o
         .unwrap()
         .to_string();
     f.finish(&third).await;
-    assert!(
+    let third_context =
         f.db.editorial_revision_context(&f.p, &grandchild, 0)
             .await
             .unwrap()
-            .unwrap()
-            .has_earlier
-    );
+            .unwrap();
+    assert!(third_context.has_earlier);
+    assert_eq!(third_context.observations[0]["taskId"], first.id);
+    assert_eq!(third_context.observations[0]["matchedAtDelegation"], true);
     assert_eq!(f.db.get_board_nodes(&root.id).await.unwrap().len(), 0);
+    sqlx::query("INSERT INTO tool_calls(task_id,call_id,tool_name,fingerprint,result_json) VALUES(?,?,'inspect_photos','oversize-fixture',?)")
+        .bind(&first.id).bind(domain::id()).bind("x".repeat(2*1024*1024+1)).execute(&f.db.pool).await.unwrap();
+    assert_eq!(
+        f.start(
+            vec![],
+            None,
+            Some(DraftReference {
+                kind: "board".into(),
+                id: parent.clone(),
+                revision
+            })
+        )
+        .await
+        .unwrap_err()
+        .code,
+        "VALIDATION_ERROR"
+    );
     let path = f._temp.path().join("creative.sqlite");
     f.db.pool.close().await;
     let db = Store::open(&path).await.unwrap();
@@ -717,6 +742,365 @@ async fn revision_context_preserves_frozen_decisions_discussion_and_hash_bound_o
             .code,
         "RECOVERY_ERROR"
     );
+    assert_eq!(
+        ContextBuilder::build(&db, &second.id)
+            .await
+            .unwrap_err()
+            .code,
+        "RECOVERY_ERROR"
+    );
+}
+
+#[tokio::test]
+async fn selection_revision_context_freezes_partial_approval_feedback_and_observations_across_rounds()
+ {
+    use crate::{
+        command_handler::{CommandHandler, GuiCommandRequest},
+        commands_generated::GuiCommand,
+    };
+    let f = Fixture::new(2).await;
+    let first = f.start(vec![], None, None).await.unwrap();
+    f.run(&first).await;
+    assert!(
+        f.tool(
+            &first,
+            "request_feedback",
+            json!({"question":"希望保留哪种观看距离？","options":["先人物","先空间"]})
+        )
+        .await
+        .ok
+    );
+    lifecycle::request_bound(
+        &f.db,
+        AgentRequest {
+            request_id: domain::id(),
+            project_id: f.p.clone(),
+            command: TaskCommand::SubmitFeedback {
+                task_id: first.id.clone(),
+                answer: "先保留人物，但不要自动记为偏好".into(),
+            },
+        },
+        None,
+    )
+    .await
+    .unwrap();
+    f.run(&first).await;
+    let parent=f.tool(&first,"create_selection_draft",json!({"title":"第一轮选片","base_project_revision":first.base_revision,"summary":"原图和正式序列保持独立","items":f.photos.iter().enumerate().map(|(position,photo)|json!({"photo_id":photo,"proposed_action":"keep","position":position,"rationale":"仅用于协议验证"})).collect::<Vec<_>>()})).await.result.unwrap()["draft_id"].as_str().unwrap().to_string();
+    let call = ToolCall {
+        call_id: domain::id(),
+        name: "inspect_photos".into(),
+        args: json!({"project_id":f.p,"photo_ids":[f.photos[0]]}),
+    };
+    let observation = super::super::vision::VisionPrefetch {
+        kind: "inspect_photos".into(),
+        requested: vec![f.photos[0].clone()],
+        observations: vec![(
+            f.photos[0].clone(),
+            json!({"photo_id":f.photos[0],"visible_facts":["generated fixture"],"interpretation":"test only","uncertainty":"not real model quality"}),
+        )],
+        uploaded: 0,
+        tokens: 0,
+        consent_id: 0,
+        cost_minor_usd: 0,
+        model_id: "fixture-observer".into(),
+        cache_version: "fixture-v1".into(),
+    };
+    assert!(
+        execution::tool(&f.db, &first.id, &call, Some(&observation))
+            .await
+            .unwrap()
+            .ok
+    );
+    f.finish(&first).await;
+    let command = GuiCommandRequest::new(
+        &f.p,
+        f.db.get(&f.p).await.unwrap().revision,
+        GuiCommand::ApplyDraft {
+            draft_id: parent.clone(),
+            expected_draft_revision: 1,
+            approved_photo_ids: vec![f.photos[0].clone()],
+            mode: "partial".into(),
+        },
+    );
+    let accepted = CommandHandler::new(&f.db)
+        .execute_gui(command)
+        .await
+        .unwrap();
+    let original = f.db.get(&f.p).await.unwrap();
+    assert_eq!(original.sequence, vec![f.photos[0].clone()]);
+    let reference = DraftReference {
+        kind: "selection".into(),
+        id: parent.clone(),
+        revision: 2,
+    };
+    let second = f
+        .start(vec![], None, Some(reference.clone()))
+        .await
+        .unwrap();
+    f.run(&second).await;
+    let frozen = f.read(&second, "selection_draft", Some(&parent)).await;
+    assert_eq!(frozen["data"]["frozenForThisTask"], true);
+    assert_eq!(
+        frozen["data"]["reviews"][0]["photoIds"],
+        json!([f.photos[0]])
+    );
+    assert_eq!(frozen["data"]["totalItems"], 2);
+    assert!(
+        !frozen
+            .to_string()
+            .contains(f._temp.path().to_str().unwrap())
+    );
+    assert_eq!(frozen["data"]["visualEvidence"], false);
+    let child = f
+        .tool(
+            &second,
+            "fork_creative_draft",
+            json!({"parent":reference,"title":"第二轮选片","reason":"结合人工反馈另存"}),
+        )
+        .await
+        .result
+        .unwrap()["draft_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let alternative=f.tool(&second,"create_selection_draft",json!({"title":"独立来源","base_project_revision":second.base_revision,"summary":"不能套用父版依据","items":[{"photo_id":f.photos[1],"proposed_action":"keep","position":0,"rationale":"独立"}]})).await.result.unwrap()["draft_id"].as_str().unwrap().to_string();
+    f.finish(&second).await;
+    let page =
+        f.db.selection_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(page.parent.id, parent);
+    assert_eq!(page.parent_state, "applied");
+    assert_eq!(page.total_items, 2);
+    assert_eq!(page.feedback.len(), 3);
+    assert_eq!(page.feedback[1].role, "assistant");
+    assert_eq!(page.feedback[2].role, "user");
+    assert_eq!(page.feedback[2].content, "先保留人物，但不要自动记为偏好");
+    assert_eq!(page.reviews[0].mode.as_deref(), Some("partial"));
+    assert_eq!(page.reviews[0].photo_ids, vec![f.photos[0].clone()]);
+    assert_eq!(page.reviews[0].undone_at_delegation, Some(false));
+    assert_eq!(page.observations[0]["callId"], call.call_id);
+    assert_eq!(page.observations[0]["currentHashMatches"], true);
+    assert!(
+        f.db.selection_revision_context(&f.p, &alternative, 0)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        f.db.selection_revision_context("foreign", &child, 0)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        encode(&original).unwrap(),
+        encode(&f.db.get(&f.p).await.unwrap()).unwrap()
+    );
+    CommandHandler::new(&f.db)
+        .execute_gui(GuiCommandRequest::new(
+            &f.p,
+            original.revision,
+            GuiCommand::UndoCommandGroup {
+                transaction_group_id: accepted.transaction_group_id.unwrap(),
+            },
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.db.selection_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap()
+            .unwrap()
+            .reviews[0]
+            .undone_at_delegation,
+        Some(false)
+    );
+    let current_parent = f
+        .start(vec![], None, Some(reference.clone()))
+        .await
+        .unwrap();
+    assert_eq!(
+        ContextBuilder::build(&f.db, &current_parent.id)
+            .await
+            .unwrap()
+            .layers["creative"]["continuation"]["selectionContextPreview"]["reviews"][0]["undoneAtDelegation"],
+        true
+    );
+    f.run(&current_parent).await;
+    f.finish(&current_parent).await;
+    let third_ref = DraftReference {
+        kind: "selection".into(),
+        id: child.clone(),
+        revision: 1,
+    };
+    let third = f
+        .start(vec![], None, Some(third_ref.clone()))
+        .await
+        .unwrap();
+    f.run(&third).await;
+    let grandchild = f
+        .tool(
+            &third,
+            "fork_creative_draft",
+            json!({"parent":third_ref,"title":"第三轮","reason":"保留来源"}),
+        )
+        .await
+        .result
+        .unwrap()["draft_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    f.finish(&third).await;
+    let history =
+        f.db.selection_revision_context(&f.p, &grandchild, 0)
+            .await
+            .unwrap()
+            .unwrap();
+    assert!(history.has_earlier);
+    assert_eq!(history.observations[0]["taskId"], first.id);
+    let path = f._temp.path().join("creative.sqlite");
+    f.db.pool.close().await;
+    let db = Store::open(&path).await.unwrap();
+    assert_eq!(
+        db.selection_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap()
+            .unwrap()
+            .feedback[2]
+            .content,
+        "先保留人物，但不要自动记为偏好"
+    );
+    sqlx::query("UPDATE photos SET content_sha256=? WHERE id=?")
+        .bind("0".repeat(64))
+        .bind(&f.photos[0])
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        db.selection_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap()
+            .unwrap()
+            .items[0]["currentHashMatches"],
+        false
+    );
+    sqlx::query("UPDATE task_messages SET body=json_set(body,'$.parentTitle','changed') WHERE task_id=? AND kind='selection_review_context'").bind(&second.id).execute(&db.pool).await.unwrap();
+    assert_eq!(
+        ContextBuilder::build(&db, &second.id)
+            .await
+            .unwrap_err()
+            .code,
+        "RECOVERY_ERROR"
+    );
+}
+
+#[tokio::test]
+async fn selection_context_pages_are_frozen_and_other_accounts_or_oversized_feedback_cannot_expand_them()
+ {
+    use crate::{
+        command_handler::{CommandHandler, GuiCommandRequest},
+        commands_generated::GuiCommand,
+    };
+    let f = Fixture::new(33).await;
+    let identity = identity("creator", "a");
+    let first = f.start(vec![], Some(&identity), None).await.unwrap();
+    f.run(&first).await;
+    let parent=f.tool(&first,"create_selection_draft",json!({"title":"分页父版","base_project_revision":first.base_revision,"summary":"保留全部身份","items":f.photos.iter().enumerate().map(|(position,photo)|json!({"photo_id":photo,"proposed_action":"keep","position":position,"rationale":"元数据夹具"})).collect::<Vec<_>>()})).await.result.unwrap()["draft_id"].as_str().unwrap().to_string();
+    f.finish(&first).await;
+    let reference = DraftReference {
+        kind: "selection".into(),
+        id: parent.clone(),
+        revision: 1,
+    };
+    assert!(
+        f.start(
+            vec![],
+            Some(&crate::agent::creative::tests::identity("other", "a")),
+            Some(reference.clone())
+        )
+        .await
+        .is_err()
+    );
+    let second = f
+        .start(vec![], Some(&identity), Some(reference.clone()))
+        .await
+        .unwrap();
+    f.run(&second).await;
+    let child = f
+        .tool(
+            &second,
+            "fork_creative_draft",
+            json!({"parent":reference,"title":"分页子版","reason":"保留父版顺序"}),
+        )
+        .await
+        .result
+        .unwrap()["draft_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    f.finish(&second).await;
+    let first_page =
+        f.db.selection_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(first_page.total_items, 33);
+    assert_eq!(first_page.items.len(), 30);
+    assert_eq!(first_page.next_offset, Some(30));
+    let tail =
+        f.db.selection_revision_context(&f.p, &child, 30)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(tail.items.len(), 3);
+    assert_eq!(tail.items[0]["position"], 30);
+    assert_eq!(tail.next_offset, None);
+    let original = f.db.get(&f.p).await.unwrap();
+    let mut reversed = f.photos.clone();
+    reversed.reverse();
+    CommandHandler::new(&f.db)
+        .execute_gui(GuiCommandRequest::new(
+            &f.p,
+            original.revision,
+            GuiCommand::UpdateDraft {
+                draft_id: parent.clone(),
+                expected_draft_revision: 1,
+                ordered_photo_ids: reversed,
+            },
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.db.selection_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap()
+            .unwrap()
+            .items[0]["photoId"],
+        f.photos[0]
+    );
+    assert!(
+        f.start(vec![], Some(&identity), Some(reference))
+            .await
+            .is_err()
+    );
+    sqlx::query("INSERT INTO task_messages(task_id,kind,body,created_at) VALUES(?,'clarification_answer',?,'now')").bind(&first.id).bind("x".repeat(2*1024*1024+1)).execute(&f.db.pool).await.unwrap();
+    assert_eq!(
+        f.start(
+            vec![],
+            Some(&identity),
+            Some(DraftReference {
+                kind: "selection".into(),
+                id: parent,
+                revision: 2
+            })
+        )
+        .await
+        .unwrap_err()
+        .code,
+        "VALIDATION_ERROR"
+    );
+    assert!(f.db.get(&f.p).await.unwrap().sequence.is_empty());
 }
 
 #[tokio::test]

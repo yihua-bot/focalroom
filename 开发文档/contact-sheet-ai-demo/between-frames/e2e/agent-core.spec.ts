@@ -1,18 +1,20 @@
-import { installAccountFixture } from './account-fixture';
+import { evidenceDirectory } from './evidence-directory';
+import { installAccountFixture, installDesktopBridge } from './account-fixture';
 import { test, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { defaultAgentBudget } from '../src/domain/agent';
 import type { AgentProjection } from '../src/domain/agent';
 
+const rpcBase = process.env.FOCALROOM_TEST_RPC_BASE ?? 'http://localhost:1422';
 const rpc = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
- const response = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
+ const response = await fetch(rpcBase + '/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
  if (!response.ok) throw new Error(response.error.message);
  return response.value;
 };
 type Project = { id: string; revision: number; sequence: string[]; photos: { id: string; status: string; note: string; rating: number }[] };
 test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、局部采纳/撤销与重启', async ({ page }) => {
- const screenshots = resolve('../docs/v3/evidence/ai-budget-recovery-2026-10-22/browser');
+ const screenshots = evidenceDirectory('agent-core');
  await mkdir(screenshots, { recursive: true });
  const errors: string[] = []; const outside: string[] = [];
  page.on('pageerror', error => errors.push(error.message));
@@ -21,16 +23,7 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
   outside.push(route.request().url()); return route.abort('internetdisconnected');
  });
  await installAccountFixture(page);
- await page.addInitScript(() => {
-  Object.assign(globalThis, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: {
-   invoke: async (command: string, args: unknown) => {
-    if (command.startsWith('plugin:event|')) return 0;
-    const r = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
-    if (!r.ok) throw r.error; return r.value;
-   },
-   convertFileSrc: (path: string) => 'http://localhost:1422/asset?path=' + encodeURIComponent(path), transformCallback: () => 0,
-  } });
- });
+ await installDesktopBridge(page,rpcBase);
  let project = await rpc<Project>('create_project', { title: 'M2 · 草案与人工决定', brief: '依据人工线索给两版作品序列；在采纳前保留我的正式编辑。' });
  const beforeHash = await rpc<string[][]>('test_fixture_checksums');
  const token = await rpc<string>('choose_import', { projectId: project.id });
@@ -75,11 +68,11 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  const dialog = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: '清除选择', exact: true }) });
  await expect(dialog.getByRole('button', { name: /^采纳所选/ })).toBeDisabled();
  await page.screenshot({ path: resolve(screenshots, 'stale.png') });
- await dialog.getByRole('button', { name: '基于当前版本重新比较' }).click();
+ await dialog.getByRole('button', { name: '与当前作品重新比较' }).click();
  await expect(dialog.getByRole('button', { name: /^采纳所选/ })).toBeEnabled();
  await dialog.getByRole('button', { name: '清除选择', exact: true }).click();
  await dialog.getByRole('checkbox').first().check();
- await dialog.getByRole('button', { name: '采纳所选 1 项' }).click();
+ await dialog.getByRole('button', { name: '采纳所选 1 张' }).click();
  await expect(dialog).toHaveCount(0);
  await expect(page.getByRole('button', { name: /^已保留\s*2$/ })).toBeVisible();
  const applied = await rpc<Project>('get_project', { projectId: project.id });
@@ -91,10 +84,10 @@ test('M2 真实后端：预算暂停、恢复、两份草案、人工冲突、�
  await page.screenshot({ path: resolve(screenshots, 'partial-approved.png') });
  // 第二份草案显式 rebase 后全量替换，再验证单组撤销。
  await page.getByRole('button', { name: '查看方案' }).nth(1).click();
- await dialog.getByRole('button', { name: '基于当前版本重新比较' }).click();
- await expect(dialog.getByRole('button', { name: '替换正式序列', exact: true })).toBeEnabled();
- await dialog.getByRole('button', { name: '替换正式序列', exact: true }).click();
- await dialog.getByRole('button', { name: '确认全量替换' }).click();
+ await dialog.getByRole('button', { name: '与当前作品重新比较' }).click();
+ await expect(dialog.getByRole('button', { name: '替换作品序列', exact: true })).toBeEnabled();
+ await dialog.getByRole('button', { name: '替换作品序列', exact: true }).click();
+ await dialog.getByRole('button', { name: '确认替换' }).click();
  await expect(page.getByRole('button', { name: /^已保留\s*25$/ })).toBeVisible();
  await page.getByRole('button', { name: '撤销', exact: true }).click();
  await expect(page.getByRole('button', { name: /^已保留\s*2$/ })).toBeVisible();

@@ -804,6 +804,19 @@ pub async fn canvas_comparison(
 }
 
 #[tauri::command]
+pub async fn selection_revision_context(
+    state: State<'_, Backend>,
+    project_id: String,
+    draft_id: String,
+    offset: Option<usize>,
+) -> Result<Option<crate::agent::SelectionContextPage>> {
+    state
+        .store
+        .selection_revision_context(&project_id, &draft_id, offset.unwrap_or(0))
+        .await
+}
+
+#[tauri::command]
 pub async fn canvas_editorial_revision_context(
     state: State<'_, Backend>,
     project_id: String,

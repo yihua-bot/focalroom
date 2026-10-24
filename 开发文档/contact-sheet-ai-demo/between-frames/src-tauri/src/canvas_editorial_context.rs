@@ -1,9 +1,6 @@
 //! 跨轮审稿上下文冻结于委托时；旧批注、决定和观察保留旧身份，不重锚为新建议。
 use super::*;
-use crate::agent::{
-    creative::DraftReference,
-    types::{Task, ToolResult},
-};
+use crate::agent::{creative::DraftReference, types::Task};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,20 +12,7 @@ pub struct RevisionDecision {
     pub decision: String,
     pub field_decisions: std::collections::BTreeMap<String, String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RevisionObservation {
-    pub photo_id: String,
-    pub photo_hash: String,
-    pub model_id: String,
-    pub prompt_version: String,
-    pub task_id: String,
-    pub call_id: String,
-    pub visible_facts: Vec<String>,
-    pub interpretation: String,
-    pub uncertainty: String,
-    pub matched_at_delegation: bool,
-}
+pub(crate) use crate::agent::revision_observations::RevisionObservation;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FrozenRevisionContext {
@@ -71,82 +55,20 @@ pub(crate) async fn freeze(
             field_decisions: c.field_decisions,
         })
         .collect();
-    let mut observations = std::collections::BTreeMap::new();
-    if let Some(creator) = snapshot["parentTaskId"].as_str() {
-        if let Some(prior) = saved(tx, creator).await? {
-            for observation in prior
-                .observations
-                .into_iter()
-                .filter(|o| task.allowed_photo_ids.contains(&o.photo_id))
-            {
-                observations.insert(observation.photo_id.clone(), observation);
-            }
-        }
-        let rows:Vec<(String,String)> = sqlx::query_as("SELECT call_id,result_json FROM tool_calls WHERE task_id=? AND tool_name IN('inspect_photos','compare_photos') ORDER BY rowid LIMIT 1001")
-            .bind(creator).fetch_all(&mut **tx).await?;
-        if rows.len() > 1000 {
-            return Err(AppError::new(
-                "VALIDATION_ERROR",
-                "这份方案的观察记录较多，请缩小修改范围",
-            ));
-        }
-        for (call_id, raw) in rows {
-            let receipt: ToolResult = serde_json::from_str(&raw).map_err(serialization)?;
-            let Some(data) = receipt
-                .result
-                .filter(|v| receipt.ok && v["mode"] == "vision_observed")
-            else {
-                continue;
-            };
-            for p in data["provenance"].as_array().into_iter().flatten() {
-                let Some(photo) = p["photo_id"]
-                    .as_str()
-                    .filter(|id| task.allowed_photo_ids.iter().any(|allowed| allowed == id))
-                else {
-                    continue;
-                };
-                let Some(hash) = p["photo_hash"]
-                    .as_str()
-                    .filter(|hash| hash.len() == 64 && hash.bytes().all(|c| c.is_ascii_hexdigit()))
-                else {
-                    continue;
-                };
-                let Some(value) = data["observations"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .find(|v| v["photo_id"] == photo)
-                else {
-                    continue;
-                };
-                if !crate::agent::vision::valid_cached_observation(value, photo) {
-                    continue;
-                }
-                observations.insert(
-                    photo.to_owned(),
-                    RevisionObservation {
-                        photo_id: photo.into(),
-                        photo_hash: hash.into(),
-                        model_id: p["model_id"].as_str().unwrap_or_default().into(),
-                        prompt_version: p["prompt_version"].as_str().unwrap_or_default().into(),
-                        task_id: creator.into(),
-                        call_id: call_id.clone(),
-                        visible_facts: serde_json::from_value(value["visible_facts"].clone())
-                            .map_err(serialization)?,
-                        interpretation: value["interpretation"].as_str().unwrap_or_default().into(),
-                        uncertainty: value["uncertainty"].as_str().unwrap_or_default().into(),
-                        matched_at_delegation: false,
-                    },
-                );
-            }
-        }
-    }
-    let current:Vec<(String,String)>=sqlx::query_as("SELECT id,content_sha256 FROM photos WHERE project_id=?")
-        .bind(&task.project_id).fetch_all(&mut **tx).await?;
-    let current:HashMap<_,_>=current.into_iter().collect();
-    for observation in observations.values_mut() {
-        observation.matched_at_delegation=current.get(&observation.photo_id)==Some(&observation.photo_hash);
-    }
+    let inherited = if let Some(creator) = snapshot["parentTaskId"].as_str() {
+        linked(tx, creator, &parent.id)
+            .await?
+            .map_or_else(Vec::new, |c| c.observations)
+    } else {
+        Vec::new()
+    };
+    let observations = crate::agent::revision_observations::collect(
+        tx,
+        task,
+        snapshot["parentTaskId"].as_str(),
+        inherited,
+    )
+    .await?;
     Ok(FrozenRevisionContext {
         parent: parent.clone(),
         parent_title: snapshot["board"]["title"]
@@ -155,7 +77,7 @@ pub(crate) async fn freeze(
             .into(),
         review_cursor: cursor,
         decisions,
-        observations: observations.into_values().collect(),
+        observations,
     })
 }
 pub(crate) async fn saved(
@@ -181,6 +103,33 @@ pub(crate) async fn saved(
         .map(Some)
         .map_err(serialization)
 }
+async fn linked(
+    tx: &mut Transaction<'_, Sqlite>,
+    task: &str,
+    draft: &str,
+) -> Result<Option<FrozenRevisionContext>> {
+    let rows:Vec<String>=sqlx::query_scalar("SELECT body_json FROM agent_steps WHERE task_id=? AND kind='draft_lineage' AND json_extract(body_json,'$.childId')=? ORDER BY id LIMIT 2").bind(task).bind(draft).fetch_all(&mut **tx).await?;
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    if rows.len() != 1 {
+        return Err(AppError::new("RECOVERY_ERROR", "方案来源记录不一致"));
+    }
+    let lineage: Value = serde_json::from_str(&rows[0]).map_err(serialization)?;
+    let Some(context) = saved(tx, task).await? else {
+        return Ok(None);
+    };
+    if lineage["kind"] != "board"
+        || lineage["parent"] != serde_json::to_value(&context.parent).map_err(serialization)?
+    {
+        return Ok(None);
+    }
+    let bound = crate::agent::creative::continuation(tx, task).await?;
+    if lineage["parentSnapshotSha256"] != bound["snapshotSha256"] {
+        return Err(AppError::new("RECOVERY_ERROR", "方案来源与修订依据不一致"));
+    }
+    Ok(Some(context))
+}
 pub(crate) fn preview(context: &FrozenRevisionContext, offset: usize, limit: usize) -> Value {
     json!({"source":"frozen_parent_review","visualEvidence":false,"decisions":context.decisions.iter().skip(offset).take(limit).collect::<Vec<_>>(),"totalDecisions":context.decisions.len(),"historicalObservations":context.observations.iter().skip(offset).take(limit).collect::<Vec<_>>(),"totalObservations":context.observations.len(),"notice":"决定属于父版，不能自动重锚或视为长期偏好；观察属于原照片哈希和旧任务，未重新观察当前版本"})
 }
@@ -197,7 +146,7 @@ impl Store {
         let mut tx = self.pool.begin().await?;
         let task:Option<String>=sqlx::query_scalar("SELECT d.task_id FROM boards b JOIN board_draft_tasks d ON d.board_id=b.id JOIN projects p ON p.id=b.project_id WHERE b.project_id=? AND b.id=? AND p.deleted_at IS NULL").bind(project).bind(draft).fetch_optional(&mut *tx).await?;
         let task = task.ok_or_else(|| AppError::new("NOT_FOUND", "这份方案不存在"))?;
-        let Some(context) = saved(&mut tx, &task).await? else {
+        let Some(context) = linked(&mut tx, &task, draft).await? else {
             return Ok(None);
         };
         let discussion = comments::discussion_tx(
@@ -210,25 +159,23 @@ impl Store {
             30,
         )
         .await?;
-        let mut observations = Vec::new();
-        for o in context.observations.iter().skip(offset).take(30) {
-            let current: Option<String> =
-                sqlx::query_scalar("SELECT content_sha256 FROM photos WHERE project_id=? AND id=?")
-                    .bind(project)
-                    .bind(&o.photo_id)
-                    .fetch_optional(&mut *tx)
-                    .await?;
-            let mut value = serde_json::to_value(o).map_err(serialization)?;
-            value["currentHashMatches"] = json!(current.as_deref() == Some(o.photo_hash.as_str()));
-            observations.push(value);
-        }
+        let observations = crate::agent::revision_observations::project(
+            &mut tx,
+            project,
+            &context.observations,
+            offset,
+            30,
+        )
+        .await?;
         let parent_task: Option<String> =
             sqlx::query_scalar("SELECT task_id FROM board_draft_tasks WHERE board_id=?")
                 .bind(&context.parent.id)
                 .fetch_optional(&mut *tx)
                 .await?;
         let has_earlier = if let Some(parent_task) = parent_task {
-            saved(&mut tx, &parent_task).await?.is_some()
+            linked(&mut tx, &parent_task, &context.parent.id)
+                .await?
+                .is_some()
         } else {
             false
         };

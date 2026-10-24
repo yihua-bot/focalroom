@@ -15,6 +15,7 @@ export const editorialSelectionSchema = z.strictObject({
   expectedTargetRevision: z.number().int().positive(), selectedChangeIds: z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(300),
   resolutions: z.array(z.strictObject({ changeId: z.string().regex(/^[a-f0-9]{64}$/), field: editorialField, choice: z.enum(['keep_current','use_draft']) })).max(2400).optional(),
   fieldsByChange: z.record(z.string().regex(/^[a-f0-9]{64}$/), z.array(editorialField).min(1).max(8)).optional(),
+  structuralResolutions: z.array(z.strictObject({ changeId: z.string().regex(/^[a-f0-9]{64}$/), choice: z.enum(['restore_proposed','remove_proposed']) })).max(300).refine(values => new Set(values.map(value => value.changeId)).size === values.length).optional(),
 });
 export const canvasActionSchema = z.discriminatedUnion('type', [
   action('CreateBoard', { title: z.string().trim().min(1).max(200) }),

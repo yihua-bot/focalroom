@@ -8,7 +8,7 @@ const context: RevisionContext = {
   draftId:'child',parent:{kind:'board',id:'parent',revision:3},parentTitle:'第二轮方案',
   discussion:{draftId:'parent',draftRevision:3,cursor:12,totalMessages:1,eventCount:1,nextOffset:null,messages:[{id:'message',threadId:'thread',changeId:'old-change',body:'保留人物与空间的关系',rootBody:'保留人物与空间的关系',isReply:false,resolved:false,createdAt:'2026-10-24T00:00:00Z'}]},
   decisions:[{changeId:'old-change',nodeType:'photo',kind:'change',decision:'rejected',fieldDecisions:{position:'rejected'}}],
-  observations:[{photoId:'photo',photoHash:'a'.repeat(64),modelId:'fixture',promptVersion:'fixture',taskId:'old-task',callId:'inspect',visibleFacts:['生成色块'],interpretation:'旧版解读',uncertainty:'不代表专业质量结论',currentHashMatches:false}],
+  observations:[{photoId:'photo',photoHash:'a'.repeat(64),photoName:'frame.jpg',thumbnailPath:null,modelId:'fixture',promptVersion:'fixture',taskId:'old-task',callId:'inspect',visibleFacts:['生成色块'],interpretation:'旧版解读',uncertainty:'不代表专业质量结论',currentHashMatches:false}],
   totalDecisions:35,totalObservations:1,nextOffset:30,hasEarlier:true,
 };
 const renderContext = (read: CanvasRepository['editorialRevisionContext']) => render(<EditorialRevisionContext projectId="project" draftId="child" repository={{editorialRevisionContext:read} as CanvasRepository} />);
@@ -37,4 +37,14 @@ it('读取失败可重试同一页，不能将失败伪装成没有修订依据'
 });
 it('没有冻结依据的旧方案不补造父版内容', async () => {
   const read=vi.fn().mockResolvedValue(null);renderContext(read);await waitFor(()=>expect(screen.queryByText('修订依据')).not.toBeInTheDocument());
+});
+it('照片版本一致时显示关联预览，版本不一致时不展示当前像素冒充旧观察', async () => {
+  const read=vi.fn().mockResolvedValue({...context,observations:[{...context.observations[0],currentHashMatches:true,thumbnailPath:'/fixture-preview.jpg'}]});
+  renderContext(read);await userEvent.click(screen.getByText('修订依据',{exact:true}));
+  expect(await screen.findByRole('img',{name:'frame.jpg'})).toHaveAttribute('src','/fixture-preview.jpg');
+});
+it('尚未决定的前版建议显示用户文案，不能显示内部翻译键',async()=>{
+  renderContext(vi.fn().mockResolvedValue({...context,decisions:[{...context.decisions[0],decision:'pending',fieldDecisions:{position:'pending'}}]}));
+  await userEvent.click(screen.getByText('修订依据',{exact:true}));expect(await screen.findByText('调整 · 尚未决定')).toBeVisible();
+  expect(screen.queryByText(/editorialDecision_pending/)).not.toBeInTheDocument();
 });

@@ -56,6 +56,7 @@ export function EditorialHistoryDialog({ repository, projectId, boardId, readOnl
     </div><div className="editorial-history-preview">
       {preview?.mergeCommandId === selected && <><CanvasComparisonViewport autoFit labels={{ baseline: zh.editorialCurrent, draft: zh.editorialRevertResult }} mode="split" baseline={preview.currentNodes} draft={preview.mergedNodes} merged={preview.mergedNodes} changes={[]} onFocus={() => {}} />
         {preview.conflicts.map((message, i) => <p role="alert" key={i}>{message}</p>)}
+        {!!preview.restoredCommentCount && <p>{zh.editorialRestoredComments.replace('{count}',String(preview.restoredCommentCount))}</p>}
         <Button variant="primary" disabled={busy || readOnly || !preview.canApply} onClick={() => void confirm()}>{zh.editorialConfirmRevert}</Button>
       </>}
     </div></div>

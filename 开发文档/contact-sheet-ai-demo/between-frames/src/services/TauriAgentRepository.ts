@@ -1,3 +1,4 @@
+import { selectionRevisionSchema, withLocalRevisionPreviews } from './revisionContextSchemas';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { z } from 'zod';
@@ -24,6 +25,12 @@ const aiConfigSchema = z.object({
  consent: consentView.nullable(),
 });
 export class TauriAgentRepository implements AgentRepository {
+ async selectionRevisionContext(projectId: string, draftId: string, offset = 0) {
+  const result = selectionRevisionSchema.nullable().parse(await invoke('selection_revision_context', {projectId,draftId,offset}));
+  if (result && (result.draftId !== draftId || result.parent.id === draftId || (result.nextOffset !== null && result.nextOffset !== offset+30) || result.items.length > result.totalItems || result.reviews.some(review => review.photoNames.length !== review.photoIds.length || (review.kind === 'apply' && review.mode === null)))) throw new Error('修订依据与方案不一致。');
+  return result ? {...result,items:withLocalRevisionPreviews(result.items),observations:withLocalRevisionPreviews(result.observations)} : null;
+ }
+
  async queryVisionResult(projectId: string, taskId: string) { return visionRecovery.parse(await invoke('query_vision_result', { projectId, taskId })); }
  async query(projectId: string) { return projection.parse(await invoke('get_agent_projection', { projectId })); }
  async request(projectId: string, command: TaskCommand) {

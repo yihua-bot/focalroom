@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
-  testDir: './e2e', testMatch: ['editorial-review.spec.ts', 'vision-recovery.spec.ts'], workers: 1, timeout: 120_000,
+  testDir: './e2e', testMatch: ['editorial-review.spec.ts', 'vision-recovery.spec.ts', 'selection-revision.spec.ts'], workers: 1, timeout: 120_000,
   outputDir: 'test-results/editorial-review',
   use: { actionTimeout: 15_000, locale: 'zh-CN', baseURL: 'http://localhost:1446', viewport: { width: 1440, height: 960 }, trace: 'retain-on-failure' },
   webServer: [

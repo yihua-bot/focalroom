@@ -61,6 +61,15 @@ impl Harness {
         let revision = args["expectedRevision"].as_i64().unwrap_or(0);
         let photo = args["photoId"].as_str().unwrap_or("");
         let value = match command {
+            "selection_revision_context" => json!(
+                self.store
+                    .selection_revision_context(
+                        id,
+                        string(args, "draftId")?,
+                        args["offset"].as_u64().unwrap_or(0) as usize,
+                    )
+                    .await?
+            ),
             "canvas_editorial_revision_context" => json!(
                 self.store
                     .editorial_revision_context(
@@ -241,7 +250,11 @@ impl Harness {
                 if !between_frames_lib::login_guard::hex64(&token) {
                     return Err(AppError::new("INVALID_INPUT", "测试会话格式错误"));
                 }
-                let reply = reqwest::Client::new()
+                let reply = reqwest::Client::builder()
+                    .redirect(reqwest::redirect::Policy::none())
+                    .timeout(std::time::Duration::from_secs(10))
+                    .build()
+                    .map_err(|_| AppError::new("CLOUD_UNAVAILABLE", "夹具网络初始化失败"))?
                     .get(format!("{origin}/api/v2/auth/me"))
                     .bearer_auth(&token)
                     .send()

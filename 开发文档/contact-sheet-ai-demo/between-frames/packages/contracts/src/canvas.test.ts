@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { canvasReceiptSchema, canvasRequestSchema } from './canvas';
+import { canvasReceiptSchema, canvasRequestSchema, editorialSelectionSchema } from './canvas';
 import examples from '../../../contracts/canvas-command-examples.json';
 
 it('20 类画布命令与 Rust 共用同一组严格协议样例', () => {
@@ -25,5 +25,13 @@ it('编号兼容仍拒绝空项目、超长项目及无效的命令和画布编�
   for (const invalid of [{ projectId: '' }, { projectId: 'p'.repeat(161) },
     { commandId: 'not-a-command' }, { boardId: 'not-a-board' }]) {
     expect(canvasRequestSchema.safeParse({ ...examples[0], ...invalid }).success).toBe(false);
+  }
+});
+
+it('关联处理只接受明确恢复或移除，拒绝重复、任意选择和附带节点写入', () => {
+  const selection={draftId:crypto.randomUUID(),draftRevision:1,targetBoardId:crypto.randomUUID(),expectedTargetRevision:2,selectedChangeIds:['a'.repeat(64)],structuralResolutions:[{changeId:'a'.repeat(64),choice:'restore_proposed'}]};
+  expect(editorialSelectionSchema.parse(selection)).toEqual(selection);
+  for (const resolutions of [[...selection.structuralResolutions,...selection.structuralResolutions],[{changeId:'a'.repeat(64),choice:'delete_all'}],[{...selection.structuralResolutions[0],nodes:[]}],Array.from({length:301},()=>selection.structuralResolutions[0])]) {
+    expect(editorialSelectionSchema.safeParse({...selection,structuralResolutions:resolutions}).success).toBe(false);
   }
 });

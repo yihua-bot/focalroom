@@ -14,6 +14,9 @@ struct Fixture {
     draft: String,
 }
 
+#[path = "canvas_merge_structure_tests.rs"]
+mod structural;
+
 #[tokio::test]
 async fn v31_upgrade_preserves_history_order_groups_and_undo_state() {
     let temp = tempfile::tempdir().unwrap();
@@ -177,6 +180,7 @@ impl Fixture {
             selected_change_ids: c.changes.iter().take(count).map(|c| c.id.clone()).collect(),
             resolutions: Vec::new(),
             fields_by_change: std::collections::BTreeMap::new(),
+            structural_resolutions: Vec::new(),
         }
     }
     async fn request(&self, selection: EditorialSelection) -> CanvasCommandRequest {
@@ -1290,7 +1294,12 @@ async fn locked_nodes_dangling_references_and_node_comments_block_safely() {
             .await
             .unwrap();
     assert!(!preview.can_apply);
-    assert!(preview.conflicts.iter().any(|s| s.contains("评论")));
+    assert!(
+        preview
+            .structural_conflicts
+            .iter()
+            .any(|c| c.preserved_comment_count > 0 && !c.resolved)
+    );
     let f = Fixture::new(0).await;
     sqlx::query("INSERT INTO canvas_nodes(id,board_id,node_type,children_json,created_at,updated_at) VALUES(?,?,'arrow',?,'now','now')")
         .bind(domain::id()).bind(&f.draft).bind(json!([domain::id(),domain::id()]).to_string()).execute(&f.db.pool).await.unwrap();

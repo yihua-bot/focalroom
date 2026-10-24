@@ -1710,8 +1710,19 @@ impl CommandHandler<'_> {
         cmd: &GroupNodesCommand,
         new_id: Option<&str>,
     ) -> Result<CanvasNode> {
-        if cmd.node_ids.is_empty() || cmd.node_ids.len() > 100 {
-            return Err(AppError::new("VALIDATION_ERROR", "分组须包含 1–100 个节点"));
+        if cmd.node_ids.is_empty()
+            || cmd.node_ids.len() > 100
+            || cmd
+                .node_ids
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != cmd.node_ids.len()
+        {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "分组须包含 1–100 个不重复的节点",
+            ));
         }
         let label = cmd.label.trim();
         if label.is_empty() || label.chars().count() > 50 {
@@ -1766,7 +1777,7 @@ impl CommandHandler<'_> {
         let children = serde_json::to_string(&cmd.node_ids)
             .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
         sqlx::query(
-            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,children_json,created_at,updated_at) VALUES(?,?, 'group',?,?,?,?,0,?,?,?,?)",
+            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,children_json,created_at,updated_at) VALUES(?,?, 'group',?,?,?,?,0,?,?,?,?,?)",
         )
         .bind(&id)
         .bind(&cmd.board_id)

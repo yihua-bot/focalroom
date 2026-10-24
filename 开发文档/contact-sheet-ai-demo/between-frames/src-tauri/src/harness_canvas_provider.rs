@@ -94,6 +94,22 @@ impl ModelProvider for CanvasScenarioProvider {
                 return call("get_board", json!({"board_id":board}));
             };
             let nodes = read["nodes"].as_array().unwrap();
+            if input.task.goal == "画布结构移除验收" {
+                if find("remove_nodes").is_none() {
+                    let photo = nodes
+                        .iter()
+                        .find(|node| node["type"] == "photo")
+                        .ok_or_else(|| AppError::new("TEST_FIXTURE", "移除剧本需要照片节点"))?;
+                    return call(
+                        "remove_nodes",
+                        json!({"board_id":board,"node_ids":[photo["id"]],"rationale":"SIMULATED：只验证移除、关联预览与人工采纳"}),
+                    );
+                }
+                return call(
+                    "finish_canvas_task",
+                    json!({"task_id":input.task.id,"board_ids":[board],"summary":"SIMULATED：移除方案已准备好，原版未变"}),
+                );
+            }
             if find("move_nodes").is_none() && !nodes.is_empty() {
                 return call(
                     "move_nodes",
@@ -148,6 +164,54 @@ async fn followup(input: &ModelTurnRequest) -> Result<ModelOutcome> {
             .map(|m| m.body["result"]["result"].clone())
     };
     let review = &input.layers["creative"]["continuation"]["reviewFeedback"]["snapshot"];
+    if input.layers["creative"]["continuation"]["reference"]["kind"] == "selection" {
+        if find("read_creative_context").is_none() {
+            return scripted_call(
+                input,
+                "read_creative_context",
+                json!({"section":"selection_draft","object_id":input.layers["creative"]["continuation"]["reference"]["id"],"offset":0,"limit":30}),
+            );
+        }
+        let Some(fork) = find("fork_creative_draft") else {
+            return scripted_call(
+                input,
+                "fork_creative_draft",
+                json!({"parent":input.layers["creative"]["continuation"]["reference"],"title":"SIMULATED · 选片修订","reason":"核对冻结的选片依据，另存调整顺序的方案"}),
+            );
+        };
+        let id = fork["draft_id"]
+            .as_str()
+            .ok_or_else(|| AppError::new("TEST_FIXTURE", "修订方案记录不完整"))?;
+        if find("update_draft_sequence").is_none() {
+            let read = find("read_creative_context").unwrap();
+            if read["data"]["count"].as_u64().unwrap_or(0) > 30 {
+                return Err(AppError::new(
+                    "TEST_FIXTURE",
+                    "该固定剧本只覆盖30张以内的选片修订",
+                ));
+            }
+            let ids: Vec<_> = read["data"]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .rev()
+                .map(|item| item["photo_id"].clone())
+                .collect();
+            return scripted_call(
+                input,
+                "update_draft_sequence",
+                json!({"draft_id":id,"expected_draft_revision":1,"ordered_photo_ids":ids}),
+            );
+        }
+        if find("evaluate_draft").is_none() {
+            return scripted_call(input, "evaluate_draft", json!({"draft_id":id}));
+        }
+        return scripted_call(
+            input,
+            "finish_task",
+            json!({"task_id":input.task.id,"draft_ids":[id],"summary":"新的选片修订已准备好，前版与作品序列保留"}),
+        );
+    }
     if review["totalMessages"].as_u64().unwrap_or(0) > 0 && find("read_creative_context").is_none()
     {
         return scripted_call(

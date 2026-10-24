@@ -5,13 +5,14 @@ import { resolve } from 'node:path';
 import { defaultAgentBudget } from '../src/domain/agent';
 import type { CanvasComparison, CanvasPhoto } from '../src/domain/canvas';
 import { installAccountFixture } from './account-fixture';
+import { evidenceDirectory } from './evidence-directory';
 
 const rpc = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
   const result = await fetch('http://localhost:1447/rpc', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
   if (!result.ok) throw new Error(JSON.stringify(result.error)); return result.value;
 };
 type Snapshot = { board: { revision: number; owning_task_id: string | null }; nodes: CanvasPhoto[] };
-async function prepare(page: Page, authenticated = false) {
+async function prepare(page: Page, authenticated = false, goal = '保留原画布，尝试空间编排') {
   const errors: string[] = [], outside: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', route => {
@@ -43,7 +44,7 @@ async function prepare(page: Page, authenticated = false) {
     { type: 'AddText', data: { boardId: source, nodeType: 'sticky', x: 300, y: 40, width: 200, height: 100, content: '保留观看中的停顿' } },
   ]);
   const task = await rpc<{ ok: boolean; data: { taskId: string }; error: unknown }>('agent_request', { request: { requestId: randomUUID(), projectId, command: {
-    type: authenticated ? 'StartConversation' : 'StartCanvasTask', ...(authenticated ? { expectedAccountId:null,focusPhotoIds:[],continuation:null } : {}), goal: '保留原画布，尝试空间编排', selectedPhotoIds: [], targetCount: 1, budget: defaultAgentBudget, consentId: null, sourceBoard: { boardId: source, revision, selectedNodeIds: [] },
+    type: authenticated ? 'StartConversation' : 'StartCanvasTask', ...(authenticated ? { expectedAccountId:null,focusPhotoIds:[],continuation:null } : {}), goal, selectedPhotoIds: [], targetCount: 1, budget: defaultAgentBudget, consentId: null, sourceBoard: { boardId: source, revision, selectedNodeIds: [] },
   } } });
   expect(task.ok, JSON.stringify(task.error)).toBe(true);
   await expect.poll(async () => (await rpc<{ tasks: Array<{ id: string; state: string }> }>('get_agent_projection', { projectId })).tasks.find(t => t.id === task.data.taskId)?.state, { timeout: 30_000 }).toBe('review_ready');
@@ -63,7 +64,7 @@ test('真实 Store 审稿：三模式、单项采纳、整组撤销重做和重�
   const { projectId, source, draft, comparison, original, errors, outside } = await prepare(page);
   const dialog = page.getByRole('dialog', { name: '智能编辑审稿', exact: true });
   await expect(dialog.getByRole('button', { name: '采纳选中改动', exact: true })).toBeDisabled();
-  const directory = resolve('../docs/v3/evidence/editorial-review-2026-10-24/browser'); await mkdir(directory, { recursive: true });
+  const directory = evidenceDirectory('editorial-review'); await mkdir(directory, { recursive: true });
   const photoChange = comparison.changes.find(c => c.nodeType === 'photo')!;
   const index = comparison.changes.indexOf(photoChange);
   await dialog.getByRole('checkbox', { name: `选择改动 ${index + 1}`, exact: true }).check();
@@ -136,7 +137,7 @@ test('真实三方冲突、连续分批采纳与拒绝决定在进程重启后�
   await dialog.getByRole('checkbox', { name: `选择改动 ${index + 1}`, exact: true }).check();
   await expect(dialog.getByRole('region', { name: '选择冲突处理方式' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: '采纳选中改动', exact: true })).toBeDisabled();
-  const directory = resolve('../docs/v3/evidence/editorial-review-2026-10-24/browser'); await mkdir(directory, { recursive: true });
+  const directory = evidenceDirectory('editorial-review'); await mkdir(directory, { recursive: true });
   await page.screenshot({ path: resolve(directory, 'attribute-conflict.png') });
   await dialog.getByRole('button', { name: '使用建议', exact: true }).click();
   await expect(dialog.getByRole('button', { name: '采纳选中改动', exact: true })).toBeEnabled();
@@ -182,6 +183,54 @@ test('真实三方冲突、连续分批采纳与拒绝决定在进程重启后�
   expect(errors).toEqual([]); expect(outside).toEqual([]);
 });
 
+test('真实关联删除：先确认分组与连接影响，再整组采纳、撤销、重做和重启',async({page})=>{
+  const {projectId,source,draft,comparison,original,errors,outside}=await prepare(page,false,'画布结构移除验收');
+  await page.getByRole('button',{name:'关闭对话框',exact:true}).click();
+  const photo=comparison.changes.find(c=>c.kind==='remove'&&c.nodeType==='photo')!;expect(photo).toBeTruthy();
+  const sourcePhoto=photo.sourceNodeId!;const other=original.nodes.find(n=>n.id!==sourcePhoto)!;
+  const groupId=randomUUID(),arrowId=randomUUID();
+  await rpc('canvas_execute',{request:{schemaVersion:3,commandId:randomUUID(),idempotencyKey:randomUUID(),projectId,boardId:source,baseRevision:original.board.revision,operations:[
+    {opId:groupId,action:{type:'GroupNodes',data:{boardId:source,nodeIds:[sourcePhoto,other.id],label:'保留的组合'}}},
+    {opId:arrowId,action:{type:'AddArrow',data:{boardId:source,fromNodeId:sourcePhoto,toNodeId:other.id}}},
+    {opId:randomUUID(),action:{type:'ResizeNode',data:{boardId:source,nodeId:sourcePhoto,width:300,height:210}}},
+  ]}});
+  const before=await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:source});const hashes=await rpc('test_fixture_checksums');
+  await page.reload();await page.getByRole('button',{name:'叙事画布',exact:true}).click();await page.getByRole('combobox',{name:'选择画布'}).selectOption(draft);await page.getByRole('button',{name:'审查改动',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'智能编辑审稿',exact:true});
+  await dialog.getByRole('checkbox',{name:`选择改动 ${comparison.changes.indexOf(photo)+1}`,exact:true}).check();
+  const conflicts=dialog.getByRole('region',{name:'处理内容与关联变化'});await expect(conflicts).toBeVisible();
+  await conflicts.getByText('一同调整的内容 · 2',{exact:true}).click();await expect(conflicts.getByText(/移除失去端点的连接线/)).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'采纳选中改动',exact:true})).toBeDisabled();expect(await rpc('canvas_snapshot',{projectId,boardId:source})).toEqual(before);
+  const directory=evidenceDirectory('structural-merge');await mkdir(directory,{recursive:true});await page.screenshot({path:resolve(directory,'related-removal-confirmation.png')});
+  await conflicts.getByRole('button',{name:'确认移除并整理关联',exact:true}).click();await expect(dialog.getByRole('button',{name:'采纳选中改动',exact:true})).toBeEnabled();
+  expect(await rpc('canvas_snapshot',{projectId,boardId:source})).toEqual(before);
+  await dialog.getByRole('button',{name:'采纳选中改动',exact:true}).click();await dialog.getByRole('button',{name:'查看原画布',exact:true}).click();
+  const applied=await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:source});expect(applied.nodes.some(n=>n.id===sourcePhoto||n.id===arrowId)).toBe(false);expect(JSON.parse(applied.nodes.find(n=>n.id===groupId)!.childrenJson!)).toEqual([other.id]);
+  await page.getByRole('button',{name:'撤销',exact:true}).click();await expect.poll(async()=>(await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:source})).nodes.length).toBe(before.nodes.length);
+  expect((await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:source})).nodes.find(n=>n.id===sourcePhoto)!.width).toBe(300);
+  await page.getByRole('button',{name:'重做',exact:true}).click();await expect.poll(async()=>(await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:source})).nodes.length).toBe(applied.nodes.length);
+  const redone=await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:source});
+  expect(redone.nodes.map(node=>({...node,updatedAt:undefined}))).toEqual(applied.nodes.map(node=>({...node,updatedAt:undefined})));
+  await page.goto('about:blank');await rpc('test_process_restart');expect(await rpc('canvas_snapshot',{projectId,boardId:source})).toEqual(redone);expect(await rpc('test_fixture_checksums')).toEqual(hashes);expect(errors).toEqual([]);expect(outside).toEqual([]);
+});
+
+test('真实原内容已移除：确认后恢复稳定身份，拒绝不会偷偷复原',async({page})=>{
+  const {projectId,source,draft,comparison,original,errors,outside}=await prepare(page);
+  await page.getByRole('button',{name:'关闭对话框',exact:true}).click();
+  const photo=comparison.changes.find(c=>c.nodeType==='photo'&&c.kind==='change')!;
+  await rpc('canvas_execute',{request:{schemaVersion:3,commandId:randomUUID(),idempotencyKey:randomUUID(),projectId,boardId:source,baseRevision:original.board.revision,operations:[{opId:randomUUID(),action:{type:'DeleteNode',data:{boardId:source,nodeId:photo.sourceNodeId}}}]}});
+  const deleted=await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:source});
+  await page.reload();await page.getByRole('button',{name:'叙事画布',exact:true}).click();await page.getByRole('combobox',{name:'选择画布'}).selectOption(draft);await page.getByRole('button',{name:'审查改动',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'智能编辑审稿',exact:true});const checkbox=dialog.getByRole('checkbox',{name:`选择改动 ${comparison.changes.indexOf(photo)+1}`,exact:true});await checkbox.check();
+  const conflicts=dialog.getByRole('region',{name:'处理内容与关联变化'});await expect(conflicts.getByText(/原内容已移除/)).toBeVisible();await expect(dialog.getByRole('button',{name:'采纳选中改动',exact:true})).toBeDisabled();
+  await conflicts.getByRole('button',{name:'保留当前，不采纳此项',exact:true}).click();await expect(dialog.locator('.editorial-change').filter({hasText:'未采纳'})).toBeVisible();expect(await rpc('canvas_snapshot',{projectId,boardId:source})).toEqual(deleted);
+  await checkbox.check();await conflicts.getByRole('button',{name:'按建议恢复',exact:true}).click();await expect(dialog.getByRole('button',{name:'采纳选中改动',exact:true})).toBeEnabled();
+  const directory=evidenceDirectory('structural-merge');await mkdir(directory,{recursive:true});await page.screenshot({path:resolve(directory,'restore-confirmation.png')});
+  await dialog.getByRole('button',{name:'采纳选中改动',exact:true}).click();await dialog.getByRole('button',{name:'查看原画布',exact:true}).click();
+  const restored=await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:source});const node=restored.nodes.find(n=>n.id===photo.sourceNodeId)!;expect(node.assetId).toBe(photo.before!.assetId);expect(node.x).toBe(photo.after!.x);expect(restored.nodes.length).toBe(original.nodes.length);
+  await page.getByRole('button',{name:'撤销',exact:true}).click();await expect.poll(async()=>(await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:source})).nodes.some(n=>n.id===photo.sourceNodeId)).toBe(false);expect(errors).toEqual([]);expect(outside).toEqual([]);
+});
+
 test('真实讨论与修订：批注回复解决重开、重启保留、用户发送后创建独立新版本', async ({ page }) => {
   const { projectId,source,draft,errors,outside } = await prepare(page,true);
   const parent = await rpc<Snapshot>('canvas_snapshot',{projectId,boardId:draft});
@@ -201,7 +250,7 @@ test('真实讨论与修订：批注回复解决重开、重启保留、用户�
   await expect(discussion.getByRole('button',{name:'回复',exact:true})).toBeEnabled();
   expect(await rpc('canvas_snapshot',{projectId,boardId:draft})).toEqual(parent);
   expect(await rpc('get_project',{projectId})).toEqual(official);
-  const directory = resolve('../docs/v3/evidence/editorial-discussion-2026-10-24/browser'); await mkdir(directory,{recursive:true});
+  const directory = evidenceDirectory('discussion'); await mkdir(directory,{recursive:true});
   await discussion.scrollIntoViewIfNeeded(); await page.screenshot({path:resolve(directory,'discussion-and-reply.png')});
   await page.goto('about:blank'); await rpc('test_process_restart');
   await page.goto('/#/project/'+projectId); await page.getByRole('button',{name:'叙事画布',exact:true}).click();
@@ -237,7 +286,7 @@ test('真实讨论与修订：批注回复解决重开、重启保留、用户�
   await expect(revisionContext.getByText('晚到意见，留给下一次修订',{exact:true})).toHaveCount(0);
   await expect(revisionContext.getByRole('textbox')).toHaveCount(0);
   await revisionContext.scrollIntoViewIfNeeded();
-  const contextDirectory=resolve('../docs/v3/evidence/cross-round-context-2026-10-24/browser');await mkdir(contextDirectory,{recursive:true});
+  const contextDirectory=evidenceDirectory('cross-round-context');await mkdir(contextDirectory,{recursive:true});
   await page.screenshot({path:resolve(contextDirectory,'frozen-parent-context.png')});
   expect(await rpc('canvas_snapshot',{projectId,boardId:draft})).toEqual(parent);
   expect(await rpc('get_project',{projectId})).toEqual(official);

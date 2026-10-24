@@ -32,6 +32,7 @@ pub struct RevertSimulation {
     pub conflicts: Vec<String>,
     pub can_apply: bool,
     pub photo_sources: Vec<CanvasPhotoSource>,
+    pub restored_comment_count: usize,
 }
 impl Store {
     pub async fn editorial_history(
@@ -144,6 +145,15 @@ async fn simulate_revert_tx(
         }
         Err(error) => return Err(error),
     };
+    let annotation_patches = if conflicts.is_empty() {
+        let nodes = merged_nodes
+            .iter()
+            .map(|n| (n.id.clone(), n.clone()))
+            .collect();
+        merge::structure::history_patches(tx, board, &data, false, &nodes).await?
+    } else {
+        Vec::new()
+    };
     let assets: std::collections::BTreeSet<_> = current_nodes
         .iter()
         .chain(merged_nodes.iter())
@@ -152,7 +162,7 @@ async fn simulate_revert_tx(
     let photo_sources = sqlx::query_as("SELECT a.id AS asset_id,MIN(p.thumbnail_path) AS thumbnail_path FROM source_assets a JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=a.project_id WHERE a.project_id=? AND a.id IN(SELECT value FROM json_each(?)) GROUP BY a.id")
         .bind(project).bind(encode(&assets)?).fetch_all(&mut **tx).await?;
     let simulation_id = fingerprint(
-        &json!({"project":project,"board":board,"command":command,"revision":target.revision,"data":data,"current":current_nodes,"merged":merged_nodes,"conflicts":conflicts}),
+        &json!({"project":project,"board":board,"command":command,"revision":target.revision,"data":data,"current":current_nodes,"merged":merged_nodes,"conflicts":conflicts,"annotationPatches":annotation_patches}),
     );
     Ok(RevertSimulation {
         merge_command_id: command.into(),
@@ -163,6 +173,7 @@ async fn simulate_revert_tx(
         can_apply: conflicts.is_empty(),
         conflicts,
         photo_sources,
+        restored_comment_count: annotation_patches.len(),
     })
 }
 impl CommandHandler<'_> {
@@ -198,9 +209,16 @@ impl CommandHandler<'_> {
                 patches.push(json!({"id":id,"before":before.get(id),"after":after.get(id)}));
             }
         }
+        let nodes = simulation
+            .merged_nodes
+            .iter()
+            .map(|n| (n.id.clone(), n.clone()))
+            .collect();
+        let annotation_patches =
+            merge::structure::history_patches(tx, board, &original, false, &nodes).await?;
         merge::restore_merge(tx, board, &original, false).await?;
-        if !patches.is_empty() {
-            let history = json!({"draftId":original["draftId"],"draftRevision":original["draftRevision"],"changes":original["changes"],"revertsCommandId":cmd.merge_command_id,"patches":patches});
+        if !patches.is_empty() || !annotation_patches.is_empty() {
+            let history = json!({"draftId":original["draftId"],"draftRevision":original["draftRevision"],"changes":original["changes"],"revertsCommandId":cmd.merge_command_id,"patches":patches,"annotationPatches":annotation_patches});
             Self::log_canvas_op(tx, project, board, "editorial_merge", &history, &history).await?;
         }
         Ok(())

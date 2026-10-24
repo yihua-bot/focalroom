@@ -236,6 +236,13 @@ pub async fn bind_continuation(
         if feedback.total_messages > 0 {
             body["reviewFeedback"] = json!({"source":"human_editorial_review","visualEvidence":false,"snapshot":feedback});
         }
+    } else if parent.kind == "selection" {
+        let value = super::selection_revision_context::freeze(tx, task, parent, &snapshot).await?;
+        let context: super::selection_revision_context::FrozenSelectionContext =
+            serde_json::from_value(value.clone()).map_err(serialization)?;
+        body["selectionContextSha256"] = json!(fingerprint(&value));
+        body["selectionContextPreview"] =
+            super::selection_revision_context::preview(&context, 0, 5);
     }
     sqlx::query("INSERT INTO task_messages(task_id,kind,body,created_at) VALUES(?,'creative_continuation',?,?)")
         .bind(&task.id).bind(encode(&body)?).bind(domain::timestamp()).execute(&mut **tx).await?;
@@ -253,6 +260,7 @@ pub async fn binding(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<Va
         return Ok(Value::Null);
     }
     crate::canvas_review::revision_context::saved(tx, &task.id).await?;
+    super::selection_revision_context::saved(tx, &task.id).await?;
     Ok(
         json!({"version":1,"promptSha256":fingerprint(&json!(PROMPT)),"knowledgeSha256":super::knowledge::digest(),"continuation":continuation(tx,&task.id).await?}),
     )
@@ -377,17 +385,16 @@ pub async fn execute(
                     if feedback.total_messages > 0 {
                         value["reviewFeedback"] = json!({"source":"human_editorial_review","visualEvidence":false,"frozenForThisTask":frozen.is_some(),"snapshot":feedback});
                     }
-                    if frozen.is_some() {
-                        if let Some(context) =
+                    if frozen.is_some()
+                        && let Some(context) =
                             crate::canvas_review::revision_context::saved(tx, &task.id).await?
-                        {
-                            value["parentReviewContext"] =
-                                crate::canvas_review::revision_context::preview(
-                                    &context,
-                                    offset as usize,
-                                    limit as usize,
-                                );
-                        }
+                    {
+                        value["parentReviewContext"] =
+                            crate::canvas_review::revision_context::preview(
+                                &context,
+                                offset as usize,
+                                limit as usize,
+                            );
                     }
                 }
                 value
@@ -489,15 +496,28 @@ pub async fn execute(
             {
                 return Err(denied());
             }
-            let items = store::items(tx, object).await?;
-            if items
-                .iter()
-                .any(|i| !task.allowed_photo_ids.contains(&i.photo_id))
+            let bound = continuation(tx, &task.id).await?;
+            if bound["reference"]["kind"] == "selection"
+                && bound["reference"]["id"] == object
+                && let Some(context) =
+                    super::selection_revision_context::saved(tx, &task.id).await?
             {
-                return Err(denied());
+                super::selection_revision_context::preview(
+                    &context,
+                    offset as usize,
+                    limit as usize,
+                )
+            } else {
+                let items = store::items(tx, object).await?;
+                if items
+                    .iter()
+                    .any(|i| !task.allowed_photo_ids.contains(&i.photo_id))
+                {
+                    return Err(denied());
+                }
+                let count = items.len();
+                json!({"id":object,"revision":row.get::<i64,_>("revision"),"baseRevision":row.get::<i64,_>("base_revision"),"title":row.get::<String,_>("title"),"summary":row.get::<String,_>("summary"),"items":items.into_iter().skip(offset as usize).take(limit as usize).collect::<Vec<_>>(),"count":count,"nextOffset":if count>offset as usize+limit as usize{Some(offset+limit)}else{None}})
             }
-            let count = items.len();
-            json!({"id":object,"revision":row.get::<i64,_>("revision"),"baseRevision":row.get::<i64,_>("base_revision"),"title":row.get::<String,_>("title"),"summary":row.get::<String,_>("summary"),"items":items.into_iter().skip(offset as usize).take(limit as usize).collect::<Vec<_>>(),"count":count,"nextOffset":if count>offset as usize+limit as usize{Some(offset+limit)}else{None}})
         }
         "drafts" => {
             let allowed = authorized_tasks(tx, task).await?;
