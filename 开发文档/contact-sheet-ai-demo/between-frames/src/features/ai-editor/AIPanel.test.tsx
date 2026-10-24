@@ -11,7 +11,7 @@ const project = { id: 'p1', title: 't', brief: '', revision: 3, photos: [{ id: '
 const readyConfig: AiConfig = { observation: null, consentProvider: 'openai@' + 'a'.repeat(64), providerId: 'openai', modelId: 'test-model', ready: true, apiKeyTail: 'abcd', keySource: 'keychain', baseUrl: 'https://x', promptVersion: 'test', capabilities: ['vision', 'tool_calling', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null, consent: null };
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn().mockResolvedValue(() => {}) }));
 function fixture(config: Partial<AiConfig> = {}, projection: AgentProjection = { tasks: [], drafts: [] }) {
- const agent = { query: vi.fn().mockResolvedValue(projection), request: vi.fn().mockResolvedValue('task-1'), subscribe: vi.fn().mockResolvedValue(() => {}), aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...config }), setConsent: vi.fn().mockResolvedValue({ id: 9 }) };
+ const agent = { queryVisionResult: vi.fn().mockResolvedValue({state:'pending',images:1}), query: vi.fn().mockResolvedValue(projection), request: vi.fn().mockResolvedValue('task-1'), subscribe: vi.fn().mockResolvedValue(() => {}), aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...config }), setConsent: vi.fn().mockResolvedValue({ id: 9 }) };
  return { agent };
 }
 function mount(repository = fixture(), props: Partial<React.ComponentProps<typeof AIPanel>> = {}) {
@@ -23,6 +23,28 @@ const send = () => screen.getByRole('button', { name: '发送' });
 const ready = () => waitFor(() => expect(send()).toBeEnabled());
 function task(state: AgentTask['state']): AgentTask { return { id: 't1', state, goal: '旅行故事', baseRevision: 3, reason: '预算已用完', question: state === 'needs_input' ? '希望以人物为主吗？' : null, budget: defaultAgentBudget, usage: { modelTurns: 1, toolCalls: 1, inputEstimate: 1, outputEstimate: 1, cloudImages: 0, costMinorUsd: 0 }, elapsedMs: 1, finalDraftIds: [], providerId: 'test', steps: [], createdAt: 'now' }; }
 beforeEach(() => { useUIStore.getState().reset(); useUIStore.setState({ aiDrafts: {} }); });
+
+it('审稿修订入口只填入消息和父方案，用户发送后才启动任务', async () => {
+ const reference={kind:'board' as const,id:'review-board',revision:9};
+ useUIStore.getState().openDraftRevision('p1',reference,'审稿方案','根据批注调整观看节奏',2);
+ const { repository }=mount(); await ready();
+ expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('根据批注调整观看节奏');
+ expect(screen.getByText(/审稿方案/)).toBeInTheDocument();
+ expect(repository.agent.request).not.toHaveBeenCalled();
+ expect(useUIStore.getState().draftRevisionRequest).toBeNull();
+ await userEvent.click(send());
+ await waitFor(() => expect(repository.agent.request).toHaveBeenCalledWith('p1',expect.objectContaining({type:'StartConversation',continuation:reference,sourceBoard:null,selectedPhotoIds:[],targetCount:2})));
+});
+
+it('已打开的对话可以接收新的审稿修订入口，保留明确的父版本', async () => {
+ const { repository }=mount(); await ready();
+ const reference={kind:'board' as const,id:'second-review',revision:5};
+ useUIStore.getState().openDraftRevision('p1',reference,'另一方案','先处理未解决意见',1);
+ await waitFor(() => expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('先处理未解决意见'));
+ expect(repository.agent.request).not.toHaveBeenCalled();
+ await userEvent.click(send());
+ await waitFor(() => expect(repository.agent.request).toHaveBeenCalledWith('p1',expect.objectContaining({continuation:reference})));
+});
 describe('选片对话与本次预览使用', () => {
  it.each([true, false])('达到等待时间后，明确延长并继续同一任务（请求未发送=%s）', async requestNotSent => {
   const paused = { ...task('paused'), elapsedMs: 480000, budgetIssue: { kind: 'time' as const, used: 480000, requested: 1, limit: 480000, stage: requestNotSent ? 'vision' : 'model_response', requestNotSent } };
@@ -135,4 +157,89 @@ describe('统一摄影助手', () => {
   fireEvent.keyDown(screen.getByRole('textbox', { name: '消息' }), { key: 'Enter', isComposing: true });
   expect(repo.agent.request).not.toHaveBeenCalled();
  });
+});
+
+it('结果未确认时只查询原分析，找回后也必须明确继续，不自动重发或重新授权', async () => {
+ const pending={...task('paused'),reason:'AI_RESULT_UNKNOWN：结果尚未确认',visionRecovery:{state:'unknown' as const,images:1}};
+ const repo=fixture({}, {tasks:[pending],drafts:[]});
+ mount(repo); await ready();
+ expect(screen.queryByRole('button',{name:'调整照片范围'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:/^继续$/})).not.toBeInTheDocument();
+ expect(repo.agent.queryVisionResult).not.toHaveBeenCalled();
+ await userEvent.click(screen.getByRole('button',{name:'查询处理结果'}));
+ expect(repo.agent.queryVisionResult).toHaveBeenCalledWith('p1','t1');
+ expect(repo.agent.request).not.toHaveBeenCalled();
+ expect(repo.agent.setConsent).not.toHaveBeenCalled();
+ repo.agent.queryVisionResult.mockImplementationOnce(async () => {
+  repo.agent.query.mockResolvedValue({tasks:[{...pending,reason:'照片分析结果已找回，可继续本次任务',visionRecovery:null,steps:[{id:1,kind:'vision_result_recovered',summary:'已找回',createdAt:'now'}]}],drafts:[]});
+  return {state:'completed',images:1};
+ });
+ await userEvent.click(screen.getByRole('button',{name:'查询处理结果'}));
+ await waitFor(() => expect(screen.getByRole('button',{name:/^继续$/})).toBeEnabled());
+ expect(repo.agent.request).not.toHaveBeenCalled();
+ await userEvent.click(screen.getByRole('button',{name:/^继续$/}));
+ expect(repo.agent.request).toHaveBeenCalledWith('p1',expect.objectContaining({type:'ResumeTask',taskId:'t1',budget:expect.objectContaining({maxCloudImages:0,maxCostMinorUsd:100})}));
+});
+
+it('查询失败仍保留查询入口，不能跳成重新上传', async () => {
+ const repo=fixture({}, {tasks:[{...task('interrupted'),reason:'AI_RESULT_UNKNOWN',visionRecovery:{state:'unknown',images:2}}],drafts:[]});
+ repo.agent.queryVisionResult.mockRejectedValueOnce(new Error('暂时无法查询，请稍后再试。'));
+ mount(repo); await ready();
+ await userEvent.click(screen.getByRole('button',{name:'查询处理结果'}));
+ await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('暂时无法查询'));
+ expect(screen.getByRole('button',{name:'查询处理结果'})).toBeEnabled();
+ expect(repo.agent.queryVisionResult).toHaveBeenCalledTimes(1);
+ expect(repo.agent.request).not.toHaveBeenCalled();
+ expect(repo.agent.setConsent).not.toHaveBeenCalled();
+});
+
+const hostedRecovery: Partial<AiConfig> = {keySource:'focalroom',hostedAccount:{enabled:true,verified:true,policy:'deepseek-flash-v1',provider:'DeepSeek',model:'deepseek-flash',unit:'tokens',granted:10000,spent:0,reserved:0,available:10000,recovery:{enabled:true,policy:'encrypted-queue-v1',maxQueueSeconds:600}}};
+it('恢复选择默认关闭，只有本次明确勾选才随消息发送，发送后不延用到下一次',async()=>{
+ const view=mount(fixture(hostedRecovery),{settingsOpen:true});const {repository}=view;
+ const toggle=await screen.findByRole('checkbox',{name:'本次分析可在服务恢复后继续'});
+ expect(toggle).not.toBeChecked();expect(repository.agent.request).not.toHaveBeenCalled();
+ await userEvent.click(toggle);
+ expect(screen.getAllByText(/预览会加密暂存/)).toHaveLength(2);
+ view.rerender(view.panel({settingsOpen:false}));await ready();
+ await userEvent.click(send());
+ expect(repository.agent.request).toHaveBeenLastCalledWith('p1',expect.objectContaining({type:'StartConversation',allowQueuedRecovery:true}));
+ view.rerender(view.panel({settingsOpen:true}));
+ expect(await screen.findByRole('checkbox',{name:'本次分析可在服务恢复后继续'})).not.toBeChecked();
+ view.rerender(view.panel({settingsOpen:false}));
+ await userEvent.type(screen.getByRole('textbox',{name:'消息'}),'再看看节奏');await ready();
+ await userEvent.click(send());
+ expect(repository.agent.request.mock.calls[1][1]).not.toHaveProperty('allowQueuedRecovery');
+});
+it('未提供恢复能力的服务不显示恢复选择，也不会默认扩展图片暂存许可',async()=>{
+ const repo=fixture();const view=mount(repo,{settingsOpen:true});await screen.findByRole('dialog',{name:'设置'});
+ expect(screen.queryByRole('checkbox',{name:'本次分析可在服务恢复后继续'})).not.toBeInTheDocument();
+ view.rerender(view.panel({settingsOpen:false}));await ready();
+ await userEvent.click(send());expect(repo.agent.request.mock.calls[0][1]).not.toHaveProperty('allowQueuedRecovery');
+});
+it('勾选后服务能力改变时不静默降级、不创建授权或发送消息',async()=>{
+ const repo=fixture(hostedRecovery);const view=mount(repo,{settingsOpen:true});
+ await userEvent.click(await screen.findByRole('checkbox',{name:'本次分析可在服务恢复后继续'}));
+ view.rerender(view.panel({settingsOpen:false}));await ready();
+ repo.agent.aiConfig.mockResolvedValue({...readyConfig,...hostedRecovery,hostedAccount:{...hostedRecovery.hostedAccount!,recovery:{enabled:false}}});
+ await userEvent.click(send());
+ await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('连接恢复暂不可用'));
+ expect(repo.agent.setConsent).not.toHaveBeenCalled();expect(repo.agent.request).not.toHaveBeenCalled();
+ view.rerender(view.panel({settingsOpen:true}));
+ expect(await screen.findByRole('checkbox',{name:'本次分析可在服务恢复后继续'})).toBeChecked();
+});
+it.each([
+ ['cancelled','排队的照片分析已撤回'],['already_sent','无法撤回已发送的内容'],['unconfirmed','暂未确认排队撤回结果'],
+] as const)('取消结果%s按真实回执说明，不把未确认当作成功',async(state,text)=>{
+ mount(fixture({}, {tasks:[{...task('cancelled'),queueCancellation:state}],drafts:[]}));await ready();
+ expect(screen.getByRole('status')).toHaveTextContent(text);
+ expect(screen.queryByRole('button',{name:'继续'})).not.toBeInTheDocument();
+});
+
+it('回答旧任务的问题时不提供扩大暂存许可的选项',async()=>{
+ const repo=fixture(hostedRecovery,{tasks:[task('needs_input')],drafts:[]});
+ const view=mount(repo,{settingsOpen:true});await screen.findByRole('dialog',{name:'设置'});
+ expect(screen.queryByRole('checkbox',{name:'本次分析可在服务恢复后继续'})).not.toBeInTheDocument();
+ view.rerender(view.panel({settingsOpen:false}));await ready();await userEvent.click(send());
+ expect(repo.agent.request).toHaveBeenCalledWith('p1',expect.objectContaining({type:'SubmitFeedback',taskId:'t1'}));
+ expect(repo.agent.setConsent).not.toHaveBeenCalled();
 });

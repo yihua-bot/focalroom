@@ -29,6 +29,21 @@ pub struct AgentEngine {
     tier: ServiceTier,
 }
 impl AgentEngine {
+    /// 只查询已持久记录的原请求；不会排队任务、调用模型或重新发送图片。
+    pub async fn query_vision_result(
+        &self,
+        project: &str,
+        task: &str,
+    ) -> Result<super::vision_recovery::VisionRecoveryView> {
+        let provider = self
+            .observation
+            .as_ref()
+            .filter(|p| p.is_hosted())
+            .ok_or_else(|| AppError::new("RECOVERY_ERROR", "这次分析不支持查询"))?;
+        let result = super::vision_recovery::query(&self.db, provider, project, task).await;
+        (self.notify)(project);
+        result
+    }
     /// 正式 IPC 通过冻结引擎身份创建任务；模型密钥存在与否不能让账户服务降级为 Mock。
     pub async fn request(&self, request: AgentRequest) -> Result<Task> {
         let queues = matches!(
@@ -42,10 +57,23 @@ impl AgentEngine {
         if let Some(provider) = self.openai.as_ref().filter(|p| p.is_hosted()) {
             let bound = provider.bind_account()?;
             if queues {
-                bound.validate_hosted_account().await?;
+                let allow = matches!(
+                    &request.command,
+                    TaskCommand::StartConversation {
+                        allow_queued_recovery: true,
+                        ..
+                    }
+                );
+                bound.validate_hosted_options(allow).await?;
             }
-            return super::lifecycle::request_bound(&self.db, request, Some(&bound.identity()))
-                .await;
+            let cancel = matches!(&request.command, TaskCommand::CancelTask { .. });
+            let task =
+                super::lifecycle::request_bound(&self.db, request, Some(&bound.identity())).await?;
+            if cancel {
+                // 本地取消先落盘。网关不确定时保留真实状态，不恢复工具或重传图片。
+                super::vision_recovery::cancel_for_task(&self.db, &bound, &task).await?;
+            }
+            return Ok(task);
         }
         if matches!(request.command, TaskCommand::StartConversation { .. })
             && self.openai.is_some()
@@ -360,7 +388,13 @@ impl AgentEngine {
             let _ = CommandHandler::new(&self.db)
                 .agent_state(
                     id,
-                    if ["MEMORY_SCOPE_CHANGED", "MEMORY_SCOPE_LIMIT"].contains(&e.code.as_str()) {
+                    if [
+                        "MEMORY_SCOPE_CHANGED",
+                        "MEMORY_SCOPE_LIMIT",
+                        "AI_RESULT_UNKNOWN",
+                    ]
+                    .contains(&e.code.as_str())
+                    {
                         "paused"
                     } else {
                         "failed"

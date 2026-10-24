@@ -627,6 +627,20 @@ pub async fn set_hypothesis_enabled(
     crate::agent::memory::set_enabled(&state.store, &project_id, hypothesis_id, enabled).await
 }
 #[tauri::command]
+pub async fn query_vision_result(
+    state: State<'_, Backend>,
+    project_id: String,
+    task_id: String,
+) -> Result<serde_json::Value> {
+    serde_json::to_value(
+        state
+            .agent
+            .query_vision_result(&project_id, &task_id)
+            .await?,
+    )
+    .map_err(crate::command_audit::serialization)
+}
+#[tauri::command]
 pub async fn agent_request(
     app: AppHandle,
     state: State<'_, Backend>,
@@ -790,6 +804,40 @@ pub async fn canvas_comparison(
 }
 
 #[tauri::command]
+pub async fn canvas_editorial_revision_context(
+    state: State<'_, Backend>,
+    project_id: String,
+    draft_id: String,
+    offset: Option<usize>,
+) -> Result<Option<crate::canvas_review::RevisionContextPage>> {
+    state
+        .store
+        .editorial_revision_context(&project_id, &draft_id, offset.unwrap_or(0))
+        .await
+}
+
+#[tauri::command]
+pub async fn canvas_editorial_discussion(
+    state: State<'_, Backend>,
+    project_id: String,
+    draft_id: String,
+    revision: i64,
+    offset: Option<usize>,
+    cursor: Option<i64>,
+) -> Result<crate::canvas_review::EditorialDiscussion> {
+    state
+        .store
+        .editorial_discussion(
+            &project_id,
+            &draft_id,
+            revision,
+            offset.unwrap_or(0),
+            cursor,
+        )
+        .await
+}
+
+#[tauri::command]
 pub async fn canvas_simulate_merge(
     state: State<'_, Backend>,
     project_id: String,
@@ -798,6 +846,31 @@ pub async fn canvas_simulate_merge(
     state
         .store
         .simulate_editorial_merge(&project_id, &selection)
+        .await
+}
+
+#[tauri::command]
+pub async fn canvas_editorial_history(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+    before: Option<i64>,
+) -> Result<Vec<crate::canvas_review::EditorialHistoryEntry>> {
+    state
+        .store
+        .editorial_history_page(&project_id, &board_id, before)
+        .await
+}
+#[tauri::command]
+pub async fn canvas_simulate_revert(
+    state: State<'_, Backend>,
+    project_id: String,
+    board_id: String,
+    command_id: String,
+) -> Result<crate::canvas_review::RevertSimulation> {
+    state
+        .store
+        .simulate_editorial_revert(&project_id, &board_id, &command_id)
         .await
 }
 

@@ -1,0 +1,60 @@
+{
+  "sourceCount": 300,
+  "firstTaskId": "8c61eb27-742e-40ad-a6a0-19860db03fcb",
+  "state": "failed",
+  "errorCode": "AI_RESULT_UNKNOWN",
+  "unknownRequestId": "0f381c50-3b12-4e1b-8f63-9fd64f2d4b2d",
+  "usage": {
+    "cloudImages": 12,
+    "costMinorUsd": 5,
+    "inputEstimate": 17668,
+    "modelTurns": 2,
+    "outputEstimate": 1303,
+    "toolCalls": 2
+  },
+  "taskElapsedMs": 56292,
+  "testElapsedSecondsIncludingSystemAuthorizationAndSourceHashing": 873.15,
+  "budget": {
+    "maxCloudImages": 60,
+    "maxContextTokens": 48000,
+    "maxCostMinorUsd": 45,
+    "maxDurationSeconds": 480,
+    "maxModelTurns": 16,
+    "maxOutputTokens": 8192,
+    "maxToolCalls": 40,
+    "maxTotalTokens": 500000
+  },
+  "quotaBefore": {
+    "available": 832701,
+    "enabled": true,
+    "granted": 1000000,
+    "model": "deepseek-flash",
+    "policy": "deepseek-flash-v1",
+    "provider": "DeepSeek",
+    "reserved": 0,
+    "spent": 167299,
+    "unit": "tokens",
+    "verified": true
+  },
+  "quotaAfter": {
+    "available": 813730,
+    "enabled": true,
+    "granted": 1000000,
+    "model": "deepseek-flash",
+    "policy": "deepseek-flash-v1",
+    "provider": "DeepSeek",
+    "reserved": 0,
+    "spent": 186270,
+    "unit": "tokens",
+    "verified": true
+  },
+  "accountSpentDelta": 18971,
+  "inspectedPhotoCount": 0,
+  "boardDraftCount": 0,
+  "originalProjectUnchanged": true,
+  "sourceHashesUnchanged": true,
+  "followupStarted": false,
+  "imageSubmitReplayed": false,
+  "actualLUMIXReceipt": "unknown; 12 previews reserved and attempted, no successful observation",
+  "professionalQualityAccepted": false
+}

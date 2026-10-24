@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { MemoryProjection } from '../src/domain/memory';
+import { installAccountFixture } from './account-fixture';
 
 async function rpc<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   const response = await fetch('http://localhost:1422/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, args }) }).then(r => r.json());
@@ -12,7 +13,7 @@ async function rpc<T>(command: string, args: Record<string, unknown> = {}): Prom
 type Project = { id: string; revision: number; sequence: string[]; photos: { id: string; status: string; note: string }[] };
 
 test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索及重启', async ({ page }) => {
-  const screenshots = resolve('../docs/screenshots/m4-memory-controls');
+  const screenshots = resolve('../docs/v3/evidence/memory-drawer-2026-10-23');
   await mkdir(screenshots, { recursive: true });
   const errors: string[] = []; const outside: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -20,6 +21,7 @@ test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索
     if (['localhost', '127.0.0.1', '[::1]'].includes(new URL(route.request().url()).hostname)) return route.continue();
     outside.push(route.request().url()); return route.abort();
   });
+  await installAccountFixture(page);
   await page.addInitScript(() => Object.assign(globalThis, {
     isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} },
     __TAURI_INTERNALS__: {
@@ -45,7 +47,9 @@ test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索
   const h = initial.hypotheses.find(h => h.statement.includes('留白'))!;
   const support = h.evidenceIds[0];
   await page.goto('/#/project/' + project.id);
-  await page.getByRole('button', { name: '审美记忆', exact: true }).last().click();
+  await expect(page.getByRole('navigation', { name: 'M4 · 选择有证据' }).getByRole('button', { name: '审美记忆', exact: true })).toHaveCount(0);
+  await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Focal AI' }).getByRole('button', { name: '审美记忆', exact: true }).click();
   const card = page.locator('.memory-hypothesis').filter({ hasText: h.statement });
   await expect(card).toContainText('证据 2 条 · 反例 1 条');
   await card.getByText('查看反例', { exact: true }).click();
@@ -74,8 +78,7 @@ test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索
   expect(field).not.toBeNull(); expect(searchButton).not.toBeNull();
   expect(Math.abs(field!.y + field!.height - searchButton!.y - searchButton!.height)).toBeLessThan(2);
   expect(field!.x + field!.width).toBeLessThanOrEqual(searchButton!.x);
-  await mkdir(resolve('../docs/evidence/ux-chat-drawer-2026-10-20'), { recursive: true });
-  await page.screenshot({ path: resolve('../docs/evidence/ux-chat-drawer-2026-10-20/memory-search.png') });
+  await page.screenshot({ path: resolve(screenshots, 'memory-search.png') });
   await page.screenshot({ path: resolve(screenshots, 'restored-search.png') });
   const memory = await rpc<MemoryProjection>('get_memory_projection', { projectId: project.id });
   expect(await rpc<Project>('get_project', { projectId: project.id })).toEqual(formal);
@@ -84,7 +87,8 @@ test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索
   expect(await rpc<MemoryProjection>('get_memory_projection', { projectId: project.id })).toEqual(memory);
   expect(await rpc<string[][]>('test_fixture_checksums')).toEqual(hashes);
   await page.reload();
-  await page.getByRole('button', { name: '审美记忆', exact: true }).last().click();
+  await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Focal AI' }).getByRole('button', { name: '审美记忆', exact: true }).click();
   await expect(card).toHaveAttribute('data-status', 'unconfirmed');
   // 作者记忆授权通过真实 Rust 命令，来源卡保持只读并跨进程重启保留。
   let source = await rpc<Project>('create_project', { title: '作者记忆来源', brief: '仅临时测试素材' });
@@ -109,12 +113,13 @@ test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索
   await expect(author).toContainText(source.id);
   await expect(author.getByRole('link')).toHaveAttribute('href', '#/project/' + source.id);
   await expect(author.getByRole('button')).toHaveCount(0);
-  await mkdir(resolve('../docs/evidence/v2-m3-author-memory'), { recursive: true });
+
   await author.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: resolve('../docs/evidence/v2-m3-author-memory/author-memory-ui.png') });
+  await page.screenshot({ path: resolve(screenshots, 'author-memory-ui.png') });
   await rpc('test_restart');
   await page.reload();
-  await page.getByRole('button', { name: '审美记忆', exact: true }).last().click();
+  await page.getByRole('main').getByRole('button', { name: 'Focal AI', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Focal AI' }).getByRole('button', { name: '审美记忆', exact: true }).click();
   await expect(toggle).toBeChecked();
   await expect(author).toBeVisible();
   await toggle.click();
@@ -124,5 +129,13 @@ test('M4 记忆控制：确认、反例、排除/恢复、移除/恢复、搜索
   expect(await rpc<Project>('get_project', { projectId: project.id })).toEqual(formal);
   expect(await rpc<Project>('get_project', { projectId: source.id })).toEqual(source);
   expect(await rpc<string[][]>('test_fixture_checksums')).toEqual(hashes);
+  await page.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.getByRole('textbox', { name: '消息' }).fill('继续讨论作品的叙事');
+  await page.getByRole('dialog', { name: 'Focal AI' }).getByRole('button', { name: '审美记忆', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: '消息' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('textbox', { name: '消息' })).toHaveValue('继续讨论作品的叙事');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Focal AI' })).toHaveCount(0);
   expect(errors).toEqual([]); expect(outside).toEqual([]);
 });

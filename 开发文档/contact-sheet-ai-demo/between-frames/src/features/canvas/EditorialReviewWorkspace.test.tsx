@@ -84,3 +84,59 @@ it('审稿选择按草案版本保留，键盘导航不会自动勾选', async (
   cleanup(); setup(); expect(screen.getByRole('checkbox', { name: '选择改动 1' })).toBeChecked();
   cleanup(); setup({}, { ...comparison, draftRevision: 4 }); expect(screen.getByRole('checkbox', { name: '选择改动 1' })).not.toBeChecked();
 });
+
+it('同一属性冲突须明确选择，选择会绑定新的模拟与正式提交', async () => {
+  const simulateMerge = vi.fn(async (_project: string, s: EditorialSelection): Promise<MergeSimulation> => ({
+    simulationId: 'resolved', draftRevision: 3, targetRevision: 12, effectiveChangeIds: s.selectedChangeIds,
+    autoIncludedChangeIds: [], conflicts: [], mergedNodes: comparison.baselineNodes, canApply: !!s.selectedChangeIds.length && !!s.resolutions?.length,
+    attributeConflicts: s.selectedChangeIds.length && !s.resolutions?.length ? [{ changeId: 'change-a', nodeId: 'a', field: 'position', baseline: [0,0], current: [15,0], proposed: [60,0] }] : [],
+  }));
+  const { repository } = setup({ simulateMerge }); const user = userEvent.setup();
+  await user.click(screen.getByRole('checkbox', { name: '选择改动 1' }));
+  const conflicts = await screen.findByRole('region', { name: '选择冲突处理方式' });
+  expect(within(conflicts).getByText('当前版本: 15, 0')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '采纳选中改动' })).toBeDisabled();
+  await user.click(within(conflicts).getByRole('button', { name: '使用建议' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '采纳选中改动' })).toBeEnabled());
+  await user.click(screen.getByRole('button', { name: '采纳选中改动' }));
+  expect(repository.applyMerge).toHaveBeenCalledWith('project', expect.objectContaining({ resolutions: [{ changeId: 'change-a', field: 'position', choice: 'use_draft' }] }), 'resolved');
+});
+
+it('分批采纳后留在审稿页，已采纳项禁选，下一批使用最新基线', async () => {
+  const updated: CanvasComparison = { ...comparison, currentSourceRevision: 13, sourceChanged: true, changes: comparison.changes.map((c,i) => ({ ...c, decision: i ? 'pending' : 'accepted' })) };
+  const compareDraft = vi.fn().mockResolvedValue(updated);
+  const { repository, onApplied } = setup({ compareDraft }); const user = userEvent.setup();
+  await user.click(screen.getByRole('checkbox', { name: '选择改动 1' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '采纳选中改动' })).toBeEnabled());
+  await user.click(screen.getByRole('button', { name: '采纳选中改动' }));
+  await waitFor(() => expect(screen.getByRole('checkbox', { name: '选择改动 1' })).toBeDisabled());
+  expect(onApplied).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('checkbox', { name: '选择改动 2' }));
+  await waitFor(() => expect(repository.simulateMerge).toHaveBeenLastCalledWith('project', expect.objectContaining({ expectedTargetRevision: 13, selectedChangeIds: ['change-b'] })));
+  await user.click(screen.getByRole('button', { name: '查看原画布' }));
+  expect(onApplied).toHaveBeenCalledWith('source');
+});
+
+it('拒绝和暂缓经持久命令保存，不使用正式采纳接口', async () => {
+  const recordDecision = vi.fn().mockResolvedValue(undefined);
+  const compareDraft = vi.fn().mockResolvedValue({ ...comparison, changes: comparison.changes.map((c,i) => ({ ...c, decision: i ? 'pending' : 'rejected' })) });
+  const { repository } = setup({ recordDecision, compareDraft }); const user = userEvent.setup();
+  await user.click(screen.getByRole('checkbox', { name: '选择改动 1' }));
+  await user.click(screen.getByRole('button', { name: '不采纳' }));
+  await waitFor(() => expect(recordDecision).toHaveBeenCalledWith('project', expect.objectContaining({ selectedChangeIds: ['change-a'] }), 'rejected'));
+  expect(await screen.findByText(/未采纳/)).toBeInTheDocument();
+  expect(repository.applyMerge).not.toHaveBeenCalled();
+});
+
+it('同一节点可以只选尺寸，已采纳的位置保留并禁用', async () => {
+  const diff: CanvasComparison = { ...comparison, changes: [{ ...comparison.changes[0], fields: ['position','size'], acceptedFields: ['position'], decision: 'partial' }] };
+  const { repository } = setup({}, diff); const user = userEvent.setup();
+  await user.click(screen.getAllByRole('button', { name: /移动位置/ })[0]);
+  expect(screen.getByRole('checkbox', { name: '位置' })).toBeDisabled();
+  expect(screen.getByRole('checkbox', { name: '位置' })).toBeChecked();
+  await user.click(screen.getByRole('checkbox', { name: '尺寸' }));
+  await waitFor(() => expect(repository.simulateMerge).toHaveBeenLastCalledWith('project', expect.objectContaining({ selectedChangeIds: ['change-a'], fieldsByChange: { 'change-a': ['size'] } })));
+  await waitFor(() => expect(screen.getByRole('button', { name: '采纳选中改动' })).toBeEnabled());
+  await user.click(screen.getByRole('button', { name: '采纳选中改动' }));
+  expect(repository.applyMerge).toHaveBeenCalledWith('project', expect.objectContaining({ fieldsByChange: { 'change-a': ['size'] } }), '["change-a"]');
+});

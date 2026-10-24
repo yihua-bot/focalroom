@@ -59,6 +59,7 @@ async fn start(
             request_id: domain::id(),
             project_id: p.into(),
             command: TaskCommand::StartConversation {
+                allow_queued_recovery: false,
                 continuation: None,
                 expected_account_id: identity.and_then(|i| i.account_id.clone()),
                 goal: "这两张如何形成观看节奏？".into(),
@@ -347,6 +348,7 @@ async fn long_history_is_trimmed_to_current_context_budget_without_deleting_save
             request_id: domain::id(),
             project_id: p.clone(),
             command: TaskCommand::StartConversation {
+                allow_queued_recovery: false,
                 continuation: None,
                 expected_account_id: None,
                 goal: "继续谈观看距离".into(),
@@ -404,6 +406,7 @@ async fn exhausted_context_without_prior_history_pauses_instead_of_panicking_or_
             request_id: domain::id(),
             project_id: p.clone(),
             command: TaskCommand::StartConversation {
+                allow_queued_recovery: false,
                 continuation: None,
                 expected_account_id: None,
                 goal: "讨论摄影".into(),
@@ -540,6 +543,7 @@ async fn read_only_conversation_preserves_large_reference_count_without_granting
             request_id: domain::id(),
             project_id: p.clone(),
             command: TaskCommand::StartConversation {
+                allow_queued_recovery: false,
                 continuation: None,
                 expected_account_id: None,
                 goal: "讨论一本五百张照片的摄影书".into(),
@@ -571,4 +575,41 @@ async fn read_only_conversation_preserves_large_reference_count_without_granting
             .unwrap()
             .canvas
     );
+}
+
+#[test]
+fn queued_recovery_is_optional_for_old_messages_and_cannot_be_added_by_resume_or_legacy_task() {
+    let mut raw = json!({"requestId":"legacy-message","projectId":"p","command":{
+        "type":"StartConversation","expectedAccountId":null,"goal":"讨论照片","selectedPhotoIds":[],"focusPhotoIds":[],"targetCount":1,
+        "budget":Budget::default(),"consentId":null,"sourceBoard":null,"continuation":null
+    }});
+    let parsed: AgentRequest = serde_json::from_value(raw.clone()).unwrap();
+    assert!(matches!(
+        parsed.command,
+        TaskCommand::StartConversation {
+            allow_queued_recovery: false,
+            ..
+        }
+    ));
+    assert_eq!(serde_json::to_value(parsed).unwrap(), raw);
+    raw["command"]["allowQueuedRecovery"] = json!(true);
+    let parsed: AgentRequest = serde_json::from_value(raw.clone()).unwrap();
+    assert!(matches!(
+        parsed.command,
+        TaskCommand::StartConversation {
+            allow_queued_recovery: true,
+            ..
+        }
+    ));
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../contracts/agent-task-request.schema.json"
+    ))
+    .unwrap();
+    crate::agent::policy::validate_schema(&schema, &raw).unwrap();
+    raw["command"] = json!({"type":"ResumeTask","taskId":"old-task","budget":Budget::default(),"allowQueuedRecovery":true});
+    assert!(serde_json::from_value::<AgentRequest>(raw.clone()).is_err());
+    assert!(crate::agent::policy::validate_schema(&schema, &raw).is_err());
+    raw["command"] = json!({"type":"StartTask","goal":"旧任务","selectedPhotoIds":[],"targetCount":1,"budget":Budget::default(),"consentId":null,"allowQueuedRecovery":true});
+    assert!(serde_json::from_value::<AgentRequest>(raw.clone()).is_err());
+    assert!(crate::agent::policy::validate_schema(&schema, &raw).is_err());
 }

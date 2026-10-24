@@ -2608,6 +2608,61 @@ async fn consented_vision_uploads_once_then_cache_hits_without_reupload() {
 }
 
 #[tokio::test]
+async fn pixel_pipeline_change_does_not_reuse_legacy_observations_or_reupload_current_cache() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let ids: Vec<String> = p.photos.iter().map(|photo| photo.id.clone()).collect();
+    let (base, state) = spawn_server(Script {
+        main: (0..3)
+            .flat_map(|_| {
+                ["tool:list_photos", "tool:inspect_from_history", "text"].map(String::from)
+            })
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+    let first = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&first.id).await.unwrap();
+    let endpoint = OpenAiProvider::new(OpenAiConfig {
+        base_url: base.clone(),
+        api_key: "test-key-abcd".into(),
+        model: "test-model".into(),
+    })
+    .identity()
+    .endpoint_sha256;
+    let legacy = format!("m3-vision-3@{endpoint}");
+    sqlx::query("UPDATE photo_observations SET prompt_version=?")
+        .bind(&legacy)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let second = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&second.id).await.unwrap();
+    assert_eq!(
+        image_requests(&state.lock().unwrap()),
+        2,
+        "旧像素策略缓存不能替代新观察"
+    );
+    let retained: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations WHERE prompt_version=?")
+            .bind(&legacy)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(retained, 2, "保留历史观察，不改写成新质量");
+    let third = start_vision_task(&db, &p, ids, 2, Some(consent.id)).await;
+    engine(&db, &base).run(&third.id).await.unwrap();
+    assert_eq!(
+        image_requests(&state.lock().unwrap()),
+        2,
+        "相同新策略继续命中，不重复上传"
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
 async fn invalid_cached_observations_require_fresh_authorized_upload() {
     let _guard = ENV_LOCK.lock().await;
     unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
@@ -3346,6 +3401,7 @@ async fn unified_conversation_answers_then_inspects_and_creates_a_reviewable_dra
         request_id: domain::id(),
         project_id: p.id.clone(),
         command: TaskCommand::StartConversation {
+            allow_queued_recovery: false,
             continuation: None,
             expected_account_id: None,
             goal: goal.into(),

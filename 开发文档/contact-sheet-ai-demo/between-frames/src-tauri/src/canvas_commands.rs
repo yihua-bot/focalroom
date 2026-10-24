@@ -48,6 +48,10 @@ pub enum CanvasAction {
     Redo(RedoCanvasCommand),
     AdoptBoard(AdoptBoardDraftCommand),
     ApplyEditorialChanges(crate::canvas_review::ApplyEditorialChanges),
+    RecordEditorialDecision(crate::canvas_review::RecordEditorialDecision),
+    RevertEditorialChanges(crate::canvas_review::RevertEditorialChanges),
+    AddEditorialComment(crate::canvas_review::AddEditorialComment),
+    ResolveEditorialThread(crate::canvas_review::ResolveEditorialThread),
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -114,6 +118,10 @@ fn validate(request: &CanvasCommandRequest) -> Result<()> {
                 | CanvasAction::Redo(_)
                 | CanvasAction::AdoptBoard(_)
                 | CanvasAction::ApplyEditorialChanges(_)
+                | CanvasAction::RecordEditorialDecision(_)
+                | CanvasAction::RevertEditorialChanges(_)
+                | CanvasAction::AddEditorialComment(_)
+                | CanvasAction::ResolveEditorialThread(_)
         ) && request.operations.len() != 1
         {
             return Err(invalid("此操作须单独提交"));
@@ -136,6 +144,13 @@ fn validate(request: &CanvasCommandRequest) -> Result<()> {
                 .all(|v| v.is_finite() && v.abs() <= 1e9)
         {
             return Err(invalid("移动距离无效"));
+        }
+        if matches!(
+            op.action,
+            CanvasAction::AddEditorialComment(_) | CanvasAction::ResolveEditorialThread(_)
+        ) && data["data"]["draftId"].as_str() != Some(request.board_id.as_str())
+        {
+            return Err(invalid("批注不属于当前方案"));
         }
     }
     Ok(())
@@ -237,6 +252,10 @@ impl CommandHandler<'_> {
         let existing = board_tx(&mut tx, &request.project_id, &request.board_id).await?;
         let creating = matches!(request.operations[0].action, CanvasAction::CreateBoard(_));
         let adopting = matches!(request.operations[0].action, CanvasAction::AdoptBoard(_));
+        let discussing = matches!(
+            request.operations[0].action,
+            CanvasAction::AddEditorialComment(_) | CanvasAction::ResolveEditorialThread(_)
+        );
         let before = existing.as_ref().map(|b| b.revision).unwrap_or(0);
         if creating && existing.is_some() {
             return Err(collision());
@@ -263,7 +282,9 @@ impl CommandHandler<'_> {
             return Err(error);
         }
         if let Some(board) = &existing {
-            if board.state == "frozen" || (board.owning_task_id.is_some() && !adopting) {
+            if board.state == "frozen"
+                || (board.owning_task_id.is_some() && !adopting && !discussing)
+            {
                 return Err(AppError::new(
                     "PERMISSION_DENIED",
                     "此画布暂不可编辑，请先采纳草案或打开可编辑版本",
@@ -347,6 +368,24 @@ impl CommandHandler<'_> {
             .fetch_one(&mut **tx)
             .await?;
         let result = match &op.action {
+            CanvasAction::AddEditorialComment(cmd) => {
+                crate::canvas_review::comments::validate_comment(tx, p, cmd).await?;
+                Value::Null
+            }
+            CanvasAction::ResolveEditorialThread(cmd) => {
+                crate::canvas_review::comments::validate_resolution(tx, p, cmd).await?;
+                Value::Null
+            }
+            CanvasAction::RevertEditorialChanges(cmd) => {
+                self.revert_editorial_tx(tx, p, &request.board_id, cmd)
+                    .await?;
+                Value::Null
+            }
+            CanvasAction::RecordEditorialDecision(cmd) => {
+                crate::canvas_review::decisions::validate_decision(tx, p, &request.board_id, cmd)
+                    .await?;
+                Value::Null
+            }
             CanvasAction::ApplyEditorialChanges(cmd) => {
                 if cmd.selection.expected_target_revision != request.base_revision {
                     return Err(invalid("预览与当前画布不一致，请重新比较"));

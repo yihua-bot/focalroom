@@ -68,6 +68,8 @@ if [ "$SKIP_INTEGRATION" = "0" ]; then
   CARGO_TARGET_DIR="target-v1" npx playwright test --config "playwright.editorial.config.ts"
   step "M4/M5 PostgreSQL 与私有存储边界（全新临时 cluster）"
   npm run test:cloud:pg
+  step "Focal AI 原生核心与真实本地网关（生成色块、隔离 PostgreSQL）"
+  CARGO_TARGET_DIR="target-v1" npm run test:ai:native
   step "M4/M5 三会话 Web 与真实 Rust Promotion"
   node "apps/api/test/run.mjs" "apps/api/test/web-journey.mjs"
   node "apps/api/test/run.mjs" "apps/api/test/native-promotion.mjs"

@@ -26,6 +26,8 @@ pub struct ConversationMessage {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ConversationContext {
+    #[serde(default, skip_serializing_if = "crate::agent::types::is_false")]
+    pub allow_queued_recovery: bool,
     owner: Option<String>,
     recipient: String,
     prompt_sha256: String,
@@ -86,7 +88,18 @@ pub(crate) async fn bind(
     task: &Task,
     identity: Option<&ModelIdentity>,
     focus: &[String],
+    allow_queued_recovery: bool,
 ) -> Result<()> {
+    if allow_queued_recovery
+        && identity.is_none_or(|i| {
+            i.account_id.is_none() || i.provider_id != crate::agent::PROVIDER_OPENAI
+        })
+    {
+        return Err(AppError::new(
+            "PERMISSION_DENIED",
+            "这次对话不能使用恢复服务",
+        ));
+    }
     if focus.iter().any(|id| !task.allowed_photo_ids.contains(id))
         || focus.iter().collect::<std::collections::HashSet<_>>().len() != focus.len()
     {
@@ -147,6 +160,7 @@ pub(crate) async fn bind(
         history.splice(0..0, turns);
     }
     let context = ConversationContext {
+        allow_queued_recovery,
         owner,
         recipient,
         prompt_sha256: fingerprint(&json!(PROMPT)),

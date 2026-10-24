@@ -105,6 +105,7 @@ pub(crate) async fn execute(
             data.retain(|p| ids.iter().any(|id| p["photo_id"] == *id));
             match vision_data.filter(|v| v.kind == call.name) {
                 Some(prefetch) => {
+                    let mut provenance = Vec::new();
                     // 观察落缓存（photo_hash 维度），配额/用量/费用同事务扣减。
                     for (photo_id, observation) in &prefetch.observations {
                         let hash: Option<String> = sqlx::query_scalar(
@@ -115,6 +116,7 @@ pub(crate) async fn execute(
                         .fetch_optional(&mut **tx)
                         .await?;
                         if let Some(hash) = hash {
+                            provenance.push(json!({"photo_id":photo_id,"photo_hash":hash,"model_id":prefetch.model_id,"prompt_version":prefetch.cache_version}));
                             sqlx::query("INSERT INTO photo_observations(photo_id,photo_hash,model_id,prompt_version,kind,observation_json,created_at) VALUES(?,?,?,?,?,?,?)")
                                 .bind(photo_id)
                                 .bind(&hash)
@@ -138,7 +140,7 @@ pub(crate) async fn execute(
                     let uploaded = prefetch.uploaded;
                     let cached = (prefetch.observations.len() as u32).saturating_sub(uploaded);
                     Ok(
-                        json!({"photos":data,"mode":"vision_observed","uploaded_images":uploaded,"cache_hits":cached,"observations":observations,"uncertainty":"主观解读与不确定性由模型标注；服务端已校验 photo_id 均属请求集合"}),
+                        json!({"photos":data,"mode":"vision_observed","uploaded_images":uploaded,"cache_hits":cached,"observations":observations,"provenance":provenance,"uncertainty":"主观解读与不确定性由模型标注；服务端已校验 photo_id 均属请求集合"}),
                     )
                 }
                 None => Ok(

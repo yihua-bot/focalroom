@@ -37,22 +37,25 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  const canvasSource = useUIStore(state => state.canvasTaskSource);
  const openCanvasBoard = useUIStore(state => state.openCanvasBoard);
  const selectPhoto = useUIStore(state => state.selectRange);
+ const consumeRevision = useUIStore(state => state.consumeDraftRevision);
  const accountId = account?.status?.user?.id ?? 'local';
+ const [initialRevision] = useState(() => { const request = useUIStore.getState().draftRevisionRequest; return request?.projectId === project.id ? request : null; });
  const query = useQuery({ queryKey: ['agent', project.id, accountId], queryFn: () => repository!.agent.query(project.id), enabled: Boolean(repository), refetchInterval: repository ? 1000 : false, refetchIntervalInBackground: true, refetchOnWindowFocus: 'always' });
  const configQuery = useQuery({ queryKey: ['ai-config', project.id], queryFn: () => repository!.agent.aiConfig(project.id), enabled: Boolean(repository), staleTime: 10_000, refetchInterval: 15_000 });
  const config = configQuery.data;
  const saved = useUIStore(state => state.aiDrafts[project.id]);
  const saveDraft = useUIStore(state => state.saveAIDraft);
- const [message, setMessage] = useState(saved?.goal ?? initialGoal ?? '');
- const [count, setCount] = useState(saved?.count ?? initialCount ?? 20);
- const [scopeSelection, setScopeSelection] = useState(saved?.scopeSelection ?? false);
+ const [message, setMessage] = useState(initialRevision?.message ?? saved?.goal ?? initialGoal ?? '');
+ const [count, setCount] = useState(initialRevision?.count ?? saved?.count ?? initialCount ?? 20);
+ const [scopeSelection, setScopeSelection] = useState(initialRevision ? false : saved?.scopeSelection ?? false);
  const [imageLimit, setImageLimit] = useState(100);
  const [duration, setDuration] = useState(defaultAgentBudget.maxDurationSeconds);
+ const [allowQueuedRecovery, setAllowQueuedRecovery] = useState(false);
  const [busy, setBusy] = useState(false);
  const sending = useRef(false);
  const [error, setError] = useState('');
  const [draftId, setDraftId] = useState<string | null>(null);
- const [continuation, setContinuation] = useState<{ reference: DraftReference; title: string } | null>(null);
+ const [continuation, setContinuation] = useState<{ reference: DraftReference; title: string } | null>(initialRevision ? { reference: initialRevision.reference, title: initialRevision.title } : null);
  const last = useRef<HTMLDivElement>(null);
  const composer = useRef<HTMLTextAreaElement>(null);
  const consumedAction = useRef<string | null>(null);
@@ -67,6 +70,8 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  const running = tasks.some(item => ['queued', 'planning', 'running'].includes(item.state));
  const blocked = !repository || configQuery.isError || !!unavailable(config);
  const vision = supportsVision(config);
+ const recoveryAvailable = vision && project.photos.length>0 && config?.keySource === 'focalroom' && config.hostedAccount?.recovery?.enabled === true;
+ const replying = !continuation && task?.state === 'needs_input';
  const selectionEmpty = scopeSelection && !selectedIds.length;
  const updateMessage = (goal: string) => {
   const explicit = goal.match(/(\d+)\s*(?:张|枚|장|photos?\b|images?\b|frames?\b)/i) ?? goal.match(/(?:select|keep|choose)\s+(\d+)/i);
@@ -89,6 +94,18 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  }, [config?.keySource, client, project.id]);
  useEffect(() => { last.current?.scrollIntoView?.({ block: 'end' }); }, [tasks.length, task?.state]);
  useEffect(() => {
+  const first = initialRevision;
+  if (first) { saveDraft(project.id,{ goal: first.message, count: first.count, scopeSelection: false }); consumeRevision(first.id); }
+  return useUIStore.subscribe((state, previous) => {
+   const next = state.draftRevisionRequest;
+   if (!next || next === previous.draftRevisionRequest || next.projectId !== project.id) return;
+   setContinuation({ reference: next.reference, title: next.title });
+   setMessage(next.message); setCount(next.count); setScopeSelection(false);
+   saveDraft(project.id,{ goal: next.message, count: next.count, scopeSelection: false });
+   consumeRevision(next.id);
+  });
+ }, [initialRevision, consumeRevision, project.id, saveDraft]);
+ useEffect(() => {
   if (!quickAction || consumedAction.current === quickAction.id) return;
   consumedAction.current = quickAction.id;
   // 外部选区动作只填写消息，不在抽屉打开时自动发送。
@@ -100,9 +117,19 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  const request = async (command: TaskCommand) => {
   if (!repository || sending.current) return;
   sending.current = true; setBusy(true); setError('');
-  try { await repository.agent.request(project.id, command); await query.refetch(); }
+  try { await repository.agent.request(project.id, command); await query.refetch(); if(command.type==='CancelTask')void configQuery.refetch(); }
   catch (cause) { setError(userFacingError(cause)); }
   finally { sending.current = false; setBusy(false); }
+ };
+ const queryResult = async (taskId: string) => {
+  if (!repository || sending.current) return;
+  const sourceContext = contextKey;
+  sending.current = true; setBusy(true); setError('');
+  try {
+   await repository.agent.queryVisionResult(project.id, taskId);
+   if (currentContext.current === sourceContext) await query.refetch();
+  } catch (cause) { if (currentContext.current === sourceContext) setError(userFacingError(cause)); }
+  finally { sending.current = false; if (currentContext.current === sourceContext) setBusy(false); }
  };
  const send = async () => {
   if (!repository || sending.current || blocked || running || !message.trim() || selectionEmpty || count < 1 || count > 500) return;
@@ -114,11 +141,13 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
    if (currentContext.current !== contextKey) return;
    const reason = unavailable(fresh.data);
    if (reason) throw new Error(reason);
+   if (allowQueuedRecovery && replying) throw new Error(zh.chatQueueUnavailable);
    if (!continuation && task?.state === 'needs_input') {
     await repository.agent.request(project.id, { type: 'SubmitFeedback', taskId: task.id, answer: message.trim() });
    } else {
     const ids = scopeSelection ? selectedIds : [];
     const images = supportsVision(fresh.data) && project.photos.length > 0 ? imageLimit : 0;
+    if (allowQueuedRecovery && (!images || fresh.data.keySource!=='focalroom' || fresh.data.hostedAccount?.recovery?.enabled!==true)) throw new Error(zh.chatQueueUnavailable);
     const budget = { ...defaultAgentBudget, maxDurationSeconds: duration, maxCloudImages: images };
     let consentId: number | null = null;
     if (images > 0) {
@@ -129,10 +158,11 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
     if (currentContext.current !== contextKey) return;
     await repository.agent.request(project.id, {
      type: 'StartConversation', expectedAccountId: account?.status?.user?.id ?? null, goal: message.trim(), targetCount: count, selectedPhotoIds: ids,
+     ...(allowQueuedRecovery ? {allowQueuedRecovery:true} : {}),
      focusPhotoIds: selectedIds.filter(id => !scopeSelection || ids.includes(id)), budget, consentId, sourceBoard: continuation ? null : canvasSource, continuation: continuation?.reference ?? null,
     });
    }
-   if (currentContext.current === contextKey) { updateMessage(''); setContinuation(null); }
+   if (currentContext.current === contextKey) { updateMessage(''); setContinuation(null); setAllowQueuedRecovery(false); }
    await query.refetch();
   } catch (cause) { if (currentContext.current === contextKey) setError(userFacingError(cause)); }
   finally { sending.current = false; setBusy(false); }
@@ -180,9 +210,15 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
      </details>}
      {!item.messages?.some(turn => turn.role === 'assistant' && turn.content === item.question) && item.question && <p>{item.question}</p>}
      {!item.conversation && ['completed', 'review_ready'].includes(item.state) && <p className="focal-message-text">{item.reason}</p>}
-     {['paused', 'interrupted', 'failed', 'stale'].includes(item.state) && <p>{budgetMessage(item) ?? userFacingError(new Error(item.reason))}</p>}
+     {!item.visionRecovery && ['paused', 'interrupted', 'failed', 'stale'].includes(item.state) && <p>{budgetMessage(item) ?? userFacingError(new Error(item.reason))}</p>}
+     {item.queueCancellation && <p role="status">{zh[`chatQueueCancel_${item.queueCancellation}`]}</p>}
      {item.budgetIssue?.kind === 'images' && <p className="muted">{zh.chatLimitImagesCount.replace('{used}', String(item.budgetIssue.used)).replace('{requested}', String(item.budgetIssue.requested)).replace('{limit}', String(item.budgetIssue.limit))}</p>}
      {item.budgetIssue?.stage === 'vision' && item.budgetIssue.requestNotSent && <p className="muted">{zh.chatPhotosNotSent}</p>}
+     {item.visionRecovery && <div className="chat-result-recovery">
+      <p role="status">{zh[`chatRecovery_${item.visionRecovery.state}`]}</p>
+      <small>{zh.chatRecoveryNoResend}</small>
+      <Button size="small" disabled={busy || running} onClick={() => { if (account) void account.requireSignIn('ai', () => queryResult(item.id)); else void queryResult(item.id); }}>{busy ? zh.chatResultChecking : zh.chatQueryResult}</Button>
+     </div>}
      {(query.data?.drafts ?? []).filter(candidate => candidate.taskId === item.id).map(candidate => <div className="chat-draft-card" key={candidate.id}>
       <div><Check size={15} /><strong>{candidate.title}</strong></div><p>{candidate.summary}</p>
       <Button size="small" disabled={running} onClick={() => setDraftId(candidate.id)}>{zh.chatReviewDraft}</Button>
@@ -198,7 +234,7 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
      {(item.preferenceProposals ?? []).map(proposal => <PreferenceProposalCard key={proposal.id} proposal={proposal} disabled={busy} onSave={statement => memoryDecision(item.id, proposal.id, statement)} onDismiss={() => memoryDecision(item.id, proposal.id)} />)}
      {item.id === task?.id && <div className="chat-task-controls">
       {['queued', 'planning', 'running'].includes(item.state) && <Button size="small" disabled={busy} onClick={() => { void request({ type: 'PauseTask', taskId: item.id }); }}>{zh.chatPause}</Button>}
-      {['paused', 'interrupted'].includes(item.state) && (resumeBudget(item, duration) ? <Button size="small" disabled={busy || running || blocked} onClick={() => {
+      {!item.visionRecovery && ['paused', 'interrupted'].includes(item.state) && (resumeBudget(item, duration) ? <Button size="small" disabled={busy || running || blocked} onClick={() => {
        const budget = resumeBudget(item, duration);
        if (budget) void request({ type: 'ResumeTask', taskId: item.id, budget });
       }}>{item.budgetIssue?.kind === 'time' ? zh.chatExtendWait : zh.chatContinue}</Button> : <Button size="small" disabled={busy || running} onClick={() => prepareRestart(item)}>{zh.chatAdjustRange}</Button>)}
@@ -229,11 +265,13 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
     </select></div>
    </form>
    {selectionEmpty ? <p className="chat-footnote">{zh.chatSelectPhotos}</p> : project.photos.length > 0 && vision ? <p className="chat-footnote">{zh.chatSendConsent.replace('{count}', String(imageLimit)).replace('{provider}', config?.hostedAccount?.provider ?? config?.observation?.modelId ?? config?.modelId ?? 'FocalRoom AI')}</p> : null}
+   {allowQueuedRecovery && <p className="chat-footnote">{zh.chatQueuePrivacy}</p>}
   </footer>
   {settingsOpen && <Modal title={zh.settings} onClose={onSettingsClose}>
    <div className="ai-settings-fields"><div className="settings-service"><Sparkles size={17} /><span>FocalRoom AI</span></div>
     <label>{zh.chatImageLimit}<select aria-label={zh.chatImageLimit} value={imageLimit} onChange={event => setImageLimit(Number(event.target.value))}>{[20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
     <label>{zh.chatTimeLimit}<select aria-label={zh.chatTimeLimit} value={duration} onChange={event => setDuration(Number(event.target.value))}>{[120, 300, 480, 600].map(n => <option key={n} value={n}>{n / 60} {zh.minutes}</option>)}</select></label>
+    {((recoveryAvailable && !replying) || allowQueuedRecovery) && <div className="chat-queue-option"><label><input type="checkbox" aria-label={zh.chatQueueOption} disabled={busy || ((!recoveryAvailable || replying) && !allowQueuedRecovery)} checked={allowQueuedRecovery} onChange={event=>setAllowQueuedRecovery(event.target.checked)} />{zh.chatQueueOption}</label><p className="muted">{zh.chatQueuePrivacy}</p></div>}
     <p className="muted">{zh.chatImagePrivacy}</p>
    </div>
   </Modal>}

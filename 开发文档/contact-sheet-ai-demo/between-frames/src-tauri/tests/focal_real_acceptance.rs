@@ -209,6 +209,88 @@ async fn hosted_account_preflight_without_model_calls() {
     eprintln!("预检证据：{}", output.display());
 }
 #[tokio::test]
+#[ignore = "显式批准后仅发送一张生成色块验证生产异步图片；不使用真实照片，不进离线 CI"]
+async fn hosted_generated_preview_async_smoke() {
+    assert_eq!(
+        required("FOCALROOM_REAL_IMAGE_SMOKE_APPROVAL"),
+        "one-generated-preview-max5c"
+    );
+    let auth = hosted_auth().await;
+    let provider = agent::openai::OpenAiProvider::hosted(auth.clone())
+        .bind_account()
+        .unwrap();
+    let before = auth.ai_account().await.unwrap();
+    assert_eq!(
+        before["reserved"].as_u64(),
+        Some(0),
+        "仍有待确认预留，未新增模型请求"
+    );
+    let directory = tempfile::Builder::new()
+        .prefix("focal-hosted-image-smoke-")
+        .tempdir()
+        .unwrap()
+        .keep();
+    let path = directory.join("generated.png");
+    image::RgbImage::from_pixel(64, 64, image::Rgb([255, 0, 0]))
+        .save(&path)
+        .unwrap();
+    let hash = image_pipeline::fingerprint(&path).unwrap();
+    let bytes = agent::upload_compress::compress_for_upload(&path).unwrap();
+    let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+    let estimate = provider.rate_card().vision_reservation(1, 8192, 256);
+    assert!(estimate <= 5, "小图验证估算不能超过批准的 5 美分");
+    let started = std::time::Instant::now();
+    let response = provider
+        .observe(
+            "连接验证素材，不包含真实照片",
+            "描述画面主要颜色；只报告可见事实，不猜测拍摄内容。",
+            &[("generated-color-1".into(), encoded)],
+            256,
+        )
+        .await;
+    let after = auth.ai_account().await.ok();
+    let elapsed = started.elapsed().as_millis();
+    let unchanged = image_pipeline::fingerprint(&path).unwrap() == hash;
+    let (observations, tokens, error) = match &response {
+        Ok((result, tokens)) => (Some(result.clone()), Some(*tokens), None),
+        Err(error) => (
+            None,
+            None,
+            Some(json!({"code":error.code,"request":error.details})),
+        ),
+    };
+    let color_correct = observations.as_ref().is_some_and(|result| {
+        let rows = result["observations"].as_array();
+        rows.is_some_and(|rows| {
+            rows.len() == 1
+                && rows[0]["photo_id"] == "generated-color-1"
+                && rows[0]["visible_facts"].as_array().is_some_and(|facts| {
+                    facts.iter().any(|fact| {
+                        fact.as_str().is_some_and(|text| {
+                            text.contains('红') || text.to_lowercase().contains("red")
+                        })
+                    })
+                })
+        })
+    });
+    let report = json!({"endpoint":HOSTED_ENDPOINT,"model":"deepseek-flash","imageSource":"generated-64px-solid-color","previewCount":1,"previewBytes":bytes.len(),"elapsedMs":elapsed,"costEstimateCeilingMinorUsd":5,"preprocessingVersion":agent::vision::VISION_PROMPT_VERSION,"observations":observations,"reportedTokens":tokens,"error":error,"quotaBefore":before,"quotaAfter":after,"generatedSourceUnchanged":unchanged,"colorCorrect":color_correct,"professionalQualityAccepted":false});
+    std::fs::write(
+        directory.join("result.json"),
+        serde_json::to_vec_pretty(&report).unwrap(),
+    )
+    .unwrap();
+    eprintln!("单图异步验证证据：{}", directory.display());
+    assert!(unchanged);
+    response.unwrap();
+    assert!(color_correct, "返回成功不等于图像事实正确，详见验证记录");
+    assert_eq!(
+        report["quotaAfter"]["reserved"].as_u64(),
+        Some(0),
+        "须核对请求级计量，不能直接继续发图"
+    );
+}
+
+#[tokio::test]
 #[ignore = "需要显式批准的端点/模型、真实凭据、300 张授权照片和最多 60 张预览上传；不进离线 CI"]
 async fn unified_300_real_photos_three_boards_and_followup() {
     assert_eq!(
@@ -358,6 +440,7 @@ async fn unified_300_real_photos_three_boards_and_followup() {
         request_id: domain::id(),
         project_id: project.id.clone(),
         command: TaskCommand::StartConversation {
+            allow_queued_recovery: false,
             expected_account_id: identity.account_id.clone(),
             goal,
             selected_photo_ids: vec![],
@@ -430,7 +513,7 @@ async fn unified_300_real_photos_three_boards_and_followup() {
     let parent_ref =
         serde_json::from_value(json!({"kind":"board","id":parent.id,"revision":parent.revision}))
             .unwrap();
-    let second=engine.request(request("继续修改这个方案：保留开篇，重新安排中段的观看节奏，并解释相对上一版的具体变化。生成新的独立修订，保留上一版；这一轮不再上传图片，需要观察时说明已有证据的限制。".into(),None,Some(parent_ref),Budget::default())).await.unwrap();
+    let second=engine.request(request("继续修改这个方案：保留开篇，重新安排中段的观看节奏，并解释相对上一版的具体变化。生成新的独立修订，保留上一版；这一轮不再上传图片，需要观察时说明已有证据的限制。".into(),None,Some(parent_ref),Budget{max_cost_minor_usd:50,..Budget::default()})).await.unwrap();
     let followup = engine.run(&second.id).await;
     let result = agent::projection(&db, &project.id).await.unwrap();
     let unchanged = serde_json::to_value(db.get(&project.id).await.unwrap()).unwrap()

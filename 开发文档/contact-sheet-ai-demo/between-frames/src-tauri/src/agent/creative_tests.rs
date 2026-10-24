@@ -57,6 +57,7 @@ impl Fixture {
                 request_id: domain::id(),
                 project_id: self.p.clone(),
                 command: TaskCommand::StartConversation {
+                    allow_queued_recovery: false,
                     expected_account_id: identity.and_then(|i| i.account_id.clone()),
                     goal: "我希望这个项目保留留白和观看距离的变化".into(),
                     selected_photo_ids: scope,
@@ -308,6 +309,414 @@ async fn board_followup_is_an_independent_child_with_stable_root_and_deleted_bas
     let view = store::projection(&f.db, &f.p).await.unwrap();
     assert!(!view.tasks[0].draft_lineage.is_empty());
     assert_eq!(f.db.get(&f.p).await.unwrap().revision, first.base_revision);
+}
+
+#[tokio::test]
+async fn review_feedback_is_frozen_for_revision_and_late_comments_cannot_change_the_task() {
+    use crate::canvas_commands::{CanvasAction, CanvasCommandRequest, CanvasOperation};
+    use crate::canvas_review::{AddEditorialComment, ResolveEditorialThread};
+    let f = Fixture::new(1).await;
+    let first = f.start(vec![], None, None).await.unwrap();
+    f.run(&first).await;
+    let create = f
+        .tool(&first, "create_board_draft", json!({"title":"待审方案"}))
+        .await
+        .result
+        .unwrap();
+    let parent = create["board_id"].as_str().unwrap().to_string();
+    let empty = f
+        .tool(&first, "create_board_draft", json!({"title":"尚无批注"}))
+        .await
+        .result
+        .unwrap()["board_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(f.tool(&first,"place_photos_on_board",json!({"board_id":parent,"placements":[{"photo_id":f.photos[0],"x":0,"y":0,"width":220,"height":160}]})).await.ok);
+    f.finish(&first).await;
+    let before = f.db.canvas_snapshot(&f.p, &parent).await.unwrap();
+    let human = |draft: &str, revision: i64, action: CanvasAction| CanvasCommandRequest {
+        schema_version: 3,
+        command_id: domain::id(),
+        idempotency_key: domain::id(),
+        project_id: f.p.clone(),
+        board_id: draft.into(),
+        base_revision: revision,
+        operations: vec![CanvasOperation {
+            op_id: domain::id(),
+            action,
+        }],
+    };
+    let comment = human(
+        &parent,
+        before.board.revision,
+        CanvasAction::AddEditorialComment(AddEditorialComment {
+            draft_id: parent.clone(),
+            draft_revision: before.board.revision,
+            change_id: None,
+            thread_id: None,
+            body: "中段增加观看距离变化；这里是用户意见，不是视觉事实。".into(),
+        }),
+    );
+    let thread = comment.operations[0].op_id.clone();
+    f.db.execute_canvas(comment).await.unwrap();
+    let reference = DraftReference {
+        kind: "board".into(),
+        id: parent.clone(),
+        revision: before.board.revision,
+    };
+    let second = f
+        .start(vec![], None, Some(reference.clone()))
+        .await
+        .unwrap();
+    let request = ContextBuilder::build(&f.db, &second.id).await.unwrap();
+    let feedback = &request.layers["creative"]["continuation"]["reviewFeedback"];
+    assert_eq!(feedback["visualEvidence"], false);
+    assert_eq!(
+        feedback["snapshot"]["messages"][0]["body"],
+        "中段增加观看距离变化；这里是用户意见，不是视觉事实。"
+    );
+    f.db.execute_canvas(human(
+        &parent,
+        before.board.revision,
+        CanvasAction::AddEditorialComment(AddEditorialComment {
+            draft_id: parent.clone(),
+            draft_revision: before.board.revision,
+            change_id: None,
+            thread_id: None,
+            body: "晚到的留言不能悄悄改变已经启动的委托".into(),
+        }),
+    ))
+    .await
+    .unwrap();
+    f.db.execute_canvas(human(
+        &parent,
+        before.board.revision,
+        CanvasAction::ResolveEditorialThread(ResolveEditorialThread {
+            draft_id: parent.clone(),
+            draft_revision: before.board.revision,
+            thread_id: thread,
+            resolved: true,
+        }),
+    ))
+    .await
+    .unwrap();
+    f.run(&second).await;
+    let read = f.read(&second, "board", Some(&parent)).await;
+    assert_eq!(read["data"]["reviewFeedback"]["frozenForThisTask"], true);
+    assert_eq!(
+        read["data"]["reviewFeedback"]["snapshot"]["totalMessages"],
+        1
+    );
+    assert_eq!(
+        read["data"]["reviewFeedback"]["snapshot"]["messages"][0]["resolved"],
+        false
+    );
+    assert!(!read.to_string().contains("晚到"));
+    assert!(
+        f.tool(
+            &second,
+            "fork_creative_draft",
+            json!({"parent":reference,"title":"依据意见的新方案","reason":"处理冻结的审稿意见"})
+        )
+        .await
+        .ok
+    );
+    assert_eq!(
+        encode(&before).unwrap(),
+        encode(&f.db.canvas_snapshot(&f.p, &parent).await.unwrap()).unwrap()
+    );
+    f.finish(&second).await;
+    let empty_snapshot = f.db.canvas_snapshot(&f.p, &empty).await.unwrap();
+    let third = f
+        .start(
+            vec![],
+            None,
+            Some(DraftReference {
+                kind: "board".into(),
+                id: empty.clone(),
+                revision: empty_snapshot.board.revision,
+            }),
+        )
+        .await
+        .unwrap();
+    f.db.execute_canvas(human(
+        &empty,
+        empty_snapshot.board.revision,
+        CanvasAction::AddEditorialComment(AddEditorialComment {
+            draft_id: empty.clone(),
+            draft_revision: empty_snapshot.board.revision,
+            change_id: None,
+            thread_id: None,
+            body: "零批注快照之后的新意见".into(),
+        }),
+    ))
+    .await
+    .unwrap();
+    f.run(&third).await;
+    assert!(f.read(&third, "board", Some(&empty)).await["data"]["reviewFeedback"].is_null());
+    assert_eq!(
+        ContextBuilder::build(&f.db, &third.id)
+            .await
+            .unwrap()
+            .layers["creative"]["continuation"]["reviewCursor"]["cursor"],
+        0
+    );
+}
+
+#[tokio::test]
+async fn revision_context_preserves_frozen_decisions_discussion_and_hash_bound_observation_across_rounds()
+ {
+    use crate::canvas_commands::{CanvasAction, CanvasCommandRequest, CanvasOperation};
+    use crate::canvas_review::{
+        AddEditorialComment, RecordEditorialDecision, decisions::ReviewDecision,
+    };
+    let f = Fixture::new(1).await;
+    let root = f.db.create_board(&f.p, "原作品").await.unwrap();
+    let first = f
+        .start(
+            vec![],
+            None,
+            Some(DraftReference {
+                kind: "board".into(),
+                id: root.id.clone(),
+                revision: root.revision,
+            }),
+        )
+        .await
+        .unwrap();
+    f.run(&first).await;
+    let parent=f.tool(&first,"fork_creative_draft",json!({"parent":{"kind":"board","id":root.id,"revision":root.revision},"title":"第一轮","reason":"协议夹具"})).await.result.unwrap()["board_id"].as_str().unwrap().to_string();
+    let placements: Vec<_> = (0..35)
+        .map(|i| json!({"photo_id":f.photos[0],"x":i*240,"y":0,"width":220,"height":160}))
+        .collect();
+    assert!(
+        f.tool(
+            &first,
+            "place_photos_on_board",
+            json!({"board_id":parent,"placements":placements})
+        )
+        .await
+        .ok
+    );
+    let call = ToolCall {
+        call_id: domain::id(),
+        name: "inspect_photos".into(),
+        args: json!({"project_id":f.p,"photo_ids":f.photos}),
+    };
+    let data = super::super::vision::VisionPrefetch {
+        kind: "inspect_photos".into(),
+        requested: f.photos.clone(),
+        observations: vec![(
+            f.photos[0].clone(),
+            json!({"photo_id":f.photos[0],"visible_facts":["generated fixture"],"interpretation":"test interpretation","uncertainty":"not real model quality"}),
+        )],
+        uploaded: 0,
+        tokens: 0,
+        consent_id: 0,
+        cost_minor_usd: 0,
+        model_id: "fixture-observer".into(),
+        cache_version: "fixture-v1".into(),
+    };
+    assert!(
+        execution::tool(&f.db, &first.id, &call, Some(&data))
+            .await
+            .unwrap()
+            .ok
+    );
+    f.finish(&first).await;
+    let comparison = f.db.canvas_comparison(&f.p, &parent).await.unwrap();
+    let change = comparison.changes[0].id.clone();
+    let revision = comparison.draft.revision;
+    let human = |board: &str, base: i64, action| CanvasCommandRequest {
+        schema_version: 3,
+        command_id: domain::id(),
+        idempotency_key: domain::id(),
+        project_id: f.p.clone(),
+        board_id: board.into(),
+        base_revision: base,
+        operations: vec![CanvasOperation {
+            op_id: domain::id(),
+            action,
+        }],
+    };
+    let decide = |decision| {
+        CanvasAction::RecordEditorialDecision(RecordEditorialDecision {
+            draft_id: parent.clone(),
+            draft_revision: revision,
+            change_ids: vec![change.clone()],
+            decision,
+            fields_by_change: Default::default(),
+        })
+    };
+    f.db.execute_canvas(human(
+        &root.id,
+        root.revision,
+        decide(ReviewDecision::Rejected),
+    ))
+    .await
+    .unwrap();
+    let comment = |body: &str| {
+        CanvasAction::AddEditorialComment(AddEditorialComment {
+            draft_id: parent.clone(),
+            draft_revision: revision,
+            change_id: Some(change.clone()),
+            thread_id: None,
+            body: body.into(),
+        })
+    };
+    f.db.execute_canvas(human(&parent, revision, comment("第一轮的原始意见")))
+        .await
+        .unwrap();
+    let reference = DraftReference {
+        kind: "board".into(),
+        id: parent.clone(),
+        revision,
+    };
+    let second = f
+        .start(vec![], None, Some(reference.clone()))
+        .await
+        .unwrap();
+    // 启动修订之后的决定和留言不得追写进既有修订的依据。
+    f.db.execute_canvas(human(
+        &root.id,
+        root.revision,
+        decide(ReviewDecision::Deferred),
+    ))
+    .await
+    .unwrap();
+    f.db.execute_canvas(human(&parent, revision, comment("晚到意见不属于这轮")))
+        .await
+        .unwrap();
+    f.run(&second).await;
+    let read = f.read(&second, "board", Some(&parent)).await;
+    assert_eq!(read["data"]["parentReviewContext"]["totalDecisions"], 35);
+    assert!(!read.to_string().contains("晚到意见"));
+    let child = f
+        .tool(
+            &second,
+            "fork_creative_draft",
+            json!({"parent":reference,"title":"第二轮","reason":"按冻结意见修改"}),
+        )
+        .await
+        .result
+        .unwrap()["board_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    f.finish(&second).await;
+    let page =
+        f.db.editorial_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(page.parent.id, parent);
+    assert_eq!(page.decisions.len(), 30);
+    assert_eq!(page.total_decisions, 35);
+    assert_eq!(page.next_offset, Some(30));
+    assert_eq!(
+        page.decisions
+            .iter()
+            .find(|d| d.change_id == change)
+            .unwrap()
+            .decision,
+        "rejected"
+    );
+    assert_eq!(page.discussion.total_messages, 1);
+    assert_eq!(page.discussion.messages[0].body, "第一轮的原始意见");
+    assert_eq!(page.observations[0]["photoId"], f.photos[0]);
+    assert_eq!(page.observations[0]["callId"], call.call_id);
+    assert_eq!(page.observations[0]["currentHashMatches"], true);
+    let tail =
+        f.db.editorial_revision_context(&f.p, &child, 30)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(tail.decisions.len(), 5);
+    assert_eq!(tail.next_offset, None);
+    assert!(
+        f.db.editorial_revision_context("other-project", &child, 0)
+            .await
+            .is_err()
+    );
+    assert!(
+        f.db.editorial_revision_context(&f.p, &parent, 0)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let child_revision =
+        f.db.canvas_snapshot(&f.p, &child)
+            .await
+            .unwrap()
+            .board
+            .revision;
+    let third_ref = DraftReference {
+        kind: "board".into(),
+        id: child.clone(),
+        revision: child_revision,
+    };
+    let third = f
+        .start(vec![], None, Some(third_ref.clone()))
+        .await
+        .unwrap();
+    f.run(&third).await;
+    let grandchild = f
+        .tool(
+            &third,
+            "fork_creative_draft",
+            json!({"parent":third_ref,"title":"第三轮","reason":"保留前轮路径"}),
+        )
+        .await
+        .result
+        .unwrap()["board_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    f.finish(&third).await;
+    assert!(
+        f.db.editorial_revision_context(&f.p, &grandchild, 0)
+            .await
+            .unwrap()
+            .unwrap()
+            .has_earlier
+    );
+    assert_eq!(f.db.get_board_nodes(&root.id).await.unwrap().len(), 0);
+    let path = f._temp.path().join("creative.sqlite");
+    f.db.pool.close().await;
+    let db = Store::open(&path).await.unwrap();
+    assert_eq!(
+        db.editorial_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap()
+            .unwrap()
+            .discussion
+            .messages[0]
+            .body,
+        "第一轮的原始意见"
+    );
+    sqlx::query("UPDATE photos SET content_sha256=? WHERE id=?")
+        .bind("0".repeat(64))
+        .bind(&f.photos[0])
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        db.editorial_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap()
+            .unwrap()
+            .observations[0]["currentHashMatches"],
+        false
+    );
+    sqlx::query("UPDATE task_messages SET body=json_set(body,'$.parentTitle','tampered') WHERE task_id=? AND kind='creative_review_context'").bind(&second.id).execute(&db.pool).await.unwrap();
+    assert_eq!(
+        db.editorial_revision_context(&f.p, &child, 0)
+            .await
+            .unwrap_err()
+            .code,
+        "RECOVERY_ERROR"
+    );
 }
 
 #[tokio::test]

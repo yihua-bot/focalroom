@@ -245,6 +245,7 @@ pub(crate) async fn request_bound(
             super::consent::ensure_task_recipient(&mut tx, &t, identity).await?;
         }
         if let TaskCommand::StartConversation {
+            allow_queued_recovery,
             focus_photo_ids,
             continuation,
             ..
@@ -256,7 +257,14 @@ pub(crate) async fn request_bound(
                     "共享项目的画布请在协作页面查看",
                 ));
             }
-            crate::focal_chat::bind(&mut tx, &t, identity, focus_photo_ids).await?;
+            crate::focal_chat::bind(
+                &mut tx,
+                &t,
+                identity,
+                focus_photo_ids,
+                *allow_queued_recovery,
+            )
+            .await?;
             if let Some(parent) = continuation {
                 super::creative::bind_continuation(&mut tx, &t, parent).await?;
             }

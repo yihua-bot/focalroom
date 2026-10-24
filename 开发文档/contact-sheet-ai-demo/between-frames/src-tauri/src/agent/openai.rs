@@ -2,7 +2,7 @@ use super::{context::ModelTurnRequest, provider::ModelProvider, types::*};
 use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 use std::{future::Future, pin::Pin};
-mod hosted_async;
+pub(crate) mod hosted_async;
 
 /// API key 只经环境变量进入进程内存：不写 SQLite、不进日志、不回传前端（仅脱敏尾号）。
 pub const KEY_ENV: &str = "BETWEEN_FRAMES_OPENAI_API_KEY";
@@ -117,11 +117,24 @@ impl OpenAiProvider {
         Ok(provider)
     }
     pub async fn validate_hosted_account(&self) -> Result<()> {
+        self.validate_hosted_options(false).await
+    }
+    pub(crate) async fn validate_hosted_options(&self, allow_queued_recovery: bool) -> Result<()> {
         let auth = self
             .hosted
             .as_ref()
             .ok_or_else(|| AppError::new("AUTH_REQUIRED", "请先登录 FocalRoom"))?;
         let account = auth.ai_account().await?;
+        if allow_queued_recovery
+            && (account["recovery"]["enabled"] != true
+                || account["recovery"]["policy"] != "encrypted-queue-v1"
+                || account["recovery"]["maxQueueSeconds"] != 600)
+        {
+            return Err(AppError::new(
+                "AI_QUEUE_NOT_AVAILABLE",
+                "连接恢复暂不可用，请关闭该选项后发送",
+            ));
+        }
         if self.hosted_account.as_deref() != Some(auth.account_id()?.as_str()) {
             return Err(AppError::new("AUTH_CHANGED", "账户已改变，请重新委托"));
         }
@@ -393,6 +406,16 @@ impl OpenAiProvider {
         images: &[(String, String)], // (photo_id, base64 jpeg)
         max_output_tokens: u32,
     ) -> Result<(Value, u32)> {
+        let body = self.observation_body(brief, question, images, max_output_tokens)?;
+        self.parse_observation(&self.post(&body).await?)
+    }
+    pub(crate) fn observation_body(
+        &self,
+        brief: &str,
+        question: &str,
+        images: &[(String, String)],
+        max_output_tokens: u32,
+    ) -> Result<Value> {
         self.require_capabilities(super::router::TaskType::VisionObserve)?;
         let mut content = vec![json!({
             "type": "input_text",
@@ -416,9 +439,33 @@ impl OpenAiProvider {
             "max_output_tokens": max_output_tokens,
             "store": false,
         });
-        let response = self.post(&body).await?;
-        let usage_tokens = tokens_of(&response);
-        let text = output_text(&response);
+        Ok(body)
+    }
+    pub(crate) async fn observe_reserved(
+        &self,
+        body: &Value,
+        id: &str,
+        allow_queued_recovery: bool,
+        guard: impl Future<Output = Result<()>>,
+    ) -> Result<(Value, u32)> {
+        self.parse_observation(
+            &hosted_async::post_with_id(self, body, id, allow_queued_recovery, guard).await?,
+        )
+    }
+    pub(crate) async fn cancel_observation_job(&self, id: &str) -> Result<bool> {
+        hosted_async::cancel(self, id).await
+    }
+    pub(crate) async fn observation_job(
+        &self,
+        id: &str,
+        output_limit: u32,
+    ) -> Result<hosted_async::HostedJob> {
+        self.require_capabilities(super::router::TaskType::VisionObserve)?;
+        hosted_async::query(self, id, output_limit).await
+    }
+    pub(crate) fn parse_observation(&self, response: &Value) -> Result<(Value, u32)> {
+        let usage_tokens = tokens_of(response);
+        let text = output_text(response);
         let mut observation: Value = serde_json::from_str(&text).map_err(|error| {
             AppError::new("MODEL_UNAVAILABLE", format!("视觉观察输出不符合 JSON 结构（类别 {:?}，行 {} 列 {}，字节数 {}，代码围栏 {}）；原文未记录", error.classify(), error.line(), error.column(), text.len(), text.trim_start().starts_with("```")))
         })?;

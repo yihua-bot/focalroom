@@ -284,8 +284,12 @@ def apply_restore(args, manifest, stage):
     with private_file(stage / "restored-previews.tar.gz") as target:
         stack.helper(["tar", "-czf", "-", "-C", "/previews", "."], stdout=target)
     require(preview_inventory(stage / "restored-previews.tar.gz") == manifest["objects"], "恢复后预览 SHA256 不一致；API 保持停止")
+    # 快照可能早于真实外发；先隔离恢复队列，不能把旧快照当作“尚未发送”的证明。
+    stack.query(Path(__file__).with_name("quarantine-restored-ai.sql").read_text(encoding="utf-8"))
+    require(stack.facts() == manifest["database"], "恢复队列隔离后表计数/迁移/预览引用不一致；API 保持停止")
     print(json.dumps({"restored": True, "project": args.project, "objects": len(manifest["objects"]), "api_stopped": True,
-                      "next": "先完成应用、权限与备份审阅，再显式启动目标 API/Web"}), flush=True)
+                      "ai_pending_quarantined": True,
+                      "next": "先完成应用、权限、AI未知用量与备份审阅，再显式启动目标 API/Web"}), flush=True)
 
 
 def main():

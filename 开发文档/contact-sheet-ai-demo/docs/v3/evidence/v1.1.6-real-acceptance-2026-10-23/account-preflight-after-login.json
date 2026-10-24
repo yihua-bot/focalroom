@@ -1,0 +1,12 @@
+{
+  "authenticated": true,
+  "available": 864352,
+  "enabled": true,
+  "endpoint": "https://team.focroom.cc/api/v2/ai/deepseek-flash-v1/responses",
+  "model": "deepseek-flash",
+  "modelCalls": 0,
+  "reserved": 0,
+  "spent": 135648,
+  "uploadedPreviews": 0,
+  "verified": true
+}

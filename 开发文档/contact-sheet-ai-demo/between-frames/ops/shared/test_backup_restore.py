@@ -96,6 +96,36 @@ class BackupTests(unittest.TestCase):
         stack.resume_api.assert_called_once()
         self.assertEqual(list(self.root.glob("focalroom-backup-*.tar.gz")), [])
 
+    def test_restore_quarantines_ai_before_success_and_never_starts_the_api(self):
+        self.bundle()
+        manifest = json.loads((self.root / "manifest.json").read_text())
+        for fail in (False, True):
+            stage = Path(tempfile.mkdtemp(dir=self.root))
+            for name in ("database.dump", "previews.tar.gz"):
+                (stage / name).write_bytes((self.root / name).read_bytes())
+            stack = unittest.mock.Mock()
+            stack.facts.return_value = manifest["database"]
+            executed = []
+            def query(sql):
+                if sql == "SHOW server_version_num":
+                    return "160000"
+                executed.append(sql)
+                if fail:
+                    raise ops.BackupError("恢复队列隔离失败")
+                return ""
+            stack.query.side_effect = query
+            with self.subTest(fail=fail), patch.object(ops, "Stack", return_value=stack), patch.object(ops, "preview_inventory", return_value=manifest["objects"]):
+                args = SimpleNamespace(compose="unused", project="isolated-target")
+                if fail:
+                    with self.assertRaisesRegex(ops.BackupError, "隔离失败"):
+                        ops.apply_restore(args, manifest, stage)
+                else:
+                    ops.apply_restore(args, manifest, stage)
+                self.assertEqual(len(executed), 1)
+                self.assertIn("phase='UNKNOWN',payload=NULL", executed[0])
+                stack.stop_api.assert_called_once()
+                stack.resume_api.assert_not_called()
+
     def test_external_failure_body_is_not_logged(self):
         completed = SimpleNamespace(returncode=1, stdout=b"private config", stderr=b"secret database password")
         with patch.object(ops.subprocess, "run", return_value=completed), self.assertRaises(ops.BackupError) as error:

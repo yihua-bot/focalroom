@@ -92,3 +92,26 @@ it('缺失收件人不能创建授权，禁止图像不依赖服务配置，业�
  await expect(repo.setConsent('p', 'task', 4, 'openai@' + 'a'.repeat(64))).rejects.toMatchObject({ code: 'CONSENT_TARGET_CHANGED', message: '服务已变化' });
  expect(ipc).toHaveBeenCalledTimes(1);
 });
+
+it('原分析查询只调用专用入口，拒绝非法状态和重复IPC重试', async () => {
+ const repo=new TauriAgentRepository();
+ ipc.mockResolvedValueOnce({state:'pending',images:2});
+ expect(await repo.queryVisionResult('p','t')).toEqual({state:'pending',images:2});
+ expect(ipc).toHaveBeenCalledWith('query_vision_result',{projectId:'p',taskId:'t'});
+ ipc.mockResolvedValueOnce({state:'retry_upload',images:2});
+ await expect(repo.queryVisionResult('p','t')).rejects.toThrow();
+ ipc.mockRejectedValueOnce(new Error('lost reply'));
+ await expect(repo.queryVisionResult('p','t')).rejects.toThrow('lost reply');
+ expect(ipc).toHaveBeenCalledTimes(3);
+});
+
+it('恢复能力必须与已知策略和期限匹配，缺少能力时保持旧协议',async()=>{
+ const base={observation:null,consentProvider:'openai@'+'a'.repeat(64),providerId:'openai',modelId:'deepseek-flash',ready:true,apiKeyTail:null,keySource:'focalroom',baseUrl:'https://team.focroom.cc/api/v2/ai/deepseek-flash-v1',promptVersion:'test',capabilities:['vision','structured_output','instruction_following'],capabilitySource:'official_documentation',configurationError:null,consent:null,
+ hostedAccount:{enabled:true,verified:true,policy:'deepseek-flash-v1',provider:'DeepSeek',model:'deepseek-flash',unit:'tokens',granted:1,spent:0,reserved:0,available:1}};
+ const repo=new TauriAgentRepository();
+ ipc.mockResolvedValue(base);expect((await repo.aiConfig('p')).hostedAccount).not.toHaveProperty('recovery');
+ ipc.mockResolvedValue({...base,hostedAccount:{...base.hostedAccount,recovery:{enabled:true,policy:'encrypted-queue-v1',maxQueueSeconds:600}}});
+ expect((await repo.aiConfig('p')).hostedAccount?.recovery).toEqual({enabled:true,policy:'encrypted-queue-v1',maxQueueSeconds:600});
+ ipc.mockResolvedValue({...base,hostedAccount:{...base.hostedAccount,recovery:{enabled:true,policy:'other',maxQueueSeconds:600}}});
+ await expect(repo.aiConfig('p')).rejects.toThrow();
+});

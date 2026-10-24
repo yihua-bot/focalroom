@@ -26,6 +26,7 @@
     "test:m1-gui": "bash \"scripts/verify-m1-gui.sh\"",
     "dev:api": "npm run dev --workspace @betweenframes/api",
     "test:cloud:pg": "node apps/api/test/run.mjs",
+    "test:ai:native": "node apps/api/test/run.mjs --test apps/api/test/hosted-ai-native.mjs",
     "review:shared": "node apps/api/test/run.mjs apps/api/tools/review-local.mjs",
     "test:ops": "python3 -m unittest discover -s ops/shared -p test_backup_restore.py -v",
     "test:ops:docker": "FOCALROOM_TEST_BACKUP_DOCKER=1 python3 ops/shared/test_docker_backup_restore.py"

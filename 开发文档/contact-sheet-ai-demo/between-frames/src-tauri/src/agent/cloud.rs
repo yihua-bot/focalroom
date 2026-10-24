@@ -7,6 +7,14 @@ use crate::{
 };
 use serde_json::{Value, json};
 
+pub(crate) struct VisionReservation {
+    pub images: u32,
+    pub cost: u32,
+    pub cost_limit: u32,
+    pub rate: super::pricing::RateCard,
+    pub receipt: Option<super::vision_recovery::VisionReceipt>,
+}
+
 pub(crate) async fn replay(
     db: &Store,
     task: &str,
@@ -24,6 +32,14 @@ pub(crate) async fn replay(
             "视觉调用 ID 已用于不同参数",
         ));
     }
+    if body["hostedRequest"].is_object() {
+        let receipt =
+            serde_json::from_value(body["hostedRequest"].clone()).map_err(serialization)?;
+        let mut tx = db.pool.begin().await?;
+        let task = store::load(&mut tx, task).await?;
+        super::vision_recovery::validate(&mut tx, &task, call, &receipt).await?;
+        tx.commit().await?;
+    }
     match body["status"].as_str() {
         Some("completed") => serde_json::from_value(body["prefetch"].clone())
             .map(Some)
@@ -31,6 +47,10 @@ pub(crate) async fn replay(
         Some("failed") => Err(AppError::new(
             "BUDGET_EXCEEDED",
             "此前视觉请求失败；已保留预算记录，不自动重传，请重新委托",
+        )),
+        _ if body["hostedRequest"].is_object() => Err(AppError::new(
+            "AI_RESULT_UNKNOWN",
+            "照片分析结果尚未确认，请先查询处理结果，勿重复发送",
         )),
         _ => Err(AppError::new(
             "BUDGET_EXCEEDED",
@@ -43,11 +63,15 @@ pub(crate) async fn reserve(
     db: &Store,
     task: &str,
     call: &ToolCall,
-    images: u32,
-    cost: u32,
-    cost_limit: u32,
-    rate: super::pricing::RateCard,
+    reservation: VisionReservation,
 ) -> Result<(i64, u64)> {
+    let VisionReservation {
+        images,
+        cost,
+        cost_limit,
+        rate,
+        mut receipt,
+    } = reservation;
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, task).await?;
     PolicyGate::validate(&mut tx, &t, call).await?;
@@ -71,7 +95,20 @@ pub(crate) async fn reserve(
     let model = identity
         .as_ref()
         .map(|identity| identity.observation_model_id());
-    store::step(&mut tx, task, "vision_reserved", json!({"modelRole":"observation","modelId":model,"recipientId":recipient,"callId":call.call_id,"fingerprint":fingerprint(&serde_json::to_value(call).unwrap()),"status":"reserved","images":images,"cost":cost,"round":t.usage.model_turns,"rateCard":rate,"effectiveCostLimitMinorUsd":t.budget.max_cost_minor_usd.min(cost_limit)}), "视觉请求预算已预留；中断时不自动重传").await?;
+    let mut body = json!({"modelRole":"observation","modelId":model,"recipientId":recipient,"callId":call.call_id,"fingerprint":fingerprint(&serde_json::to_value(call).unwrap()),"status":"reserved","images":images,"cost":cost,"round":t.usage.model_turns,"rateCard":rate,"effectiveCostLimitMinorUsd":t.budget.max_cost_minor_usd.min(cost_limit)});
+    if let Some(value) = receipt.as_mut() {
+        value.prefetch.consent_id = consent;
+        super::vision_recovery::validate(&mut tx, &t, call, value).await?;
+        body["hostedRequest"] = serde_json::to_value(value).map_err(serialization)?;
+    }
+    store::step(
+        &mut tx,
+        task,
+        "vision_reserved",
+        body,
+        "已保存照片分析请求，中断后不会重复发送",
+    )
+    .await?;
     store::checkpoint(&mut tx, &t).await?;
     tx.commit().await?;
     Ok((
@@ -97,6 +134,11 @@ pub(crate) async fn settle(
         .bind(task).bind(&call.call_id).fetch_one(&mut *tx).await?;
     if settled > 0 {
         return Ok(());
+    }
+    if data.is_some() && reserved["hostedRequest"].is_object() {
+        let receipt =
+            serde_json::from_value(reserved["hostedRequest"].clone()).map_err(serialization)?;
+        super::vision_recovery::validate(&mut tx, &t, call, &receipt).await?;
     }
     let upper = reserved["cost"].as_u64().unwrap() as u32;
     // 没有可信 usage（超时/网络错误/坏 JSON）时保留预留，不能把未知外发当零消耗。
@@ -124,6 +166,10 @@ pub(crate) async fn settle(
     });
     reserved["prefetch"] = serde_json::to_value(data).map_err(serialization)?;
     reserved["reportedCost"] = json!(cost);
+    let recovered = data.is_some()
+        && reserved["hostedRequest"].is_object()
+        && matches!(t.state.as_str(), "paused" | "interrupted");
+    let request_id = reserved["hostedRequest"]["requestId"].clone();
     store::step(
         &mut tx,
         task,
@@ -132,6 +178,17 @@ pub(crate) async fn settle(
         "视觉请求已结算；失败或取消后仍保留传输预算记录",
     )
     .await?;
+    if recovered {
+        t.reason = "照片分析结果已找回，可继续本次任务".into();
+        store::step(
+            &mut tx,
+            task,
+            "vision_result_recovered",
+            json!({"requestId":request_id}),
+            &t.reason,
+        )
+        .await?;
+    }
     if overage > 0 && t.state == "running" {
         store::transition(
             &mut tx,
@@ -141,6 +198,31 @@ pub(crate) async fn settle(
         )
         .await?;
     }
+    store::save(&mut tx, &t).await?;
+    store::checkpoint(&mut tx, &t).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+pub(crate) async fn transport_failed(
+    db: &Store,
+    task: &str,
+    call: &ToolCall,
+    error: &AppError,
+    elapsed: u64,
+) -> Result<()> {
+    let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let mut t = store::load(&mut tx, task).await?;
+    t.elapsed_ms = t.elapsed_ms.saturating_add(elapsed);
+    // 错误正文与网络地址不进入持久记录；未知结果仍保留全部预留。
+    store::step(
+        &mut tx,
+        task,
+        "vision_transport_unconfirmed",
+        json!({"callId":call.call_id,"code":error.code,"elapsedMs":elapsed}),
+        "尚未取得照片分析结果，可查询原请求",
+    )
+    .await?;
     store::save(&mut tx, &t).await?;
     store::checkpoint(&mut tx, &t).await?;
     tx.commit().await?;

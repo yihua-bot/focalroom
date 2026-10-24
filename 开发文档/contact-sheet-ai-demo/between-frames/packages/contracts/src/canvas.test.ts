@@ -2,8 +2,8 @@ import { expect, it } from 'vitest';
 import { canvasReceiptSchema, canvasRequestSchema } from './canvas';
 import examples from '../../../contracts/canvas-command-examples.json';
 
-it('16 类画布命令与 Rust 共用同一组严格协议样例', () => {
-  expect(examples).toHaveLength(16);
+it('20 类画布命令与 Rust 共用同一组严格协议样例', () => {
+  expect(examples).toHaveLength(20);
   for (const example of examples) {
     expect(canvasRequestSchema.parse(example)).toEqual(example);
     expect(canvasRequestSchema.safeParse({ ...example, actor: 'human' }).success).toBe(false);

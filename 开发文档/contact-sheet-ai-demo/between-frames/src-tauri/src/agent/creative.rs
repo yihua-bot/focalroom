@@ -198,7 +198,45 @@ pub async fn bind_continuation(
     parent: &DraftReference,
 ) -> Result<()> {
     let snapshot = parent_snapshot(tx, task, parent).await?;
-    let body = json!({"reference":parent,"snapshotSha256":fingerprint(&snapshot),"parentTaskId":snapshot["parentTaskId"]});
+    let mut body = json!({"reference":parent,"snapshotSha256":fingerprint(&snapshot),"parentTaskId":snapshot["parentTaskId"]});
+    if parent.kind == "board" && snapshot["parentTaskId"].is_string() {
+        let feedback = crate::canvas_review::comments::discussion_tx(
+            tx,
+            &task.project_id,
+            &parent.id,
+            parent.revision,
+            None,
+            0,
+            5,
+        )
+        .await?;
+        body["reviewCursor"] =
+            json!({"draftId":parent.id,"draftRevision":parent.revision,"cursor":feedback.cursor});
+        let context = crate::canvas_review::revision_context::freeze(
+            tx,
+            task,
+            parent,
+            &snapshot,
+            feedback.cursor,
+        )
+        .await?;
+        let value = serde_json::to_value(&context).map_err(serialization)?;
+        let raw = encode(&value)?;
+        if raw.len() > 2 * 1024 * 1024 {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "修订依据较多，请缩小修改范围",
+            ));
+        }
+        body["reviewContextSha256"] = json!(fingerprint(&value));
+        body["reviewContextPreview"] =
+            crate::canvas_review::revision_context::preview(&context, 0, 5);
+        sqlx::query("INSERT INTO task_messages(task_id,kind,body,created_at) VALUES(?,'creative_review_context',?,?)")
+            .bind(&task.id).bind(raw).bind(domain::timestamp()).execute(&mut **tx).await?;
+        if feedback.total_messages > 0 {
+            body["reviewFeedback"] = json!({"source":"human_editorial_review","visualEvidence":false,"snapshot":feedback});
+        }
+    }
     sqlx::query("INSERT INTO task_messages(task_id,kind,body,created_at) VALUES(?,'creative_continuation',?,?)")
         .bind(&task.id).bind(encode(&body)?).bind(domain::timestamp()).execute(&mut **tx).await?;
     Ok(())
@@ -214,6 +252,7 @@ pub async fn binding(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<Va
     if !grant.tools.contains(&"read_creative_context".into()) {
         return Ok(Value::Null);
     }
+    crate::canvas_review::revision_context::saved(tx, &task.id).await?;
     Ok(
         json!({"version":1,"promptSha256":fingerprint(&json!(PROMPT)),"knowledgeSha256":super::knowledge::digest(),"continuation":continuation(tx,&task.id).await?}),
     )
@@ -304,7 +343,54 @@ pub async fn execute(
                     let photo:Option<String>=sqlx::query_scalar("SELECT photo_id FROM asset_aliases WHERE asset_id=? AND photo_id IN(SELECT value FROM json_each(?)) ORDER BY photo_id LIMIT 1").bind(&n.asset_id).bind(&scope).fetch_optional(&mut **tx).await?;
                     items.push(json!({"id":n.id,"type":n.node_type,"photoId":photo,"renditionRef":n.rendition_ref,"x":n.x,"y":n.y,"width":n.width,"height":n.height,"content":n.content_json,"children":n.children_json,"locked":n.locked}));
                 }
-                json!({"boardId":object,"revision":board.revision,"state":board.state,"items":items,"snapshot":"live_read_only; use a new draft to propose changes"})
+                let mut value = json!({"boardId":object,"revision":board.revision,"state":board.state,"items":items,"snapshot":"live_read_only; use a new draft to propose changes"});
+                let is_draft: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM board_draft_tasks WHERE board_id=?)",
+                )
+                .bind(object)
+                .fetch_one(&mut **tx)
+                .await?;
+                if is_draft {
+                    let bound = continuation(tx, &task.id).await?;
+                    let frozen = if bound["reference"]["kind"] == "board"
+                        && bound["reference"]["id"] == object
+                    {
+                        bound["reviewCursor"]["cursor"].as_i64()
+                    } else {
+                        None
+                    };
+                    let revision = if frozen.is_some() {
+                        bound["reference"]["revision"].as_i64().ok_or_else(denied)?
+                    } else {
+                        board.revision
+                    };
+                    let feedback = crate::canvas_review::comments::discussion_tx(
+                        tx,
+                        &task.project_id,
+                        object,
+                        revision,
+                        frozen,
+                        offset as usize,
+                        limit as usize,
+                    )
+                    .await?;
+                    if feedback.total_messages > 0 {
+                        value["reviewFeedback"] = json!({"source":"human_editorial_review","visualEvidence":false,"frozenForThisTask":frozen.is_some(),"snapshot":feedback});
+                    }
+                    if frozen.is_some() {
+                        if let Some(context) =
+                            crate::canvas_review::revision_context::saved(tx, &task.id).await?
+                        {
+                            value["parentReviewContext"] =
+                                crate::canvas_review::revision_context::preview(
+                                    &context,
+                                    offset as usize,
+                                    limit as usize,
+                                );
+                        }
+                    }
+                }
+                value
             }
         }
         "history" => {

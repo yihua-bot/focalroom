@@ -150,8 +150,8 @@ impl Fixture {
                 )
                 .unwrap()
             });
-            sqlx::query("INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,content_json,children_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'now','now')")
-                .bind(id).bind(&draft).bind(&node.node_type).bind(node.x + 50.).bind(node.y + 25.).bind(node.width).bind(node.height).bind(&node.content_json).bind(children).execute(&db.pool).await.unwrap();
+            sqlx::query("INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,content_json,children_json,z_order,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,'now','now')")
+                .bind(id).bind(&draft).bind(&node.node_type).bind(node.x + 50.).bind(node.y + 25.).bind(node.width).bind(node.height).bind(&node.content_json).bind(children).bind(node.z_order).execute(&db.pool).await.unwrap();
             sqlx::query("INSERT INTO board_draft_node_origins(node_id,board_id,source_node_id,base_json) VALUES(?,?,?,?)")
                 .bind(id).bind(&draft).bind(&node.id).bind(encode(&node).unwrap()).execute(&db.pool).await.unwrap();
         }
@@ -175,6 +175,8 @@ impl Fixture {
             target_board_id: self.source.clone(),
             expected_target_revision: c.current_source_revision.unwrap(),
             selected_change_ids: c.changes.iter().take(count).map(|c| c.id.clone()).collect(),
+            resolutions: Vec::new(),
+            fields_by_change: std::collections::BTreeMap::new(),
         }
     }
     async fn request(&self, selection: EditorialSelection) -> CanvasCommandRequest {
@@ -207,6 +209,757 @@ fn command(p: &str, board: &str, revision: i64, action: CanvasAction) -> CanvasC
             action,
         }],
     }
+}
+
+#[tokio::test]
+async fn three_way_merge_preserves_manual_size_and_other_nodes_and_requires_explicit_overlap_choice()
+ {
+    let f = Fixture::new(2).await;
+    let comparison = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    let change = &comparison.changes[0];
+    let target = change.source_node_id.as_ref().unwrap();
+    f.db.resize_node(
+        &f.p,
+        &ResizeNodesCommand {
+            board_id: f.source.clone(),
+            node_id: target.clone(),
+            width: 350.,
+            height: 160.,
+        },
+    )
+    .await
+    .unwrap();
+    let selected = f.selection(1).await;
+    let preview =
+        f.db.simulate_editorial_merge(&f.p, &selected)
+            .await
+            .unwrap();
+    assert!(preview.can_apply, "{:?}", preview.conflicts);
+    let result = preview
+        .merged_nodes
+        .iter()
+        .find(|n| &n.id == target)
+        .unwrap();
+    assert_eq!(
+        (result.x, result.y),
+        (
+            change.after.as_ref().unwrap().x,
+            change.after.as_ref().unwrap().y
+        )
+    );
+    assert_eq!((result.width, result.height), (350., 160.));
+    f.db.move_nodes(
+        &f.p,
+        &MoveNodesCommand {
+            board_id: f.source.clone(),
+            node_ids: vec![target.clone()],
+            dx: 12.,
+            dy: 0.,
+        },
+    )
+    .await
+    .unwrap();
+    let mut selected = f.selection(1).await;
+    let overlap =
+        f.db.simulate_editorial_merge(&f.p, &selected)
+            .await
+            .unwrap();
+    assert!(!overlap.can_apply);
+    assert_eq!(overlap.attribute_conflicts.len(), 1);
+    assert_eq!(overlap.attribute_conflicts[0].field, "position");
+    let blocked = f.request(selected.clone()).await;
+    assert_eq!(
+        f.db.execute_canvas(blocked).await.unwrap_err().code,
+        "CONFLICT"
+    );
+    selected.resolutions.push(EditorialResolution {
+        change_id: change.id.clone(),
+        field: "position".into(),
+        choice: ResolutionChoice::KeepCurrent,
+    });
+    let keep =
+        f.db.simulate_editorial_merge(&f.p, &selected)
+            .await
+            .unwrap();
+    assert!(keep.can_apply);
+    assert_eq!(
+        keep.merged_nodes
+            .iter()
+            .find(|n| &n.id == target)
+            .unwrap()
+            .x,
+        change.before.as_ref().unwrap().x + 12.
+    );
+    selected.resolutions[0].choice = ResolutionChoice::UseDraft;
+    let request = f.request(selected.clone()).await;
+    selected.resolutions.push(selected.resolutions[0].clone());
+    assert_eq!(
+        f.db.simulate_editorial_merge(&f.p, &selected)
+            .await
+            .unwrap_err()
+            .code,
+        "CONFLICT"
+    );
+    f.db.execute_canvas(request).await.unwrap();
+    let result = f.db.get_board_nodes(&f.source).await.unwrap();
+    let node = result.iter().find(|n| &n.id == target).unwrap();
+    assert_eq!(node.x, change.after.as_ref().unwrap().x);
+    assert_eq!(node.width, 350.);
+}
+
+#[tokio::test]
+async fn successive_partial_approvals_and_decisions_survive_restart_and_undo() {
+    let f = Fixture::new(3).await;
+    let original = f.db.canvas_snapshot(&f.p, &f.source).await.unwrap();
+    let comparison = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    let first = f.selection(1).await;
+    f.db.execute_canvas(f.request(first).await).await.unwrap();
+    let review = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(review.changes[0].decision, "accepted");
+    let mut next = f.selection(0).await;
+    next.selected_change_ids = vec![comparison.changes[1].id.clone()];
+    let second = f.db.execute_canvas(f.request(next).await).await.unwrap();
+    assert_eq!(second.revision, original.board.revision + 2);
+    let review = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(
+        review
+            .changes
+            .iter()
+            .filter(|c| c.decision == "accepted")
+            .count(),
+        2
+    );
+    let decision = command(
+        &f.p,
+        &f.source,
+        second.revision,
+        CanvasAction::RecordEditorialDecision(RecordEditorialDecision {
+            draft_id: f.draft.clone(),
+            draft_revision: review.draft.revision,
+            change_ids: vec![review.changes[2].id.clone()],
+            decision: decisions::ReviewDecision::Deferred,
+            fields_by_change: std::collections::BTreeMap::new(),
+        }),
+    );
+    let snapshot = f.db.canvas_snapshot(&f.p, &f.source).await.unwrap();
+    let receipt = f.db.execute_canvas(decision.clone()).await.unwrap();
+    assert!(!receipt.changed);
+    assert_eq!(receipt.revision, second.revision);
+    assert_eq!(
+        encode(&snapshot).unwrap(),
+        encode(&f.db.canvas_snapshot(&f.p, &f.source).await.unwrap()).unwrap()
+    );
+    assert_eq!(
+        encode(&receipt).unwrap(),
+        encode(&f.db.execute_canvas(decision.clone()).await.unwrap()).unwrap()
+    );
+    f.db.pool.close().await;
+    let db = Store::open(&f._temp.path().join("review.sqlite"))
+        .await
+        .unwrap();
+    let review = db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(review.changes[2].decision, "deferred");
+    db.execute_canvas(command(
+        &f.p,
+        &f.source,
+        second.revision,
+        CanvasAction::Undo(UndoCanvasCommand {
+            board_id: f.source.clone(),
+        }),
+    ))
+    .await
+    .unwrap();
+    let review = db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(review.changes[0].decision, "accepted");
+    assert_eq!(review.changes[1].decision, "pending");
+    assert_eq!(review.changes[2].decision, "deferred");
+    assert_eq!(
+        CommandHandler::new(&db)
+            .execute_canvas(decision, &CommandContext::read_only(&f.p))
+            .await
+            .unwrap_err()
+            .code,
+        "PERMISSION_DENIED"
+    );
+}
+
+#[tokio::test]
+async fn rejection_does_not_change_work_and_cannot_relabel_an_accepted_change() {
+    let f = Fixture::new(2).await;
+    let c = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    let selection = f.selection(1).await;
+    let rejected = command(
+        &f.p,
+        &f.source,
+        selection.expected_target_revision,
+        CanvasAction::RecordEditorialDecision(RecordEditorialDecision {
+            draft_id: f.draft.clone(),
+            draft_revision: c.draft.revision,
+            change_ids: vec![c.changes[0].id.clone()],
+            decision: decisions::ReviewDecision::Rejected,
+            fields_by_change: std::collections::BTreeMap::new(),
+        }),
+    );
+    let before = f.db.canvas_snapshot(&f.p, &f.source).await.unwrap();
+    f.db.execute_canvas(rejected.clone()).await.unwrap();
+    assert_eq!(
+        f.db.canvas_comparison(&f.p, &f.draft)
+            .await
+            .unwrap()
+            .changes[0]
+            .decision,
+        "rejected"
+    );
+    assert_eq!(
+        encode(&before).unwrap(),
+        encode(&f.db.canvas_snapshot(&f.p, &f.source).await.unwrap()).unwrap()
+    );
+    f.db.execute_canvas(f.request(selection).await)
+        .await
+        .unwrap();
+    let mut invalid = rejected;
+    invalid.command_id = domain::id();
+    invalid.idempotency_key = domain::id();
+    invalid.operations[0].op_id = domain::id();
+    invalid.base_revision += 1;
+    assert_eq!(
+        f.db.execute_canvas(invalid).await.unwrap_err().code,
+        "CONFLICT"
+    );
+    assert_eq!(
+        f.db.canvas_comparison(&f.p, &f.draft)
+            .await
+            .unwrap()
+            .changes[0]
+            .decision,
+        "accepted"
+    );
+}
+
+#[tokio::test]
+async fn individual_properties_can_be_accepted_in_separate_rounds_and_undone_independently() {
+    let f = Fixture::new(1).await;
+    sqlx::query("UPDATE canvas_nodes SET width=300,height=150 WHERE board_id=?")
+        .bind(&f.draft)
+        .execute(&f.db.pool)
+        .await
+        .unwrap();
+    let c = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(c.changes[0].fields, vec!["position", "size"]);
+    let mut selection = f.selection(1).await;
+    selection
+        .fields_by_change
+        .insert(c.changes[0].id.clone(), vec!["position".into()]);
+    f.db.execute_canvas(f.request(selection).await)
+        .await
+        .unwrap();
+    let c = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(c.changes[0].decision, "partial");
+    assert_eq!(c.changes[0].accepted_fields, vec!["position"]);
+    assert_eq!(c.current_source_nodes[0].width, 200.);
+    let mut selection = f.selection(1).await;
+    selection
+        .fields_by_change
+        .insert(c.changes[0].id.clone(), vec!["size".into()]);
+    let second =
+        f.db.execute_canvas(f.request(selection).await)
+            .await
+            .unwrap();
+    let c = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(c.changes[0].decision, "accepted");
+    assert_eq!(c.current_source_nodes[0].width, 300.);
+    f.db.execute_canvas(command(
+        &f.p,
+        &f.source,
+        second.revision,
+        CanvasAction::Undo(UndoCanvasCommand {
+            board_id: f.source.clone(),
+        }),
+    ))
+    .await
+    .unwrap();
+    let c = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(c.changes[0].decision, "partial");
+    assert_eq!(c.changes[0].accepted_fields, vec!["position"]);
+    assert_eq!(
+        c.current_source_nodes[0].x,
+        c.changes[0].after.as_ref().unwrap().x
+    );
+    assert_eq!(c.current_source_nodes[0].width, 200.);
+    let mut forged = f.selection(1).await;
+    forged
+        .fields_by_change
+        .insert(c.changes[0].id.clone(), vec!["asset".into()]);
+    assert_eq!(
+        f.db.simulate_editorial_merge(&f.p, &forged)
+            .await
+            .unwrap_err()
+            .code,
+        "CONFLICT"
+    );
+}
+
+#[tokio::test]
+async fn deferred_size_does_not_relabel_an_undone_position_decision() {
+    let f = Fixture::new(1).await;
+    sqlx::query("UPDATE canvas_nodes SET width=300 WHERE board_id=?")
+        .bind(&f.draft)
+        .execute(&f.db.pool)
+        .await
+        .unwrap();
+    let mut selection = f.selection(1).await;
+    let id = selection.selected_change_ids[0].clone();
+    selection
+        .fields_by_change
+        .insert(id.clone(), vec!["position".into()]);
+    let applied =
+        f.db.execute_canvas(f.request(selection).await)
+            .await
+            .unwrap();
+    let c = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    f.db.execute_canvas(command(
+        &f.p,
+        &f.source,
+        applied.revision,
+        CanvasAction::RecordEditorialDecision(RecordEditorialDecision {
+            draft_id: f.draft.clone(),
+            draft_revision: c.draft.revision,
+            change_ids: vec![id.clone()],
+            decision: decisions::ReviewDecision::Deferred,
+            fields_by_change: std::collections::BTreeMap::from([(id, vec!["size".into()])]),
+        }),
+    ))
+    .await
+    .unwrap();
+    let c = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(c.changes[0].field_decisions["position"], "accepted");
+    assert_eq!(c.changes[0].field_decisions["size"], "deferred");
+    f.db.execute_canvas(command(
+        &f.p,
+        &f.source,
+        applied.revision,
+        CanvasAction::Undo(UndoCanvasCommand {
+            board_id: f.source.clone(),
+        }),
+    ))
+    .await
+    .unwrap();
+    let c = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(c.changes[0].field_decisions["position"], "pending");
+    assert_eq!(c.changes[0].field_decisions["size"], "deferred");
+}
+
+#[tokio::test]
+async fn historical_compensation_preserves_later_unrelated_fields_and_is_itself_undoable() {
+    let f = Fixture::new(2).await;
+    let comparison = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    let node = comparison.changes[0]
+        .source_node_id
+        .as_ref()
+        .unwrap()
+        .clone();
+    let approval =
+        f.db.execute_canvas(f.request(f.selection(1).await).await)
+            .await
+            .unwrap();
+    let resized =
+        f.db.execute_canvas(command(
+            &f.p,
+            &f.source,
+            approval.revision,
+            CanvasAction::ResizeNode(ResizeNodesCommand {
+                board_id: f.source.clone(),
+                node_id: node.clone(),
+                width: 360.,
+                height: 180.,
+            }),
+        ))
+        .await
+        .unwrap();
+    let snapshot = f.db.canvas_snapshot(&f.p, &f.source).await.unwrap();
+    let preview =
+        f.db.simulate_editorial_revert(&f.p, &f.source, &approval.command_id)
+            .await
+            .unwrap();
+    assert!(preview.can_apply, "{:?}", preview.conflicts);
+    assert_eq!(preview.target_revision, resized.revision);
+    assert_eq!(
+        encode(&snapshot).unwrap(),
+        encode(&f.db.canvas_snapshot(&f.p, &f.source).await.unwrap()).unwrap()
+    );
+    let restored = preview.merged_nodes.iter().find(|n| n.id == node).unwrap();
+    assert_eq!(restored.x, comparison.changes[0].before.as_ref().unwrap().x);
+    assert_eq!(restored.width, 360.);
+    let request = command(
+        &f.p,
+        &f.source,
+        preview.target_revision,
+        CanvasAction::RevertEditorialChanges(RevertEditorialChanges {
+            merge_command_id: approval.command_id.clone(),
+            simulation_id: preview.simulation_id,
+        }),
+    );
+    let receipt = f.db.execute_canvas(request.clone()).await.unwrap();
+    assert_eq!(
+        encode(&receipt).unwrap(),
+        encode(&f.db.execute_canvas(request).await.unwrap()).unwrap()
+    );
+    let history = f.db.editorial_history(&f.p, &f.source).await.unwrap();
+    assert_eq!(history.len(), 2);
+    assert!(history[0].is_compensation);
+    assert!(history[1].compensated);
+    let older =
+        f.db.editorial_history_page(&f.p, &f.source, Some(history[0].cursor))
+            .await
+            .unwrap();
+    assert_eq!(older.len(), 1);
+    assert_eq!(older[0].command_id, approval.command_id);
+    assert_eq!(
+        f.db.canvas_comparison(&f.p, &f.draft)
+            .await
+            .unwrap()
+            .changes[0]
+            .decision,
+        "pending"
+    );
+    assert_eq!(
+        f.db.simulate_editorial_revert(&f.p, &f.source, &approval.command_id)
+            .await
+            .unwrap_err()
+            .code,
+        "CONFLICT"
+    );
+    f.db.execute_canvas(command(
+        &f.p,
+        &f.source,
+        receipt.revision,
+        CanvasAction::Undo(UndoCanvasCommand {
+            board_id: f.source.clone(),
+        }),
+    ))
+    .await
+    .unwrap();
+    let now = f.db.canvas_snapshot(&f.p, &f.source).await.unwrap();
+    let restored = now.nodes.iter().find(|n| n.id == node).unwrap();
+    assert_eq!(restored.x, comparison.changes[0].after.as_ref().unwrap().x);
+    assert_eq!(restored.width, 360.);
+    assert_eq!(
+        f.db.canvas_comparison(&f.p, &f.draft)
+            .await
+            .unwrap()
+            .changes[0]
+            .decision,
+        "accepted"
+    );
+    assert!(!f.db.editorial_history(&f.p, &f.source).await.unwrap()[1].compensated);
+}
+
+#[tokio::test]
+async fn compensation_conflicts_scope_and_stale_preview_never_overwrite_later_changes() {
+    let f = Fixture::new(1).await;
+    let approval =
+        f.db.execute_canvas(f.request(f.selection(1).await).await)
+            .await
+            .unwrap();
+    let preview =
+        f.db.simulate_editorial_revert(&f.p, &f.source, &approval.command_id)
+            .await
+            .unwrap();
+    assert_eq!(
+        f.db.simulate_editorial_revert("foreign-project", &f.source, &approval.command_id)
+            .await
+            .unwrap_err()
+            .code,
+        "NOT_FOUND"
+    );
+    let node = preview.current_nodes[0].id.clone();
+    f.db.move_nodes(
+        &f.p,
+        &MoveNodesCommand {
+            board_id: f.source.clone(),
+            node_ids: vec![node],
+            dx: 7.,
+            dy: 0.,
+        },
+    )
+    .await
+    .unwrap();
+    let current = f.db.canvas_snapshot(&f.p, &f.source).await.unwrap();
+    let blocked =
+        f.db.simulate_editorial_revert(&f.p, &f.source, &approval.command_id)
+            .await
+            .unwrap();
+    assert!(!blocked.can_apply);
+    assert!(!blocked.conflicts.is_empty());
+    let command = command(
+        &f.p,
+        &f.source,
+        preview.target_revision,
+        CanvasAction::RevertEditorialChanges(RevertEditorialChanges {
+            merge_command_id: approval.command_id,
+            simulation_id: preview.simulation_id,
+        }),
+    );
+    assert_eq!(
+        f.db.execute_canvas(command).await.unwrap_err().code,
+        "REVISION_CONFLICT"
+    );
+    assert_eq!(
+        encode(&current).unwrap(),
+        encode(&f.db.canvas_snapshot(&f.p, &f.source).await.unwrap()).unwrap()
+    );
+    assert_eq!(
+        f.db.editorial_history(&f.p, &f.source).await.unwrap().len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn comments_replies_resolve_reopen_are_immutable_scoped_and_do_not_edit_the_draft() {
+    let f = Fixture::new(1).await;
+    let comparison = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    let before = f.db.canvas_snapshot(&f.p, &f.draft).await.unwrap();
+    let original = f.db.get(&f.p).await.unwrap();
+    let root = command(
+        &f.p,
+        &f.draft,
+        before.board.revision,
+        CanvasAction::AddEditorialComment(AddEditorialComment {
+            draft_id: f.draft.clone(),
+            draft_revision: before.board.revision,
+            change_id: Some(comparison.changes[0].id.clone()),
+            thread_id: None,
+            body: "开篇保留，中段请增加留白。".into(),
+        }),
+    );
+    let thread = root.operations[0].op_id.clone();
+    let receipt = f.db.execute_canvas(root.clone()).await.unwrap();
+    assert!(!receipt.changed);
+    assert_eq!(receipt.revision, before.board.revision);
+    assert_eq!(
+        encode(&receipt).unwrap(),
+        encode(&f.db.execute_canvas(root.clone()).await.unwrap()).unwrap()
+    );
+    assert_eq!(
+        CommandHandler::new(&f.db)
+            .execute_canvas(root, &CommandContext::read_only(&f.p))
+            .await
+            .unwrap_err()
+            .code,
+        "PERMISSION_DENIED"
+    );
+    let reply = |body: &str| {
+        command(
+            &f.p,
+            &f.draft,
+            before.board.revision,
+            CanvasAction::AddEditorialComment(AddEditorialComment {
+                draft_id: f.draft.clone(),
+                draft_revision: before.board.revision,
+                change_id: Some(comparison.changes[0].id.clone()),
+                thread_id: Some(thread.clone()),
+                body: body.into(),
+            }),
+        )
+    };
+    f.db.execute_canvas(reply("希望保留街道空镜作为过渡。"))
+        .await
+        .unwrap();
+    let resolve = |resolved| {
+        command(
+            &f.p,
+            &f.draft,
+            before.board.revision,
+            CanvasAction::ResolveEditorialThread(ResolveEditorialThread {
+                draft_id: f.draft.clone(),
+                draft_revision: before.board.revision,
+                thread_id: thread.clone(),
+                resolved,
+            }),
+        )
+    };
+    f.db.execute_canvas(resolve(true)).await.unwrap();
+    assert_eq!(
+        f.db.execute_canvas(reply("关闭的批注不能直接回复"))
+            .await
+            .unwrap_err()
+            .code,
+        "CONFLICT"
+    );
+    assert!(
+        f.db.editorial_discussion(&f.p, &f.draft, before.board.revision, 0, None)
+            .await
+            .unwrap()
+            .messages
+            .iter()
+            .all(|m| m.resolved)
+    );
+    f.db.execute_canvas(resolve(false)).await.unwrap();
+    f.db.execute_canvas(reply("重新讨论这个观看距离。"))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.db.editorial_discussion("another-project", &f.draft, before.board.revision, 0, None)
+            .await
+            .unwrap_err()
+            .code,
+        "NOT_FOUND"
+    );
+    assert_eq!(
+        encode(&before).unwrap(),
+        encode(&f.db.canvas_snapshot(&f.p, &f.draft).await.unwrap()).unwrap()
+    );
+    assert_eq!(
+        encode(&original).unwrap(),
+        encode(&f.db.get(&f.p).await.unwrap()).unwrap()
+    );
+    f.db.pool.close().await;
+    let db = Store::open(&f._temp.path().join("review.sqlite"))
+        .await
+        .unwrap();
+    let discussion = db
+        .editorial_discussion(&f.p, &f.draft, before.board.revision, 0, None)
+        .await
+        .unwrap();
+    assert_eq!(discussion.total_messages, 3);
+    assert!(discussion.messages.iter().all(|m| !m.resolved));
+    assert_eq!(
+        discussion.messages[2].root_body,
+        "开篇保留，中段请增加留白。"
+    );
+    let audit_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM canvas_command_events")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    let invalid = command(
+        &f.p,
+        &f.draft,
+        before.board.revision,
+        CanvasAction::AddEditorialComment(AddEditorialComment {
+            draft_id: f.draft.clone(),
+            draft_revision: before.board.revision,
+            change_id: None,
+            thread_id: Some(thread),
+            body: "改变批注所指建议不被接受".into(),
+        }),
+    );
+    assert_eq!(
+        db.execute_canvas(invalid).await.unwrap_err().code,
+        "CONFLICT"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM canvas_command_events")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap(),
+        audit_before
+    );
+}
+
+#[tokio::test]
+async fn discussion_paging_is_frozen_and_old_version_comments_are_never_reanchored() {
+    let f = Fixture::new(1).await;
+    let revision =
+        f.db.canvas_snapshot(&f.p, &f.draft)
+            .await
+            .unwrap()
+            .board
+            .revision;
+    for index in 0..35 {
+        f.db.execute_canvas(command(
+            &f.p,
+            &f.draft,
+            revision,
+            CanvasAction::AddEditorialComment(AddEditorialComment {
+                draft_id: f.draft.clone(),
+                draft_revision: revision,
+                change_id: None,
+                thread_id: None,
+                body: format!("批注 {index}"),
+            }),
+        ))
+        .await
+        .unwrap();
+    }
+    let first =
+        f.db.editorial_discussion(&f.p, &f.draft, revision, 0, None)
+            .await
+            .unwrap();
+    assert_eq!(first.messages.len(), 30);
+    assert_eq!(first.next_offset, Some(30));
+    let thread = first.messages[0].thread_id.clone();
+    f.db.execute_canvas(command(
+        &f.p,
+        &f.draft,
+        revision,
+        CanvasAction::ResolveEditorialThread(ResolveEditorialThread {
+            draft_id: f.draft.clone(),
+            draft_revision: revision,
+            thread_id: thread,
+            resolved: true,
+        }),
+    ))
+    .await
+    .unwrap();
+    let frozen =
+        f.db.editorial_discussion(&f.p, &f.draft, revision, 0, Some(first.cursor))
+            .await
+            .unwrap();
+    assert!(!frozen.messages[0].resolved);
+    assert!(
+        f.db.editorial_discussion(&f.p, &f.draft, revision, 0, None)
+            .await
+            .unwrap()
+            .messages[0]
+            .resolved
+    );
+    let next =
+        f.db.editorial_discussion(
+            &f.p,
+            &f.draft,
+            revision,
+            first.next_offset.unwrap(),
+            Some(first.cursor),
+        )
+        .await
+        .unwrap();
+    assert_eq!(next.messages.len(), 5);
+    assert_eq!(next.next_offset, None);
+    sqlx::query("UPDATE boards SET revision=revision+1 WHERE id=?")
+        .bind(&f.draft)
+        .execute(&f.db.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        f.db.editorial_discussion(&f.p, &f.draft, revision + 1, 0, None)
+            .await
+            .unwrap()
+            .total_messages,
+        0
+    );
+    assert_eq!(
+        f.db.editorial_discussion(&f.p, &f.draft, revision, 0, None)
+            .await
+            .unwrap()
+            .total_messages,
+        35
+    );
+    let stale = command(
+        &f.p,
+        &f.draft,
+        revision + 1,
+        CanvasAction::AddEditorialComment(AddEditorialComment {
+            draft_id: f.draft.clone(),
+            draft_revision: revision,
+            change_id: None,
+            thread_id: None,
+            body: "旧版意见不能落入新版".into(),
+        }),
+    );
+    assert_eq!(
+        f.db.execute_canvas(stale).await.unwrap_err().code,
+        "REVISION_CONFLICT"
+    );
 }
 
 #[tokio::test]
@@ -425,8 +1178,11 @@ async fn source_or_draft_changes_invalidates_approval_instead_of_overwriting() {
         f.db.simulate_editorial_merge(&f.p, &f.selection(1).await)
             .await
             .unwrap();
-    assert!(!sim.can_apply);
-    assert!(sim.conflicts.iter().any(|s| s.contains("原画布已有修改")));
+    assert!(
+        sim.can_apply,
+        "其他节点的人工修改不应阻止无冲突采纳: {:?}",
+        sim.conflicts
+    );
     let f = Fixture::new(1).await;
     let request = f.request(f.selection(1).await).await;
     sqlx::query("UPDATE canvas_nodes SET x=x+1 WHERE board_id=?")

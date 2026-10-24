@@ -40,6 +40,16 @@ impl ContextBuilder {
         .ok_or_else(|| AppError::new("RECOVERY_ERROR", "缺少安全检查点，不能继续任务"))?;
         let checkpoint: Value =
             serde_json::from_str(&raw).map_err(crate::command_audit::serialization)?;
+        if checkpoint
+            .get("visionReceiptBinding")
+            .unwrap_or(&Value::Null)
+            != &super::vision_recovery::binding(&mut tx, id).await?
+        {
+            return Err(AppError::new(
+                "RECOVERY_ERROR",
+                "分析请求记录已改变，无法安全续接",
+            ));
+        }
         let conversation = crate::focal_chat::load(&mut tx, id).await?;
         let conversation_binding = crate::focal_chat::binding(&mut tx, id).await?;
         if checkpoint

@@ -4,7 +4,7 @@ use super::*;
 fn shared_protocol_examples_roundtrip_all_sixteen_actions_without_extra_fields() {
     let examples: Vec<Value> =
         serde_json::from_str(include_str!("../../contracts/canvas-command-examples.json")).unwrap();
-    assert_eq!(examples.len(), 16);
+    assert_eq!(examples.len(), 20);
     for example in examples {
         let request: CanvasCommandRequest = serde_json::from_value(example.clone()).unwrap();
         validate(&request).unwrap();

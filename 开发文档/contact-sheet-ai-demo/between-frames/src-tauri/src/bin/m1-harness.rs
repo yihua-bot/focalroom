@@ -1,12 +1,18 @@
 // 测试专用 stdio 驱动；不启动 WebView，不作为桌面产物编译，不开放生产网络端口。
 use between_frames_lib::{
+    cloud_auth::CloudAuth,
+    cloud_credentials::CredentialStore,
     db::Store,
     domain::{AppError, Result},
     export, image_pipeline,
     importer::ImportManager,
 };
 use serde_json::{Value, json};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 #[path = "../harness_canvas_provider.rs"]
@@ -16,11 +22,27 @@ mod fixtures;
 
 struct Harness {
     cloud: Option<(String, String, Value)>,
+    hosted_auth: Option<Arc<CloudAuth>>,
     store: Store,
     agent: between_frames_lib::agent::runtime::AgentEngine,
     root: PathBuf,
     imports: ImportManager,
     grants: HashMap<String, (String, PathBuf)>,
+}
+// 测试会话只在当前子进程内存中；不读写系统钥匙串或真实用户登录条目。
+struct TestCredentials(Mutex<Option<String>>);
+impl CredentialStore for TestCredentials {
+    fn read(&self, _: &str) -> Result<Option<String>> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+    fn write(&self, _: &str, value: &str) -> Result<()> {
+        *self.0.lock().unwrap() = Some(value.into());
+        Ok(())
+    }
+    fn delete(&self, _: &str) -> Result<()> {
+        *self.0.lock().unwrap() = None;
+        Ok(())
+    }
 }
 fn string<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key]
@@ -39,6 +61,40 @@ impl Harness {
         let revision = args["expectedRevision"].as_i64().unwrap_or(0);
         let photo = args["photoId"].as_str().unwrap_or("");
         let value = match command {
+            "canvas_editorial_revision_context" => json!(
+                self.store
+                    .editorial_revision_context(
+                        id,
+                        string(args, "draftId")?,
+                        args["offset"].as_u64().unwrap_or(0) as usize,
+                    )
+                    .await?
+            ),
+            "canvas_editorial_discussion" => json!(
+                self.store
+                    .editorial_discussion(
+                        id,
+                        string(args, "draftId")?,
+                        args["revision"].as_i64().unwrap_or(0),
+                        args["offset"].as_u64().unwrap_or(0) as usize,
+                        args["cursor"].as_i64()
+                    )
+                    .await?
+            ),
+            "canvas_editorial_history" => json!(
+                self.store
+                    .editorial_history_page(id, string(args, "boardId")?, args["before"].as_i64())
+                    .await?
+            ),
+            "canvas_simulate_revert" => json!(
+                self.store
+                    .simulate_editorial_revert(
+                        id,
+                        string(args, "boardId")?,
+                        string(args, "commandId")?
+                    )
+                    .await?
+            ),
             "canvas_simulate_merge" => json!(
                 self.store
                     .simulate_editorial_merge(
@@ -175,7 +231,7 @@ impl Harness {
                     .generate_from_sequence(id, &payload(args)?)
                     .await?
             ),
-            "set_cloud_test_session" => {
+            "set_cloud_test_session" | "set_hosted_ai_test_session" => {
                 let origin =
                     between_frames_lib::login_guard::trusted_origin(string(args, "origin")?)?;
                 if !origin.starts_with("http://") {
@@ -198,11 +254,22 @@ impl Harness {
                     .json()
                     .await
                     .map_err(|_| AppError::new("CLOUD_PROTOCOL", "夹具账户格式错误"))?;
-                self.cloud = Some((
-                    origin,
-                    token,
-                    json!({"id":user["id"],"email":user["email"],"name":user["name"]}),
-                ));
+                let user = json!({"id":user["id"],"email":user["email"],"name":user["name"]});
+                if command == "set_hosted_ai_test_session" {
+                    let vault = Arc::new(TestCredentials(Mutex::new(Some(
+                        json!({
+                            "pending":null,"session":{"token":token,"user":user}
+                        })
+                        .to_string(),
+                    ))));
+                    let auth = Arc::new(CloudAuth::new(&origin, "isolated-harness", vault)?);
+                    self.agent = between_frames_lib::agent::runtime::AgentEngine::hosted(
+                        self.store.clone(),
+                        auth.clone(),
+                    );
+                    self.hosted_auth = Some(auth);
+                }
+                self.cloud = Some((origin, token, user));
                 json!({"ok":true})
             }
             "cloud_login_status" => match &self.cloud {
@@ -235,6 +302,11 @@ impl Harness {
             "get_agent_projection" => {
                 json!(between_frames_lib::agent::projection(&self.store, id).await?)
             }
+            "query_vision_result" => json!(
+                self.agent
+                    .query_vision_result(id, string(args, "taskId")?)
+                    .await?
+            ),
             "store_api_key" => {
                 let key = string(args, "key")?.to_owned();
                 between_frames_lib::keychain::store_api_key(&key)?;
@@ -383,10 +455,7 @@ impl Harness {
                     serde_json::from_value(args["request"].clone())
                         .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
                 let request_id = request.request_id.clone();
-                match between_frames_lib::command_handler::CommandHandler::new(&self.store)
-                    .agent_request(request)
-                    .await
-                {
+                match self.agent.request(request).await {
                     Ok(task) => {
                         if task.state == "queued" {
                             self.agent.dispatch(&task.id).await;
@@ -591,10 +660,17 @@ impl Harness {
                 between_frames_lib::command_handler::CommandHandler::new(&self.store)
                     .recover_agents()
                     .await?;
-                self.agent = between_frames_lib::agent::runtime::AgentEngine::with_provider(
-                    self.store.clone(),
-                    std::sync::Arc::new(canvas_provider::CanvasScenarioProvider),
-                );
+                self.agent = if let Some(auth) = &self.hosted_auth {
+                    between_frames_lib::agent::runtime::AgentEngine::hosted(
+                        self.store.clone(),
+                        auth.clone(),
+                    )
+                } else {
+                    between_frames_lib::agent::runtime::AgentEngine::with_provider(
+                        self.store.clone(),
+                        Arc::new(canvas_provider::CanvasScenarioProvider),
+                    )
+                };
                 json!(true)
             }
             "test_fixture_info" => fixtures::info(&self.root)?,
@@ -683,6 +759,7 @@ async fn main() {
         .unwrap();
     let mut harness = Harness {
         cloud: None,
+        hosted_auth: None,
         agent: between_frames_lib::agent::runtime::AgentEngine::with_provider(
             store.clone(),
             std::sync::Arc::new(canvas_provider::CanvasScenarioProvider),

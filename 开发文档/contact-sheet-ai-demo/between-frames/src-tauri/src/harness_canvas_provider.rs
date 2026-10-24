@@ -147,6 +147,15 @@ async fn followup(input: &ModelTurnRequest) -> Result<ModelOutcome> {
             .find(|m| m.body["name"] == name)
             .map(|m| m.body["result"]["result"].clone())
     };
+    let review = &input.layers["creative"]["continuation"]["reviewFeedback"]["snapshot"];
+    if review["totalMessages"].as_u64().unwrap_or(0) > 0 && find("read_creative_context").is_none()
+    {
+        return scripted_call(
+            input,
+            "read_creative_context",
+            json!({"section":"board","object_id":input.layers["creative"]["continuation"]["reference"]["id"],"offset":0,"limit":5}),
+        );
+    }
     let Some(fork) = find("fork_creative_draft") else {
         return scripted_call(
             input,
@@ -161,10 +170,19 @@ async fn followup(input: &ModelTurnRequest) -> Result<ModelOutcome> {
         return scripted_call(input, "get_board", json!({"board_id":board}));
     }
     if find("add_editorial_note").is_none() {
+        let text = find("read_creative_context")
+            .and_then(|result| {
+                result["data"]["reviewFeedback"]["snapshot"]["messages"]
+                    .as_array()
+                    .and_then(|messages| messages.last())
+                    .and_then(|message| message["body"].as_str())
+                    .map(|body| format!("SIMULATED · 收到的审稿意见：{body}"))
+            })
+            .unwrap_or_else(|| "这一版增加观看中的停顿".into());
         return scripted_call(
             input,
             "add_editorial_note",
-            json!({"board_id":board,"text":"这一版增加观看中的停顿","x":620,"y":100,"photo_ids":[],"rationale":"SIMULATED：验证跨轮独立修改"}),
+            json!({"board_id":board,"text":text,"x":620,"y":100,"photo_ids":[],"rationale":"SIMULATED：验证跨轮独立修改"}),
         );
     }
     scripted_call(

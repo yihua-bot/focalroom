@@ -97,6 +97,35 @@ describe('工作台交互', () => {
     await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'Focal AI' }));
     expect(screen.getByLabelText('消息')).toHaveValue('');
   });
+  it('审美记忆仅从 Focal AI 抽屉进入，返回时保留对话、选区和工作台位置', async () => {
+    const { user } = await open();
+    const nav = screen.getByRole('navigation', { name: '未命名的日常' });
+    expect(within(nav).queryByRole('button', { name: '审美记忆' })).not.toBeInTheDocument();
+    await user.click(within(screen.getByRole('main')).getByRole('button', { name: 'Focal AI' }));
+    const drawer = screen.getByRole('dialog', { name: 'Focal AI' });
+    await user.clear(within(drawer).getByLabelText('消息'));
+    await user.type(within(drawer).getByLabelText('消息'), '继续讨论照片的叙事');
+    const selection = useUIStore.getState().selectedIds;
+    await user.click(within(drawer).getByRole('button', { name: '审美记忆' }));
+    expect(within(drawer).getByRole('region', { name: '审美记忆' })).toBeInTheDocument();
+    expect(within(drawer).queryByRole('textbox', { name: '消息' })).not.toBeInTheDocument();
+    expect(within(nav).getByRole('button', { name: '选片工作台' })).toHaveAttribute('aria-current', 'page');
+    expect(useUIStore.getState().selectedIds).toEqual(selection);
+    await user.click(within(drawer).getByRole('button', { name: '返回对话' }));
+    expect(within(drawer).getByLabelText('消息')).toHaveValue('继续讨论照片的叙事');
+    await user.click(within(drawer).getByRole('button', { name: '审美记忆' }));
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: 'Focal AI' })).toBeInTheDocument();
+    expect(within(drawer).getByLabelText('消息')).toHaveValue('继续讨论照片的叙事');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Focal AI' })).not.toBeInTheDocument();
+  });
+  it('旧记忆入口转到 Focal AI，不再切换照片检查器', () => {
+    useUIStore.getState().setPanel('memory');
+    expect(useUIStore.getState()).toMatchObject({ panel: 'photo', aiOpen: true, aiMemoryOpen: true });
+    useUIStore.getState().reset();
+    expect(useUIStore.getState()).toMatchObject({ aiOpen: false, aiMemoryOpen: false });
+  });
   it('已保留筛选无照片时，显示恢复路径', async () => {
     const { user } = await open();
     await user.click(screen.getByRole('button', { name: '已保留0' }));

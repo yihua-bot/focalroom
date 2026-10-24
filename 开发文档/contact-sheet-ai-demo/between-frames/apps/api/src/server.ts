@@ -99,6 +99,8 @@ class ApiController {
       res.status(job.state === "PENDING" ? 202 : 200);
       return job;
     }
+    const cancelAi=path.match(/^\/ai\/deepseek-flash-v1\/responses\/async\/([^/]+)\/cancel$/);
+    if(cancelAi && req.method==='POST')return s.ai.cancel(headers,cancelAi[1]);
     if (path.startsWith("/ai/deepseek-flash-v1/responses/async/") && req.method === "GET") {
       return s.ai.job(headers, path.slice("/ai/deepseek-flash-v1/responses/async/".length));
     }

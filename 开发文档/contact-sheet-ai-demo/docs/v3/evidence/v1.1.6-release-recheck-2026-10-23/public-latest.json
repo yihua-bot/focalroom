@@ -1,0 +1,11 @@
+{
+  "version": "1.1.6",
+  "notes": "Focal AI 异步视觉分析（绕过超时）、上传图片压缩、统一会话引擎、管理员统计",
+  "pub_date": "2026-10-23T12:33:56Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTNHpVbG1wUWJ0WkYrTUV6c3VzZ3ZKZWxEdmxCYWs0cmQvamM0T3V6UzlXR05GZzFicHdENkhRaWJCWm12ZHRwWWtFQlVMTWM4aWFZbUxORlJyRGtyQkRCYk93N3J1S2dnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzU4MDIxCWZpbGU6Rm9jYWxSb29tLmFwcC50YXIuZ3oJdmVyc2lvbjoxLjEuNgozMEt2dHNxck5hTHZyQWwxeDNTVHpoN1BxRmUwTWdtSzVCVGs2T3pwMWxlUUJqazFlT2JUZ2dnYTdmb2c3Y0U1Yjd0UDI0S3ltRjYvUnlTbXdLVFZCZz09Cg==",
+      "url": "https://focroom.cc/download/FocalRoom-1.1.6-app.tar.gz"
+    }
+  }
+}

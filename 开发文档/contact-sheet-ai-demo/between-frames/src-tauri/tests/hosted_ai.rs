@@ -33,6 +33,11 @@ fn session(user: &str) -> String {
     json!({"pending":null,"session":{"token":"f".repeat(64),"user":{"id":user,"email":"fixture@example.test","name":"Fixture"}}}).to_string()
 }
 struct Server {
+    queue: Arc<AtomicBool>,
+    opt_ins: Arc<AtomicU32>,
+    cancels: Arc<AtomicU32>,
+    cancel_mode: Arc<AtomicU32>,
+    main_reply: Arc<Mutex<Option<Value>>>,
     origin: String,
     calls: Arc<AtomicU32>,
     auth_calls: Arc<AtomicU32>,
@@ -52,10 +57,21 @@ impl Server {
         let polls = Arc::new(AtomicU32::new(0));
         let poll_count = polls.clone();
         let mode = Arc::new(AtomicU32::new(0));
+        let queue = Arc::new(AtomicBool::new(false));
+        let queue_enabled = queue.clone();
+        let opt_ins = Arc::new(AtomicU32::new(0));
+        let opted = opt_ins.clone();
+        let cancels = Arc::new(AtomicU32::new(0));
+        let cancelled = cancels.clone();
+        let cancel_mode = Arc::new(AtomicU32::new(0));
+        let cancel_reply = cancel_mode.clone();
+        let main_reply = Arc::new(Mutex::new(None::<Value>));
+        let next_reply = main_reply.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let (count, status, stopping) = (calls.clone(), mode.clone(), stop.clone());
         let thread = std::thread::spawn(move || {
             let mut job_id = String::new();
+            let mut photo_id = "photo-1".to_owned();
             while !stopping.load(Ordering::SeqCst) {
                 let (mut stream, _) = match listener.accept() {
                     Ok(s) => s,
@@ -108,6 +124,9 @@ impl Server {
                     assert_eq!(body["model"], "deepseek-flash");
                     assert!(!body.to_string().contains("hostedAccountId"));
                     if async_submit {
+                        if headers.contains("x-focalroom-recovery-consent: encrypted-queue-v1") {
+                            opted.fetch_add(1, Ordering::SeqCst);
+                        }
                         assert!(
                             body["input"][0]["content"]
                                 .as_array()
@@ -119,6 +138,14 @@ impl Server {
                             .lines()
                             .find_map(|line| line.strip_prefix("x-focalroom-request-id: "))
                             .unwrap()
+                            .to_owned();
+                        photo_id = body["input"][0]["content"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .filter_map(|v| v["text"].as_str())
+                            .find_map(|s| s.strip_prefix("photo_id: "))
+                            .unwrap_or("photo-1")
                             .to_owned();
                         if status.load(Ordering::SeqCst) == 7 {
                             continue;
@@ -132,6 +159,11 @@ impl Server {
                         write!(stream,"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}",reply.len()).unwrap();
                         continue;
                     }
+                    if let Some(reply) = next_reply.lock().unwrap().take() {
+                        let text = reply.to_string();
+                        write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}",text.len()).unwrap();
+                        continue;
+                    }
                     match status.load(Ordering::SeqCst) {
                         1 => (402, json!({"error":{"code":"AI_QUOTA_EXHAUSTED"}})),
                         2 => {
@@ -142,6 +174,20 @@ impl Server {
                             json!({"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"fixture"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}),
                         ),
                     }
+                } else if headers.starts_with("post /api/v2/ai/deepseek-flash-v1/responses/async/")
+                    && headers.contains("/cancel ")
+                {
+                    assert!(headers.starts_with(&format!(
+                        "post /api/v2/ai/deepseek-flash-v1/responses/async/{job_id}/cancel "
+                    )));
+                    cancelled.fetch_add(1, Ordering::SeqCst);
+                    if cancel_reply.load(Ordering::SeqCst) == 2 {
+                        continue;
+                    }
+                    (
+                        200,
+                        json!({"cancelled":cancel_reply.load(Ordering::SeqCst)==0}),
+                    )
                 } else if headers.starts_with("get /api/v2/ai/deepseek-flash-v1/responses/async/") {
                     assert!(headers.starts_with(&format!(
                         "get /api/v2/ai/deepseek-flash-v1/responses/async/{job_id} "
@@ -155,7 +201,16 @@ impl Server {
                         write!(stream,"HTTP/1.1 401 Unauthorized\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
                         continue;
                     }
-                    let observation = json!({"observations":[{"photo_id":"photo-1","visible_facts":["fixture only"],"interpretation":"fixture","uncertainty":"not real vision"}]}).to_string();
+                    let observation = json!({"observations":[{"photo_id":photo_id,"visible_facts":["fixture only"],"interpretation":"fixture","uncertainty":"not real vision"}]}).to_string();
+                    if mode == 12 || mode == 13 || mode == 14 {
+                        let reply=match mode {
+                            12=>json!({"jobId":job_id,"state":"PENDING","result":null,"error":null}),
+                            13=>json!({"jobId":job_id,"state":"COMPLETED","result":null,"error":"AI_RESULT_EXPIRED"}),
+                            _=>json!({"jobId":job_id,"state":"COMPLETED","error":null,"result":{"status":"completed","model":"deepseek-flash","output":[],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":1}}}),
+                        }.to_string();
+                        write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}",reply.len()).unwrap();
+                        continue;
+                    }
                     (
                         200,
                         json!({"jobId":job_id,"state":if mode == 9 {"UNKNOWN"} else {"COMPLETED"},"error":if mode == 9 {json!("AI_RESULT_UNKNOWN")} else {Value::Null},"result":{"status":"completed","model":"deepseek-flash","output":[{"type":"message","content":[{"type":"output_text","text":observation}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}),
@@ -163,7 +218,7 @@ impl Server {
                 } else if headers.starts_with("get /api/v2/ai/account ") {
                     (
                         200,
-                        json!({"policy":"deepseek-flash-v1","enabled":true,"verified":true,"available":250000}),
+                        json!({"policy":"deepseek-flash-v1","enabled":true,"verified":true,"available":250000,"recovery":if queue_enabled.load(Ordering::SeqCst){json!({"enabled":true,"policy":"encrypted-queue-v1","maxQueueSeconds":600})}else{json!({"enabled":false})}}),
                     )
                 } else {
                     assert!(headers.starts_with("get /api/v2/auth/me "));
@@ -190,6 +245,11 @@ impl Server {
             }
         });
         Self {
+            queue,
+            opt_ins,
+            cancels,
+            cancel_mode,
+            main_reply,
             origin,
             calls,
             auth_calls,
@@ -473,4 +533,544 @@ async fn native_task_creation_freezes_hosted_provider_and_account_instead_of_run
     vault.write("", &session("user-b")).unwrap();
     assert!(engine.request(request).await.is_err());
     assert_eq!(server.calls.load(Ordering::SeqCst), 1);
+}
+
+// 仅本机协议夹具：验证请求恢复，不作为真实照片质量评测。
+async fn recovery_fixture(
+    run_to_unknown: bool,
+) -> (
+    tempfile::TempDir,
+    between_frames_lib::db::Store,
+    Server,
+    Arc<Vault>,
+    String,
+    Task,
+) {
+    recovery_fixture_with_options(run_to_unknown, false).await
+}
+
+async fn recovery_fixture_with_options(
+    run_to_unknown: bool,
+    allow_queued_recovery: bool,
+) -> (
+    tempfile::TempDir,
+    between_frames_lib::db::Store,
+    Server,
+    Arc<Vault>,
+    String,
+    Task,
+) {
+    use between_frames_lib::{agent::runtime::AgentEngine, db::Store, image_pipeline};
+    let root = tempfile::tempdir().unwrap();
+    let db = Store::open(&root.path().join("recovery.sqlite"))
+        .await
+        .unwrap();
+    let p = db.create("恢复验证", "只验证协议").await.unwrap();
+    let source = root.path().join("fixture.jpg");
+    image::RgbImage::from_pixel(32, 24, image::Rgb([1, 2, 3]))
+        .save(&source)
+        .unwrap();
+    db.insert_photo(
+        &p.id,
+        &image_pipeline::prepare(&source, &root.path().join("cache")).unwrap(),
+    )
+    .await
+    .unwrap();
+    let p = db.get(&p.id).await.unwrap();
+    let server = Server::new();
+    server.queue.store(allow_queued_recovery, Ordering::SeqCst);
+    let vault = Arc::new(Vault::default());
+    vault.write("", &session("user-a")).unwrap();
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap()),
+    );
+    let consent = engine
+        .set_consent(ConsentRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            project_id: p.id.clone(),
+            mode: "task".into(),
+            provider: engine.ai_config().consent_provider.unwrap(),
+            quota: 1,
+        })
+        .await
+        .unwrap();
+    let task = engine
+        .request(AgentRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            project_id: p.id.clone(),
+            command: if allow_queued_recovery {
+                TaskCommand::StartConversation {
+                    allow_queued_recovery: true,
+                    expected_account_id: Some("user-a".into()),
+                    goal: "观察后恢复".into(),
+                    selected_photo_ids: vec![],
+                    focus_photo_ids: vec![],
+                    target_count: 1,
+                    budget: Budget {
+                        max_cloud_images: 1,
+                        ..Budget::default()
+                    },
+                    consent_id: Some(consent.id),
+                    source_board: None,
+                    continuation: None,
+                }
+            } else {
+                TaskCommand::StartTask {
+                    goal: "观察后恢复".into(),
+                    selected_photo_ids: vec![],
+                    target_count: 1,
+                    budget: Budget {
+                        max_cloud_images: 1,
+                        ..Budget::default()
+                    },
+                    consent_id: Some(consent.id),
+                }
+            },
+        })
+        .await
+        .unwrap();
+    *server.main_reply.lock().unwrap() = Some(
+        json!({"status":"completed","output":[{"type":"function_call","call_id":"inspect-once","name":"inspect_photos","arguments":json!({"project_id":p.id,"photo_ids":[p.photos[0].id]}).to_string()}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}),
+    );
+    server.mode.store(9, Ordering::SeqCst);
+    if run_to_unknown {
+        assert_eq!(
+            engine.run(&task.id).await.unwrap_err().code,
+            "AI_RESULT_UNKNOWN"
+        );
+        assert_eq!(server.calls.load(Ordering::SeqCst), 2);
+    }
+    (root, db, server, vault, p.id, task)
+}
+
+#[tokio::test]
+async fn hosted_recovery_survives_store_restart_queries_only_and_resumes_the_saved_tool_once() {
+    use between_frames_lib::{
+        agent::{self, runtime::AgentEngine},
+        db::Store,
+    };
+    let (root, db, server, vault, project, task) = recovery_fixture(true).await;
+    let before = db.get(&project).await.unwrap();
+    let projection = agent::projection(&db, &project).await.unwrap();
+    assert_eq!(projection.tasks[0].state, "paused");
+    assert_eq!(
+        projection.tasks[0].vision_recovery.as_ref().unwrap().images,
+        1
+    );
+    let raw: String = sqlx::query_scalar(
+        "SELECT body_json FROM agent_steps WHERE task_id=? AND kind='vision_reserved'",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let receipt: Value = serde_json::from_str(&raw).unwrap();
+    assert!(uuid::Uuid::parse_str(receipt["hostedRequest"]["requestId"].as_str().unwrap()).is_ok());
+    assert_eq!(receipt["hostedRequest"]["identity"]["accountId"], "user-a");
+    assert!(!raw.contains("data:image"));
+    assert!(!raw.contains(&"f".repeat(64)));
+    db.pool.close().await;
+    let db = Store::open(&root.path().join("recovery.sqlite"))
+        .await
+        .unwrap();
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+    );
+    let calls = server.calls.load(Ordering::SeqCst);
+    server.mode.store(12, Ordering::SeqCst);
+    assert_eq!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .unwrap()
+            .state,
+        "pending"
+    );
+    assert_eq!(server.calls.load(Ordering::SeqCst), calls);
+    server.mode.store(6, Ordering::SeqCst);
+    assert_eq!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .unwrap()
+            .state,
+        "completed"
+    );
+    assert_eq!(server.calls.load(Ordering::SeqCst), calls);
+    let projection = agent::projection(&db, &project).await.unwrap();
+    assert_eq!(projection.tasks[0].state, "paused");
+    assert!(projection.tasks[0].vision_recovery.is_none());
+    assert_eq!(projection.tasks[0].usage.cloud_images, 1);
+    let settled: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM agent_steps WHERE task_id=? AND kind='vision_settled'",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    assert_eq!(settled, 1);
+    assert!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .is_err()
+    );
+    assert_eq!(server.calls.load(Ordering::SeqCst), calls);
+    engine
+        .request(AgentRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            project_id: project.clone(),
+            command: TaskCommand::ResumeTask {
+                task_id: task.id.clone(),
+                budget: task.budget.clone(),
+            },
+        })
+        .await
+        .unwrap();
+    engine.run(&task.id).await.unwrap();
+    assert_eq!(server.calls.load(Ordering::SeqCst), calls + 1); // 只新增下一轮文字，不重复发图。
+    let observations: i64 = sqlx::query_scalar("SELECT count(*) FROM photo_observations")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(observations, 1);
+    assert_eq!(db.get(&project).await.unwrap().revision, before.revision);
+    assert_eq!(
+        db.get(&project).await.unwrap().photos[0].status,
+        before.photos[0].status
+    );
+}
+
+#[tokio::test]
+async fn hosted_recovery_rejects_other_accounts_projects_revoked_consent_and_changed_photos_before_get()
+ {
+    use between_frames_lib::agent::runtime::AgentEngine;
+    let (_root, db, server, vault, project, task) = recovery_fixture(true).await;
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap()),
+    );
+    let polls = server.polls.load(Ordering::SeqCst);
+    vault.write("", &session("user-b")).unwrap();
+    assert_eq!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .unwrap_err()
+            .code,
+        "AUTH_CHANGED"
+    );
+    vault.write("", &session("user-a")).unwrap();
+    assert_eq!(
+        engine
+            .query_vision_result("another-project", &task.id)
+            .await
+            .unwrap_err()
+            .code,
+        "PERMISSION_DENIED"
+    );
+    let photo = db.get(&project).await.unwrap().photos[0].id.clone();
+    let hash: String = sqlx::query_scalar("SELECT content_sha256 FROM photos WHERE id=?")
+        .bind(&photo)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE photos SET content_sha256='changed' WHERE id=?")
+        .bind(&photo)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .unwrap_err()
+            .code,
+        "REVISION_CONFLICT"
+    );
+    sqlx::query("UPDATE photos SET content_sha256=? WHERE id=?")
+        .bind(hash)
+        .bind(photo)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    engine
+        .set_consent(ConsentRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            project_id: project.clone(),
+            mode: "deny".into(),
+            provider: "openai".into(),
+            quota: 0,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .unwrap_err()
+            .code,
+        "PERMISSION_DENIED"
+    );
+    assert_eq!(server.polls.load(Ordering::SeqCst), polls);
+    assert_eq!(server.calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn hosted_recovery_keeps_unknown_expired_and_invalid_metering_unsettled_without_reupload() {
+    use between_frames_lib::agent::runtime::AgentEngine;
+    let (_root, db, server, vault, project, task) = recovery_fixture(true).await;
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+    );
+    for (mode, state) in [(9, Some("unknown")), (13, Some("expired")), (14, None)] {
+        server.mode.store(mode, Ordering::SeqCst);
+        let result = engine.query_vision_result(&project, &task.id).await;
+        if let Some(state) = state {
+            assert_eq!(result.unwrap().state, state);
+        } else {
+            assert_eq!(result.unwrap_err().code, "AI_RESULT_UNKNOWN");
+        }
+    }
+    let settled: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM agent_steps WHERE task_id=? AND kind='vision_settled'",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    assert_eq!(settled, 0);
+    assert_eq!(server.calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn interrupted_hosted_upload_can_be_queried_after_restart_without_resubmission() {
+    use between_frames_lib::{
+        agent::{self, runtime::AgentEngine},
+        command_handler::CommandHandler,
+        db::Store,
+    };
+    let (root, db, server, vault, project, task) = recovery_fixture(false).await;
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap()),
+    );
+    let task_id = task.id.clone();
+    let running = tokio::spawn(async move { engine.run(&task_id).await });
+    for _ in 0..100 {
+        if server.calls.load(Ordering::SeqCst) >= 2 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert_eq!(server.calls.load(Ordering::SeqCst), 2);
+    // 图片已经接收、回执轮询仍在等待时模拟进程退出。
+    running.abort();
+    assert!(running.await.unwrap_err().is_cancelled());
+    db.pool.close().await;
+    let db = Store::open(&root.path().join("recovery.sqlite"))
+        .await
+        .unwrap();
+    CommandHandler::new(&db).recover_agents().await.unwrap();
+    let projection = agent::projection(&db, &project).await.unwrap();
+    assert_eq!(projection.tasks[0].state, "interrupted");
+    assert!(projection.tasks[0].vision_recovery.is_some());
+    assert_eq!(server.calls.load(Ordering::SeqCst), 2);
+    server.mode.store(6, Ordering::SeqCst);
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+    );
+    assert_eq!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .unwrap()
+            .state,
+        "completed"
+    );
+    assert_eq!(server.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(
+        agent::projection(&db, &project).await.unwrap().tasks[0].state,
+        "interrupted"
+    );
+}
+
+#[tokio::test]
+async fn altered_hosted_receipt_cannot_redirect_a_recovery_lookup() {
+    use between_frames_lib::agent::runtime::AgentEngine;
+    let (_root, db, server, vault, project, task) = recovery_fixture(true).await;
+    let raw: String = sqlx::query_scalar(
+        "SELECT body_json FROM agent_steps WHERE task_id=? AND kind='vision_reserved'",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let mut changed: Value = serde_json::from_str(&raw).unwrap();
+    changed["hostedRequest"]["requestId"] = json!(uuid::Uuid::new_v4().to_string());
+    assert!(
+        sqlx::query(
+            "UPDATE agent_steps SET body_json=? WHERE task_id=? AND kind='vision_reserved'"
+        )
+        .bind(changed.to_string())
+        .bind(&task.id)
+        .execute(&db.pool)
+        .await
+        .is_err()
+    );
+    // 不移除 append-only 保护；模拟额外注入伪造记录，检查点仍必须拒绝。
+    sqlx::query("INSERT INTO agent_steps(task_id,kind,body_json,summary,created_at) SELECT task_id,kind,?,'forged receipt',created_at FROM agent_steps WHERE task_id=? AND kind='vision_reserved' LIMIT 1")
+        .bind(changed.to_string()).bind(&task.id).execute(&db.pool).await.unwrap();
+    let polls = server.polls.load(Ordering::SeqCst);
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+    );
+    assert_eq!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .unwrap_err()
+            .code,
+        "RECOVERY_ERROR"
+    );
+    assert_eq!(server.polls.load(Ordering::SeqCst), polls);
+    assert_eq!(server.calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn queue_permission_is_explicit_frozen_and_absent_from_legacy_tasks() {
+    use between_frames_lib::agent::runtime::AgentEngine;
+    let (root, db, server, vault, project, task) = recovery_fixture_with_options(true, true).await;
+    assert_eq!(server.opt_ins.load(Ordering::SeqCst), 1);
+    let raw: String = sqlx::query_scalar(
+        "SELECT body FROM task_messages WHERE task_id=? AND kind='conversation_context'",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&raw).unwrap()["allowQueuedRecovery"],
+        true
+    );
+    let raw: String = sqlx::query_scalar(
+        "SELECT body_json FROM agent_steps WHERE task_id=? AND kind='vision_reserved'",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&raw).unwrap()["hostedRequest"]["allowQueuedRecovery"],
+        true
+    );
+    db.pool.close().await;
+    let db = between_frames_lib::db::Store::open(&root.path().join("recovery.sqlite"))
+        .await
+        .unwrap();
+    // 服务后来关闭不影响只读查询原回执，也不会再次发送图片。
+    server.queue.store(false, Ordering::SeqCst);
+    server.mode.store(6, Ordering::SeqCst);
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+    );
+    assert_eq!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .unwrap()
+            .state,
+        "completed"
+    );
+    assert_eq!(server.opt_ins.load(Ordering::SeqCst), 1);
+    let (_root, db, server, vault, _project, task) = recovery_fixture(false).await;
+    server.queue.store(true, Ordering::SeqCst);
+    let engine = AgentEngine::hosted(
+        db,
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+    );
+    assert!(engine.run(&task.id).await.is_err());
+    assert_eq!(server.opt_ins.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn queue_capability_change_is_rejected_before_delegation_or_image_reservation() {
+    use between_frames_lib::agent::runtime::AgentEngine;
+    let (_root, db, server, vault, project, task) =
+        recovery_fixture_with_options(false, true).await;
+    server.queue.store(false, Ordering::SeqCst);
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+    );
+    let error = engine
+        .request(AgentRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            project_id: project,
+            command: TaskCommand::StartConversation {
+                allow_queued_recovery: true,
+                expected_account_id: Some("user-a".into()),
+                goal: "不应开始".into(),
+                selected_photo_ids: vec![],
+                focus_photo_ids: vec![],
+                target_count: 1,
+                budget: task.budget.clone(),
+                consent_id: task.consent_id,
+                source_board: None,
+                continuation: None,
+            },
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "AI_QUEUE_NOT_AVAILABLE");
+    assert_eq!(
+        engine.run(&task.id).await.unwrap_err().code,
+        "AI_QUEUE_NOT_AVAILABLE"
+    );
+    let reserved: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM agent_steps WHERE task_id=? AND kind='vision_reserved'",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    assert_eq!(reserved, 0);
+    assert_eq!(server.opt_ins.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn local_cancellation_records_confirmed_already_sent_or_unconfirmed_without_reuploading() {
+    use between_frames_lib::agent::{self, runtime::AgentEngine};
+    for (mode, expected) in [(0, "cancelled"), (1, "already_sent"), (2, "unconfirmed")] {
+        let (_root, db, server, vault, project, task) =
+            recovery_fixture_with_options(true, true).await;
+        server.cancel_mode.store(mode, Ordering::SeqCst);
+        let engine = AgentEngine::hosted(
+            db.clone(),
+            Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+        );
+        let request = AgentRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            project_id: project.clone(),
+            command: TaskCommand::CancelTask {
+                task_id: task.id.clone(),
+            },
+        };
+        assert_eq!(
+            engine.request(request.clone()).await.unwrap().state,
+            "cancelled"
+        );
+        assert_eq!(engine.request(request).await.unwrap().state, "cancelled");
+        let view = agent::projection(&db, &project).await.unwrap();
+        assert_eq!(view.tasks[0].queue_cancellation.as_deref(), Some(expected));
+        assert_eq!(server.cancels.load(Ordering::SeqCst), 1);
+        assert_eq!(server.opt_ins.load(Ordering::SeqCst), 1);
+        assert_eq!(server.calls.load(Ordering::SeqCst), 2);
+    }
 }

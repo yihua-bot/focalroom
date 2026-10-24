@@ -124,6 +124,17 @@ impl PolicyGate {
         task: &Task,
         call: &ToolCall,
     ) -> Result<()> {
+        if task.state != "running" {
+            return Err(AppError::new("CANCELLED", "任务已暂停或停止"));
+        }
+        Self::validate_scope(tx, task, call).await
+    }
+    /// 只读回执查询复用范围/权限检查；不授予暂停任务执行工具的权限。
+    pub(crate) async fn validate_scope(
+        tx: &mut Transaction<'_, Sqlite>,
+        task: &Task,
+        call: &ToolCall,
+    ) -> Result<()> {
         ToolRegistry::validate(call).map_err(|error| {
             if call.name == "list_photos" && error.code == "VALIDATION_ERROR" {
                 AppError::new("VALIDATION_ERROR", format!("list_photos 参数不合法；status 仅允许 keep/reject/undecided 或 JSON null。首个分页可用以下完整参数：{}。null 不加引号，不能写成字符串。", json!({"project_id":task.project_id,"status":null,"limit":100,"cursor":null})))
@@ -132,9 +143,6 @@ impl PolicyGate {
         super::task_scope::require_tool(tx, task, &call.name).await?;
         if call.args["project_id"] != task.project_id {
             return Err(AppError::new("PERMISSION_DENIED", "工具不能访问其他项目"));
-        }
-        if task.state != "running" {
-            return Err(AppError::new("CANCELLED", "任务已暂停或停止"));
         }
         let active: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM projects WHERE id=? AND deleted_at IS NULL")

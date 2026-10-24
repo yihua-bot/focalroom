@@ -39,6 +39,7 @@ mod tools;
 pub mod types;
 pub mod upload_compress;
 pub mod vision;
+mod vision_recovery;
 pub(crate) use drafts::human as apply_human_draft;
 
 use crate::{command_handler::CommandHandler, domain::Result};
@@ -66,12 +67,9 @@ impl CommandHandler<'_> {
         &self,
         task: &str,
         call: &ToolCall,
-        images: u32,
-        cost: u32,
-        cost_limit: u32,
-        rate: pricing::RateCard,
+        reservation: cloud::VisionReservation,
     ) -> Result<(i64, u64)> {
-        cloud::reserve(self.store, task, call, images, cost, cost_limit, rate).await
+        cloud::reserve(self.store, task, call, reservation).await
     }
     pub(crate) async fn settle_vision(
         &self,

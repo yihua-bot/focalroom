@@ -12,7 +12,22 @@ use std::collections::HashMap;
 
 #[path = "canvas_merge.rs"]
 pub(crate) mod merge;
-pub use merge::{ApplyEditorialChanges, EditorialSelection, MergeSimulation};
+pub use merge::{
+    ApplyEditorialChanges, EditorialResolution, EditorialSelection, MergeSimulation,
+    ResolutionChoice,
+};
+#[path = "canvas_review_decisions.rs"]
+pub(crate) mod decisions;
+pub use decisions::RecordEditorialDecision;
+#[path = "canvas_editorial_history.rs"]
+pub(crate) mod history;
+pub use history::{EditorialHistoryEntry, RevertEditorialChanges, RevertSimulation};
+#[path = "canvas_editorial_comments.rs"]
+pub(crate) mod comments;
+pub use comments::{AddEditorialComment, EditorialDiscussion, ResolveEditorialThread};
+#[path = "canvas_editorial_context.rs"]
+pub(crate) mod revision_context;
+pub use revision_context::RevisionContextPage;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +41,10 @@ pub struct CanvasChange {
     pub after: Option<CanvasNode>,
     pub kinds: Vec<String>,
     pub required_dependencies: Vec<String>,
+    pub decision: String,
+    pub fields: Vec<String>,
+    pub accepted_fields: Vec<String>,
+    pub field_decisions: std::collections::BTreeMap<String, String>,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +58,7 @@ pub struct CanvasComparison {
     pub changes: Vec<CanvasChange>,
     pub photo_sources: Vec<CanvasPhotoSource>,
     pub draft_nodes: Vec<CanvasNode>,
+    pub current_source_nodes: Vec<CanvasNode>,
 }
 fn geometry(node: &CanvasNode, origins: &HashMap<String, String>) -> Result<Value> {
     let children = node
@@ -87,6 +107,23 @@ pub(crate) async fn comparison_tx(
     } else {
         None
     };
+    let current_source_nodes: Vec<CanvasNode> = if let Some((id, _)) = &source {
+        sqlx::query_as("SELECT n.* FROM canvas_nodes n JOIN boards b ON b.id=n.board_id WHERE n.board_id=? AND b.project_id=? AND n.visible=1 ORDER BY n.z_order,n.id LIMIT 5001")
+            .bind(id).bind(project).fetch_all(&mut **tx).await?
+    } else {
+        Vec::new()
+    };
+    if current_source_nodes.len() > 5000 {
+        return Err(AppError::new(
+            "VALIDATION_ERROR",
+            "画布内容过多，请分成较小的方案",
+        ));
+    }
+    let decisions = if let Some((id, _)) = &source {
+        decisions::decisions_tx(tx, project, id, board, draft.revision).await?
+    } else {
+        decisions::DecisionProjection::default()
+    };
     let origins:Vec<(String,String,String)>=sqlx::query_as("SELECT node_id,source_node_id,base_json FROM board_draft_node_origins WHERE board_id=? ORDER BY rowid")
             .bind(board).fetch_all(&mut **tx).await?;
     let source_map: HashMap<String, String> = origins
@@ -130,7 +167,60 @@ pub(crate) async fn comparison_tx(
         let id = fingerprint(
             &json!({"board":board,"revision":draft.revision,"node":node.id,"before":before,"after":node}),
         );
+        let fields = if let Some(before) = before {
+            merge::changed_fields(before, node, &source_map)?
+        } else {
+            Vec::new()
+        };
+        let default_decision = decisions
+            .states
+            .get(&id)
+            .cloned()
+            .unwrap_or_else(|| "pending".into());
+        let mut field_decisions = std::collections::BTreeMap::new();
+        for field in &fields {
+            let accepted = default_decision == "accepted"
+                || decisions
+                    .accepted_fields
+                    .get(&id)
+                    .is_some_and(|set| set.contains(field));
+            let state = if accepted {
+                "accepted".into()
+            } else {
+                decisions
+                    .field_decisions
+                    .get(&id)
+                    .and_then(|states| states.get(field))
+                    .cloned()
+                    .unwrap_or_else(|| default_decision.clone())
+            };
+            field_decisions.insert(field.clone(), state);
+        }
+        let accepted_fields: Vec<String> = fields
+            .iter()
+            .filter(|field| {
+                field_decisions
+                    .get(*field)
+                    .is_some_and(|state| state == "accepted")
+            })
+            .cloned()
+            .collect();
+        let decision = if !fields.is_empty() && accepted_fields.len() == fields.len() {
+            "accepted".into()
+        } else if !accepted_fields.is_empty() {
+            "partial".into()
+        } else if !fields.is_empty() && field_decisions.values().all(|state| state == "rejected") {
+            "rejected".into()
+        } else if !fields.is_empty() && field_decisions.values().all(|state| state == "deferred") {
+            "deferred".into()
+        } else {
+            default_decision
+        };
         changes.push(CanvasChange {
+            fields,
+            accepted_fields,
+            field_decisions,
+            decision,
             id,
             node_id: node.id.clone(),
             source_node_id: source_map.get(&node.id).cloned(),
@@ -196,6 +286,7 @@ pub(crate) async fn comparison_tx(
     let assets: Vec<_> = baseline_nodes
         .iter()
         .chain(nodes.iter())
+        .chain(current_source_nodes.iter())
         .filter_map(|n| n.asset_id.as_ref())
         .collect();
     let photo_sources=sqlx::query_as("SELECT a.id AS asset_id,MIN(p.thumbnail_path) AS thumbnail_path FROM source_assets a JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=a.project_id WHERE a.project_id=? AND a.id IN(SELECT value FROM json_each(?)) GROUP BY a.id")
@@ -213,6 +304,7 @@ pub(crate) async fn comparison_tx(
         changes,
         photo_sources,
         draft_nodes: nodes,
+        current_source_nodes,
     })
 }
 

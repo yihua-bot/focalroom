@@ -4,10 +4,23 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub fn prepare(root: &Path, profile: &str) -> Result<()> {
-    if !matches!(profile, "standard" | "m1-500") {
+    if !matches!(profile, "standard" | "m1-500" | "hosted-ai") {
         return Err("未知测试素材配置".into());
     }
     if std::fs::read_dir(root.join("fixtures"))?.next().is_some() {
+        return Ok(());
+    }
+    if profile == "hosted-ai" {
+        // 本机网关组合测试仅用生成色块，不引用示例摄影素材。
+        image::RgbImage::from_pixel(32, 24, image::Rgb([180, 20, 30]))
+            .save(root.join("fixtures/generated-color.jpg"))?;
+        std::fs::write(
+            root.join("fixture-info.json"),
+            serde_json::to_vec(&json!({
+                "profile":profile,"count":1,"jpeg":1,"png":0,"dimensions":"32x24",
+                "provenance":"generated solid color; protocol fixture, not photography quality evidence"
+            }))?,
+        )?;
         return Ok(());
     }
     let count = if profile == "m1-500" { 500 } else { 200 };

@@ -178,21 +178,20 @@ export function AppController({ repository }: { repository: ProjectRepository })
     { id: 'help', group: '帮助', label: '快捷键与帮助', run: () => setDialog({ kind: 'help' }) },
   );
   if (local) paletteCommands.push({ id: 'quick-start', group: '项目', label: '快速开始：用一句话创建项目', run: () => { setArchived(false); setDialog({ kind: 'quickStart' }); } });
-  const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector" aria-label={ui.panel === 'photo' ? zh.editorTitle : zh.memory}>
-    <h2 className="editor-title">{ui.panel === 'photo' ? zh.editorTitle : zh.memory}</h2>
-    {ui.panel === 'photo' ? (active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending || readOnly} onDecide={decide}
+  const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector" aria-label={zh.editorTitle}>
+    <h2 className="editor-title">{zh.editorTitle}</h2>
+    {active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending || readOnly} onDecide={decide}
       onRate={(id, rating) => act(() => repository.rate(project.id, [id], rating))}
       onBookMark={local && project ? (id, mark) => act(() => repository.setBookMark(project.id, id, mark), mark === 'spread' ? '已设为跨页大图' : mark === 'full' ? '已设为整页图' : '已清除册页标记') : undefined}
       draft={drafts[active.id]} onDraft={note => setDrafts(previous => ({ ...previous, [active.id]: note }))}
       onNote={(id, note) => act(() => repository.note(project.id, id, note), zh.savedNote, false, () => setDrafts(previous => { const next = { ...previous }; delete next[id]; return next; }))}
       onRelink={local ? () => { act(async () => (await repository.relink(project.id, active.id)) ?? project); } : undefined}
       onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
-      : <EmptyState title="选择一张照片" hint="点击网格，开始检查画面。" />)
-      : <PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}
+      : <EmptyState title="选择一张照片" hint="点击网格，开始检查画面。" />}
   </aside> : undefined;
-  return <><AppShell inspector={panel} assistant={ui.panel !== 'photo'} collapsed={!ui.sidebarOpen} nav={<SideNav cloudAuth={local ? repository.cloudAuth : undefined} project={route.page === 'workspace' ? project : undefined} page={route.page} view={ui.view} local={local} authority={sharing.data?.authority}
+  return <><AppShell inspector={panel} collapsed={!ui.sidebarOpen} nav={<SideNav cloudAuth={local ? repository.cloudAuth : undefined} project={route.page === 'workspace' ? project : undefined} page={route.page} view={ui.view} local={local} authority={sharing.data?.authority}
     diagnostics={local ? repository.diagnostics : undefined} onView={ui.setView}
-    onProjects={() => { setArchived(false); navigate(null); }} onMemory={() => ui.setPanel('memory')} onHelp={() => setDialog({ kind: 'help' })} />}>
+    onProjects={() => { setArchived(false); navigate(null); }} onHelp={() => setDialog({ kind: 'help' })} />}>
     {query.isPending ? <p role="status" className="page-message">正在加载项目…</p> : query.isError ? <EmptyState title="项目加载失败" hint={query.error.message} action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />
       : route.page === 'projects' ? <ProjectList projects={projects} onOpen={openProject} onCreate={() => { setArchived(false); setPendingGoal(null); setDialog({ kind: 'create' }); }} onQuickStart={local ? () => { setArchived(false); setDialog({ kind: 'quickStart' }); } : undefined} local={local} archived={archived}
         onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })}
@@ -201,7 +200,9 @@ export function AppController({ repository }: { repository: ProjectRepository })
         onEditorVersions={local && repository.editorVersions ? () => setDialog({ kind: 'editorVersions' }) : undefined} onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCopyPlan={copyPlan} onAICompare={aiCompare} onAIOrder={aiOrder} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
         : <EmptyState title={local ? '项目未找到' : '项目未找到'} hint={local ? '项目可能已归档，请返回项目列表查看。' : '请返回项目列表查看。'} action={<Button onClick={() => navigate(null)}>{zh.projects}</Button>} />}
   </AppShell>
-    {ui.aiOpen && project && route.page === 'workspace' && <AISelectionDrawer projectTitle={project.title} onClose={ui.closeAgent}>
+    {ui.aiOpen && project && route.page === 'workspace' && <AISelectionDrawer key={project.id} projectTitle={project.title} onClose={ui.closeAgent}
+      memoryOpen={ui.aiMemoryOpen} onMemoryChange={ui.setAIMemoryOpen}
+      memory={<PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}>
       {(settingsOpen, closeSettings) => <AIPanel key={project.id} repository={local ? repository : undefined} project={project} selectedIds={selectedIds}
         initialGoal={pendingGoal?.projectId === project.id ? pendingGoal.goal : project.brief}
         initialCount={pendingGoal?.projectId === project.id ? pendingGoal.count : Math.min(parseGoal(project.brief).count, project.photos.length || 100)}

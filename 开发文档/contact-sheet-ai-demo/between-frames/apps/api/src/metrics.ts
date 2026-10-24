@@ -77,6 +77,16 @@ export class MetricsRegistry {
     } catch {
       lines.push("focalroom_agent_metrics_error 1");
     }
+    try {
+      const queued=await pool.query("SELECT phase,count(*)::int AS n,coalesce(sum(octet_length(payload)),0)::bigint AS bytes FROM fr_ai_jobs GROUP BY phase");
+      for(const phase of ['QUEUED','DISPATCHING','DONE','UNKNOWN']) {
+        const row=queued.rows.find(value=>value.phase===phase);
+        lines.push(`focalroom_hosted_ai_jobs{phase="${phase}"} ${row?.n ?? 0}`);
+      }
+      lines.push(`focalroom_hosted_ai_queued_input_bytes ${queued.rows.find(value=>value.phase==='QUEUED')?.bytes ?? 0}`);
+      const age=await pool.query("SELECT coalesce(greatest(extract(epoch FROM now()-min(created_at)),0),0)::int AS seconds FROM fr_ai_jobs WHERE phase='QUEUED'");
+      lines.push(`focalroom_hosted_ai_oldest_queued_seconds ${age.rows[0].seconds}`);
+    }catch {lines.push('focalroom_hosted_ai_metrics_error 1');}
     return lines;
   }
 
@@ -114,6 +124,10 @@ export class MetricsRegistry {
     lines.push("# TYPE focalroom_agent_queue_depth gauge");
     lines.push("# HELP focalroom_agent_cost_minor_usd_total 模型费用累计（美分，估算）");
     lines.push("# TYPE focalroom_agent_cost_minor_usd_total counter");
+    lines.push('# HELP focalroom_hosted_ai_jobs 托管分析队列状态计数（不含账户标识）');
+    lines.push('# TYPE focalroom_hosted_ai_jobs gauge');
+    lines.push('# TYPE focalroom_hosted_ai_queued_input_bytes gauge');
+    lines.push('# TYPE focalroom_hosted_ai_oldest_queued_seconds gauge');
     lines.push(...(await this.derived(pool)));
     lines.push(`focalroom_metrics_uptime_seconds ${Math.floor((Date.now() - this.startedAt) / 1000)}`);
     return `${lines.join("\n")}\n`;

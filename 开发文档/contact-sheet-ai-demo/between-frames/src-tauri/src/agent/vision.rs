@@ -2,7 +2,8 @@ use super::{consent, openai::OpenAiProvider, types::*};
 use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 
-pub const VISION_PROMPT_VERSION: &str = "m3-vision-3";
+// 观察缓存身份包含像素准备方式，不能复用旧 1400px 或未标记的 512px 观察。
+pub const VISION_PROMPT_VERSION: &str = "m3-vision-4-upload512-q75";
 
 /// 一次视觉工具调用的预取结果：缓存命中零上传；未命中部分经 HTTP 观察取得。
 /// 预取只持读事务与网络，写事务在 tools::execute 内完成配额消耗与观察落库。
@@ -132,6 +133,14 @@ pub(crate) async fn prefetch(
             cache_version,
         }));
     }
+    let mut read = db.pool.begin().await?;
+    let allow_queued_recovery = crate::focal_chat::load(&mut read, &task.id)
+        .await?
+        .is_some_and(|c| c.allow_queued_recovery);
+    read.commit().await?;
+    if allow_queued_recovery {
+        provider.validate_hosted_options(true).await?;
+    }
     super::budget::vision_limits(task, missing.len() as u32, 0, u32::MAX)?;
     // 授权在预取阶段只读校验；配额扣减在写事务，同项目唯一执行任务避免并发超用。
     let mut read = db.pool.begin().await?;
@@ -178,19 +187,92 @@ pub(crate) async fn prefetch(
     let output_limit =
         super::budget::vision_output_limit(task, uploaded, input_bound, cost_limit, rate)?;
     let upper_cost = rate.vision_reservation(uploaded, input_bound, output_limit);
+    let body = provider.observation_body(&brief, &question, &images, output_limit)?;
+    let receipt = provider
+        .is_hosted()
+        .then(|| super::vision_recovery::VisionReceipt {
+            allow_queued_recovery,
+            request_id: uuid::Uuid::new_v4().to_string(),
+            identity: provider.identity(),
+            body_sha256: crate::command_audit::fingerprint(&body),
+            photo_hashes: scoped.iter().map(|p| (p.0.clone(), p.1.clone())).collect(),
+            output_limit,
+            prefetch: VisionPrefetch {
+                kind: call.name.clone(),
+                requested: ids.clone(),
+                observations: cached.clone(),
+                uploaded,
+                tokens: 0,
+                consent_id: 0,
+                cost_minor_usd: upper_cost,
+                model_id: model_id.into(),
+                cache_version: cache_version.clone(),
+            },
+        });
     let handler = crate::command_handler::CommandHandler::new(db);
     let (consent_id, remaining) = handler
-        .reserve_vision(&task.id, call, uploaded, upper_cost, cost_limit, rate)
+        .reserve_vision(
+            &task.id,
+            call,
+            super::cloud::VisionReservation {
+                images: uploaded,
+                cost: upper_cost,
+                cost_limit,
+                rate,
+                receipt: receipt.clone(),
+            },
+        )
         .await?;
     let started = std::time::Instant::now();
-    let result = tokio::time::timeout(
-        std::time::Duration::from_millis(remaining),
-        provider.observe(&brief, &question, &images, output_limit),
-    )
+    let result = tokio::time::timeout(std::time::Duration::from_millis(remaining), async {
+        match &receipt {
+            Some(receipt) => {
+                provider
+                    .observe_reserved(
+                        &body,
+                        &receipt.request_id,
+                        receipt.allow_queued_recovery,
+                        super::vision_recovery::before_dispatch(
+                            db,
+                            &task.id,
+                            call,
+                            &receipt.request_id,
+                        ),
+                    )
+                    .await
+            }
+            None => {
+                provider
+                    .observe(&brief, &question, &images, output_limit)
+                    .await
+            }
+        }
+    })
     .await;
     let (mut observation, tokens) = match result {
         Ok(Ok(value)) => value,
         other => {
+            if receipt.is_some() {
+                let error = match other {
+                    Ok(Err(error)) => error,
+                    _ => AppError::new(
+                        "AI_RESULT_UNKNOWN",
+                        "照片分析仍未确认，请查询处理结果，勿重复发送",
+                    ),
+                };
+                super::cloud::transport_failed(
+                    db,
+                    &task.id,
+                    call,
+                    &error,
+                    started.elapsed().as_millis() as u64,
+                )
+                .await?;
+                return Err(AppError::new(
+                    "AI_RESULT_UNKNOWN",
+                    "照片分析结果尚未确认，请查询处理结果，勿重复发送",
+                ));
+            }
             handler
                 .settle_vision(
                     &task.id,

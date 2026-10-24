@@ -1,0 +1,28 @@
+{
+  "checkedAtAsiaShanghai": "2026-10-23T21:42:23.063529+08:00",
+  "head": "79ee12a35eeeb30a63742373dd1a49132b5f0b52",
+  "includesUncommittedFixes": true,
+  "rustDefault": {
+    "passed": 318,
+    "failed": 0,
+    "ignored": 19
+  },
+  "rustTargeted": {
+    "passed": 54,
+    "failed": 0,
+    "ignored": 3
+  },
+  "clippy": "passed",
+  "productionApiCalls": 0,
+  "realModelCalls": 0,
+  "realPhotoUploads": 0,
+  "committed": false,
+  "deployed": false,
+  "releasedAppContainsLocalFixes": false,
+  "sourceSha256": {
+    "src-tauri/src/agent/upload_compress.rs": "9c58d9c3933f763c8543f4dc9b2296fc84a90d99c0bd746fe6980317aa4abfae",
+    "src-tauri/src/agent/vision.rs": "004a480cc001c7273c3526880afe083ff6797de2b169c35dbb10765c2ca23857",
+    "src-tauri/tests/agent_vision.rs": "99815dcdc590ae7c7a41a79b7b638ce82663982a4987bdf7352bc7707f238c69",
+    "src-tauri/tests/focal_real_acceptance.rs": "fc3751e3f4aeb0a3ad5d1a4cbc640be7dcb8ecb6ef84f1e032df438d2b10d922"
+  }
+}

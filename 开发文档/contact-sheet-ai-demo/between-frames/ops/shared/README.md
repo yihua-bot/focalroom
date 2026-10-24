@@ -1,5 +1,9 @@
 # 独立共享服务交付与上线核对
 
+2026-10-24：可选托管AI恢复队列见 `../../../docs/ADR/0047-encrypted-hosted-ai-queue.md`。默认 `FOCALROOM_AI_QUEUE_ENABLED=0`；其余私有配置为 `FOCALROOM_AI_QUEUE_ACTIVE_KEY_ID` 和JSON密钥表 `FOCALROOM_AI_QUEUE_KEYS`，每个密钥须为32字节随机值的标准Base64。不要使用模型API Key或登录密钥代替，不提交实际值；启用前须审阅0022、客户端许可与留存边界，本轮未部署。
+
+恢复工具核验后会隔离未结束AI任务、清除队列正文并保留预留，不自动调用模型或退款。恢复失败保持API停止；切换前核对用量、旧会话与密钥，源和恢复目标不得同时提供AI服务。备份/WAL可能仍保留密文，10分钟是可执行窗口，不是所有物理副本删除承诺。
+
 这里包含部署草案与本地演练记录，不是腾讯云部署证明。2026-10-18 本机 Docker 29.2.1 可用，已完成独立容器备份/恢复演练，以及真实 API/Web 业务镜像的权限、迁移、启动和代理验收；后者见 `../../../docs/V2-M4-OTP-DEPLOYMENT-FIX-TEST-REPORT.md`。实际 PostgreSQL 为 16.13，不能代替 Compose 中 16.14 的目标环境验收；不可从本地结果推断生产通过。
 
 验证码修复另见 `../../../docs/V2-M4-OTP-DEPLOYMENT-PLAN.md`。API 构建规范源文件与祖先目录权限，以非 root 用户实际导入；Web 静态资源可读。邮件配置由 `FOCALROOM_RESEND_API_KEY` / `FOCALROOM_EMAIL_FROM` 注入，未配置时返回 503，不声称已发送。已用独立数据库验证迁移角色和应用角色，以及 Nginx 的 HTML/PNG 200、鉴权代理 401；真实邮件与公网 HTTPS 仍待验收。

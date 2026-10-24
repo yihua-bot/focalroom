@@ -8,10 +8,13 @@ const rectangle = { x: coordinate, y: coordinate, width: z.number().positive().m
 const board = { boardId: id };
 const nodeIds = z.array(id).min(1).max(300).refine(ids => new Set(ids).size === ids.length);
 const color = z.string().max(100).optional();
+export const editorialField = z.enum(['position','size','rotation','order','content','style','children','rendition']);
 const action = <T extends string, S extends z.ZodRawShape>(type: T, shape: S) => z.strictObject({ type: z.literal(type), data: z.strictObject(shape) });
 export const editorialSelectionSchema = z.strictObject({
   draftId: id, draftRevision: z.number().int().positive(), targetBoardId: id,
   expectedTargetRevision: z.number().int().positive(), selectedChangeIds: z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(300),
+  resolutions: z.array(z.strictObject({ changeId: z.string().regex(/^[a-f0-9]{64}$/), field: editorialField, choice: z.enum(['keep_current','use_draft']) })).max(2400).optional(),
+  fieldsByChange: z.record(z.string().regex(/^[a-f0-9]{64}$/), z.array(editorialField).min(1).max(8)).optional(),
 });
 export const canvasActionSchema = z.discriminatedUnion('type', [
   action('CreateBoard', { title: z.string().trim().min(1).max(200) }),
@@ -29,6 +32,10 @@ export const canvasActionSchema = z.discriminatedUnion('type', [
   action('SetNodeLocked', { ...board, nodeId: id, locked: z.boolean() }),
   action('Undo', board), action('Redo', board), action('AdoptBoard', board),
   action('ApplyEditorialChanges', { selection: editorialSelectionSchema, simulationId: z.string().regex(/^[a-f0-9]{64}$/) }),
+  action('RecordEditorialDecision', { draftId: id, draftRevision: z.number().int().positive(), changeIds: z.array(z.string().regex(/^[a-f0-9]{64}$/)).min(1).max(300), decision: z.enum(['pending','rejected','deferred']), fieldsByChange: z.record(z.string().regex(/^[a-f0-9]{64}$/), z.array(editorialField).min(1).max(8)).optional() }),
+  action('RevertEditorialChanges', { mergeCommandId: id, simulationId: z.string().regex(/^[a-f0-9]{64}$/) }),
+  action('AddEditorialComment', { draftId: id, draftRevision: z.number().int().positive(), changeId: z.string().regex(/^[a-f0-9]{64}$/).nullable(), threadId: id.nullable(), body: z.string().trim().min(1).max(2000) }),
+  action('ResolveEditorialThread', { draftId: id, draftRevision: z.number().int().positive(), threadId: id, resolved: z.boolean() }),
 ]);
 export const canvasRequestSchema = z.strictObject({
   schemaVersion: z.literal(3), commandId: id, idempotencyKey: z.string().min(1).max(160),
@@ -40,7 +47,8 @@ export const canvasRequestSchema = z.strictObject({
     if (seen.has(op.opId)) ctx.addIssue({ code: 'custom', message: 'Duplicate operation', path: ['operations', i, 'opId'] });
     seen.add(op.opId);
     if ('boardId' in op.action.data && op.action.data.boardId !== request.boardId) ctx.addIssue({ code: 'custom', message: 'Board mismatch' });
-    if (['CreateBoard', 'Undo', 'Redo', 'AdoptBoard', 'ApplyEditorialChanges'].includes(op.action.type) && request.operations.length !== 1) ctx.addIssue({ code: 'custom', message: 'Must be a single operation' });
+    if (['CreateBoard', 'Undo', 'Redo', 'AdoptBoard', 'ApplyEditorialChanges', 'RecordEditorialDecision', 'RevertEditorialChanges', 'AddEditorialComment', 'ResolveEditorialThread'].includes(op.action.type) && request.operations.length !== 1) ctx.addIssue({ code: 'custom', message: 'Must be a single operation' });
+    if ((op.action.type === 'AddEditorialComment' || op.action.type === 'ResolveEditorialThread') && (op.action.data.draftId !== request.boardId || op.action.data.draftRevision !== request.baseRevision)) ctx.addIssue({ code: 'custom', message: 'Discussion version mismatch' });
     if (op.action.type === 'ApplyEditorialChanges' && (op.action.data.selection.targetBoardId !== request.boardId || op.action.data.selection.expectedTargetRevision !== request.baseRevision)) ctx.addIssue({ code: 'custom', message: 'Preview mismatch' });
   });
 });

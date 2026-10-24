@@ -4,6 +4,11 @@ use crate::{canvas::validate_rectangle, command_handler::CommandHandler, domain}
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "canvas_merge_fields.rs"]
+mod fields;
+pub(crate) use fields::changed_fields;
+pub use fields::{AttributeConflict, EditorialResolution, ResolutionChoice};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EditorialSelection {
@@ -12,6 +17,10 @@ pub struct EditorialSelection {
     pub target_board_id: String,
     pub expected_target_revision: i64,
     pub selected_change_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub resolutions: Vec<EditorialResolution>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields_by_change: BTreeMap<String, Vec<String>>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -28,6 +37,7 @@ pub struct MergeSimulation {
     pub effective_change_ids: Vec<String>,
     pub auto_included_change_ids: Vec<String>,
     pub conflicts: Vec<String>,
+    pub attribute_conflicts: Vec<AttributeConflict>,
     pub merged_nodes: Vec<CanvasNode>,
     pub can_apply: bool,
     pub node_id_map: HashMap<String, String>,
@@ -75,7 +85,7 @@ async fn simulate_tx(
         .await?
         .ok_or_else(|| conflict("原画布已不存在"))?;
     let mut conflicts = Vec::new();
-    if target.revision != selection.expected_target_revision || comparison.source_changed {
+    if target.revision != selection.expected_target_revision {
         conflicts.push("原画布已有修改，请重新比较或生成新方案，避免覆盖已有编辑".into());
     }
     if target.owning_task_id.is_some()
@@ -97,6 +107,29 @@ async fn simulate_tx(
     if selected.iter().any(|id| !changes.contains_key(id)) {
         return Err(conflict("所选建议已变化，请重新查看并选择"));
     }
+    if selection.fields_by_change.len() > 300
+        || selection.fields_by_change.iter().any(|(id, fields)| {
+            !selected.contains(id)
+                || changes.get(id).is_none_or(|c| {
+                    c.kind != "change" || fields.iter().any(|f| !c.fields.contains(f))
+                })
+                || fields.is_empty()
+                || fields.len() > fields::FIELDS.len()
+                || fields.iter().collect::<BTreeSet<_>>().len() != fields.len()
+        })
+    {
+        return Err(conflict("所选属性已变化，请重新查看改动"));
+    }
+    let mut resolution_keys = BTreeSet::new();
+    if selection.resolutions.len() > 2400
+        || selection.resolutions.iter().any(|r| {
+            !selected.contains(&r.change_id)
+                || !fields::FIELDS.contains(&r.field.as_str())
+                || !resolution_keys.insert((&r.change_id, &r.field))
+        })
+    {
+        return Err(conflict("冲突选择已变化，请重新比较后选择"));
+    }
     let mut effective = selected.clone();
     loop {
         let old = effective.len();
@@ -109,6 +142,12 @@ async fn simulate_tx(
         if effective.len() > 300 {
             return Err(conflict("关联改动过多，请拆分方案"));
         }
+    }
+    if effective
+        .difference(&selected)
+        .any(|id| matches!(changes[id].decision.as_str(), "rejected" | "deferred"))
+    {
+        conflicts.push("关联建议已被暂缓或拒绝，请先明确选择这些改动".into());
     }
     let rows: Vec<CanvasNode> = sqlx::query_as(
         "SELECT * FROM canvas_nodes WHERE board_id=? AND visible=1 ORDER BY z_order,id LIMIT 5001",
@@ -127,6 +166,7 @@ async fn simulate_tx(
     .fetch_all(&mut **tx)
     .await?;
     let mut mapping: HashMap<String, String> = origins.into_iter().collect();
+    let mut attribute_conflicts = Vec::new();
     for node in &comparison.draft_nodes {
         mapping
             .entry(node.id.clone())
@@ -143,8 +183,14 @@ async fn simulate_tx(
                 conflicts.push("这项建议涉及已锁定的内容，请排除此项改动".into());
                 continue;
             }
-            if current.is_none() {
+            if current.is_none() && change.after.is_some() {
                 conflicts.push("这项建议涉及已移除的内容，请重新生成方案".into());
+                continue;
+            }
+            if let Some(current) = current
+                && (current.asset_id != before.asset_id || current.node_type != before.node_type)
+            {
+                conflicts.push("原照片关联已变化，请重新生成方案".into());
                 continue;
             }
         }
@@ -176,9 +222,30 @@ async fn simulate_tx(
             if let Some(current) = merged.get(target_id) {
                 node.created_at = current.created_at.clone();
                 node.updated_at = current.updated_at.clone();
+                if let Some(before) = &change.before {
+                    let (result, found) = fields::merge_attributes(
+                        id,
+                        before,
+                        current,
+                        &node,
+                        &selection.resolutions,
+                        selection.fields_by_change.get(id),
+                    );
+                    node = result;
+                    attribute_conflicts.extend(found);
+                } else if geometry(current, &HashMap::new())? != geometry(&node, &HashMap::new())? {
+                    conflicts.push("新增内容与已有内容不一致，请重新比较".into());
+                    continue;
+                }
             }
             merged.insert(target_id.clone(), node);
         } else {
+            if let (Some(before), Some(current)) = (&change.before, merged.get(target_id))
+                && geometry(before, &HashMap::new())? != geometry(current, &HashMap::new())?
+            {
+                conflicts.push("准备移除的内容已有修改，请先处理这项建议".into());
+                continue;
+            }
             merged.remove(target_id);
             let anchored: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM board_annotations WHERE board_id=? AND node_id=? AND visible=1)")
                 .bind(&target.id).bind(target_id).fetch_one(&mut **tx).await?;
@@ -260,16 +327,17 @@ async fn simulate_tx(
     let effective_change_ids: Vec<_> = effective.iter().cloned().collect();
     let auto_included_change_ids = effective.difference(&selected).cloned().collect();
     let simulation_id = fingerprint(
-        &json!({"project":project,"selection":selection,"effective":effective_change_ids,"nodes":merged_nodes,"conflicts":conflicts}),
+        &json!({"project":project,"selection":selection,"effective":effective_change_ids,"nodes":merged_nodes,"conflicts":conflicts,"attributeConflicts":attribute_conflicts}),
     );
     Ok(MergeSimulation {
         simulation_id,
         draft_revision: comparison.draft.revision,
         target_revision: target.revision,
-        can_apply: !effective.is_empty() && conflicts.is_empty(),
+        can_apply: !effective.is_empty() && conflicts.is_empty() && attribute_conflicts.is_empty(),
         effective_change_ids,
         auto_included_change_ids,
         conflicts,
+        attribute_conflicts,
         merged_nodes,
         node_id_map: mapping,
     })
@@ -360,67 +428,112 @@ impl CommandHandler<'_> {
             write_node(tx, board, &id, new.as_ref()).await?;
             patches.push(json!({"id":id,"before":old,"after":new}));
         }
-        let history = json!({"draftId":cmd.selection.draft_id,"draftRevision":cmd.selection.draft_revision,"changes":simulation.effective_change_ids,"patches":patches});
-        Self::log_canvas_op(tx, project, board, "editorial_merge", &history, &history).await?;
+        if !patches.is_empty() {
+            let history = json!({"draftId":cmd.selection.draft_id,"draftRevision":cmd.selection.draft_revision,"changes":simulation.effective_change_ids,"patches":patches});
+            Self::log_canvas_op(tx, project, board, "editorial_merge", &history, &history).await?;
+        }
         Ok(())
     }
 }
 
 // 历史只包含本次变化的节点，绝不以整板快照覆盖后续无关编辑。
+pub(crate) async fn inverse_projection(
+    tx: &mut Transaction<'_, Sqlite>,
+    board: &str,
+    data: &Value,
+    redo: bool,
+) -> Result<BTreeMap<String, CanvasNode>> {
+    let patches = data["patches"]
+        .as_array()
+        .ok_or_else(|| conflict("无法恢复这次采纳"))?;
+    let rows: Vec<CanvasNode> =
+        sqlx::query_as("SELECT * FROM canvas_nodes WHERE board_id=? AND visible=1 LIMIT 5001")
+            .bind(board)
+            .fetch_all(&mut **tx)
+            .await?;
+    if rows.len() > 5000 || patches.len() > 5000 {
+        return Err(conflict("画布内容过多，请分成较小方案"));
+    }
+    let mut merged: BTreeMap<_, _> = rows.into_iter().map(|n| (n.id.clone(), n)).collect();
+    for patch in patches {
+        let id = patch["id"]
+            .as_str()
+            .ok_or_else(|| conflict("节点记录不完整"))?;
+        let expected: Option<CanvasNode> =
+            serde_json::from_value(patch[if redo { "before" } else { "after" }].clone())
+                .map_err(serialization)?;
+        let next: Option<CanvasNode> =
+            serde_json::from_value(patch[if redo { "after" } else { "before" }].clone())
+                .map_err(serialization)?;
+        let current = merged.get(id);
+        if current.is_some_and(|n| n.locked) {
+            return Err(conflict("相关内容已锁定，请先解锁再撤回"));
+        }
+        let result = match (expected.as_ref(), current, next.as_ref()) {
+            (Some(expected), Some(current), Some(next))
+                if expected.asset_id == current.asset_id
+                    && expected.node_type == current.node_type
+                    && expected.asset_id == next.asset_id
+                    && expected.node_type == next.node_type =>
+            {
+                let (merged, conflicts) =
+                    fields::merge_attributes("history", expected, current, next, &[], None);
+                if !conflicts.is_empty() {
+                    return Err(conflict("相关属性已有后续修改，请先处理冲突再撤回"));
+                }
+                Some(merged)
+            }
+            (Some(expected), Some(current), None)
+                if geometry(current, &HashMap::new())? == geometry(expected, &HashMap::new())? =>
+            {
+                None
+            }
+            (None, None, Some(next)) => Some(next.clone()),
+            _ => return Err(conflict("相关内容已变化，无法直接撤回这次采纳")),
+        };
+        if let Some(next) = result {
+            if next.id != id || next.board_id != board {
+                return Err(conflict("历史记录不属于此画布"));
+            }
+            merged.insert(id.into(), next);
+        } else {
+            merged.remove(id);
+        }
+    }
+    for node in merged.values() {
+        if child_ids(node)?.iter().any(|id| !merged.contains_key(id)) {
+            return Err(conflict("后续编辑引用了这些内容，请先处理关联内容"));
+        }
+        if !matches!(node.node_type.as_str(), "arrow" | "ink") {
+            validate_rectangle(node.x, node.y, node.width, node.height)?;
+        }
+    }
+    if !acyclic(&merged)? {
+        return Err(conflict("恢复后关联内容形成循环，无法撤回"));
+    }
+    let ids: Vec<_> = merged.keys().collect();
+    let dangling: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM board_annotations WHERE board_id=? AND visible=1 AND node_id IS NOT NULL AND node_id NOT IN (SELECT value FROM json_each(?)))")
+        .bind(board).bind(encode(&ids)?).fetch_one(&mut **tx).await?;
+    if dangling {
+        return Err(conflict("相关内容已有作品评论，请先处理评论"));
+    }
+    Ok(merged)
+}
 pub(crate) async fn restore_merge(
     tx: &mut Transaction<'_, Sqlite>,
     board: &str,
     data: &Value,
     redo: bool,
 ) -> Result<()> {
-    let patches = data["patches"]
+    let nodes = inverse_projection(tx, board, data, redo).await?;
+    for patch in data["patches"]
         .as_array()
-        .ok_or_else(|| conflict("无法恢复这次采纳"))?;
-    for patch in patches {
+        .ok_or_else(|| conflict("无法恢复这次采纳"))?
+    {
         let id = patch["id"]
             .as_str()
             .ok_or_else(|| conflict("节点记录不完整"))?;
-        let current: Option<CanvasNode> =
-            sqlx::query_as("SELECT * FROM canvas_nodes WHERE id=? AND board_id=? AND visible=1")
-                .bind(id)
-                .bind(board)
-                .fetch_optional(&mut **tx)
-                .await?;
-        let expected: Option<CanvasNode> =
-            serde_json::from_value(patch[if redo { "before" } else { "after" }].clone())
-                .map_err(serialization)?;
-        if current.as_ref().is_some_and(|n| n.locked)
-            || current
-                .as_ref()
-                .map(|n| geometry(n, &HashMap::new()))
-                .transpose()?
-                != expected
-                    .as_ref()
-                    .map(|n| geometry(n, &HashMap::new()))
-                    .transpose()?
-        {
-            return Err(conflict("相关节点已有修改或已锁定，无法恢复这次采纳"));
-        }
-        let next: Option<CanvasNode> =
-            serde_json::from_value(patch[if redo { "after" } else { "before" }].clone())
-                .map_err(serialization)?;
-        write_node(tx, board, id, next.as_ref()).await?;
-    }
-    let nodes: Vec<CanvasNode> =
-        sqlx::query_as("SELECT * FROM canvas_nodes WHERE board_id=? AND visible=1")
-            .bind(board)
-            .fetch_all(&mut **tx)
-            .await?;
-    let ids: BTreeSet<_> = nodes.iter().map(|n| n.id.as_str()).collect();
-    for node in &nodes {
-        if child_ids(node)?.iter().any(|id| !ids.contains(id.as_str())) {
-            return Err(conflict("后续编辑引用了这次采纳的节点，请先处理关联内容"));
-        }
-    }
-    let dangling_comment: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM board_annotations a JOIN canvas_nodes n ON n.id=a.node_id WHERE a.board_id=? AND a.visible=1 AND n.visible=0)")
-        .bind(board).fetch_one(&mut **tx).await?;
-    if dangling_comment {
-        return Err(conflict("相关节点已有作品评论，请先处理评论"));
+        write_node(tx, board, id, nodes.get(id)).await?;
     }
     Ok(())
 }

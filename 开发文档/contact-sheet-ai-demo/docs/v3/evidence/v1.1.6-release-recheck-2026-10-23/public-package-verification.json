@@ -1,0 +1,20 @@
+{
+  "downloadDmgSha256": "a87a4297fe3cb279ae8874e320d4ff5803c1d0a62ef3d9f601a7c160ec687a50",
+  "imageReadOnly": true,
+  "appLaunched": false,
+  "attachExit": 0,
+  "appVersion": "1.1.6",
+  "appCodesign": {
+    "exit": 0,
+    "output": ""
+  },
+  "appStaple": {
+    "exit": 0,
+    "output": "Processing: /tmp/focalroom-release-audit.RTgW45/inspect-mount/FocalRoom.app\nThe validate action worked!\n"
+  },
+  "gatekeeper": {
+    "exit": 0,
+    "output": "/tmp/focalroom-release-audit.RTgW45/inspect-mount/FocalRoom.app: accepted\nsource=Notarized Developer ID\n"
+  },
+  "detachExit": 0
+}

@@ -8,6 +8,7 @@ import { zh } from '../../app/copy';
 import { useAccount } from '../cloud-login/AccountProvider';
 import { CanvasNodes } from './CanvasNodes';
 import { EditorialReviewWorkspace } from './EditorialReviewWorkspace';
+import { EditorialHistoryDialog } from './EditorialHistoryDialog';
 import { Maximize } from 'lucide-react';
 
 import type { AnnotationInfo, BoardInfo, CanvasPhoto, CanvasRepository } from '../../domain/canvas';
@@ -28,6 +29,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const boardRequest = useUIStore(state => state.canvasBoardRequest);
   const requestedBoard = useUIStore(state => state.canvasBoardId);
   const openCanvasAgent = useUIStore(state => state.openCanvasAgent);
+  const openDraftRevision = useUIStore(state => state.openDraftRevision);
   const [boards, setBoards] = useState<BoardInfo[]>([]);
   const [activeBoard, setActiveBoard] = useState<string | null>(null);
   const [nodes, setNodes] = useState<CanvasPhoto[]>([]);
@@ -46,6 +48,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const [pending, setPending] = useState<Array<{ boardId: string }>>([]);
   const [loadedBoard, setLoadedBoard] = useState<string | null>(null);
   const [comparison, setComparison] = useState<{ boardId: string; value: Awaited<ReturnType<NonNullable<CanvasRepository['compareDraft']>>> } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [showBaseline, setShowBaseline] = useState(true);
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
@@ -431,6 +434,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
         </select>
         <Button size="small" disabled={creating || working || readOnly} onClick={() => void run(createBoard)}>新建画布</Button>
+        {board && !board.owningTaskId && repository.editorialHistory && <Button size="small" disabled={working} onClick={() => setHistoryOpen(true)}>{zh.editorialHistory}</Button>}
         {board?.owningTaskId && repository.simulateMerge && <Button size="small" disabled={working || !review} onClick={() => setReviewing(true)}>{zh.editorialOpen}</Button>}
         {board?.owningTaskId && <Button size="small" disabled={working || readOnly || Boolean(repository.compareDraft && !review)} onClick={() => setAdopting(true)}>{zh.editorialSaveIndependent}</Button>}
         <Button size="small" disabled={working || editLocked || !activeBoard || selectedPhotoIds.length === 0} onClick={() => void run(placeSelected)}>
@@ -544,6 +548,10 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
         </div>
       </div>
       {reviewing && review && board && <EditorialReviewWorkspace key={`${board.id}-${review.draftRevision}`} repository={repository} projectId={projectId} board={board} comparison={review} readOnly={readOnly}
+        onRevise={() => {
+          const revise = () => { setReviewing(false); openDraftRevision(projectId,{ kind: 'board', id: board.id, revision: review.draftRevision },board.title,zh.editorialReviseGoal,Math.max(1,(review.draftNodes ?? []).filter(n => n.nodeType === 'photo').length)); };
+          if (account) void account.requireSignIn('ai',revise); else revise();
+        }}
         onClose={() => { setReviewing(false); setPending(repository.pendingCommands?.(projectId) ?? []); }} onApplied={async target => {
           const list = await repository.listBoards(projectId);
           const snapshot = await readCanvas(repository, target);
@@ -552,6 +560,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           setSelectedNodeIds(new Set()); setReviewing(false); setNotice(zh.editorialApplied);
         }}
         onSaveIndependent={() => { setReviewing(false); setAdopting(true); }} />}
+      {historyOpen && activeBoard && <EditorialHistoryDialog key={activeBoard} repository={repository} projectId={projectId} boardId={activeBoard} readOnly={readOnly} onClose={() => { setHistoryOpen(false); setPending(repository.pendingCommands?.(projectId) ?? []); }} onChanged={loadBoards} />}
       {adopting && <Modal title={zh.editorialSaveIndependent} description={zh.editorialIndependentDescription} onClose={() => { if (!working) setAdopting(false); }}>
         <Button disabled={working || readOnly} onClick={() => void run(adoptBoard)}>{zh.editorialSaveIndependent}</Button>
         <Button disabled={working} onClick={() => setAdopting(false)}>取消</Button>

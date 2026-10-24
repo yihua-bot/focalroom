@@ -1,0 +1,21 @@
+{
+  "head": "79ee12a",
+  "uncommitted": true,
+  "scope": "Memory management consolidated into Focal AI drawer",
+  "frontendTests": 335,
+  "browserJourneys": 1,
+  "typecheck": "passed",
+  "lint": "passed",
+  "build": "passed",
+  "productionDeployed": false,
+  "reusesExistingMemoryRepository": true,
+  "sourceSha256": {
+    "src/app/AppController.tsx": "7be850146f5d8df627d44407507c85b4762031963c2c624e17780f9c3cb75114",
+    "src/app/SideNav.tsx": "4e53e565985e18d7ff935ebf39248f3cede8e44db9b0772ef3d20f2d5044d035",
+    "src/features/ai-editor/AISelectionDrawer.tsx": "fd09a6f7326871d4ca9bcc53b7554e0dbcaf31b2ab04cd7336a21b807e3393ff",
+    "src/stores/uiStore.ts": "eb032fd717304525288964f9ddc1e0c6d16d1f41e6030d6adc96e4d047f74b3b",
+    "src/styles/app.css": "88a86e1689f75d9dcf10f1d37fc9c77ea59bfbf56858f17328a9721c5e78f367",
+    "src/test/App.test.tsx": "0b86f9b0c8e3dd75c821fa8442a2d07488ac8d0f3c3d63ed768a2a49b1cbd36f",
+    "e2e/memory-controls.spec.ts": "1103fa93f4c8c93ccf08ed8d30185c673ae9f85188f3c81c696d5f8f31cc4106"
+  }
+}

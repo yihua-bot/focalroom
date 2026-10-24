@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasPhoto, EditorialChange } from '../../domain/canvas';
 import { CanvasNodes } from './CanvasNodes';
 import { Button } from '../../components/shared/Button';
 import { zh } from '../../app/copy';
 
-export function CanvasComparisonViewport({ mode, baseline, draft, merged, change, changes, onFocus, nodeIds }: {
+export function CanvasComparisonViewport({ mode, baseline, draft, merged, change, changes, onFocus, nodeIds, autoFit = false, labels }: {
   mode: 'merged' | 'split' | 'overlay'; baseline: CanvasPhoto[]; draft: CanvasPhoto[]; merged?: CanvasPhoto[];
   change?: EditorialChange; changes: EditorialChange[]; onFocus: (id: string) => void;
   nodeIds?: Record<string, string>;
+  autoFit?: boolean; labels?: { baseline: string; draft: string };
 }) {
   const [view, setView] = useState({ x: 32, y: 48, zoom: .6 });
   const surface = useRef<HTMLDivElement>(null);
@@ -22,7 +23,7 @@ export function CanvasComparisonViewport({ mode, baseline, draft, merged, change
     }, 0);
     return () => window.clearTimeout(timer);
   }, [focusNode]);
-  const fit = (nodes: CanvasPhoto[]) => {
+  const fit = useCallback((nodes: CanvasPhoto[]) => {
     const box = surface.current?.getBoundingClientRect();
     const visible = nodes.filter(n => n.nodeType !== 'arrow' && n.visible !== false);
     if (!box || !visible.length) return;
@@ -31,9 +32,14 @@ export function CanvasComparisonViewport({ mode, baseline, draft, merged, change
     const width = box.width / (mode === 'split' ? 2 : 1);
     const zoom = Math.max(.001, Math.min(2, (width - 64) / Math.max(1, right - x), (box.height - 64) / Math.max(1, bottom - y)));
     setView({ x: -(x + right) / 2 * zoom, y: -(y + bottom) / 2 * zoom, zoom });
-  };
+  }, [mode]);
+  useEffect(() => {
+    if (!autoFit) return;
+    const frame = requestAnimationFrame(() => fit([...baseline, ...draft]));
+    return () => cancelAnimationFrame(frame);
+  }, [autoFit, baseline, draft, fit]);
   const focus = () => fit([change?.after ?? change?.before].filter((n): n is CanvasPhoto => Boolean(n)));
-  const panels = mode === 'split' ? [{ label: zh.editorialOriginal, nodes: baseline }, { label: zh.editorialDraft, nodes: draft }] : [{ label: mode === 'merged' ? zh.editorialMode_merged : zh.editorialMode_overlay, nodes: mode === 'merged' ? merged ?? baseline : draft }];
+  const panels = mode === 'split' ? [{ label: labels?.baseline ?? zh.editorialOriginal, nodes: baseline }, { label: labels?.draft ?? zh.editorialDraft, nodes: draft }] : [{ label: mode === 'merged' ? zh.editorialMode_merged : zh.editorialMode_overlay, nodes: mode === 'merged' ? merged ?? baseline : draft }];
   return <section className="editorial-viewport" aria-label={zh.editorialPreview}>
     <div className="editorial-viewport-tools"><Button size="small" onClick={() => fit([...baseline, ...draft])}>{zh.editorialFit}</Button><Button size="small" disabled={!change} onClick={focus}>{zh.editorialLocate}</Button><output aria-label={zh.editorialZoom}>{Math.round(view.zoom * 100)}%</output></div>
     <div className="editorial-preview-panels" ref={surface} tabIndex={0} onKeyDown={event => { if (event.shiftKey && event.key === '1') { event.preventDefault(); fit([...baseline, ...draft]); } }}>

@@ -1,0 +1,53 @@
+{
+  "colorCorrect": true,
+  "costEstimateCeilingMinorUsd": 5,
+  "elapsedMs": 4760,
+  "endpoint": "https://team.focroom.cc/api/v2/ai/deepseek-flash-v1/responses",
+  "error": null,
+  "generatedSourceUnchanged": true,
+  "imageSource": "generated-64px-solid-color",
+  "model": "deepseek-flash",
+  "observations": {
+    "model_id": "deepseek-flash",
+    "observations": [
+      {
+        "interpretation": "在本项目中可能承担纯色色值/连通性或显示环境的验证素材，而非内容照片。",
+        "photo_id": "generated-color-1",
+        "uncertainty": "无法从画面判断是否存在极轻微的色彩偏差或压缩噪点；与项目意图的具体对应关系不明确。",
+        "visible_facts": [
+          "整个画面为均匀的单一红色，无可见物体、纹理或明暗变化。",
+          "红色在整幅图中基本一致，未见明显渐变或边缘差异。"
+        ]
+      }
+    ]
+  },
+  "preprocessingVersion": "m3-vision-4-upload512-q75",
+  "previewBytes": 741,
+  "previewCount": 1,
+  "professionalQualityAccepted": false,
+  "quotaAfter": {
+    "available": 832701,
+    "enabled": true,
+    "granted": 1000000,
+    "model": "deepseek-flash",
+    "policy": "deepseek-flash-v1",
+    "provider": "DeepSeek",
+    "reserved": 0,
+    "spent": 167299,
+    "unit": "tokens",
+    "verified": true
+  },
+  "quotaBefore": {
+    "available": 833487,
+    "enabled": true,
+    "granted": 1000000,
+    "model": "deepseek-flash",
+    "policy": "deepseek-flash-v1",
+    "provider": "DeepSeek",
+    "reserved": 0,
+    "spent": 166513,
+    "unit": "tokens",
+    "verified": true
+  },
+  "reportedTokens": 786
+}

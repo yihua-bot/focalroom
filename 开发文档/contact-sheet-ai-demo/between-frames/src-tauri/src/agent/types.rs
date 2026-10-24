@@ -65,6 +65,8 @@ pub struct AgentRequest {
 #[serde(tag = "type", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub enum TaskCommand {
     StartConversation {
+        #[serde(default, skip_serializing_if = "is_false")]
+        allow_queued_recovery: bool,
         expected_account_id: Option<String>,
         goal: String,
         selected_photo_ids: Vec<String>,
@@ -109,6 +111,9 @@ pub enum TaskCommand {
     CloseTask {
         task_id: String,
     },
+}
+pub(crate) fn is_false(value: &bool) -> bool {
+    !value
 }
 impl TaskCommand {
     pub fn task_id(&self) -> Option<&str> {
@@ -264,6 +269,8 @@ pub struct AgentProjection {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskView {
+    pub queue_cancellation: Option<String>,
+    pub vision_recovery: Option<super::vision_recovery::VisionRecoveryView>,
     pub creative_references: Vec<Value>,
     pub draft_lineage: Vec<Value>,
     pub preference_proposals: Vec<Value>,
