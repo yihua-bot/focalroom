@@ -46,7 +46,7 @@ export function QuickStartModal({ onClose, onCreate, busy = false }: {
         <label htmlFor="quick-start-input">{zh["quickstart.input.label"]}</label>
         <textarea
           id="quick-start-input"
-          rows={4}
+          rows={6}
           maxLength={1500}
           placeholder={zh["quickstart.placeholder"]}
           value={text}

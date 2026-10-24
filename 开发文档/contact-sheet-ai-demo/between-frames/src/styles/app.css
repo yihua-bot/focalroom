@@ -749,3 +749,11 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .import-banner-detail{padding:8px 16px 12px;border-top:1px solid var(--border,#2a2a40);display:flex;flex-direction:column;gap:8px}
 .import-banner-detail .muted{font-size:12px;margin:0}
 .import-dialog-actions{display:flex;gap:8px;margin-top:8px}
+
+/* 快速开始：输入框加大 */
+#quick-start-input { width: 100%; min-height: 140px; padding: 14px; font-size: 15px; line-height: 1.7; background: var(--surface, #141414); border: 1px solid var(--border, #454743); border-radius: 8px; color: var(--text, #e8e8e0); box-sizing: border-box; resize: vertical; }
+#quick-start-input::placeholder { color: var(--muted, #8a8a80); }
+#quick-start-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+.quick-start-preview { margin-top: 12px; padding: 12px 14px; background: var(--surface, #141414); border: 1px solid var(--border, #454743); border-radius: 6px; }
+.quick-start-preview p { margin: 4px 0; font-size: 13px; color: var(--text, #e8e8e0); }
+.quick-start-preview strong { color: var(--accent, #b8a9e8); }
