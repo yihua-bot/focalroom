@@ -14,10 +14,10 @@ const googleCopy = {
 } as const;
 
 const copy = {
-  zh: { title: "登录 FocalRoom", email: "邮箱", hint: "使用邮箱验证码登录。", send: "发送验证码", code: "验证码", codeTitle: "输入验证码", check: "请检查收件箱，验证码 10 分钟内有效。", verify: "验证并登录", change: "更换邮箱", busy: "处理中…", invalid: "请输入 6 位数字验证码。", resend: "重新发送", intro: "查看照片、批注和编辑提案。", review: "共享评片" },
-  en: { title: "Sign in to FocalRoom", email: "Email", hint: "Sign in with an email code.", send: "Send code", code: "Verification code", codeTitle: "Enter your code", check: "Check your inbox. The code expires in 10 minutes.", verify: "Verify and sign in", change: "Change email", busy: "Working…", invalid: "Enter a 6-digit code.", resend: "Resend code", intro: "View photos, comments and editing proposals.", review: "Shared review" },
-  ja: { title: "FocalRoom にログイン", email: "メールアドレス", hint: "メールの確認コードでログインします。", send: "コードを送信", code: "確認コード", codeTitle: "確認コードを入力", check: "受信箱をご確認ください。コードは10分間有効です。", verify: "確認してログイン", change: "メールアドレスを変更", busy: "処理中…", invalid: "6桁の数字を入力してください。", resend: "コードを再送信", intro: "写真、コメント、編集提案を確認できます。", review: "共同レビュー" },
-  ko: { title: "FocalRoom 로그인", email: "이메일", hint: "이메일 인증 코드로 로그인하세요.", send: "코드 보내기", code: "인증 코드", codeTitle: "인증 코드 입력", check: "받은편지함을 확인하세요. 코드는 10분간 유효합니다.", verify: "인증하고 로그인", change: "이메일 변경", busy: "처리 중…", invalid: "6자리 숫자를 입력하세요.", resend: "코드 다시 보내기", intro: "사진, 댓글과 편집 제안을 확인하세요.", review: "공동 리뷰" },
+  zh: { title: "登录 FocalRoom", email: "邮箱", hint: "使用邮箱验证码登录。", pwdTitle: "密码登录", pwdHint: "输入邮箱和密码直接登录。", pwdLabel: "密码", pwdButton: "登录", pwdToggle: "使用密码登录", codeToggle: "使用验证码登录", send: "发送验证码", code: "验证码", codeTitle: "输入验证码", check: "请检查收件箱，验证码 10 分钟内有效。", verify: "验证并登录", change: "更换邮箱", busy: "处理中…", invalid: "请输入 6 位数字验证码。", resend: "重新发送", intro: "查看照片、批注和编辑提案。", review: "共享评片" },
+  en: { title: "Sign in to FocalRoom", email: "Email", hint: "Sign in with an email code.", pwdTitle: "Password sign in", pwdHint: "Sign in with email and password.", pwdLabel: "Password", pwdButton: "Sign in", pwdToggle: "Use password", codeToggle: "Use email code", send: "Send code", code: "Verification code", codeTitle: "Enter your code", check: "Check your inbox. The code expires in 10 minutes.", verify: "Verify and sign in", change: "Change email", busy: "Working…", invalid: "Enter a 6-digit code.", resend: "Resend code", intro: "View photos, comments and editing proposals.", review: "Shared review" },
+  ja: { title: "FocalRoom にログイン", email: "メールアドレス", hint: "メールの確認コードでログインします。", pwdTitle: "パスワードログイン", pwdHint: "メールとパスワードでログイン。", pwdLabel: "パスワード", pwdButton: "ログイン", pwdToggle: "パスワードを使う", codeToggle: "確認コードを使う", send: "コードを送信", code: "確認コード", codeTitle: "確認コードを入力", check: "受信箱をご確認ください。コードは10分間有効です。", verify: "確認してログイン", change: "メールアドレスを変更", busy: "処理中…", invalid: "6桁の数字を入力してください。", resend: "コードを再送信", intro: "写真、コメント、編集提案を確認できます。", review: "共同レビュー" },
+  ko: { title: "FocalRoom 로그인", email: "이메일", hint: "이메일 인증 코드로 로그인하세요.", pwdTitle: "비밀번호 로그인", pwdHint: "이메일과 비밀번호로 로그인하세요.", pwdLabel: "비밀번호", pwdButton: "로그인", pwdToggle: "비밀번호 사용", codeToggle: "인증 코드 사용", send: "코드 보내기", code: "인증 코드", codeTitle: "인증 코드 입력", check: "받은편지함을 확인하세요. 코드는 10분간 유효합니다.", verify: "인증하고 로그인", change: "이메일 변경", busy: "처리 중…", invalid: "6자리 숫자를 입력하세요.", resend: "코드 다시 보내기", intro: "사진, 댓글과 편집 제안을 확인하세요.", review: "공동 리뷰" },
 } as const;
 
 function GoogleSignIn({onLogin,onError,disabled}:{onLogin:(session:Session)=>void;onError:(message:string)=>void;disabled:boolean}) {
@@ -38,7 +38,8 @@ export function MagicLogin({ onLogin }: { onLogin: (session: Session) => void })
   const [recovering, setRecovering] = useState(false);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [step, setStep] = useState<"email" | "code">("email");
+  const [step, setStep] = useState<"email" | "code" | "password">("email");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(false);
@@ -62,11 +63,16 @@ export function MagicLogin({ onLogin }: { onLogin: (session: Session) => void })
 
     });
   };
+  const pwdLogin = () => perform(async () => {
+    const result = await request<{ user: { id: string; email: string; name: string }; csrf: string }>(
+      "/auth/login", null, "POST", { email: email.trim().toLowerCase(), password });
+    onLogin(sessionSchema.parse({ ...result.user, csrf: result.csrf }));
+  });
   if (recovering) return <AccountRecovery onBack={() => setRecovering(false)} />;
   return <main className="fr-welcome">
     <section><h1>{text.review}</h1><p>{text.intro}</p></section>
     <div className="fr-card fr-login">
-      <h2>{step === "email" ? text.title : text.codeTitle}</h2>
+      <h2>{step === "password" ? text.pwdTitle : step === "code" ? text.codeTitle : text.title}</h2>
       {step === "email" ? <form onSubmit={event => { event.preventDefault(); void send(); }}>
         <p>{text.hint}</p>
         <label>{text.email}<input type="email" autoComplete="email" maxLength={200} required disabled={busy} value={email} onChange={event => setEmail(event.target.value)} /></label>
@@ -78,6 +84,14 @@ export function MagicLogin({ onLogin }: { onLogin: (session: Session) => void })
         <button type="button" className="fr-text" disabled={busy} onClick={() => { void send(); }}>{text.resend}</button>
         <button type="button" className="fr-text" disabled={busy} onClick={() => { setStep("email"); setCode(""); setError(""); }}>{text.change}</button>
       </form>}
+      {step === "password" && <form onSubmit={event => { event.preventDefault(); void pwdLogin(); }}>
+        <p>{text.pwdHint}</p>
+        <label>{text.email}<input type="email" autoComplete="email" maxLength={200} required disabled={busy} value={email} onChange={event => setEmail(event.target.value)} /></label>
+        <label>{text.pwdLabel}<input type="password" autoComplete="current-password" maxLength={1024} required disabled={busy} value={password} onChange={event => setPassword(event.target.value)} /></label>
+        <button className="fr-primary" disabled={busy || !email.trim() || !password}>{busy ? text.busy : text.pwdButton}</button>
+      </form>}
+      {step === "email" && <button type="button" className="fr-text" disabled={busy} onClick={() => { setStep("password"); setError(""); }}>{text.pwdToggle}</button>}
+      {step === "password" && <button type="button" className="fr-text" disabled={busy} onClick={() => { setStep("email"); setPassword(""); setError(""); }}>{text.codeToggle}</button>}
       {error && <p role="alert" className="fr-error">{error}</p>}
       <button type="button" className="fr-text" disabled={busy} onClick={() => setRecovering(true)}>{t("web.forgotPassword")}</button>
     </div>
