@@ -735,3 +735,17 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .stat-number{font-size:24px;font-weight:700;color:var(--accent,#a29bfe);font-variant-numeric:tabular-nums}
 .stat-label{font-size:11px;color:var(--text,#e8e8f0)}
 .stat-sub{font-size:10px;color:var(--text2,#777)}
+
+/* 后台导入指示器 */
+.import-banner{position:fixed;bottom:0;left:0;right:0;z-index:900;background:var(--bg-secondary,#1a1a28);border-top:1px solid var(--border,#2a2a40);box-shadow:0 -4px 16px rgba(0,0,0,.3);animation:slide-up .25s ease}
+@keyframes slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.import-banner-header{display:flex;align-items:center;gap:12px;width:100%;padding:10px 16px;background:none;border:none;cursor:pointer;color:var(--text,#e8e8f0);font-size:13px}
+.import-banner-icon{font-size:16px}
+.import-banner-label{flex:none;white-space:nowrap}
+.import-banner-bar{flex:1;height:6px;max-width:400px;appearance:none;border:none;background:var(--border,#2a2a40);border-radius:3px;overflow:hidden}
+.import-banner-bar::-webkit-progress-bar{background:var(--border,#2a2a40);border-radius:3px}
+.import-banner-bar::-webkit-progress-value{background:var(--accent,#6c5ce7);border-radius:3px;transition:width .3s ease}
+.import-banner-toggle{font-size:10px;color:var(--text2,#888)}
+.import-banner-detail{padding:8px 16px 12px;border-top:1px solid var(--border,#2a2a40);display:flex;flex-direction:column;gap:8px}
+.import-banner-detail .muted{font-size:12px;margin:0}
+.import-dialog-actions{display:flex;gap:8px;margin-top:8px}
