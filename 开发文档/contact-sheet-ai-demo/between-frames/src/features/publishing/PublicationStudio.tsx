@@ -38,7 +38,7 @@ function PublicationStudioBody({repository,projectId,publication,readOnly,onClos
     if(versions.status==='fulfilled'){setHistory(versions.value);setHasMore(versions.value.length===30);}else setNotice(userFacingError(versions.reason,zh.publicationHistoryFailed));
     return current.status==='fulfilled'&&versions.status==='fulfilled';
   },[repository,projectId,publication.id]);
-  useEffect(()=>{alive.current=true;void reload();return()=>{alive.current=false;readGeneration.current++;};
+  useEffect(()=>{alive.current=true;readGeneration.current++;void Promise.resolve().then(reload);return()=>{alive.current=false;};
   },[reload]);
   const run=async(operation:()=>Promise<void>,success:string)=>{
     if(lock.current||readOnly)return;lock.current=true;setBusy(true);setNotice('');readGeneration.current++;
