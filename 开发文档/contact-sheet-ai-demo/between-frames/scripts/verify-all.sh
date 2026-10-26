@@ -36,6 +36,8 @@ step "前端单元测试"
 npm test
 
 if [ "$SKIP_E2E" = "0" ]; then
+  step "构建预览 E2E 依赖的 RPC harness（target-v1）"
+  cargo build --manifest-path "src-tauri/Cargo.toml" --target-dir "src-tauri/target-v1" --features integration-harness --bin m1-harness
   step "浏览器预览 E2E"
   npm run test:e2e
 fi
