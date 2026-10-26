@@ -25,6 +25,7 @@ import { metricsAuthorized } from "./metrics.ts";
 import { migrate, assertSchema } from "./database.ts";
 import { hostedAiConfig, type HostedAiConfig, type HostedAiTransport } from "./hosted-ai.ts";
 import { billingConfig, type BillingConfig, type BillingGateway } from './billing-gateway.ts';
+import { getAuthorMemories, upsertAuthorMemory } from "./author-memory.ts";
 
 class ApiController {
   readonly service: CloudService;
@@ -159,6 +160,14 @@ class ApiController {
     const annotationResolve = path.match(/^\/boards\/annotations\/([^/]+)\/resolve$/);
     if (annotationResolve && req.method === "POST") {
       return s.boards.resolve(headers, annotationResolve[1], req.body);
+    }
+    if (path === "/author-memory" && req.method === "GET") {
+      const u = await s.auth.authenticate(headers, false);
+      return getAuthorMemories(s.pool, u.id, req.query.project);
+    }
+    if (path === "/author-memory" && req.method === "POST") {
+      const u = await s.auth.authenticate(headers, true);
+      return { id: await upsertAuthorMemory(s.pool, u.id, req.body) };
     }
     if (path === "/auth/profile" && req.method === "PATCH") {
       const u = await s.auth.authenticate(headers, true);

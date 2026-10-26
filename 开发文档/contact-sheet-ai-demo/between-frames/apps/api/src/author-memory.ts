@@ -1,17 +1,24 @@
 /**
- * M3#11 云端作者记忆：Creator 隔离的记忆读写——同 Creator 跨项目共享，跨 Creator 严格隔离。
- *
- * 设计原则（ADR 0037 扩展到云端）：
- * - 每条记忆归属于 Creator（即 first_project 的 owner），不属于单个项目
- * - 同 Creator 的任务经授权可读取其全部项目的记忆
- * - 不同 Creator 的记忆严格不可见
- * - 写操作仅限 Creator 本人（评审者不能写他人记忆）
+ * 云端作者记忆（剩余清单 #9）：Creator 隔离的跨项目偏好假设（ADR 0037 的云端扩展）。
+ * - 假设经 fr_projects.owner_id 归属 Creator；同 Creator 跨项目共享，跨 Creator 严格不可见
+ * - 写操作仅限 Creator 本人；评审者与受邀编辑不获得记忆写权限
+ * - 0010_author_memory.sql 是未登记设计稿（UUID/cloud_projects 不兼容）；实际结构由 0023 落地
  */
-
 import type { Pool } from "pg";
+import { z } from "zod";
+import { assert } from "./errors.ts";
+
+const projectIdSchema = z.string().trim().min(1).max(160);
+export const authorMemoryQuerySchema = z.strictObject({ project: projectIdSchema });
+export const authorMemoryUpsertSchema = z.strictObject({
+  projectId: projectIdSchema,
+  statement: z.string().trim().min(1).max(1000),
+  status: z.enum(["unconfirmed", "confirmed", "corrected", "retired"]),
+  confidence: z.enum(["tentative", "moderate"]),
+});
 
 export interface AuthorMemory {
-  id: number;
+  id: string;
   statement: string;
   status: string;
   confidence: string;
@@ -21,121 +28,65 @@ export interface AuthorMemory {
   updated_at: string;
 }
 
-export interface MemoryAccessResult {
-  authorized: boolean;
-  creator_id: string;
-  reason: string;
+async function requireCreator(pool: Pool, userId: string, projectId: string): Promise<void> {
+  const row = (await pool.query("SELECT owner_id FROM fr_projects WHERE id=$1", [projectId])).rows[0];
+  assert(row, 404, "NOT_FOUND", "项目不存在");
+  assert(row.owner_id === userId, 403, "PERMISSION_DENIED", "只有项目所有者可以访问作者记忆");
 }
 
 /**
- * 确认用户是项目的 Creator（owner）。Creator 身份 = 第一个以 owner 身份创建此项目的用户。
- */
-export async function verifyCreator(
-  pool: Pool,
-  userId: string,
-  projectId: string,
-): Promise<MemoryAccessResult> {
-  const row = (
-    await pool.query(
-      "SELECT owner_id FROM cloud_projects WHERE id=$1",
-      [projectId],
-    )
-  ).rows[0];
-
-  if (!row) {
-    return { authorized: false, creator_id: "", reason: "项目不存在" };
-  }
-
-  if (row.owner_id !== userId) {
-    return {
-      authorized: false,
-      creator_id: row.owner_id,
-      reason: "只有项目所有者可以访问作者记忆",
-    };
-  }
-
-  return { authorized: true, creator_id: userId, reason: "" };
-}
-
-/**
- * 获取同 Creator 的跨项目偏好假设（只读）。
- * 经授权的本地任务可以在 Agent 上下文中引用其他项目的假设，但不得修改。
+ * 读取同 Creator 的跨项目偏好假设（只读）：验证 excludeProject 归属后，
+ * 仅返回调用者本人拥有的其他项目中未停用、未退役的假设。
  */
 export async function getAuthorMemories(
   pool: Pool,
-  creatorId: string,
-  excludeProjectId: string,
-  limit = 100,
+  userId: string,
+  project: unknown,
 ): Promise<AuthorMemory[]> {
-  const rows = await pool.query(
-    `SELECT p.id, p.statement, p.status, p.confidence,
-            p.project_id, cp.title AS project_title,
-            p.created_at, p.updated_at
-     FROM fr_author_hypotheses p
-     JOIN cloud_projects cp ON cp.id = p.project_id
-     WHERE p.project_id IN (
-       SELECT id FROM cloud_projects WHERE owner_id = $1
-     )
-     AND p.project_id != $2
-     AND p.status NOT IN ('retired')
-     AND p.disabled_for_retrieval = 0
-     ORDER BY p.updated_at DESC
-     LIMIT $3`,
-    [creatorId, excludeProjectId, limit],
-  );
-  return rows.rows;
+  const { project: excludeProjectId } = authorMemoryQuerySchema.parse({ project });
+  await requireCreator(pool, userId, excludeProjectId);
+  return (
+    await pool.query(
+      `SELECT h.id, h.statement, h.status, h.confidence, h.project_id,
+              p.title AS project_title, h.created_at, h.updated_at
+       FROM fr_author_hypotheses h
+       JOIN fr_projects p ON p.id = h.project_id
+       WHERE p.owner_id = $1 AND h.project_id <> $2
+         AND h.status <> 'retired' AND NOT h.disabled_for_retrieval
+       ORDER BY h.updated_at DESC, h.id DESC
+       LIMIT 100`,
+      [userId, excludeProjectId],
+    )
+  ).rows;
 }
 
 /**
- * 写入/更新云端作者记忆假设（仅 Creator 本人）。
+ * 写入/更新云端作者记忆假设（仅 Creator 本人）。按 (project_id, statement) 幂等。
  */
 export async function upsertAuthorMemory(
   pool: Pool,
-  projectId: string,
   userId: string,
-  statement: string,
-  status: string,
-  confidence: string,
+  input: unknown,
 ): Promise<string> {
-  const creator = await verifyCreator(pool, userId, projectId);
-  if (!creator.authorized) {
-    throw Object.assign(new Error(creator.reason), { status: 403 });
-  }
-
+  const value = authorMemoryUpsertSchema.parse(input);
+  await requireCreator(pool, userId, value.projectId);
   const existing = (
     await pool.query(
       "SELECT id FROM fr_author_hypotheses WHERE project_id=$1 AND statement=$2",
-      [projectId, statement],
+      [value.projectId, value.statement],
     )
   ).rows[0];
-
   if (existing) {
     await pool.query(
       "UPDATE fr_author_hypotheses SET status=$1, confidence=$2, updated_at=now() WHERE id=$3",
-      [status, confidence, existing.id],
+      [value.status, value.confidence, existing.id],
     );
     return existing.id;
   }
-
   const id = crypto.randomUUID();
   await pool.query(
     "INSERT INTO fr_author_hypotheses(id, project_id, statement, status, confidence) VALUES($1,$2,$3,$4,$5)",
-    [id, projectId, statement, status, confidence],
+    [id, value.projectId, value.statement, value.status, value.confidence],
   );
   return id;
-}
-
-/**
- * 撤销跨项目记忆授权：关闭后 Agent 不再引用其他项目的假设。
- */
-export async function revokeMemoryAccess(
-  pool: Pool,
-  projectId: string,
-  userId: string,
-): Promise<boolean> {
-  const creator = await verifyCreator(pool, userId, projectId);
-  if (!creator.authorized) return false;
-  // 实际实现：在 tasks 的 metadata 中设置 cross_project=false（前端/桌面传入）。
-  // 服务端只验证 Creator 身份——实际开关由桌面端的 MemoryScopeSettings 控制。
-  return true;
 }
