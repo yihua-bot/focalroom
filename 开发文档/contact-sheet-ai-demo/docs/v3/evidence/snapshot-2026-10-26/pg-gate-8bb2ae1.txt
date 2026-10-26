@@ -1,0 +1,239 @@
+
+> between-frames@0.1.0 test:cloud:pg
+> node apps/api/test/run.mjs
+
+✔ M4 promotion verifies media, strips EXIF, atomically commits and replays (394.408875ms)
+✔ M4 project-only invitation, email binding, one-time acceptance and isolation (13.963792ms)
+✔ M4 cookie CSRF, session hashes, unknown fields, no model authorization (5.5835ms)
+✔ M5 comment anchors, parent project isolation, provenance and Viewer denial (19.801792ms)
+✔ M5 two concurrent proposals: one atomic formal apply, other remains submitted (22.785583ms)
+✔ M5 authenticated WS, private Yjs, presence, snapshot reconnect and revoke (1156.48775ms)
+✔ M5 cross-instance presence syncs through the PostgreSQL bus (1012.573833ms)
+✔ M5 short task principals are project scoped, read-only, expiring and revocable (16.765208ms)
+✔ M4 malformed and oversized requests return safe private JSON errors (4.296458ms)
+✔ M4 invitations expire and membership never grants ordinary project access (8.549709ms)
+✔ M5 Yjs rejects formal state fields and viewer replay cannot bypass downgraded ACL (68.044208ms)
+✔ M4/M5 API restart preserves session, authoritative versions and comments (17.707291ms)
+✔ M4 workspace member removal preserves independent project grants and protects owner (5.054167ms)
+✔ M5 draft revisions are private, owned, idempotent and partially approved with complete audit (38.218625ms)
+✔ M5 thread replies replay exactly and preserve an immutable original payload (7.461667ms)
+✔ M4 append-only migration upgrades 0001 without rewriting legacy receipts (90.247209ms)
+✔ M4 project authority does not authorize cloud model transmission (4.002083ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3418.528208
+✔ M4 R2 adapter signs S3 put/get against an isolated local protocol server (20.82275ms)
+✔ M4 local preview store rejects links, foreign object paths and content collisions (1.630792ms)
+✔ M4 media policy rejects oversized, PNG-disguised and corrupt sources (2.925375ms)
+✔ M4 R2 configuration requires explicit official endpoint and complete credentials (0.893334ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 218.684667
+✔ M4 explicit migrations create account/limiter tables and remain idempotent (107.222333ms)
+✔ M4 independent database clients enforce one shared hourly quota under concurrency (9.611208ms)
+✔ M4 password reset hashes match login, revoke sessions and consume every outstanding token (219.900083ms)
+✔ M4 concurrent resets with different tokens have exactly one winner (98.62975ms)
+✔ M4 invalid, expired and oversized reset inputs do not change the account (147.199125ms)
+✔ M4 forgot password normalizes email and hides account existence and email quota (154.888917ms)
+✔ M4 verification enforces session/CSRF and concurrent ten-minute delivery quota (54.424ms)
+✔ M4 unavailable email rolls back tokens without claiming verification delivery (49.445666ms)
+✔ M4 account mail links use fragments, reject public HTTP and support the Web route (0.306417ms)
+✔ M4 quota cleanup removes expired rows without erasing longer live windows (1.245666ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1148.818291
+✔ M4 OTP migration supports legacy draft tables and repeat explicit migration (113.089292ms)
+✔ M4 OTP normalizes email and stores a challenge-bound hash, never the code (24.356208ms)
+✔ M4 OTP creates an authenticated cookie session, verified account and owner workspace (65.788875ms)
+✔ M4 OTP reuses existing accounts without changing password or duplicating workspaces (107.976125ms)
+✔ M4 OTP mail failure rejects the request and rolls back codes (55.251375ms)
+✔ M4 OTP expired codes and invalid inputs create no session (5.087333ms)
+✔ M4 OTP wrong attempts persist and revoke the code after five failures (7.022417ms)
+✔ M4 OTP resend invalidates old challenges, with one shared email quota (56.937583ms)
+✔ M4 OTP concurrent verification succeeds once and creates one session (62.032792ms)
+✔ M4 OTP session failure rolls back code consumption and new account atomically (109.80525ms)
+✔ M4 OTP failed resend preserves the previously delivered code (54.03025ms)
+✔ M4 OTP concurrent resend cannot bypass the shared delivery quota (56.334375ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1014.971125
+✔ desktop grant stores hashes, fixed return URL and real PKCE session; browser never receives bearer (164.0415ms)
+✔ authorize requires browser authentication, exact state and CSRF; malformed/external redirect rejected (58.510167ms)
+✔ wrong verifier/state/code cannot redeem or consume the legitimate grant (57.5875ms)
+✔ concurrent exchanges create only one desktop session (80.382959ms)
+✔ grant and authorization code expiry both prevent redemption (116.182125ms)
+✔ browser revocation/password reset cannot yield a new desktop credential (111.465958ms)
+✔ existing browser session may approve, retry replaces code and another account cannot take over (107.281792ms)
+✔ session creation failure rolls back code consumption, then legitimate exchange can recover (57.015792ms)
+✔ revocation and redemption share session-first lock ordering without a deadlock (106.409167ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1172.9745
+✔ Google verified profile persists and is returned immediately, by /me and subsequent OTP session (153.024667ms)
+✔ wrong audience, unverified email or self-asserted profile cannot create an identity (1.457584ms)
+✔ unsupported avatar does not replace the saved trusted image; OTP-only accounts remain null (48.062ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 489.59625
+✔ hosted AI requires live account, verified email, correct policy and CSRF; key never returned (163.178625ms)
+✔ quota and grants are account isolated and idempotent, cannot self-top-up over HTTP (99.657959ms)
+✔ atomic reservation across two service instances rejects overspending and simultaneous duplicate IDs (207.088791ms)
+✔ confirmed upstream rejection releases reservation; unknown network/meter/result holds it and never replays (327.208292ms)
+✔ image forwarding requires consent and bounded local JPEG, strips metadata and blocks URLs/server tools (62.637833ms)
+✔ disabled service is explicit and has no trial side effect; exhausted quota never calls provider (96.989083ms)
+✔ operator reconciliation needs a confirmed reference, cannot release active calls, and is atomic/idempotent (54.820791ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1295.702583
+✔ NestJS accepts async work without waiting; concurrent instances and retries call upstream once (169.732083ms)
+✔ async validation preserves policy, verified account, CSRF, model, request ID and image consent (110.121875ms)
+✔ async quotas are atomic across concurrent jobs; account and session isolation applies to polling (100.580125ms)
+✔ only confirmed rejection releases async quota; network, 5xx and invalid usage remain UNKNOWN (265.763ms)
+✔ restarting with an abandoned PENDING job exposes UNKNOWN without replay or quota release (48.824459ms)
+✔ identical job IDs in two accounts settle only their own ledger and result (112.0405ms)
+✔ expired async results are removed without refunding or replaying a completed request (54.823125ms)
+✔ async JSON payload above 2.5 MB traverses the real local HTTP parser and remains bounded (141.444292ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1297.184375
+✔ queue is opt-in, authenticated and unavailable when no validated encryption key is configured (163.959625ms)
+✔ body and preview are encrypted at rest, without credentials, and resume on service replacement (83.09ms)
+✔ two consumers and duplicate submissions dispatch once and clear input before model waiting (75.965083ms)
+✔ queued cancellation is account-scoped, CSRF protected, idempotent and releases only unsent usage (103.7495ms)
+✔ logout and email revocation before dispatch reject the job without forwarding or retaining the body (102.98275ms)
+✔ queue expiry purges encrypted input and returns reserved tokens without treating dispatched jobs as unsent (58.158625ms)
+✔ lost or corrupted encryption keys and swapped ciphertext never fall back to plaintext or call the model (208.252417ms)
+✔ key rotation retains old decryption key while using the new key for subsequent requests (68.8855ms)
+✔ enqueue and account reservation roll back together on database failure (51.513167ms)
+✔ unknown transport or invalid usage never re-enters the durable queue or releases reserved usage (109.792041ms)
+✔ independent worker processes recover a queued job, but never replay after a killed dispatch (1510.015ms)
+✔ restored queued and dispatched snapshots are quarantined without replay or automatic refund (82.725375ms)
+✔ a late model response cannot overwrite an audited reconciliation (56.679208ms)
+✔ queue metrics expose aggregate phase, encrypted bytes and age without prompts, IDs or keys (52.099708ms)
+✔ cross-instance queue capacity rejects overflow and rolls back the losing reservation (158.262916ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3192.584375
+✔ catalog is public; private billing and checkout enforce authentication, verification, CSRF and configured prices (199.756209ms)
+✔ lost remote checkout response retains intent; retries and concurrent requests create one checkout and no entitlement (11.117709ms)
+✔ signature failures and stale notifications never grant access; paid invoice grants once even under different event IDs (13.139958ms)
+✔ cancellation and old event delivery use current remote state; portal is account-scoped and active subscriptions reject another purchase (6.668041ms)
+✔ unconfigured sales stay closed and public configuration cannot expose secrets (5.457667ms)
+✔ payment configuration without an available FocalRoom AI service cannot sell an AI plan (3.059958ms)
+✔ price mismatch and unexpected payment destinations are rejected before redirect (0.437334ms)
+✔ canceling an unpaid checkout expires only this account session and permits another plan (7.412792ms)
+✔ paused or incomplete subscriptions never display a renewal promise or receive AI allowance (5.238709ms)
+✔ closing new sales retains existing customer management and signed notification handling (5.564583ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 554.217666
+✔ M4 角色初始化（等价 postgres-init 脚本）与迁移角色执行迁移 (68.127292ms)
+✔ M4 应用角色只能 DML：读写通过，DDL 与建角色被拒 (14.116667ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10131.794166
+✔ M4 cookie-authenticated Agent GETs need no Origin/CSRF, writes remain protected (254.354875ms)
+✔ M4 无显式授权时入队被拒；授权/任务/取消/撤权全链路 (31.554667ms)
+✔ M4 分歧分析：消息体为 system/user 字符串且 task_type 落库为分歧 (4.573542ms)
+✔ M4 崩溃恢复：租约过期的 RUNNING 任务被重新领取并完成 (4.490917ms)
+✔ M4 模型失败有限重试后 FAILED 且不外发更多请求 (5.944583ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 592.962292
+✔ M4 /metrics 暴露请求计数、延迟桶与 DB 派生指标 (93.229167ms)
+✔ M4 UUID 路由模板归一，防止标签基数爆炸 (2.663958ms)
+✔ M4 FOCALROOM_METRICS_TOKEN 未设置时开放，设置后需令牌 (3.278459ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 378.785625
+✔ G6 board discovery and creation enforce project grants, not just authentication (356.173333ms)
+✔ G6 node and comment reads are scoped; hidden nodes and missing resources behave correctly (7.581875ms)
+✔ G6 comments validate input, require write permission and restrict resolution to author or editor (22.269959ms)
+✔ G6 cookie mutations require CSRF; revoked grants stop existing board access immediately (9.782083ms)
+✔ H0-04 board with real asset alias returns photo_id for image ticket flow (5.4065ms)
+✔ H0-04 uuid-text cast does not error on legacy text asset ids (2.631667ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 682.853333
+✔ 作者记忆读取要求 Creator：匿名 401，项目受邀编辑与无关用户 403 (248.177542ms)
+✔ Creator 跨项目只读：排除当前项目，过滤 retired 与停用条目，跨 Creator 不可见 (3.5385ms)
+✔ 写入仅限 Creator，按 (project, statement) 幂等，非法输入与不存在项目被拒 (9.573792ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 550.741916
+Isolated PostgreSQL evidence: /var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/focalroom-pg-tests-tXC1kc

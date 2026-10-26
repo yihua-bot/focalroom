@@ -3,16 +3,16 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-21T05:57:30.555Z",
-  "sourceHead": "dd9978190063777df493486af451c4f24ecd3f50",
+  "observedAt": "2026-10-26T21:08:09.383Z",
+  "sourceHead": "d4d3e7045bc9c2e9fe32e66d89e165f323749fbb",
   "changedSources": [],
   "branch": "main",
-  "clientVersion": "1.0.4",
+  "clientVersion": "1.2.0",
   "ciWorkflow": {
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "fb4e66cd42211da17a1c216569369c1ab62397e81cd0dfea3017978f862b7b2e"
   },
-  "status": "H0_HARDENING_MERGED_MAIN_CI_GREEN",
+  "status": "V3_DEV_CONTINUING_MAIN_CI_GREEN",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -22,34 +22,49 @@
   "migrationDeltaFromBaseline": [
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0017_cloud_asset_domain.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0018_cloud_canvas.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0019_subscriptions.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0020_admin_stats.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0021_ai_async.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0022_ai_durable_queue.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0023_author_memory.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0020_asset_domain.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0021_canvas.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0022_external_edit.sql\"",
-    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0023_publishing.sql\""
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0023_publishing.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0024_canvas_undo_log.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0025_task_owned_boards.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0026_canvas_redo.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0027_board_revision.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0028_canvas_history_states.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0029_canvas_command_receipts.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0030_agent_task_grants.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0031_focal_chat_history.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0032_editorial_merge_history.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0033_publication_versions.sql\""
   ],
   "modules": [
     {
       "id": "ai-drawer",
       "path": "src/features/ai-editor/AISelectionDrawer.tsx",
-      "sha256": "0589b2f64de66646840624941dd98b5b52e04ba0958ec90ea8b58a85de815122",
+      "sha256": "fd09a6f7326871d4ca9bcc53b7554e0dbcaf31b2ab04cd7336a21b807e3393ff",
       "boundary": "workspace conversation drawer; nested Escape guarded"
     },
     {
       "id": "desktop-ui",
       "path": "src/app/AppController.tsx",
-      "sha256": "369666db141aa80bbee9c30170755a40e82512af0333ba9c61184b1fa7469f0a",
+      "sha256": "e7f1ba8dfae20a44b25dd5198d2d365923cac6b20705b9142987c9fbed2b159a",
       "boundary": "working selection workspace; no free-coordinate Board"
     },
     {
       "id": "local-authority",
       "path": "src-tauri/src/command_handler.rs",
-      "sha256": "f5ae4b62f8a784e369b2352553065a40529b02e8b3de8dd525de23a4607c0dc6",
+      "sha256": "f2898b87378d4d56153bcf9fa8168f684ed0b01f743ec0d8ef1daac60094f9e8",
       "boundary": "validated formal local commands, revision, idempotency, audit"
     },
     {
       "id": "sqlite",
       "path": "src-tauri/src/db.rs",
-      "sha256": "ae4736fa0ebbdbf25cf7626e8f606282961f5fd457b4366ac246bd2b11ede25f",
+      "sha256": "5f09ea0c0de8d8c08dd5044edd819946bb9f9cce4e33b921e5cec36c2767c5d8",
       "boundary": "backup-before-upgrade and SQLx migrations"
     },
     {
@@ -67,19 +82,19 @@
     {
       "id": "agent",
       "path": "src-tauri/src/agent/runtime.rs",
-      "sha256": "f9a2ab23594e4a9cfa2992ba417e3cd21a065312773b7c39fa890f4b7317ceff",
+      "sha256": "c0f02eeeec144108b10ca66b9c66787e5edaeb3ea4e1b612a289b44f639c84f9",
       "boundary": "local task/tool/checkpoint runtime; model writes drafts"
     },
     {
       "id": "agent-policy",
       "path": "src-tauri/src/agent/policy.rs",
-      "sha256": "d9f6f572776090c8926714b8c9f8cdf5d6e7d244fbc43c568ce1a1a1e02b2545",
+      "sha256": "72c4dd47201a3ea7b30461740f9263e5fead9bd4e1a822e057b473e0d52094be",
       "boundary": "resource scope, budgets and tool boundaries"
     },
     {
       "id": "memory",
       "path": "src-tauri/src/agent/memory.rs",
-      "sha256": "43a2fe10dc446cbbe01350838d1db7df9cd891e5f96015a91d1466e505a193d3",
+      "sha256": "9a636e1a7228221984291c7ad1934e727f89a2cec40152f2496ad08b05fdfc06",
       "boundary": "evidence/hypotheses/correction; not professionally validated multimodal preference learning"
     },
     {
@@ -103,7 +118,7 @@
     {
       "id": "web-review",
       "path": "apps/web/src/shared/ProjectReview.tsx",
-      "sha256": "29c8047b60b4710cb83c81214021b64665ad8db6ba8c91ca75c37ed15fb257d3",
+      "sha256": "bd56930ede89909b874653eac80008ef89b95198192bc555b448f68eeb20e080",
       "boundary": "shared photo review; no v3 Board UI"
     },
     {
@@ -115,7 +130,7 @@
     {
       "id": "contracts",
       "path": "packages/contracts/src/index.ts",
-      "sha256": "bcc99b8316e9e65cafbb619cf697ee607d70f493c8a30171ff50888300e55210",
+      "sha256": "16b3ea74e65053efedf2deb068fc7bcab1b7724f1395279602e89f48fc38992d",
       "boundary": "current v2 semantic contracts; v3 blueprints not runtime"
     }
   ],
@@ -213,15 +228,55 @@
         {
           "path": "src-tauri/migrations/0023_publishing.sql",
           "sha256": "7b4599ec95d14efa316e191690a3a7bcf38e2775582c7eb17173d7a643b61703"
+        },
+        {
+          "path": "src-tauri/migrations/0024_canvas_undo_log.sql",
+          "sha256": "e97f45fc7130766ae928f4fbed56c50b484c71cfc1087098bc69334f512250c0"
+        },
+        {
+          "path": "src-tauri/migrations/0025_task_owned_boards.sql",
+          "sha256": "b64d0c0c75489f887583bd560cfbd9705f4f5e5d94aaffcf182549fc40dc7dcf"
+        },
+        {
+          "path": "src-tauri/migrations/0026_canvas_redo.sql",
+          "sha256": "63436b3fda7326b84c9482473b6deaa74c036beff029181849e2aeecdc9a3ddf"
+        },
+        {
+          "path": "src-tauri/migrations/0027_board_revision.sql",
+          "sha256": "029d94a2f97131c74727ccc2cdb1a03e378cf0b255d51abf5cc64676acc56c64"
+        },
+        {
+          "path": "src-tauri/migrations/0028_canvas_history_states.sql",
+          "sha256": "d05062a59e94d1709427234680d84abff86c4b59495579657b3fe0d6a583dcff"
+        },
+        {
+          "path": "src-tauri/migrations/0029_canvas_command_receipts.sql",
+          "sha256": "d74b13fe2357675f7cce6d00c8c597f23ad1d9b1094e08d21b720b442b587e47"
+        },
+        {
+          "path": "src-tauri/migrations/0030_agent_task_grants.sql",
+          "sha256": "ee4b777e3260daeac477d6ec91b31f665c5c63d6d3d3b7d727dabea3f9f6c387"
+        },
+        {
+          "path": "src-tauri/migrations/0031_focal_chat_history.sql",
+          "sha256": "0da65af3cb58344d3fbcf6de572b6a22d3700a0d8fc3b8a3ac7c5aa9b04678a9"
+        },
+        {
+          "path": "src-tauri/migrations/0032_editorial_merge_history.sql",
+          "sha256": "bb1f732ecb41d90f198ff8ad46bb78dedf25f6f488c6bf42cee62de4f6f2f176"
+        },
+        {
+          "path": "src-tauri/migrations/0033_publication_versions.sql",
+          "sha256": "2369ffda3c92039b77a8dc75f2dfd2890467c4b002aaedb0b6f2185568ce2d6a"
         }
       ],
-      "backupSha256": "7c7ce2a9923500258c6f2ada764e3a625cc84a3926b5d6b8edf7c42157ab07ac",
+      "backupSha256": "dc2c16c8c1f3827f4cffc470121714360c47eecedcf44c904b50fb0489759de5",
       "fixture": "generated JPEG and legacy v11 SQLite; no user data",
-      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmp2GWGQG",
+      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmpkb0KNw",
       "foreignKeyViolations": 0,
       "legacyMigrations": 11,
       "restoredProjectionMatches": true,
-      "snapshotSha256": "8c4003df8e414774f52033bad9253c7ce099a8eefde76e049874e1a3464c73d7",
+      "snapshotSha256": "cc2000fbb4674389667f6447ef4f1077af37681c59e81df39e16a5ecfdfe2d8f",
       "snapshotUnchanged": true,
       "sourceSha256": "ddcce3e7c64670e2b67b55522783440118049c8107e958be51a5299df4b0709a",
       "sourceUnchanged": true,
@@ -230,12 +285,19 @@
         "agent_checkpoints",
         "agent_request_receipts",
         "agent_steps",
+        "agent_task_grants",
         "agent_tasks",
         "asset_aliases",
         "asset_representations",
         "board_annotations",
+        "board_draft_node_origins",
+        "board_draft_origins",
+        "board_draft_tasks",
         "boards",
+        "canvas_command_events",
         "canvas_nodes",
+        "canvas_op_log",
+        "canvas_operation_ids",
         "command_events",
         "command_history",
         "command_receipt_aliases",
@@ -249,6 +311,7 @@
         "drafts",
         "edit_variants",
         "external_edit_links",
+        "focal_chat_messages",
         "history_heads",
         "memory_commands",
         "memory_evidence_state",
@@ -272,9 +335,12 @@
         "projects",
         "proposal_operations",
         "proposals",
+        "publication_command_events",
         "publication_frames",
+        "publication_operation_ids",
         "publication_pages",
         "publication_texts",
+        "publication_versions",
         "publications",
         "renditions",
         "sequence_items",
@@ -306,15 +372,23 @@
         "fr_agent_task_results",
         "fr_ai_accounts",
         "fr_ai_grants",
+        "fr_ai_jobs",
         "fr_ai_reconciliations",
         "fr_ai_requests",
         "fr_asset_aliases",
+        "fr_author_hypotheses",
+        "fr_billing_checkouts",
+        "fr_billing_customers",
+        "fr_billing_events",
+        "fr_billing_invoices",
+        "fr_billing_subscriptions",
         "fr_board_annotations",
         "fr_boards",
         "fr_canvas_nodes",
         "fr_commands",
         "fr_comments",
         "fr_desktop_logins",
+        "fr_download_events",
         "fr_drafts",
         "fr_edit_variants",
         "fr_email_verify_tokens",
@@ -391,6 +465,26 @@
         {
           "version": "0018",
           "sha256": "efd2a30dd3ba1ced3e196bc90305dd5a263eecfbf0addd9ca9f43caa5c638983"
+        },
+        {
+          "version": "0019",
+          "sha256": "70e183858a59c29aa7dedc15521d38195a75b5ca140e6095a74a80132d85fc9e"
+        },
+        {
+          "version": "0020",
+          "sha256": "da8a05530fbb1934bed9b1137c4a8eea6202ba1685f5e300cdb81abbecb69de2"
+        },
+        {
+          "version": "0021",
+          "sha256": "77d54f2cf1eac21cf501c95cd1408f832af61a03ce84a3cff0ce343724e8b583"
+        },
+        {
+          "version": "0022",
+          "sha256": "ce32387e260efb4c442bb67c73c0f0a57b9fd1c79be9824463b4d1c729d880dc"
+        },
+        {
+          "version": "0023",
+          "sha256": "52c430a862d0924ba036cd140501f92a68d075110d665ab28f3ba143667a5836"
         }
       ],
       "registeredFiles": [
@@ -445,6 +539,26 @@
         {
           "path": "apps/api/migrations/0018_cloud_canvas.sql",
           "sha256": "efd2a30dd3ba1ced3e196bc90305dd5a263eecfbf0addd9ca9f43caa5c638983"
+        },
+        {
+          "path": "apps/api/migrations/0019_subscriptions.sql",
+          "sha256": "70e183858a59c29aa7dedc15521d38195a75b5ca140e6095a74a80132d85fc9e"
+        },
+        {
+          "path": "apps/api/migrations/0020_admin_stats.sql",
+          "sha256": "da8a05530fbb1934bed9b1137c4a8eea6202ba1685f5e300cdb81abbecb69de2"
+        },
+        {
+          "path": "apps/api/migrations/0021_ai_async.sql",
+          "sha256": "77d54f2cf1eac21cf501c95cd1408f832af61a03ce84a3cff0ce343724e8b583"
+        },
+        {
+          "path": "apps/api/migrations/0022_ai_durable_queue.sql",
+          "sha256": "ce32387e260efb4c442bb67c73c0f0a57b9fd1c79be9824463b4d1c729d880dc"
+        },
+        {
+          "path": "apps/api/migrations/0023_author_memory.sql",
+          "sha256": "52c430a862d0924ba036cd140501f92a68d075110d665ab28f3ba143667a5836"
         }
       ],
       "unregisteredDesignFiles": [
@@ -493,134 +607,90 @@
   },
   "tests": [
     {
-      "id": "full-local-gate",
-      "command": "npm run verify:v2",
+      "id": "ci-restoration-batch",
       "result": "PASS",
+      "commits": 8,
+      "head": "e3fcdaa",
+      "note": "lint/单测/E2E 1447 RPC/超时/fmt/文案/账户制共享/导出回执八层修复"
+    },
+    {
+      "id": "postgresql-author-memory-suite",
+      "result": "PASS",
+      "tests": 3,
+      "suites": "author-memory",
+      "head": "8bb2ae1",
+      "note": "Creator 隔离/跨项目只读/幂等写入/校验拒绝"
+    },
+    {
+      "id": "postgresql-full-gate",
+      "result": "PASS",
+      "suites": 15,
+      "tests": 114,
       "exitCode": 0,
-      "head": "ce165a3",
-      "evidence": "evidence/h0-2026-10-21/verify-v2.txt"
+      "head": "8bb2ae1"
     },
     {
-      "id": "frontend",
+      "id": "author-memory-desktop-rust",
       "result": "PASS",
-      "tests": 274,
-      "files": 41
+      "tests": 5,
+      "head": "d4d3e70",
+      "note": "bearer/查询参数、AUTHORITY_MISMATCH、AUTH_REQUIRED、CLOUD_PROTOCOL、错误码透传"
     },
     {
-      "id": "rust",
+      "id": "author-memory-desktop-frontend",
       "result": "PASS",
-      "tests": 239,
-      "ignored": 15,
-      "filteredKeychain": 1
+      "tests": 18,
+      "files": 2,
+      "head": "d4d3e70",
+      "note": "仓库层转换/异常回执 + 面板共享分区只读/失败隔离"
     },
     {
-      "id": "postgresql-candidate",
+      "id": "remote-ci-author-memory-api",
       "result": "PASS",
-      "tests": 76,
-      "suites": 11,
-      "evidence": "evidence/h0-2026-10-21/test-summary.json"
+      "run": 40388204296,
+      "head": "8bb2ae1"
     },
     {
-      "id": "postgresql-l-regate",
+      "id": "remote-ci-author-memory-desktop",
       "result": "PASS",
-      "suites": 11,
-      "exitCode": 0,
-      "head": "ce165a3",
-      "note": "L independent re-run on frozen tree after concurrent-write incident",
-      "evidence": "evidence/h0-2026-10-21/pg-regate-ce165a3.txt"
-    },
-    {
-      "id": "browser-preview-e2e",
-      "result": "PASS",
-      "tests": 18
-    },
-    {
-      "id": "real-rust-store-journeys",
-      "result": "PASS",
-      "tests": 7,
-      "note": "includes new canvas/publication journeys"
-    },
-    {
-      "id": "500-generated-file-gui",
-      "result": "PASS",
-      "tests": 4,
-      "originalHashesMatched": 500,
-      "snapshotRestored": true,
-      "aiTasks": 0,
-      "evidence": "evidence/h0-2026-10-21/m1-500-gui-metrics.json"
-    },
-    {
-      "id": "desktop-review-build",
-      "result": "PASS",
-      "signed": false,
-      "sizeMiB": 64.23,
-      "nativeGui": "NOT_EXECUTED",
-      "evidence": "evidence/h0-2026-10-21/native-review-build.txt"
-    },
-    {
-      "id": "remote-ci-candidate-branch",
-      "result": "PASS",
-      "runs": [
-        39544472721,
-        39544510872
-      ],
-      "head": "ce165a3"
-    },
-    {
-      "id": "remote-ci-main-merge",
-      "result": "PASS",
-      "run": 39552206030,
-      "head": "dd9978190063777df493486af451c4f24ecd3f50"
+      "run": 40395672029,
+      "head": "d4d3e70"
     },
     {
       "id": "v3-baseline-legacy-restore",
       "result": "PASS",
-      "head": "dd9978190063777df493486af451c4f24ecd3f50",
-      "note": "legacy v11 snapshot upgrade/restore on merged main"
+      "head": "d4d3e70"
     },
     {
       "id": "g0-inventory",
       "result": "PASS",
-      "pgTables": 38,
-      "pgMigrations": 13,
-      "sqliteMigrations": 23,
-      "head": "dd9978190063777df493486af451c4f24ecd3f50",
-      "note": "isolated runner; no production data"
+      "pgTables": 46,
+      "pgMigrations": 18,
+      "sqliteMigrations": 33,
+      "head": "d4d3e70",
+      "migrationDeltaAllAdditive": true
     }
   ],
   "remaining": [
-    "H0-03 agent tool contracts/PolicyGate/task-owned drafts not started",
-    "H0-06 external reflow file-integrity and path boundaries not started",
-    "H0-07 command/history/undo integration for canvas+publication not started",
-    "H0-02/04/05/08 native WKWebView UI acceptance and Web BoardViewer wiring pending",
-    "B-domain deep review of color_engine.rs bounded parsing (L reviewed ACL+SQL only)",
-    "G1+ implementation order per IMPLEMENTATION-AND-MULTI-AGENT-HANDOFF-2026-10-21 section 7",
-    "Device/human/supplier/production acceptance remains separate"
+    "对方工作区 234 文件 WIP（canvas 命令/出版方向）待提交评审后合入",
+    "external_edit.rs 死路径清理推迟：对方 WIP 含 lib.rs，待其合入后处理",
+    "H0-03 任务草案已由 0389d1c 交付；原生 WKWebView UI 验收仍待",
+    "分类 #4 原生色彩转换、#7 服务端画布共编、G2 原生技术验证开放",
+    "真人/设备/供应商/生产验收全部保留（30 任务/10 评委/5 组双人/LR/C1/32 页书）"
   ],
-  "h0": {
-    "record": "H0-HARDENING-2026-10-21.md",
-    "mergedPR": 1,
-    "candidateHead": "ce165a39951f991939c12fe322f24b18bbe209b9",
-    "h0Closed": [
-      "H0-01",
-      "H0-02(partial:browser-bridge)",
-      "H0-04(partial:server-side)",
-      "H0-05(partial:non-empty-pages)",
-      "H0-08(partial:bounded-parsing)"
-    ],
-    "h0Open": [
-      "H0-03",
-      "H0-06",
-      "H0-07"
-    ]
+  "session": {
+    "restoredCiAt": "e3fcdaa",
+    "authorMemoryApiAt": "8bb2ae1",
+    "authorMemoryDesktopAt": "d4d3e70",
+    "notes": "v1.2.0 批次 8 层 CI 断裂修复后恢复绿线；作者记忆云端 API 与桌面只读接入落地"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 39552206030,
-    "headSha": "dd9978190063777df493486af451c4f24ecd3f50",
+    "databaseId": 40395672029,
+    "headSha": "d4d3e7045bc9c2e9fe32e66d89e165f323749fbb",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/39552206030",
-    "observedAt": "2026-10-21T06:19:36.012Z",
-    "note": "Squash merge of PR #1 (candidate ce165a3). H0-01 migration assertions now expect 0017/0018."
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40395672029",
+    "observedAt": "2026-10-26T21:08:31.437Z",
+    "note": "桌面端云端作者记忆只读接入合入后全量门禁绿"
   }
 }
