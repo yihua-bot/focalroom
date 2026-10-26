@@ -450,6 +450,22 @@ pub mod native_transform {
         )
     }
 
+    // 32bpc 浮点位图：kCGBitmapFloatComponents(1<<8=256) + SkipLast(5) + ByteOrder32Little(2<<12=0x2000)，
+    // 128bpp RGBA float；小端序使内存布局与 f32::to_le_bytes 一致。
+    const FLOAT_SKIP_LAST_32LE: u32 = 256 | 5 | 0x2000;
+
+    fn bitmap_context32f(space: &CGColorSpace, width: usize, height: usize) -> CGContext {
+        CGContext::create_bitmap_context(
+            None,
+            width,
+            height,
+            32,
+            width * 16,
+            space,
+            FLOAT_SKIP_LAST_32LE,
+        )
+    }
+
     /// 就地按目标 ICC 变换 RGB8 像素（紧密三通道）。
     pub fn transform_rgb8(
         src_icc: &[u8],
@@ -546,6 +562,65 @@ pub mod native_transform {
             for component in 0..3 {
                 let bytes = [chunk[component * 2], chunk[component * 2 + 1]];
                 pixels[index * 3 + component] = u16::from_le_bytes(bytes);
+            }
+        }
+        Ok(())
+    }
+
+    /// 就地按目标 ICC 变换 RGB 浮点像素（f32 三通道，主机字节序）。
+    pub fn transform_rgb32f(
+        src_icc: &[u8],
+        dst_icc: &[u8],
+        pixels: &mut [f32],
+        width: usize,
+        height: usize,
+    ) -> Result<()> {
+        if width == 0 || height == 0 || width > 65535 || height > 65535 {
+            return Err(AppError::new("VALIDATION_ERROR", "像素尺寸超出支持范围"));
+        }
+        let expected = width
+            .checked_mul(height)
+            .and_then(|n| n.checked_mul(3))
+            .ok_or_else(|| AppError::new("VALIDATION_ERROR", "像素尺寸溢出"))?;
+        if pixels.len() != expected {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "像素缓冲长度与尺寸不匹配",
+            ));
+        }
+        let src_space = space_from_icc(src_icc)?;
+        let dst_space = space_from_icc(dst_icc)?;
+        let mut src_ctx = bitmap_context32f(&src_space, width, height);
+        let mut staging = Vec::with_capacity(expected / 3 * 16);
+        for pixel in pixels.chunks_exact(3) {
+            for value in pixel {
+                staging.extend_from_slice(&value.to_le_bytes());
+            }
+            staging.extend_from_slice(&1.0f32.to_le_bytes());
+        }
+        src_ctx.data().copy_from_slice(&staging);
+        let src_image = src_ctx
+            .create_image()
+            .ok_or_else(|| AppError::new("COLOR_TRANSFORM_FAILED", "无法从源像素创建图像"))?;
+        let mut dst_ctx = bitmap_context32f(&dst_space, width, height);
+        dst_ctx.draw_image(
+            CGRect::new(
+                &CGPoint::new(0.0, 0.0),
+                &CGSize::new(width as f64, height as f64),
+            ),
+            &src_image,
+        );
+        let converted = dst_ctx.data();
+        for (index, chunk) in converted.chunks_exact(16).enumerate() {
+            for component in 0..3 {
+                let start = component * 4;
+                let bytes = [
+                    chunk[start],
+                    chunk[start + 1],
+                    chunk[start + 2],
+                    chunk[start + 3],
+                ];
+                pixels[index * 3 + component] = f32::from_le_bytes(bytes);
             }
         }
         Ok(())
@@ -990,6 +1065,69 @@ mod diagnostic_tests {
         assert!(super::native_transform::transform_rgb16(&srgb, &srgb, &mut wrong, 1, 1).is_err());
         assert!(
             super::native_transform::transform_rgb16(b"bad", &srgb, &mut pixels, 1, 1).is_err()
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn native_transform32f_identity_keeps_srgb_pixels() {
+        let srgb = system_profile("sRGB Profile.icc");
+        let mut pixels: Vec<f32> = vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.07, 0.4, 0.8];
+        let expected = pixels.clone();
+        super::native_transform::transform_rgb32f(&srgb, &srgb, &mut pixels, 3, 1).unwrap();
+        for (actual, want) in pixels.iter().zip(expected.iter()) {
+            assert!(
+                (actual - want).abs() <= 0.002,
+                "float identity 差异过大: {pixels:?}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn native_transform32f_srgb_to_display_p3_matches_reference() {
+        let srgb = system_profile("sRGB Profile.icc");
+        let p3 = system_profile("Display P3.icc");
+        let mut pixels: Vec<f32> = vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0];
+        super::native_transform::transform_rgb32f(&srgb, &p3, &mut pixels, 4, 1).unwrap();
+        let scaled = |pixel: usize, component: usize| pixels[pixel * 3 + component] * 255.0;
+        // 浮点结果 ×255 须与 RGB8 预登记参考一致：红 234/51/35、绿 117/251/76、蓝 245、白 255。
+        for (component, want) in [(0usize, 234.0), (1, 51.0), (2, 35.0)] {
+            assert!(
+                (scaled(0, component) - want).abs() <= 2.0,
+                "红{component} {}",
+                scaled(0, component)
+            );
+        }
+        for (component, want) in [(0usize, 117.0), (1, 251.0), (2, 76.0)] {
+            assert!(
+                (scaled(1, component) - want).abs() <= 2.0,
+                "绿{component} {}",
+                scaled(1, component)
+            );
+        }
+        assert!((scaled(2, 2) - 245.0).abs() <= 2.0, "蓝B {}", scaled(2, 2));
+        for component in 0..3 {
+            assert!(
+                (pixels[3 * 3 + component] - 1.0).abs() <= 0.008,
+                "白{component} {}",
+                pixels[3 * 3 + component]
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn native_transform32f_rejects_invalid_buffers() {
+        let srgb = system_profile("sRGB Profile.icc");
+        let mut pixels: Vec<f32> = vec![0.0; 3];
+        assert!(
+            super::native_transform::transform_rgb32f(&srgb, &srgb, &mut pixels, 2, 1).is_err()
+        );
+        let mut wrong: Vec<f32> = vec![0.0; 4];
+        assert!(super::native_transform::transform_rgb32f(&srgb, &srgb, &mut wrong, 1, 1).is_err());
+        assert!(
+            super::native_transform::transform_rgb32f(b"bad", &srgb, &mut pixels, 1, 1).is_err()
         );
     }
 }
