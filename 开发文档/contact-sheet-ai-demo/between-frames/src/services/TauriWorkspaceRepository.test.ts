@@ -4,14 +4,29 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: ipc, convertFileSrc: (path: str
 import { TauriCanvasRepository } from './TauriCanvasRepository';
 import { TauriPublicationRepository } from './TauriPublicationRepository';
 import { useUIStore } from '../stores/uiStore';
-beforeEach(() => { ipc.mockReset(); useUIStore.getState().reset(); });
+
+type PublicationRequestLike = { commandId: string; projectId: string; publicationId: string; baseRevision: number };
+const receiptFor = (request: PublicationRequestLike, changed: boolean, results: unknown[]) => ({
+  commandId: request.commandId, projectId: request.projectId, publicationId: request.publicationId,
+  baseRevision: request.baseRevision, revision: request.baseRevision + Number(changed), changed, results,
+});
+const BOOK = '33333333-4444-4555-8666-777777777777';
+const publicationRow = (revision: number, id: string = BOOK) => ({ id, project_id: 'project', pub_type: 'photobook', title: '书', state: 'draft', created_at: '2026-10-21', revision });
+
+beforeEach(() => { ipc.mockReset(); useUIStore.getState().reset(); window.localStorage.clear(); });
 
 it('适配 Rust 的 board/publication snake_case，不能把空字段渲染为已接通', async () => {
   ipc.mockResolvedValueOnce([{ id: 'board', project_id: 'project', title: '叙事', state: 'draft', owning_task_id: null, revision: 1 }]);
   expect(await new TauriCanvasRepository().listBoards('project')).toEqual([{ id: 'board', projectId: 'project', title: '叙事', state: 'draft', owningTaskId: null, revision: 1 }]);
-  ipc.mockResolvedValueOnce({ id: 'book', project_id: 'project', pub_type: 'photobook', title: '书', state: 'draft', created_at: '2026-10-21' });
-  expect(await new TauriPublicationRepository().create('project', '书')).toMatchObject({ projectId: 'project', pubType: 'photobook', createdAt: '2026-10-21' });
-  expect(ipc).toHaveBeenLastCalledWith('pub_create', { projectId: 'project', cmd: { title: '书', pubType: 'photobook' } });
+  ipc.mockImplementationOnce(async (_name: string, { request }: { request: PublicationRequestLike }) => receiptFor(request, true, [publicationRow(1, request.publicationId)]));
+  const created = await new TauriPublicationRepository().create('project', '书');
+  expect(created).toMatchObject({ projectId: 'project', pubType: 'photobook', createdAt: '2026-10-21' });
+  expect(ipc).toHaveBeenLastCalledWith('pub_execute', expect.objectContaining({
+    request: expect.objectContaining({
+      projectId: 'project', publicationId: created.id, baseRevision: 0,
+      operations: [expect.objectContaining({ action: { type: 'Create', data: { title: '书', pubType: 'photobook' } } })],
+    }),
+  }));
   ipc.mockResolvedValueOnce([{ id: 'broken', projectId: 'project' }]);
   await expect(new TauriCanvasRepository().listBoards('project')).rejects.toThrow();
 });
@@ -35,15 +50,27 @@ it('画布照片通过资产别名取得授权缓存路径，过滤隐藏节点'
 
 it('生成页面返回值必须为正整数，错误回执不能显示成功', async () => {
   const repository = new TauriPublicationRepository();
-  for (const invalid of [null, -1, 0, 1.5, '1']) {
-    ipc.mockResolvedValueOnce(invalid);
-    await expect(repository.generate('project', 'book', 2)).rejects.toThrow();
+  for (const invalid of [3, 0]) {
+    await expect(repository.generate('project', BOOK, invalid)).rejects.toThrow();
   }
-  ipc.mockResolvedValueOnce(3);
-  expect(await repository.generate('project', 'book', 2)).toBe(3);
-  expect(ipc).toHaveBeenLastCalledWith('pub_generate', { projectId: 'project', cmd: { publicationId: 'book', photosPerPage: 2 } });
+  ipc.mockResolvedValueOnce(2);
+  await expect(repository.generate('project', BOOK, 2)).rejects.toThrow();
+  ipc.mockResolvedValueOnce([publicationRow(4)]);
+  ipc.mockImplementationOnce(async (_name: string, { request }: { request: PublicationRequestLike }) => receiptFor(request, false, [0]));
+  await expect(repository.generate('project', BOOK, 2)).rejects.toThrow();
+  await expect(repository.generate('project', BOOK, 2)).rejects.toThrow();
+  ipc.mockImplementationOnce(async (_name: string, { request }: { request: PublicationRequestLike }) => receiptFor(request, true, [3]));
+  await repository.retryPending('project', BOOK);
+  ipc.mockImplementationOnce(async (_name: string, { request }: { request: PublicationRequestLike }) => receiptFor(request, true, [3]));
+  expect(await repository.generate('project', BOOK, 2)).toBe(3);
+  expect(ipc).toHaveBeenLastCalledWith('pub_execute', expect.objectContaining({
+    request: expect.objectContaining({
+      projectId: 'project', publicationId: BOOK, baseRevision: 5,
+      operations: [expect.objectContaining({ action: { type: 'Generate', data: { photosPerPage: 2 } } })],
+    }),
+  }));
   ipc.mockRejectedValueOnce({ code: 'CONFLICT', message: '该出版物已有页面', retriable: false });
-  await expect(repository.generate('project', 'book')).rejects.toThrow('该出版物已有页面');
+  await expect(repository.generate('project', BOOK)).rejects.toThrow('该出版物已有页面');
 });
 
 it('从选片工作台进入画布保留照片选区，切换项目仍清空', () => {
