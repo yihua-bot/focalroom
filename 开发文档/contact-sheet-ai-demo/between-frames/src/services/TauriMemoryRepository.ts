@@ -13,6 +13,11 @@ const hypothesis = z.object({
  status: z.enum(['unconfirmed', 'confirmed', 'corrected', 'retired']), confidence: z.enum(['tentative', 'moderate']),
  userCorrection: z.string().nullable(), disabled: z.boolean(), createdAt: z.string(), updatedAt: z.string(),
 });
+const cloudAuthorMemory = z.object({
+ id: z.string(), statement: z.string(), status: z.enum(['unconfirmed', 'confirmed', 'corrected', 'retired']),
+ confidence: z.enum(['tentative', 'moderate']), project_id: z.string(), project_title: z.string(),
+ created_at: z.string(), updated_at: z.string(),
+}).transform(value => ({ id: value.id, statement: value.statement, status: value.status, confidence: value.confidence, projectId: value.project_id, projectTitle: value.project_title, createdAt: value.created_at, updatedAt: value.updated_at }));
 const projection = z.object({ evidence: z.array(evidence), hypotheses: z.array(hypothesis), notice: z.string(), crossProjectEnabled: z.boolean().default(false), authorHypotheses: z.array(hypothesis).default([]), authorMemoryNotice: z.string().default('') });
 
 const reply = z.object({ ok: z.boolean(), requestId: z.string(), data: z.object({ requestId: z.string(), changed: z.boolean(), memoryRevision: z.number().int().nonnegative() }).nullable(), error: z.object({ code: z.string(), message: z.string(), retryable: z.boolean() }).nullable() });
@@ -50,6 +55,9 @@ export class TauriMemoryRepository implements MemoryRepository {
  }
  async purgeObservationCache(projectId: string) {
   return this.request(projectId, { type: 'PurgeObservationCache' });
+ }
+ async cloudAuthorMemories(projectId: string) {
+  return z.array(cloudAuthorMemory).parse(await invoke('cloud_author_memories', { projectId }));
  }
  private async find(projectId: string, id: number) {
   const item = (await this.query(projectId)).hypotheses.find(h => h.id === id);

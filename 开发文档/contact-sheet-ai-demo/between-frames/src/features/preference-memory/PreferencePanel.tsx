@@ -8,13 +8,14 @@ import { Button } from '../../components/shared/Button';
 
 const statusLabels: Record<string, string> = { unconfirmed: '未确认', confirmed: '已确认', corrected: '已纠正', retired: '已移除' };
 
-export function PreferencePanel({ events, repository, project }: { events: PreviewEvent[]; repository?: DesktopProjectRepository; project: Project }) {
+export function PreferencePanel({ events, repository, project, authority }: { events: PreviewEvent[]; repository?: DesktopProjectRepository; project: Project; authority?: string }) {
   const client = useQueryClient();
   const [search, setSearch] = useState('');
   const [keyword, setKeyword] = useState('');
   const [showRemoved, setShowRemoved] = useState(false);
   const [evidenceLimit, setEvidenceLimit] = useState(20);
   const query = useQuery({ queryKey: ['memory', project.id, keyword, project.revision], queryFn: () => repository!.memory.query(project.id, keyword), enabled: Boolean(repository), staleTime: 5_000 });
+  const cloudMemory = useQuery({ queryKey: ['cloud-author-memory', project.id], queryFn: () => repository!.memory.cloudAuthorMemories!(project.id), enabled: authority === 'shared' && Boolean(repository?.memory.cloudAuthorMemories), staleTime: 60_000, retry: false });
   const [correcting, setCorrecting] = useState<number | null>(null);
   const [correction, setCorrection] = useState('');
   const [busy, setBusy] = useState(false);
@@ -60,6 +61,15 @@ export function PreferencePanel({ events, repository, project }: { events: Previ
         <a href={`#/project/${encodeURIComponent(item.projectId)}`}>进入来源项目查看与管理</a>
       </article>)}
       {!query.data.authorHypotheses?.length && <p className="micro">没有符合条件的其他项目线索。</p>}
+    </section>}
+    {authority === 'shared' && repository?.memory.cloudAuthorMemories && <section aria-label="云端作者记忆">
+      <div className="divider" /><div className="eyebrow">云端作者记忆（只读）</div>
+      {cloudMemory.isError && <p className="micro" role="alert">云端作者记忆暂不可用，可稍后重试。</p>}
+      {cloudMemory.data?.length ? cloudMemory.data.map(item => <article key={item.id} className="info-card" data-cloud-author-memory={item.id}>
+        <strong>{item.statement}</strong>
+        <p className="micro">{statusLabels[item.status]} · {item.confidence === 'moderate' ? '中等' : '初步'}置信 · 来自你的其他共享项目</p>
+        <p className="micro">来源项目：{item.projectTitle}</p>
+      </article>) : cloudMemory.isSuccess && <p className="micro">云端没有其他项目的作者记忆。</p>}
     </section>}
     <label className="micro"><input type="checkbox" checked={showRemoved} onChange={event => setShowRemoved(event.target.checked)} /> 显示已移除假设</label>
     <div className="divider" /><div className="eyebrow">偏好假设</div>

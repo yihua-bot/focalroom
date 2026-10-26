@@ -33,14 +33,15 @@ function makeRepository() {
       request: vi.fn().mockResolvedValue({ changed: true, memoryRevision: 1, requestId: 'm1' }),
       correct: vi.fn().mockResolvedValue({ ...hypothesis, status: 'corrected', disabled: true, userCorrection: '不是我的偏好' }),
       setEnabled: vi.fn().mockImplementation((_p: string, _id: number, enabled: boolean) => Promise.resolve({ ...hypothesis, disabled: !enabled })),
+      cloudAuthorMemories: vi.fn(),
     },
-  } as unknown as { memory: { query: Mock; request: Mock; correct: Mock; setEnabled: Mock } };
+  } as unknown as { memory: { query: Mock; request: Mock; correct: Mock; setEnabled: Mock; cloudAuthorMemories: Mock } };
 }
-function mount(repository?: unknown) {
+function mount(repository?: unknown, authority?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <PreferencePanel events={events} repository={repository as DesktopProjectRepository | undefined} project={project} />
+      <PreferencePanel events={events} repository={repository as DesktopProjectRepository | undefined} project={project} authority={authority} />
     </QueryClientProvider>,
   );
 }
@@ -177,4 +178,26 @@ it('查询失败不允许用默认值覆盖作者授权', async () => {
   mount(repository);
   await screen.findByRole('alert');
   expect(screen.getByRole('checkbox', { name: '参考其他本地项目的偏好' })).toBeDisabled();
+});
+it('共享项目显示云端作者记忆只读区，本地项目不显示', async () => {
+  const repository = makeRepository();
+  repository.memory.cloudAuthorMemories.mockResolvedValue([
+    { id: 'h1', statement: '偏好低饱和冷色调', status: 'confirmed', confidence: 'moderate', projectId: 'cloud-2', projectTitle: '另一个项目', createdAt: '2026-10-27T00:00:00Z', updatedAt: '2026-10-27T00:00:00Z' },
+  ]);
+  const first = mount(repository, 'shared');
+  const section = await screen.findByRole('region', { name: '云端作者记忆' });
+  expect(await within(section).findByText('偏好低饱和冷色调')).toBeInTheDocument();
+  expect(within(section).getByText(/来源项目：另一个项目/)).toBeInTheDocument();
+  expect(within(section).queryByRole('button')).not.toBeInTheDocument();
+  first.unmount();
+  mount(repository, 'local');
+  await screen.findByText(hypothesis.statement);
+  expect(screen.queryByRole('region', { name: '云端作者记忆' })).not.toBeInTheDocument();
+});
+it('云端记忆获取失败只影响该区，不阻塞本地面板', async () => {
+  const repository = makeRepository();
+  repository.memory.cloudAuthorMemories.mockRejectedValue(new Error('CLOUD_UNAVAILABLE'));
+  mount(repository, 'shared');
+  expect(await screen.findByText(/云端作者记忆暂不可用/)).toBeVisible();
+  expect(await screen.findByText(hypothesis.statement)).toBeInTheDocument();
 });

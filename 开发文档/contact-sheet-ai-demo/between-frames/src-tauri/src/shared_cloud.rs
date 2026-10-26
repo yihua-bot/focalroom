@@ -111,6 +111,59 @@ fn review_link(state: &Value) -> Result<String> {
     Ok(url)
 }
 
+pub async fn author_memory_binding(store: &Store, project: &str) -> Result<(String, String)> {
+    let state = status(store, project).await?;
+    if state["authority"] != "shared" {
+        return Err(AppError::new(
+            "AUTHORITY_MISMATCH",
+            "云端作者记忆仅对共享项目开放",
+        ));
+    }
+    let invalid = || {
+        AppError::new(
+            "SHARE_BINDING_CHANGED",
+            "共享绑定信息不完整，请重新打开共享评片",
+        )
+    };
+    let base = endpoint(
+        state["remote"]["binding"]["baseUrl"]
+            .as_str()
+            .ok_or_else(invalid)?,
+    )?;
+    let cloud = state["remote"]["projectId"]
+        .as_str()
+        .ok_or_else(invalid)?
+        .to_owned();
+    Ok((base, cloud))
+}
+
+/// 云端作者记忆只读：同 Creator 跨项目假设，不进入任务上下文（ADR0037 边界）。
+pub async fn author_memories(store: &Store, project: &str, token: &str) -> Result<Value> {
+    let (base, cloud) = author_memory_binding(store, project).await?;
+    if !crate::login_guard::hex64(token) {
+        return Err(AppError::new("AUTH_REQUIRED", "请先登录"));
+    }
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|_| AppError::new("CLOUD_CONFIG", "HTTP 客户端创建失败"))?;
+    let value = response(
+        client
+            .get(format!("{base}/api/v2/author-memory"))
+            .query(&[("project", cloud.as_str())])
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(network)?,
+    )
+    .await?;
+    if !value.is_array() {
+        return Err(AppError::new("CLOUD_PROTOCOL", "云端作者记忆回包不是列表"));
+    }
+    Ok(value)
+}
+
 pub async fn share(store: &Store, request: ShareRequest, token: &str) -> Result<Value> {
     static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     let _lock = LOCK.lock().await;

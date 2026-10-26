@@ -13,6 +13,7 @@ export type MemoryCommand =
   | { type: 'DeleteEvidence'; evidenceId: number }
   | { type: 'PurgeObservationCache' };
 export interface MemoryReceipt { requestId: string; changed: boolean; memoryRevision: number }
+export interface CloudAuthorMemory { id: string; statement: string; status: 'unconfirmed' | 'confirmed' | 'corrected' | 'retired'; confidence: 'tentative' | 'moderate'; projectId: string; projectTitle: string; createdAt: string; updatedAt: string }
 export interface MemoryRepository {
   query(projectId: string, query?: string): Promise<MemoryProjection>;
   request(projectId: string, command: MemoryCommand): Promise<MemoryReceipt>;
@@ -21,4 +22,5 @@ export interface MemoryRepository {
   deleteHypothesis(projectId: string, hypothesisId: number): Promise<void>;
   deleteEvidence(projectId: string, evidenceId: number): Promise<void>;
   purgeObservationCache(projectId: string): Promise<MemoryReceipt>;
+  cloudAuthorMemories?(projectId: string): Promise<CloudAuthorMemory[]>;
 }

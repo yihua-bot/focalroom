@@ -412,6 +412,16 @@ pub async fn share_project(
 }
 
 #[tauri::command]
+pub async fn cloud_author_memories(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<serde_json::Value> {
+    let (base, _) = crate::shared_cloud::author_memory_binding(&state.store, &project_id).await?;
+    let token = state.cloud_auth.bearer(&base).await?;
+    crate::shared_cloud::author_memories(&state.store, &project_id, &token).await
+}
+
+#[tauri::command]
 pub async fn get_agent_projection(
     state: State<'_, Backend>,
     project_id: String,

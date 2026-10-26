@@ -44,3 +44,14 @@ it('旧投影保守默认隔离，拒绝混入可编辑列表的其他项目假�
  ipc.mockResolvedValue({ evidence: [], hypotheses: [], notice: 'n', crossProjectEnabled: true, authorHypotheses: [{ ...h, scope: 'cross_project', status: 'unconfirmed' }] });
  await expect(repo.query('p1')).rejects.toThrow('范围不匹配');
 });
+
+it('云端作者记忆转换字段命名并拒绝异常回包', async () => {
+  const repo = new TauriMemoryRepository();
+  ipc.mockResolvedValue([{ id: 'h1', statement: '偏好低饱和', status: 'confirmed', confidence: 'moderate', project_id: 'cloud-2', project_title: '另一个项目', created_at: '2026-10-27T00:00:00Z', updated_at: '2026-10-27T00:00:00Z' }]);
+  await expect(repo.cloudAuthorMemories!('p1')).resolves.toEqual([{ id: 'h1', statement: '偏好低饱和', status: 'confirmed', confidence: 'moderate', projectId: 'cloud-2', projectTitle: '另一个项目', createdAt: '2026-10-27T00:00:00Z', updatedAt: '2026-10-27T00:00:00Z' }]);
+  expect(ipc).toHaveBeenCalledWith('cloud_author_memories', { projectId: 'p1' });
+  ipc.mockResolvedValue([{ id: 'h1', statement: 'x', status: 'bogus', confidence: 'moderate', project_id: 'p', project_title: 't', created_at: 'n', updated_at: 'n' }]);
+  await expect(repo.cloudAuthorMemories!('p1')).rejects.toThrow();
+  ipc.mockResolvedValue({ not: 'array' });
+  await expect(repo.cloudAuthorMemories!('p1')).rejects.toThrow();
+});

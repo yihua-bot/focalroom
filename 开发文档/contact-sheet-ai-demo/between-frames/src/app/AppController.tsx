@@ -202,7 +202,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
   </AppShell>
     {ui.aiOpen && project && route.page === 'workspace' && <AISelectionDrawer key={project.id} projectTitle={project.title} onClose={ui.closeAgent}
       memoryOpen={ui.aiMemoryOpen} onMemoryChange={ui.setAIMemoryOpen}
-      memory={<PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} />}>
+      memory={<PreferencePanel events={project.events} repository={local ? repository : undefined} project={project} authority={sharing.data?.authority} />}>
       {(settingsOpen, closeSettings) => <AIPanel key={project.id} repository={local ? repository : undefined} project={project} selectedIds={selectedIds}
         initialGoal={pendingGoal?.projectId === project.id ? pendingGoal.goal : project.brief}
         initialCount={pendingGoal?.projectId === project.id ? pendingGoal.count : Math.min(parseGoal(project.brief).count, project.photos.length || 100)}
