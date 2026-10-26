@@ -1,6 +1,6 @@
 [package]
 name = "between-frames"
-version = "1.1.6"
+version = "1.2.0"
 description = "序间：本地优先的摄影编辑工作台"
 authors = ["Between Frames"]
 edition = "2024"
