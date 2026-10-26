@@ -391,6 +391,100 @@ fn parse_icc_description(icc: &[u8]) -> String {
     "unknown".to_owned()
 }
 
+/// macOS ColorSync 原生变换原型（FR3-014）。
+/// 经 CoreGraphics 位图上下文在源/目标 ICC 色彩空间之间转换 RGB8；
+/// 16-bit/float 与预览管线接入在 G2 评审后另行推进，参考值见同模块测试。
+#[cfg(target_os = "macos")]
+pub mod native_transform {
+    use crate::domain::{AppError, Result};
+    use core_foundation::base::TCFType;
+    use core_foundation::data::{CFData, CFDataRef};
+    use core_graphics::color_space::CGColorSpace;
+    use core_graphics::context::CGContext;
+    use core_graphics::geometry::{CGPoint, CGRect, CGSize};
+    use foreign_types::ForeignType;
+    use std::ffi::c_void;
+
+    unsafe extern "C" {
+        fn CGColorSpaceCreateWithICCProfile(data: CFDataRef) -> *mut c_void;
+    }
+
+    fn space_from_icc(icc: &[u8]) -> Result<CGColorSpace> {
+        let data = CFData::from_buffer(icc);
+        let raw = unsafe { CGColorSpaceCreateWithICCProfile(data.as_concrete_TypeRef()) };
+        if raw.is_null() {
+            return Err(AppError::new(
+                "COLOR_PROFILE_INVALID",
+                "ICC 配置无法创建色彩空间",
+            ));
+        }
+        Ok(unsafe { CGColorSpace::from_ptr(raw.cast()) })
+    }
+
+    // macOS 位图上下文不支持 24bpp 紧凑 RGB，采用 32bpp RGBX（kCGImageAlphaNoneSkipLast=5）。
+    const ALPHA_NONE_SKIP_LAST: u32 = 5;
+
+    fn bitmap_context(space: &CGColorSpace, width: usize, height: usize) -> CGContext {
+        CGContext::create_bitmap_context(
+            None,
+            width,
+            height,
+            8,
+            width * 4,
+            space,
+            ALPHA_NONE_SKIP_LAST,
+        )
+    }
+
+    /// 就地按目标 ICC 变换 RGB8 像素（紧密三通道）。
+    pub fn transform_rgb8(
+        src_icc: &[u8],
+        dst_icc: &[u8],
+        pixels: &mut [u8],
+        width: usize,
+        height: usize,
+    ) -> Result<()> {
+        if width == 0 || height == 0 || width > 65535 || height > 65535 {
+            return Err(AppError::new("VALIDATION_ERROR", "像素尺寸超出支持范围"));
+        }
+        let expected = width
+            .checked_mul(height)
+            .and_then(|n| n.checked_mul(3))
+            .ok_or_else(|| AppError::new("VALIDATION_ERROR", "像素尺寸溢出"))?;
+        if pixels.len() != expected {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "像素缓冲长度与尺寸不匹配",
+            ));
+        }
+        let src_space = space_from_icc(src_icc)?;
+        let dst_space = space_from_icc(dst_icc)?;
+        let mut src_ctx = bitmap_context(&src_space, width, height);
+        let mut staging = vec![0u8; expected / 3 * 4];
+        for (index, chunk) in pixels.chunks_exact(3).enumerate() {
+            staging[index * 4..index * 4 + 3].copy_from_slice(chunk);
+            staging[index * 4 + 3] = 255;
+        }
+        src_ctx.data().copy_from_slice(&staging);
+        let src_image = src_ctx
+            .create_image()
+            .ok_or_else(|| AppError::new("COLOR_TRANSFORM_FAILED", "无法从源像素创建图像"))?;
+        let mut dst_ctx = bitmap_context(&dst_space, width, height);
+        dst_ctx.draw_image(
+            CGRect::new(
+                &CGPoint::new(0.0, 0.0),
+                &CGSize::new(width as f64, height as f64),
+            ),
+            &src_image,
+        );
+        let converted = dst_ctx.data();
+        for (index, chunk) in converted.chunks_exact(4).enumerate() {
+            pixels[index * 3..index * 3 + 3].copy_from_slice(&chunk[..3]);
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -699,5 +793,70 @@ mod diagnostic_tests {
             }
         }
         !crc
+    }
+
+    #[cfg(target_os = "macos")]
+    fn system_profile(name: &str) -> Vec<u8> {
+        let path = std::path::Path::new("/System/Library/ColorSync/Profiles").join(name);
+        std::fs::read(&path).unwrap_or_else(|error| panic!("缺少系统色彩配置 {name}: {error}"))
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn native_transform_identity_keeps_srgb_pixels() {
+        let srgb = system_profile("sRGB Profile.icc");
+        let mut pixels = vec![
+            255u8, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 18, 99, 200,
+        ];
+        let expected = pixels.clone();
+        super::native_transform::transform_rgb8(&srgb, &srgb, &mut pixels, 5, 1).unwrap();
+        for (actual, want) in pixels.iter().zip(expected.iter()) {
+            assert!(
+                ((*actual as i32) - (*want as i32)).abs() <= 1,
+                "identity 差异过大: {pixels:?}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn native_transform_srgb_to_display_p3_matches_reference() {
+        let srgb = system_profile("sRGB Profile.icc");
+        let p3 = system_profile("Display P3.icc");
+        let mut pixels = vec![255u8, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255];
+        super::native_transform::transform_rgb8(&srgb, &p3, &mut pixels, 4, 1).unwrap();
+        let channel = |pixel: usize, component: usize| pixels[pixel * 3 + component] as i32;
+        // 预登记参考值（P3 原色 + sRGB 传递函数，D65）：
+        assert!((channel(0, 0) - 234).abs() <= 3, "红R {}", channel(0, 0));
+        assert!((channel(0, 1) - 51).abs() <= 3, "红G {}", channel(0, 1));
+        assert!((channel(0, 2) - 35).abs() <= 3, "红B {}", channel(0, 2));
+        assert!((channel(1, 0) - 117).abs() <= 3, "绿R {}", channel(1, 0));
+        assert!((channel(1, 1) - 251).abs() <= 3, "绿G {}", channel(1, 1));
+        assert!((channel(1, 2) - 76).abs() <= 3, "绿B {}", channel(1, 2));
+        // sRGB 蓝原色与 P3 同色度但最大亮度更低（Y 0.0722 对 0.0793），
+        // 线性比≈0.9106，经 sRGB 传递函数编码≈245，而非 255：
+        assert!((channel(2, 2) - 245).abs() <= 3, "蓝B {}", channel(2, 2));
+        assert!(channel(2, 0) <= 3 && channel(2, 1) <= 3, "蓝通道纯净");
+        for component in 0..3 {
+            assert!(
+                (channel(3, component) - 255).abs() <= 1,
+                "白通道 {}",
+                channel(3, component)
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn native_transform_rejects_invalid_profiles_and_buffers() {
+        let srgb = system_profile("sRGB Profile.icc");
+        let mut pixels = vec![0u8; 3];
+        assert!(
+            super::native_transform::transform_rgb8(b"not an icc", &srgb, &mut pixels, 1, 1)
+                .is_err()
+        );
+        assert!(super::native_transform::transform_rgb8(&srgb, &srgb, &mut pixels, 2, 1).is_err());
+        let mut wrong = vec![0u8; 4];
+        assert!(super::native_transform::transform_rgb8(&srgb, &srgb, &mut wrong, 1, 1).is_err());
     }
 }
