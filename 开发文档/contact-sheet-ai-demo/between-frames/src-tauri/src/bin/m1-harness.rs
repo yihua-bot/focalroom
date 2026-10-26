@@ -229,6 +229,38 @@ impl Harness {
                 Value::Null
             }
             "pub_list" => json!(self.store.list_publications(id).await?),
+            "pub_execute" => json!(
+                self.store
+                    .execute_publication(
+                        serde_json::from_value(args["request"].clone()).map_err(|error| {
+                            AppError::new("VALIDATION_ERROR", error.to_string())
+                        })?
+                    )
+                    .await?
+            ),
+            "pub_layout" => json!(
+                self.store
+                    .publication_document(id, string(args, "publicationId")?)
+                    .await?
+            ),
+            "pub_versions" => json!(
+                self.store
+                    .publication_versions(
+                        id,
+                        string(args, "publicationId")?,
+                        args.get("before").and_then(Value::as_i64)
+                    )
+                    .await?
+            ),
+            "pub_version" => json!(
+                self.store
+                    .publication_version(
+                        id,
+                        string(args, "publicationId")?,
+                        string(args, "versionId")?
+                    )
+                    .await?
+            ),
             "pub_pages" => json!(
                 self.store
                     .publication_pages(id, string(args, "publicationId")?)

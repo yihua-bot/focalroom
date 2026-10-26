@@ -1,16 +1,21 @@
 // G7 Publication Panel：桌面端出版物管理面板。
 // 创建出版物、从序列生成初稿、查看页面列表。
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../components/shared/Button';
 
 import type { PublicationInfo, PublicationPage, PublicationRepository } from '../../domain/publication';
+import { PublicationStudio } from './PublicationStudio';
+import { userFacingError } from '../../services/userFacingError';
+import { zh } from '../../app/copy';
 
-export function PublicationPanel({ repository, projectId, sequenceCount, readOnly = false }: {
+type Props={
   repository?: PublicationRepository;
   projectId: string;
   sequenceCount: number;
   readOnly?: boolean;
-}) {
+};
+export function PublicationPanel(props:Props){return <PublicationPanelBody key={props.projectId} {...props}/>;}
+function PublicationPanelBody({repository,projectId,sequenceCount,readOnly=false}:Props){
   const [publications, setPublications] = useState<PublicationInfo[]>([]);
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -19,6 +24,11 @@ export function PublicationPanel({ repository, projectId, sequenceCount, readOnl
   const [notice, setNotice] = useState('');
   const [pages, setPages] = useState<Record<string, PublicationPage[]>>({});
   const [loadingPages, setLoadingPages] = useState<string | null>(null);
+  const [editing,setEditing]=useState<PublicationInfo>();
+  const [confirming,setConfirming]=useState(false);
+  const writeLock=useRef(false),mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  const pending=repository?.pendingCommands?.(projectId)??[];
 
   const load = async () => {
     if (!repository) return;
@@ -37,7 +47,8 @@ export function PublicationPanel({ repository, projectId, sequenceCount, readOnl
   }, [repository, projectId]);
 
   const create = async () => {
-    if (!repository || readOnly || creating || !title.trim()) return;
+    if (!repository || readOnly || creating || writeLock.current || !title.trim()) return;
+    writeLock.current=true;
     setCreating(true);
     setNotice('');
     try {
@@ -45,21 +56,23 @@ export function PublicationPanel({ repository, projectId, sequenceCount, readOnl
       setTitle('');
       await load();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '创建出版物失败');
-    } finally { setCreating(false); }
+      setNotice(userFacingError(error,zh.publicationCreateFailed));
+    } finally { writeLock.current=false;setCreating(false); }
   };
 
   const generate = async (pubId: string) => {
-    if (!repository || readOnly || generating) return;
+    if (!repository || readOnly || generating || writeLock.current) return;
+    writeLock.current=true;
     setGenerating(true);
     setNotice('');
     try {
       const pages = await repository.generate(projectId, pubId, perPage);
       setNotice(`已生成 ${pages} 页初稿`);
       setPages(current => ({ ...current, [pubId]: [] }));
+      await load();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : '生成失败');
-    } finally { setGenerating(false); }
+    } finally { writeLock.current=false;setGenerating(false); }
   };
 
   const showPages = async (publicationId: string) => {
@@ -82,6 +95,10 @@ export function PublicationPanel({ repository, projectId, sequenceCount, readOnl
   return <section className="publication-panel">
     <h3>出版物</h3>
     <p className="micro">从作品序列生成摄影书/展览初稿。</p>
+    {pending.map(request=><Button key={request.publicationId} disabled={confirming||readOnly} onClick={()=>{
+      if(!repository?.retryPending||writeLock.current)return;writeLock.current=true;setConfirming(true);const project=projectId;
+      void repository.retryPending(project,request.publicationId).then(async()=>{if(!mounted.current)return;await load();if(mounted.current)setNotice(zh.publicationConfirmed);}).catch(error=>{if(mounted.current)setNotice(userFacingError(error,zh.publicationPending));}).finally(()=>{writeLock.current=false;if(mounted.current)setConfirming(false);});
+    }}>{zh.publicationConfirmPrevious}</Button>)}
 
     <div className="publication-create">
       <input
@@ -120,6 +137,7 @@ export function PublicationPanel({ repository, projectId, sequenceCount, readOnl
           <Button size="small" disabled={!!loadingPages || generating} onClick={() => void showPages(pub.id)}>
             {loadingPages === pub.id ? '读取中…' : '查看页面'}
           </Button>
+          {repository.document&&repository.versions&&repository.version&&<Button size="small" disabled={creating||generating||confirming} onClick={()=>setEditing(pub)}>{zh.publicationStudio}</Button>}
         </div>
         {!!pages[pub.id]?.length && <div className="publication-pages" aria-label={`${pub.title}页面初稿`}>
           {pages[pub.id].map(page => <figure key={page.id} className="publication-page-preview">
@@ -141,5 +159,6 @@ export function PublicationPanel({ repository, projectId, sequenceCount, readOnl
     )}
 
     {notice && <p role="status" className="publication-notice">{notice}</p>}
+    {editing&&<PublicationStudio key={`${projectId}:${editing.id}`} repository={repository} projectId={projectId} publication={editing} readOnly={readOnly} onClose={()=>setEditing(undefined)} onChanged={load}/>}
   </section>;
 }

@@ -15,6 +15,7 @@ pub struct Publication {
     pub title: String,
     pub state: String,
     pub created_at: String,
+    pub revision: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -40,7 +41,7 @@ pub struct PublicationFrame {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreatePublicationCommand {
     pub title: String,
     pub pub_type: Option<String>,
@@ -73,10 +74,12 @@ fn validate_page_size(width: f64, height: f64) -> Result<()> {
 
 impl CommandHandler<'_> {
     /// 创建出版物。
-    pub async fn create_publication(
+    pub(crate) async fn create_publication_tx(
         &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
         project: &str,
         cmd: &CreatePublicationCommand,
+        id: &str,
     ) -> Result<Publication> {
         let title = cmd.title.trim();
         if title.is_empty() || title.chars().count() > 200 {
@@ -92,32 +95,30 @@ impl CommandHandler<'_> {
         let width = cmd.width_mm.unwrap_or(210.0);
         let height = cmd.height_mm.unwrap_or(297.0);
         validate_page_size(width, height)?;
-        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
-        let id = domain::id();
         let now = domain::timestamp();
         let spec = json!({
             "width_mm": width,
             "height_mm": height,
         });
         sqlx::query("INSERT INTO publications(id,project_id,pub_type,title,spec_json,state,created_at,updated_at) VALUES(?,?,?,?,?,'draft',?,?)")
-            .bind(&id).bind(project).bind(pub_type).bind(title)
+            .bind(id).bind(project).bind(pub_type).bind(title)
             .bind(spec.to_string()).bind(&now).bind(&now)
-            .execute(&mut *tx).await?;
-        tx.commit().await?;
+            .execute(&mut **tx).await?;
         Ok(Publication {
-            id,
+            id: id.to_owned(),
             project_id: project.to_owned(),
             pub_type: pub_type.to_owned(),
             title: title.to_owned(),
             state: "draft".to_owned(),
             created_at: now,
+            revision: 1,
         })
     }
 
     /// 从作品序列自动生成初稿页面布局。
-    pub async fn generate_from_sequence(
+    pub(crate) async fn generate_from_sequence_tx(
         &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
         project: &str,
         cmd: &GenerateFromSequenceCommand,
     ) -> Result<i64> {
@@ -128,14 +129,12 @@ impl CommandHandler<'_> {
                 "每页照片数须为 1、2 或 4",
             ));
         }
-        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        crate::agent::promotion::ensure_local_write(&mut tx, project).await?;
         // 验证出版物
         let state: Option<String> =
             sqlx::query_scalar("SELECT state FROM publications WHERE id=? AND project_id=?")
                 .bind(&cmd.publication_id)
                 .bind(project)
-                .fetch_optional(&mut *tx)
+                .fetch_optional(&mut **tx)
                 .await?;
         let Some(state) = state else {
             return Err(AppError::new("NOT_FOUND", "出版物不存在"));
@@ -146,7 +145,7 @@ impl CommandHandler<'_> {
         let page_count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM publication_pages WHERE publication_id=?")
                 .bind(&cmd.publication_id)
-                .fetch_one(&mut *tx)
+                .fetch_one(&mut **tx)
                 .await?;
         if page_count > 0 {
             return Err(AppError::new(
@@ -159,7 +158,7 @@ impl CommandHandler<'_> {
             "SELECT photo_id FROM sequence_items WHERE project_id=? ORDER BY position",
         )
         .bind(project)
-        .fetch_all(&mut *tx)
+        .fetch_all(&mut **tx)
         .await?;
         if photo_ids.is_empty() {
             return Err(AppError::new(
@@ -172,7 +171,7 @@ impl CommandHandler<'_> {
         for photo_id in &photo_ids {
             let asset: Option<String> = sqlx::query_scalar(
                 "SELECT a.id FROM source_assets a JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id WHERE alias.photo_id=? AND a.project_id=? AND p.project_id=?",
-            ).bind(photo_id).bind(project).bind(project).fetch_optional(&mut *tx).await?;
+            ).bind(photo_id).bind(project).bind(project).fetch_optional(&mut **tx).await?;
             asset_ids.push(asset.ok_or_else(|| {
                 AppError::new(
                     "ASSET_NOT_FOUND",
@@ -184,7 +183,7 @@ impl CommandHandler<'_> {
         // 读取规格
         let spec: String = sqlx::query_scalar("SELECT spec_json FROM publications WHERE id=?")
             .bind(&cmd.publication_id)
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await?;
         let spec: serde_json::Value = serde_json::from_str(&spec)
             .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
@@ -202,13 +201,13 @@ impl CommandHandler<'_> {
         let cover_id = domain::id();
         sqlx::query("INSERT INTO publication_pages(id,publication_id,page_number,side,width_mm,height_mm,margin_mm,bleed_mm,created_at,updated_at) VALUES(?,?,0,'cover',?,?,?,3,?,?)")
             .bind(&cover_id).bind(&cmd.publication_id).bind(w).bind(h).bind(margin).bind(&now).bind(&now)
-            .execute(&mut *tx).await?;
+            .execute(&mut **tx).await?;
         // 封面放第一张
         sqlx::query("INSERT INTO publication_frames(id,page_id,x_mm,y_mm,width_mm,height_mm,fit_mode,asset_id,created_at,updated_at) VALUES(?,?,?,?,?,?,'fill',?,?,?)")
             .bind(domain::id()).bind(&cover_id).bind(margin).bind(margin)
             .bind(w - margin * 2.0).bind(h - margin * 2.0)
             .bind(&asset_ids[0]).bind(&now).bind(&now)
-            .execute(&mut *tx).await?;
+            .execute(&mut **tx).await?;
 
         // 内页
         let mut page_num = 1i64;
@@ -218,7 +217,7 @@ impl CommandHandler<'_> {
             sqlx::query("INSERT INTO publication_pages(id,publication_id,page_number,side,width_mm,height_mm,margin_mm,bleed_mm,created_at,updated_at) VALUES(?,?,?,?,?,?,?,3,?,?)")
                 .bind(&page_id).bind(&cmd.publication_id).bind(page_num).bind(side)
                 .bind(w).bind(h).bind(margin).bind(&now).bind(&now)
-                .execute(&mut *tx).await?;
+                .execute(&mut **tx).await?;
 
             // 计算每张图的位置
             let avail_w = w - margin * 2.0;
@@ -244,7 +243,7 @@ impl CommandHandler<'_> {
                     .bind(domain::id()).bind(&page_id)
                     .bind(fx).bind(fy).bind(fw).bind(fh)
                     .bind(asset_id).bind(&now).bind(&now)
-                    .execute(&mut *tx).await?;
+                    .execute(&mut **tx).await?;
             }
             page_num += 1;
         }
@@ -253,16 +252,15 @@ impl CommandHandler<'_> {
             .bind(&now)
             .bind(&cmd.publication_id)
             .bind(project)
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await?;
-        tx.commit().await?;
         Ok(page_num - 1) // 返回生成的内页数
     }
 
     /// 列出项目的出版物。
     pub async fn list_publications(&self, project: &str) -> Result<Vec<Publication>> {
-        let rows = sqlx::query_as::<_, (String, String, String, String, String, String)>(
-            "SELECT id, project_id, pub_type, title, state, created_at FROM publications WHERE project_id=? ORDER BY created_at",
+        let rows = sqlx::query_as::<_, (String, String, String, String, String, String,i64)>(
+            "SELECT id, project_id, pub_type, title, state, created_at,revision FROM publications WHERE project_id=? ORDER BY created_at",
         )
         .bind(project)
         .fetch_all(&self.store.pool)
@@ -270,13 +268,14 @@ impl CommandHandler<'_> {
         Ok(rows
             .into_iter()
             .map(
-                |(id, project_id, pub_type, title, state, created_at)| Publication {
+                |(id, project_id, pub_type, title, state, created_at, revision)| Publication {
                     id,
                     project_id,
                     pub_type,
                     title,
                     state,
                     created_at,
+                    revision,
                 },
             )
             .collect())

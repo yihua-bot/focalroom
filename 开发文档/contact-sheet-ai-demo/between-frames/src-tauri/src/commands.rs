@@ -931,6 +931,49 @@ pub async fn canvas_get_annotations(
 // ── G7 Publishing IPC ──
 
 #[tauri::command]
+pub async fn pub_execute(
+    state: State<'_, Backend>,
+    request: crate::publication_commands::PublicationCommandRequest,
+) -> Result<crate::publication_commands::PublicationReceipt> {
+    state.store.execute_publication(request).await
+}
+#[tauri::command]
+pub async fn pub_layout(
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+) -> Result<crate::publication_versions::PublicationDocument> {
+    state
+        .store
+        .publication_document(&project_id, &publication_id)
+        .await
+}
+#[tauri::command]
+pub async fn pub_versions(
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+    before: Option<i64>,
+) -> Result<Vec<crate::publication_versions::PublicationVersionInfo>> {
+    state
+        .store
+        .publication_versions(&project_id, &publication_id, before)
+        .await
+}
+#[tauri::command]
+pub async fn pub_version(
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+    version_id: String,
+) -> Result<crate::publication_versions::PublicationVersion> {
+    state
+        .store
+        .publication_version(&project_id, &publication_id, &version_id)
+        .await
+}
+
+#[tauri::command]
 pub async fn pub_create(
     state: State<'_, Backend>,
     project_id: String,

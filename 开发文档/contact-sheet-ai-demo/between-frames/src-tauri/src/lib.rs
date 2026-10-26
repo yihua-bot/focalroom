@@ -28,6 +28,9 @@ pub mod login_guard;
 mod macos_menu;
 pub mod photo_inspection;
 pub mod product_links;
+pub mod publication_commands;
+pub(crate) mod publication_previews;
+pub mod publication_versions;
 pub mod publishing;
 mod resource_commands;
 pub mod seed_demo;
@@ -211,6 +214,10 @@ pub fn run() {
             commands::canvas_get_photo_sources,
             commands::canvas_get_annotations,
             commands::pub_create,
+            commands::pub_execute,
+            commands::pub_layout,
+            commands::pub_versions,
+            commands::pub_version,
             commands::pub_list,
             commands::pub_pages,
             commands::pub_generate
