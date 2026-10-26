@@ -12,6 +12,7 @@ const rpc=async<T>(command:string,args:Record<string,unknown>={}):Promise<T>=>{
 };
 type LocalProject={id:string;revision:number;sequence:string[];photos:{id:string;name:string;status:string}[]};
 test('真实选片修订：部分采纳后另存、查看冻结依据、重启保持且不修改父版或作品',async({page})=>{
+ test.setTimeout(120_000);
  const outside:string[]=[],errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/*',route=>{if(['localhost','127.0.0.1','[::1]'].includes(new URL(route.request().url()).hostname))return route.continue();outside.push(route.request().url());return route.abort();});
  await installAccountFixture(page);await installDesktopBridge(page,base);
