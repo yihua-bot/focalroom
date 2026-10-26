@@ -423,6 +423,8 @@ pub mod native_transform {
 
     // macOS 位图上下文不支持 24bpp 紧凑 RGB，采用 32bpp RGBX（kCGImageAlphaNoneSkipLast=5）。
     const ALPHA_NONE_SKIP_LAST: u32 = 5;
+    // 16bpc 同样需 64bpp RGBX；小端字节序（kCGBitmapByteOrder16Little=0x1000，字节序字段位于 12–14 位）让内存布局与 u16 原生序一致。
+    const ALPHA_NONE_SKIP_LAST_16LE: u32 = 5 | 0x1000;
 
     fn bitmap_context(space: &CGColorSpace, width: usize, height: usize) -> CGContext {
         CGContext::create_bitmap_context(
@@ -433,6 +435,18 @@ pub mod native_transform {
             width * 4,
             space,
             ALPHA_NONE_SKIP_LAST,
+        )
+    }
+
+    fn bitmap_context16(space: &CGColorSpace, width: usize, height: usize) -> CGContext {
+        CGContext::create_bitmap_context(
+            None,
+            width,
+            height,
+            16,
+            width * 8,
+            space,
+            ALPHA_NONE_SKIP_LAST_16LE,
         )
     }
 
@@ -480,6 +494,59 @@ pub mod native_transform {
         let converted = dst_ctx.data();
         for (index, chunk) in converted.chunks_exact(4).enumerate() {
             pixels[index * 3..index * 3 + 3].copy_from_slice(&chunk[..3]);
+        }
+        Ok(())
+    }
+
+    /// 就地按目标 ICC 变换 RGB16 像素（u16 三通道，主机字节序）。
+    pub fn transform_rgb16(
+        src_icc: &[u8],
+        dst_icc: &[u8],
+        pixels: &mut [u16],
+        width: usize,
+        height: usize,
+    ) -> Result<()> {
+        if width == 0 || height == 0 || width > 65535 || height > 65535 {
+            return Err(AppError::new("VALIDATION_ERROR", "像素尺寸超出支持范围"));
+        }
+        let expected = width
+            .checked_mul(height)
+            .and_then(|n| n.checked_mul(3))
+            .ok_or_else(|| AppError::new("VALIDATION_ERROR", "像素尺寸溢出"))?;
+        if pixels.len() != expected {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "像素缓冲长度与尺寸不匹配",
+            ));
+        }
+        let src_space = space_from_icc(src_icc)?;
+        let dst_space = space_from_icc(dst_icc)?;
+        let mut src_ctx = bitmap_context16(&src_space, width, height);
+        let mut staging = Vec::with_capacity(expected / 3 * 8);
+        for pixel in pixels.chunks_exact(3) {
+            for value in pixel {
+                staging.extend_from_slice(&value.to_le_bytes());
+            }
+            staging.extend_from_slice(&65535u16.to_le_bytes());
+        }
+        src_ctx.data().copy_from_slice(&staging);
+        let src_image = src_ctx
+            .create_image()
+            .ok_or_else(|| AppError::new("COLOR_TRANSFORM_FAILED", "无法从源像素创建图像"))?;
+        let mut dst_ctx = bitmap_context16(&dst_space, width, height);
+        dst_ctx.draw_image(
+            CGRect::new(
+                &CGPoint::new(0.0, 0.0),
+                &CGSize::new(width as f64, height as f64),
+            ),
+            &src_image,
+        );
+        let converted = dst_ctx.data();
+        for (index, chunk) in converted.chunks_exact(8).enumerate() {
+            for component in 0..3 {
+                let bytes = [chunk[component * 2], chunk[component * 2 + 1]];
+                pixels[index * 3 + component] = u16::from_le_bytes(bytes);
+            }
         }
         Ok(())
     }
@@ -857,6 +924,72 @@ mod diagnostic_tests {
         );
         assert!(super::native_transform::transform_rgb8(&srgb, &srgb, &mut pixels, 2, 1).is_err());
         let mut wrong = vec![0u8; 4];
-        assert!(super::native_transform::transform_rgb8(&srgb, &srgb, &mut wrong, 1, 1).is_err());
+        assert!(super::native_transform::transform_rgb8(&srgb, &srgb, &mut wrong, 1, 1).is_err())
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn native_transform16_identity_keeps_srgb_pixels() {
+        let srgb = system_profile("sRGB Profile.icc");
+        let mut pixels: Vec<u16> = vec![
+            65535, 0, 0, 0, 65535, 0, 0, 0, 65535, 65535, 65535, 65535, 4626, 25443, 51400,
+        ];
+        let expected = pixels.clone();
+        super::native_transform::transform_rgb16(&srgb, &srgb, &mut pixels, 5, 1).unwrap();
+        for (actual, want) in pixels.iter().zip(expected.iter()) {
+            assert!(
+                ((*actual as i32) - (*want as i32)).abs() <= 257,
+                "16 位 identity 差异过大: {pixels:?}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn native_transform16_srgb_to_display_p3_matches_reference() {
+        let srgb = system_profile("sRGB Profile.icc");
+        let p3 = system_profile("Display P3.icc");
+        let mut pixels: Vec<u16> = vec![65535, 0, 0, 0, 65535, 0, 0, 0, 65535, 65535, 65535, 65535];
+        super::native_transform::transform_rgb16(&srgb, &p3, &mut pixels, 4, 1).unwrap();
+        let scaled = |pixel: usize, component: usize| {
+            (pixels[pixel * 3 + component] as f64 / 257.0).round() as i32
+        };
+        // 16 位结果按 8 位尺度（÷257）须与 RGB8 预登记参考一致：
+        // 红 234/51/35、绿 117/251/76、蓝 245、白 255。
+        for (component, want) in [(0usize, 234), (1, 51), (2, 35)] {
+            assert!(
+                (scaled(0, component) - want).abs() <= 2,
+                "红{component} {}",
+                scaled(0, component)
+            );
+        }
+        for (component, want) in [(0usize, 117), (1, 251), (2, 76)] {
+            assert!(
+                (scaled(1, component) - want).abs() <= 2,
+                "绿{component} {}",
+                scaled(1, component)
+            );
+        }
+        assert!((scaled(2, 2) - 245).abs() <= 2, "蓝B {}", scaled(2, 2));
+        for component in 0..3 {
+            assert!(
+                (scaled(3, component) - 255).abs() <= 1,
+                "白{component} {}",
+                scaled(3, component)
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn native_transform16_rejects_invalid_buffers() {
+        let srgb = system_profile("sRGB Profile.icc");
+        let mut pixels: Vec<u16> = vec![0; 3];
+        assert!(super::native_transform::transform_rgb16(&srgb, &srgb, &mut pixels, 2, 1).is_err());
+        let mut wrong: Vec<u16> = vec![0; 4];
+        assert!(super::native_transform::transform_rgb16(&srgb, &srgb, &mut wrong, 1, 1).is_err());
+        assert!(
+            super::native_transform::transform_rgb16(b"bad", &srgb, &mut pixels, 1, 1).is_err()
+        );
     }
 }
