@@ -231,11 +231,9 @@ impl Harness {
             "pub_list" => json!(self.store.list_publications(id).await?),
             "pub_execute" => json!(
                 self.store
-                    .execute_publication(
-                        serde_json::from_value(args["request"].clone()).map_err(|error| {
-                            AppError::new("VALIDATION_ERROR", error.to_string())
-                        })?
-                    )
+                    .execute_publication(serde_json::from_value(args["request"].clone()).map_err(
+                        |error| { AppError::new("VALIDATION_ERROR", error.to_string()) }
+                    )?)
                     .await?
             ),
             "pub_layout" => json!(
