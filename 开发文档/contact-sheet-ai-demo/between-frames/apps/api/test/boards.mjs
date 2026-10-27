@@ -137,16 +137,13 @@ test('G6 cookie mutations require CSRF; revoked grants stop existing board acces
 test('H0-04 board with real asset alias returns photo_id for image ticket flow', async () => {
   // 创建带真实 alias 的画布节点——验证 photo_id 从 JOIN 返回
   const created = await call('/boards', 'POST', owner, { projectId: project, title: '真实照片画布' });
-  // 插入 source_asset + alias（模拟桌面端同步上来的资产）
-  const assetId = randomUUID();
-  await pool.query(
-    'INSERT INTO fr_source_assets(id, project_id, photo_id, content_sha256, file_size, width, height, format) VALUES($1,$2,$3,$4,100,96,64,\'jpeg\')',
-    [assetId, project, 'p1', 'b'.repeat(64)],
-  );
-  await pool.query(
-    'INSERT INTO fr_asset_aliases(photo_id, asset_id, project_id) VALUES($1,$2,$3)',
-    ['p1', assetId, project],
-  );
+  // 复用 before 中真实上传建立的映射，不能以手工插入掩盖非 UUID 照片映射失败。
+  const alias = (await pool.query(
+    'SELECT a.asset_id FROM fr_asset_aliases a JOIN fr_source_assets s ON s.id=a.asset_id WHERE a.project_id=$1 AND a.photo_id=$2 AND s.project_id=$1',
+    [project, 'p1'],
+  )).rows[0];
+  assert.ok(alias, '预览上传应同时建立资产与原照片编号的映射');
+  const assetId = alias.asset_id;
   // 在画布上放一个引用该资产的照片节点
   await pool.query(
     'INSERT INTO fr_canvas_nodes(id, board_id, node_type, x, y, width, height, z_order, asset_id) VALUES($1,$2,\'photo\',50,60,220,160,1,$3)',
@@ -296,4 +293,39 @@ test('G6 canvas event log: commands append ordered events; cursor replays increm
   const viewerView = await call('/boards/' + created.id + '/events', 'GET', viewer);
   assert.equal(viewerView.events.length, 3);
   await call('/boards/' + created.id + '/events', 'GET', outsider, undefined, 403);
+});
+
+test('G6 board lifecycle: state transitions are editor-gated formal commands', async () => {
+  const created = await call('/boards', 'POST', owner, { projectId: project, title: '生命周期画布' });
+  const envelope = (baseRevision, actions) => ({
+    schemaVersion: 3, commandId: randomUUID(), idempotencyKey: randomUUID(),
+    projectId: project, baseRevision,
+    operations: actions.map(action => ({ opId: randomUUID(), action })),
+  });
+  const post = (body, status = 200) => call('/boards/' + created.id + '/commands', 'POST', owner, body, status);
+  const transition = (baseRevision, target, extra = []) =>
+    envelope(baseRevision, [{ type: 'transitionState', target }, ...extra]);
+
+  // 评审者（可提案、无编辑权）不能转换状态。
+  await call('/boards/' + created.id + '/commands', 'POST', reviewer, transition(0, 'official'), 403);
+
+  // 混排（内容+转换）直接拒绝。
+  await post(transition(0, 'official', [{ type: 'createNode', nodeType: 'photo', x: 0, y: 0, width: 10, height: 10 }]), 400);
+
+  // 拥有者发布草稿：修订推进、事件追加。
+  const publish = await post(transition(0, 'official'));
+  assert.equal(publish.ok, true);
+  assert.equal(publish.newRevision, 1);
+  const events = await call('/boards/' + created.id + '/events?after=0&limit=10');
+  assert.equal(events.events.length, 1);
+  assert.equal(events.events[0].revision, 1);
+
+  // 正式画布拒绝内容命令；只能冻结。
+  await post(envelope(1, [{ type: 'createNode', nodeType: 'photo', x: 0, y: 0, width: 10, height: 10 }]), 409);
+  const freeze = await post(transition(1, 'frozen'));
+  assert.equal(freeze.newRevision, 2);
+
+  // 冻结为终态：一切命令拒绝。
+  await post(transition(2, 'official'), 409);
+  await post(envelope(2, [{ type: 'createNode', nodeType: 'photo', x: 0, y: 0, width: 10, height: 10 }]), 409);
 });

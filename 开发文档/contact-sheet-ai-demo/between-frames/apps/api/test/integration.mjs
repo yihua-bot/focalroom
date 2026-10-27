@@ -47,6 +47,20 @@ test('M4 promotion verifies media, strips EXIF, atomically commits and replays',
   assert.equal((await fetch(`${base}${ticket.url}`)).status, 401, '单次票据不得重放');
   assert.equal(Number((await pool.query('SELECT count(*) FROM fr_versions WHERE project_id=$1', [project])).rows[0].count), 1);
 });
+test('M4 non-UUID photo IDs retain stable asset aliases after preview upload', async () => {
+  const rows = (await pool.query(
+    'SELECT a.photo_id,a.project_id,a.asset_id,s.id,s.photo_id AS source_photo_id FROM fr_asset_aliases a JOIN fr_source_assets s ON s.id=a.asset_id WHERE a.project_id=$1 ORDER BY a.photo_id',
+    [project],
+  )).rows;
+  assert.equal(rows.length, 3, '不能吞掉非 UUID 照片的资产映射失败');
+  assert.deepEqual(rows.map(row => row.photo_id), ['p1', 'p2', 'p3']);
+  for (const row of rows) {
+    assert.equal(row.project_id, project);
+    assert.equal(row.asset_id, row.id);
+    assert.equal(row.photo_id, row.source_photo_id);
+    assert.match(row.asset_id, /^[a-f0-9-]{36}$/);
+  }
+});
 test('M4 project-only invitation, email binding, one-time acceptance and isolation', async () => {
   const invited = await invite(reviewer); await invite(viewer, 'VIEWER');
   await call('/invitations/accept', 'POST', reviewer.token, { token: invited.token }, 403);

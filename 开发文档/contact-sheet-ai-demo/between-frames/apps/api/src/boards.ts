@@ -47,6 +47,7 @@ const canvasActionSchema = z.discriminatedUnion('type', [
     moves: z.array(z.strictObject({ nodeId: idSchema, x: coordinateSchema, y: coordinateSchema })).min(1).max(100),
   }),
   z.strictObject({ type: z.literal('deleteNode'), nodeId: idSchema }),
+  z.strictObject({ type: z.literal('transitionState'), target: z.enum(['official', 'frozen']) }),
 ]);
 const canvasCommandSchema = z.strictObject({
   schemaVersion: z.literal(3),
@@ -213,14 +214,24 @@ export class BoardService {
   async commands(headers: Headers, boardId: unknown, input: unknown) {
     const command = canvasCommandSchema.parse(input);
     const id = idSchema.parse(boardId);
-    return this.boardScope(headers, id, true, async ({ tx, user }) => {
+    return this.boardScope(headers, id, true, async ({ tx, user, principal }) => {
       // 独占 Board 行锁：串行化并发命令的读取-校验-推进，避免修订竞争。
       const board = (await tx.query(
         "SELECT project_id,state,revision FROM fr_boards WHERE id=$1 FOR UPDATE", [id],
       )).rows[0];
       assert(board, 404, "NOT_FOUND", "画布不存在");
       assert(command.projectId === board.project_id, 403, "PERMISSION_DENIED", "命令不属于此画布的项目");
-      assert(board.state === "draft", 409, "BOARD_READ_ONLY", "仅草稿画布接受正式命令");
+      // 生命周期：状态转换是正式决定（需项目编辑权限），不与内容操作混排；
+      // 冻结终态；正式画布只接受转换命令。
+      const transitions = command.operations.filter(op => op.action.type === "transitionState");
+      if (transitions.length) {
+        assert(transitions.length === command.operations.length, 400, "VALIDATION_ERROR", "状态转换命令不能混入其他操作");
+        assert(principal.can_edit_formal, 403, "PERMISSION_DENIED", "状态转换需要项目编辑权限");
+      }
+      assert(board.state !== "frozen", 409, "BOARD_READ_ONLY", "画布已冻结");
+      if (board.state === "official") {
+        assert(transitions.length && transitions.length === command.operations.length, 409, "BOARD_READ_ONLY", "正式画布仅接受冻结转换");
+      }
       const hash = digest(JSON.stringify(command));
       const replay = (await tx.query(
         "SELECT command_id,actor_id,payload_digest,reply FROM fr_canvas_commands WHERE board_id=$1 AND (command_id=$2 OR (project_id=$3 AND actor_id=$4 AND idempotency_key=$5))",
@@ -296,11 +307,17 @@ export class BoardService {
             );
             affected.push(move.nodeId);
           }
-        } else {
+        } else if (action.type === "deleteNode") {
           const current = await lockNode(action.nodeId);
           assert(!current.locked, 409, "NODE_LOCKED", "锁定节点须先解锁再删除");
           await tx.query("DELETE FROM fr_canvas_nodes WHERE id=$1 AND board_id=$2", [action.nodeId, id]);
           affected.push(action.nodeId);
+        } else {
+          // transitionState：仅草稿可发布或冻结；正式画布只能冻结（预检查已保证纯转换命令）。
+          assert(board.state === "draft" || (board.state === "official" && action.target === "frozen"),
+            409, "BOARD_READ_ONLY", "仅草稿可发布或冻结，正式画布仅可冻结");
+          await tx.query("UPDATE fr_boards SET state=$2, updated_at=now() WHERE id=$1", [id, action.target]);
+          board.state = action.target;
         }
       }
       const newRevision = board.revision + 1;

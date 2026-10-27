@@ -399,16 +399,22 @@ export class CloudService {
         // PG 事务内失败会 abort——用 SAVEPOINT 保护，失败回滚到保存点
         await tx.query('SAVEPOINT g1_asset_map');
         try {
+          // 旧照片 ID 允许非 UUID；资产表使用独立 UUID，通过 alias 保持业务身份。
+          const assetId = z.uuid().safeParse(photoId).success ? photoId : randomUUID();
           await tx.query(
             `INSERT INTO fr_source_assets(id, project_id, photo_id, content_sha256, file_size, width, height, format)
              VALUES($1, $2, $3, $4, $5, $6, $7, 'jpeg')
              ON CONFLICT (project_id, photo_id) DO NOTHING`,
-            [photoId, id, photoId, preview.sha, preview.data.length, preview.width, preview.height],
+            [assetId, id, photoId, preview.sha, preview.data.length, preview.width, preview.height],
           );
+          const source = (await tx.query(
+            'SELECT id FROM fr_source_assets WHERE project_id=$1 AND photo_id=$2',
+            [id, photoId],
+          )).rows[0];
           await tx.query(
             `INSERT INTO fr_asset_aliases(photo_id, asset_id, project_id) VALUES($1, $2, $3)
              ON CONFLICT (photo_id) DO NOTHING`,
-            [photoId, photoId, id],
+            [photoId, source.id, id],
           );
           await tx.query('RELEASE SAVEPOINT g1_asset_map');
         } catch {
