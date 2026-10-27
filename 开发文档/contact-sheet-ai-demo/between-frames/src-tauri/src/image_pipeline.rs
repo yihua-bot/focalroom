@@ -305,3 +305,216 @@ fn platform_decode(_path: &Path, _cache: &Path) -> Result<image::DynamicImage> {
         "HEIC/RAW 需要 macOS 平台解码器",
     ))
 }
+
+/// FR3-015 瓦片金字塔原型：有界内存的多级缩放瓦片与内容寻址缓存键。
+/// 当前为 CPU 级 2× 盒式降采样；真正局部解码与原生管线接入在 G2 评审后推进。
+pub mod tile_pyramid {
+    use crate::domain::{AppError, Result};
+
+    /// 瓦片边长（像素）；金字塔每级 2× 缩小，直到最长边 ≤ TILE。
+    pub const TILE: u32 = 256;
+    /// 降采样算法版本：纳入缓存键，算法变化时旧瓦片自然失效。
+    pub const PYRAMID_VERSION: u8 = 1;
+
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub struct TileKey {
+        pub source_sha256: String,
+        pub level: u8,
+        pub x: u32,
+        pub y: u32,
+    }
+
+    impl TileKey {
+        pub fn cache_string(&self) -> String {
+            format!(
+                "v{}.{}.{}.{}.{}",
+                PYRAMID_VERSION, self.source_sha256, self.level, self.x, self.y
+            )
+        }
+    }
+
+    pub fn level_count(width: u32, height: u32) -> Result<u8> {
+        if width == 0 || height == 0 {
+            return Err(AppError::new("VALIDATION_ERROR", "金字塔尺寸必须为正"));
+        }
+        let mut levels = 1u8;
+        let mut edge = width.max(height);
+        while edge > TILE {
+            edge = edge.div_ceil(2);
+            levels += 1;
+        }
+        Ok(levels)
+    }
+
+    /// 2× 盒式降采样：每 2×2 块取算术平均（含 alpha）；奇数行列的边缘像素丢弃。
+    pub fn downsample_2x(width: u32, height: u32, rgba: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
+        if width == 0 || height == 0 {
+            return Err(AppError::new("VALIDATION_ERROR", "降采样尺寸必须为正"));
+        }
+        if rgba.len() != width as usize * height as usize * 4 {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "像素缓冲长度与尺寸不匹配",
+            ));
+        }
+        let (out_w, out_h) = (width / 2, height / 2);
+        if out_w == 0 || out_h == 0 {
+            return Ok((width, height, rgba.to_vec()));
+        }
+        let stride = width as usize * 4;
+        let mut out = Vec::with_capacity(out_w as usize * out_h as usize * 4);
+        for y in 0..out_h {
+            for x in 0..out_w {
+                let base = (y as usize * 2) * stride + (x as usize * 2) * 4;
+                for component in 0..4 {
+                    let sum = rgba[base + component] as u32
+                        + rgba[base + 4 + component] as u32
+                        + rgba[base + stride + component] as u32
+                        + rgba[base + stride + 4 + component] as u32;
+                    out.push((sum / 4) as u8);
+                }
+            }
+        }
+        Ok((out_w, out_h, out))
+    }
+
+    /// 提取 (x, y) 号瓦片；边缘瓦片可能小于 TILE×TILE，坐标完全越界则报错。
+    pub fn tile_pixels(
+        rgba: &[u8],
+        width: u32,
+        height: u32,
+        x: u32,
+        y: u32,
+    ) -> Result<(u32, u32, Vec<u8>)> {
+        if width == 0 || height == 0 || rgba.len() != width as usize * height as usize * 4 {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "像素缓冲长度与尺寸不匹配",
+            ));
+        }
+        let tile_w = TILE.min(width.saturating_sub(x * TILE));
+        let tile_h = TILE.min(height.saturating_sub(y * TILE));
+        if tile_w == 0 || tile_h == 0 {
+            return Err(AppError::new("VALIDATION_ERROR", "瓦片坐标超出图像范围"));
+        }
+        let mut out = vec![0u8; tile_w as usize * tile_h as usize * 4];
+        for row in 0..tile_h {
+            let src = ((y * TILE + row) as usize * width as usize + (x * TILE) as usize) * 4;
+            let dst = row as usize * tile_w as usize * 4;
+            out[dst..dst + tile_w as usize * 4]
+                .copy_from_slice(&rgba[src..src + tile_w as usize * 4]);
+        }
+        Ok((tile_w, tile_h, out))
+    }
+
+    /// 构建完整金字塔（level 0 为原图）；总内存 ≤ 原图 × 4/3（几何级数）。
+    pub fn build_levels(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<(u32, u32, Vec<u8>)>> {
+        let count = level_count(width, height)?;
+        let mut levels = Vec::with_capacity(count as usize);
+        levels.push((width, height, rgba.to_vec()));
+        while levels.len() < count as usize {
+            let (w, h, data) = levels.last().expect("level 0 已推入");
+            let (nw, nh, nd) = downsample_2x(*w, *h, data)?;
+            // 一维尺寸为 1 时无法再缩小，提前终止，避免与 level_count 计数死循环。
+            if nw == *w && nh == *h {
+                break;
+            }
+            levels.push((nw, nh, nd));
+        }
+        Ok(levels)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::collections::HashSet;
+
+        fn solid(width: u32, height: u32, pixel: [u8; 4]) -> Vec<u8> {
+            pixel
+                .iter()
+                .copied()
+                .cycle()
+                .take(width as usize * height as usize * 4)
+                .collect()
+        }
+
+        #[test]
+        fn level_count_halves_until_tile() {
+            assert_eq!(level_count(256, 256).unwrap(), 1);
+            assert_eq!(level_count(100, 80).unwrap(), 1);
+            assert_eq!(level_count(1000, 800).unwrap(), 3);
+            assert_eq!(level_count(5000, 300).unwrap(), 6);
+            assert!(level_count(0, 10).is_err());
+        }
+
+        #[test]
+        fn downsample_averages_2x2_blocks() {
+            let rgba = vec![
+                0, 0, 0, 255, 100, 100, 100, 255, //
+                200, 200, 200, 255, 0, 0, 0, 255,
+            ];
+            let (w, h, out) = downsample_2x(2, 2, &rgba).unwrap();
+            assert_eq!((w, h), (1, 1));
+            assert_eq!(out, vec![75, 75, 75, 255]);
+            let padded = solid(3, 3, [10, 20, 30, 255]);
+            let (w, h, out) = downsample_2x(3, 3, &padded).unwrap();
+            assert_eq!((w, h), (1, 1));
+            assert_eq!(out, solid(1, 1, [10, 20, 30, 255]));
+            assert!(downsample_2x(2, 2, &[0u8; 7]).is_err());
+        }
+
+        #[test]
+        fn tile_extraction_clamps_edges() {
+            let image = solid(300, 300, [1, 2, 3, 4]);
+            let (w, h, t) = tile_pixels(&image, 300, 300, 0, 0).unwrap();
+            assert_eq!((w, h), (256, 256));
+            assert_eq!(t.len(), 256 * 256 * 4);
+            let (w, h, t) = tile_pixels(&image, 300, 300, 1, 1).unwrap();
+            assert_eq!((w, h), (44, 44));
+            assert_eq!(t, solid(44, 44, [1, 2, 3, 4]));
+            assert!(tile_pixels(&image, 300, 300, 2, 0).is_err());
+        }
+
+        #[test]
+        fn cache_keys_are_stable_and_distinct() {
+            let key = TileKey {
+                source_sha256: "a".repeat(64),
+                level: 0,
+                x: 1,
+                y: 2,
+            };
+            assert_eq!(key.cache_string(), key.clone().cache_string());
+            assert!(key.cache_string().starts_with("v1."));
+            let variants = [
+                key.clone(),
+                TileKey {
+                    level: 1,
+                    ..key.clone()
+                },
+                TileKey {
+                    x: 2,
+                    ..key.clone()
+                },
+                TileKey {
+                    source_sha256: "b".repeat(64),
+                    ..key.clone()
+                },
+            ];
+            let unique: HashSet<_> = variants.iter().map(|k| k.cache_string()).collect();
+            assert_eq!(unique.len(), variants.len());
+        }
+
+        #[test]
+        fn pyramid_memory_stays_within_geometric_bound() {
+            let (w, h) = (2048u32, 2048u32);
+            let rgba = solid(w, h, [9, 8, 7, 255]);
+            let levels = build_levels(w, h, &rgba).unwrap();
+            assert_eq!(levels.len(), level_count(w, h).unwrap() as usize);
+            let total: usize = levels.iter().map(|(_, _, data)| data.len()).sum();
+            let bound = w as usize * h as usize * 4 * 4 / 3;
+            assert!(total <= bound, "total={total} bound={bound}");
+            let (coarse_w, _, _) = levels.last().unwrap();
+            assert_eq!(*coarse_w, 256);
+        }
+    }
+}
