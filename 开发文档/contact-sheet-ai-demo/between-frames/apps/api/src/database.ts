@@ -44,6 +44,7 @@ async function migrations() {
       "0021_ai_async.sql",
       "0022_ai_durable_queue.sql",
       "0023_author_memory.sql",
+      "0024_billing_refunds.sql",
     ].map(
       async (name) => {
         const sql = await readFile(

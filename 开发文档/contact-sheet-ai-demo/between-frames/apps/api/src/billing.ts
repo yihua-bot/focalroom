@@ -155,6 +155,26 @@ export class BillingService {
           await tx.query("UPDATE fr_billing_checkouts SET state='CLOSED' WHERE user_id=$1 AND state='READY' AND $2 IN ('active','trialing')",[customer.user_id,sub.status]);
         }
       }
+      if(event.refund) {
+        const refund=event.refund;
+        // 争议通知只带 charge 引用，需回查 charge 才能定位发票。
+        let invoiceId=refund.invoiceId;
+        if(!invoiceId && refund.chargeId) invoiceId=(await gateway.charge(refund.chargeId)).invoiceId;
+        assert(invoiceId,409,'BILLING_RECONCILIATION_REQUIRED','退款对应的账单需要核对');
+        const invoice=(await tx.query('SELECT id,user_id,amount,currency,tokens_granted FROM fr_billing_invoices WHERE id=$1',[invoiceId])).rows[0];
+        assert(invoice,409,'BILLING_RECONCILIATION_REQUIRED','退款对应的账单尚未入账');
+        assert(refund.currency===invoice.currency && refund.amount>0 && refund.amount<=Number(invoice.amount),409,'BILLING_REFUND_INVALID','退款金额与账单不一致');
+        const tokensDue=invoice.tokens_granted>0?Math.floor(invoice.tokens_granted*refund.amount/Number(invoice.amount)):0;
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,701))',[invoice.user_id]);
+        const account=(await tx.query('SELECT granted,spent,reserved FROM fr_ai_accounts WHERE user_id=$1 FOR UPDATE',[invoice.user_id])).rows[0];
+        // 已消费部分无法追回：只撤回当前可用额度，缺口记入 refunds 供人工对账。
+        const available=account?Math.max(0,Number(account.granted)-Number(account.spent)-Number(account.reserved)):0;
+        const revoke=Math.min(tokensDue,available);
+        // 先落退款记录（幂等键=退款对象 ID）：换事件 ID 重投同一退款时不重复扣减。
+        const saved=await tx.query('INSERT INTO fr_billing_refunds(id,invoice_id,user_id,kind,amount,tokens_due,tokens_revoked) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING RETURNING id',
+          [refund.id,invoice.id,invoice.user_id,refund.kind,refund.amount,tokensDue,revoke]);
+        if(saved.rowCount && revoke>0) await tx.query('UPDATE fr_ai_accounts SET granted=granted-$2 WHERE user_id=$1',[invoice.user_id,revoke]);
+      }
       await tx.query('INSERT INTO fr_billing_events(id,digest,event_type) VALUES($1,$2,$3)',[event.id,fingerprint,event.type]);
       return {received:true};
     });

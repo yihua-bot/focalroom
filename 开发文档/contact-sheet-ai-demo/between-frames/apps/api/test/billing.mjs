@@ -10,7 +10,7 @@ import { StripeBillingGateway } from '../src/billing-gateway.ts';
 
 const config={secret:'sk_test_fixture',webhookSecret:'whsec_fixture',prices:[{id:'price_monthly',interval:'month',amount:1900,currency:'USD',includedTokens:50000},{id:'price_yearly',interval:'year',amount:19000,currency:'USD',includedTokens:600000}]};
 let pool,api,base,owner,other,disabledApi,noAiApi,salesOffApi;
-const customers=new Map(),sessions=new Map(),subscriptions=new Map(),invoices=new Map();
+const customers=new Map(),sessions=new Map(),subscriptions=new Map(),invoices=new Map(),charges=new Map();
 let failAfterCreating=false, remoteCheckouts=0, priceChanged=false;
 const gateway=new StripeBillingGateway(config,async(path,method,body,key)=>{
   if(path==='/customers') { const id='cus_'+body.get('metadata[focalroom_user_id]').replaceAll('-','');customers.set(body.get('metadata[focalroom_user_id]'),id);return {id}; }
@@ -29,6 +29,7 @@ const gateway=new StripeBillingGateway(config,async(path,method,body,key)=>{
   }
   if(path.startsWith('/subscriptions/')) { const value=subscriptions.get(path.split('/').pop());assert.ok(value,'仅允许本地订阅夹具');return structuredClone(value); }
   if(path.startsWith('/invoices/')) { const value=invoices.get(path.split('/').pop());assert.ok(value,'仅允许本地账单夹具');return structuredClone(value); }
+  if(path.startsWith('/charges/')) { const value=charges.get(path.split('/').pop());assert.ok(value,'仅允许本地付款夹具');return structuredClone(value); }
   throw new Error('没有实现的本地支付调用：'+path+' '+method);
 });
 async function call(path,{method='GET',account=owner,body,status=200,headers={}}={}) {
@@ -89,6 +90,40 @@ test('signature failures and stale notifications never grant access; paid invoic
   await call('/billing/cancel-checkout',{method:'POST',body:{},status:409});
   const foreign=await call('/billing/overview',{account:other});assert.equal(foreign.planId,'free');assert.equal(foreign.invoices.length,0);
   await webhook({...paid,data:{object:{id:'in_other',subscription:'sub_fixture'}}},{expected:409});
+});
+
+test('refunds and disputes revoke quota idempotently with spent shortfall recorded',async()=>{
+  const customer=customers.get(owner.user.id);
+  // 全额退款：in_fixture 授予的 50000 全部撤回。
+  const refunded=event('evt_refund_1','charge.refunded',{id:'ch_fixture',refunded:true,invoice:'in_fixture',currency:'usd',refunds:{data:[{id:'re_fixture',amount:1900}]}});
+  await webhook(refunded);
+  let overview=await call('/billing/overview');assert.equal(overview.usage.totalCredits,0);assert.equal(overview.usage.hasAllowance,false);
+  // 幂等：同事件重投 + 换事件 ID 重投同一退款对象，均不重复扣减。
+  await webhook(refunded);await webhook({...refunded,id:'evt_refund_replayed'});
+  const refunds=(await pool.query('SELECT kind,amount,tokens_due,tokens_revoked FROM fr_billing_refunds')).rows;
+  assert.equal(refunds.length,1);assert.equal(refunds[0].kind,'refund');assert.equal(refunds[0].amount,'1900');
+  assert.equal(refunds[0].tokens_due,50000);assert.equal(refunds[0].tokens_revoked,50000);
+  overview=await call('/billing/overview');assert.equal(overview.usage.totalCredits,0);
+  // 新周期发票再次授予 50000；消费 40000 后半额退款：应撤 25000，仅可撤 10000，缺口留档。
+  invoices.set('in_second',{id:'in_second',customer,subscription:'sub_fixture',status:'paid',amount_paid:1900,currency:'usd',created:Math.floor(Date.now()/1000),billing_reason:'subscription_cycle',lines:{data:[{price:{id:'price_monthly'},proration:false}]}});
+  await webhook(event('evt_paid_2','invoice.paid',{id:'in_second',subscription:'sub_fixture'}));
+  overview=await call('/billing/overview');assert.equal(overview.usage.totalCredits,50);
+  await pool.query('UPDATE fr_ai_accounts SET spent=40000 WHERE user_id=$1',[owner.user.id]);
+  await webhook(event('evt_refund_2','charge.refunded',{id:'ch_second',refunded:true,invoice:'in_second',currency:'usd',refunds:{data:[{id:'re_second',amount:950}]}}));
+  const second=(await pool.query("SELECT tokens_due,tokens_revoked FROM fr_billing_refunds WHERE id='re_second'")).rows[0];
+  assert.equal(second.tokens_due,25000);assert.equal(second.tokens_revoked,10000);
+  overview=await call('/billing/overview');assert.equal(overview.usage.totalCredits,40);
+  // 争议只带 charge 引用：经 charge 回查定位发票并撤回剩余可用。
+  charges.set('ch_second_full',{id:'ch_second_full',customer,invoice:'in_second',amount:1900,currency:'usd'});
+  await pool.query('UPDATE fr_ai_accounts SET spent=0 WHERE user_id=$1',[owner.user.id]);
+  await webhook(event('evt_dispute','charge.dispute.created',{id:'dp_fixture',charge:'ch_second_full',amount:1900,currency:'usd'}));
+  const dispute=(await pool.query("SELECT kind,tokens_due,tokens_revoked FROM fr_billing_refunds WHERE id='dp_fixture'")).rows[0];
+  assert.equal(dispute.kind,'dispute');assert.equal(dispute.tokens_due,50000);assert.equal(dispute.tokens_revoked,40000);
+  overview=await call('/billing/overview');assert.equal(overview.usage.totalCredits,0);
+  // 未知发票的退款拒绝核对。
+  await webhook(event('evt_refund_unknown','charge.refunded',{id:'ch_unknown',refunded:true,invoice:'in_missing',currency:'usd',refunds:{data:[{id:'re_unknown',amount:100}]}}),{expected:409});
+  // 恢复共享夹具（granted=50000/spent=0），维持后续取消测试的原有前置。
+  await pool.query('UPDATE fr_ai_accounts SET granted=50000, spent=0, reserved=0 WHERE user_id=$1',[owner.user.id]);
 });
 
 test('cancellation and old event delivery use current remote state; portal is account-scoped and active subscriptions reject another purchase',async()=>{

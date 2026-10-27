@@ -20,7 +20,9 @@ export function billingConfig(): BillingConfig | undefined {
     500,'BILLING_CONFIG_INVALID','订阅服务暂时不可用');
   return { secret, webhookSecret, prices, salesEnabled };
 }
-export type BillingRemoteEvent = { id: string; type: string; subscriptionId: string | null; invoiceId: string | null };
+export type BillingRefundEvent = { id: string; kind: 'refund' | 'dispute'; amount: number; currency: string; invoiceId: string | null; chargeId: string | null };
+export type BillingCharge = { id: string; customer: string; invoiceId: string | null; amount: number; currency: string };
+export type BillingRemoteEvent = { id: string; type: string; subscriptionId: string | null; invoiceId: string | null; refund: BillingRefundEvent | null };
 export type BillingSubscription = { id: string; customer: string; priceId: string; status: string; currentPeriodEnd: number; cancelAtPeriodEnd: boolean };
 export type BillingInvoice = { id: string; customer: string; subscriptionId: string; priceId: string; status: 'paid'|'open'|'void'; amount: number; currency: string; issuedAt: number; billingReason: string };
 export interface BillingGateway {
@@ -30,11 +32,24 @@ export interface BillingGateway {
   cancelCheckout(session: string, customer: string): Promise<void>;
   subscription(id: string): Promise<BillingSubscription>;
   invoice(id: string): Promise<BillingInvoice>;
+  charge(id: string): Promise<BillingCharge>;
   event(body: Buffer, signature: string): BillingRemoteEvent;
 }
 export type BillingTransport = (path: string, method: 'GET'|'POST', body?: URLSearchParams, idempotency?: string) => Promise<unknown>;
 const reference = z.string().regex(/^[A-Za-z0-9_]+$/).max(200);
 const ref = (value: unknown) => reference.parse(typeof value === 'object' && value ? (value as {id?:unknown}).id : value);
+// 退款通知取 refunds 列表最后一条（本次退款）；累计 amount_refunded 在多次退款下会重复扣减。
+const refundFromCharge = (object: Record<string, unknown>): BillingRefundEvent => {
+  const data=(object.refunds as {data?: unknown[]} | undefined)?.data;
+  const latest=Array.isArray(data)?data[data.length-1]:undefined;
+  const refund=z.object({id:reference,amount:z.number().int().positive()}).parse(latest);
+  assert(object.refunded===true && typeof object.invoice==='string' && typeof object.currency==='string',400,'BILLING_REFUND_INVALID','退款通知无法核对');
+  return {id:refund.id,kind:'refund',amount:refund.amount,currency:object.currency.toUpperCase(),invoiceId:ref(object.invoice),chargeId:null};
+};
+const refundFromDispute = (object: Record<string, unknown>): BillingRefundEvent => {
+  const dispute=z.object({id:reference,charge:z.unknown(),amount:z.number().int().positive(),currency:z.string()}).parse(object);
+  return {id:dispute.id,kind:'dispute',amount:dispute.amount,currency:dispute.currency.toUpperCase(),invoiceId:null,chargeId:ref(dispute.charge)};
+};
 export function paymentUrl(value: unknown, host: 'checkout.stripe.com'|'billing.stripe.com') {
   const url = new URL(z.string().url().parse(value));
   assert(url.protocol === 'https:' && url.hostname === host && !url.port && !url.username && !url.password,502,'BILLING_RESPONSE_INVALID','暂时无法打开付款页面');
@@ -93,6 +108,10 @@ export class StripeBillingGateway implements BillingGateway {
     assert(recurring.length===1,409,'BILLING_INVOICE_REVIEW','账单需要进一步核对');
     return {id:value.id,customer:ref(value.customer),subscriptionId:ref(value.subscription),priceId:recurring[0].price!.id,status:value.status,amount:value.amount_paid,currency:value.currency.toUpperCase(),issuedAt:value.created,billingReason:value.billing_reason};
   }
+  async charge(id: string): Promise<BillingCharge> {
+    const value = z.object({id:reference,customer:z.unknown(),invoice:z.unknown().nullable(),amount:z.number().int().positive(),currency:z.string()}).parse(await this.transport('/charges/'+reference.parse(id),'GET'));
+    return {id:value.id,customer:ref(value.customer),invoiceId:value.invoice?ref(value.invoice):null,amount:value.amount,currency:value.currency.toUpperCase()};
+  }
   event(body: Buffer, signature: string): BillingRemoteEvent {
     assert(body.length>0 && body.length<=1024*1024 && signature.length<=2048,400,'BILLING_SIGNATURE_INVALID','付款通知无效');
     const parts=signature.split(',').map(part=>part.trim().split('='));
@@ -105,6 +124,7 @@ export class StripeBillingGateway implements BillingGateway {
     assert(event.livemode===this.config.secret.startsWith('sk_live_'),400,'BILLING_MODE_MISMATCH','付款通知无效');
     const object=event.data.object;
     const subscriptionId=event.type.startsWith('customer.subscription.')?ref(object.id):event.type==='invoice.paid' && object.subscription?ref(object.subscription):null;
-    return {id:event.id,type:event.type,subscriptionId,invoiceId:event.type==='invoice.paid' && subscriptionId?ref(object.id):null};
+    const refund=event.type==='charge.refunded'?refundFromCharge(object):event.type==='charge.dispute.created'?refundFromDispute(object):null;
+    return {id:event.id,type:event.type,subscriptionId,invoiceId:event.type==='invoice.paid' && subscriptionId?ref(object.id):null,refund};
   }
 }
