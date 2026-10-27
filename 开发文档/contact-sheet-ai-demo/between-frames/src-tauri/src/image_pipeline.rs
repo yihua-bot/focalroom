@@ -408,11 +408,29 @@ pub mod tile_pyramid {
     }
 
     /// 构建完整金字塔（level 0 为原图）；总内存 ≤ 原图 × 4/3（几何级数）。
+    /// 构建完整金字塔（level 0 为原图）；总内存 ≤ 原图 × 4/3（几何级数）。
     pub fn build_levels(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<(u32, u32, Vec<u8>)>> {
+        build_levels_with_cancel(width, height, rgba, &|| false)
+    }
+
+    /// FR3-015 取消：起点与每级之间检查回调；取消返回 CANCELLED 结构化错误，
+    /// 不返回部分结果——调用方应放弃本次构建，已分配内存随返回值释放。
+    pub fn build_levels_with_cancel(
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+        should_cancel: &dyn Fn() -> bool,
+    ) -> Result<Vec<(u32, u32, Vec<u8>)>> {
         let count = level_count(width, height)?;
+        if should_cancel() {
+            return Err(AppError::new("CANCELLED", "金字塔构建已取消"));
+        }
         let mut levels = Vec::with_capacity(count as usize);
         levels.push((width, height, rgba.to_vec()));
         while levels.len() < count as usize {
+            if should_cancel() {
+                return Err(AppError::new("CANCELLED", "金字塔构建已取消"));
+            }
             let (w, h, data) = levels.last().expect("level 0 已推入");
             let (nw, nh, nd) = downsample_2x(*w, *h, data)?;
             // 一维尺寸为 1 时无法再缩小，提前终止，避免与 level_count 计数死循环。
@@ -515,6 +533,42 @@ pub mod tile_pyramid {
             assert!(total <= bound, "total={total} bound={bound}");
             let (coarse_w, _, _) = levels.last().unwrap();
             assert_eq!(*coarse_w, 256);
+        }
+
+        #[test]
+        fn cancellable_build_matches_plain_when_never_cancelled() {
+            let (w, h) = (1024u32, 768u32);
+            let rgba = solid(w, h, [5, 6, 7, 255]);
+            let plain = build_levels(w, h, &rgba).unwrap();
+            let cancellable = build_levels_with_cancel(w, h, &rgba, &|| false).unwrap();
+            assert_eq!(plain.len(), cancellable.len());
+        }
+
+        #[test]
+        fn immediate_cancel_returns_structured_error_without_copy() {
+            let rgba = solid(64, 64, [1, 1, 1, 255]);
+            let calls = std::cell::Cell::new(0);
+            let error = build_levels_with_cancel(64, 64, &rgba, &|| {
+                calls.set(calls.get() + 1);
+                true
+            })
+            .unwrap_err();
+            assert_eq!(error.code, "CANCELLED");
+            assert_eq!(calls.get(), 1);
+        }
+
+        #[test]
+        fn mid_way_cancel_stops_between_levels() {
+            let (w, h) = (2048u32, 2048u32);
+            let rgba = solid(w, h, [3, 4, 5, 255]);
+            let calls = std::cell::Cell::new(0);
+            let error = build_levels_with_cancel(w, h, &rgba, &|| {
+                calls.set(calls.get() + 1);
+                calls.get() == 2
+            })
+            .unwrap_err();
+            assert_eq!(error.code, "CANCELLED");
+            assert!(calls.get() >= 2);
         }
     }
 }
