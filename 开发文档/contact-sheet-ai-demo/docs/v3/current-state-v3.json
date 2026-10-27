@@ -3,16 +3,16 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-26T21:08:09.383Z",
-  "sourceHead": "d4d3e7045bc9c2e9fe32e66d89e165f323749fbb",
+  "observedAt": "2026-10-27T08:40:57.032Z",
+  "sourceHead": "8810482db86e48a62428f6498c85f063659165c9",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
   "ciWorkflow": {
     "path": "../../../.github/workflows/betweenframes-v2.yml",
-    "sha256": "fb4e66cd42211da17a1c216569369c1ab62397e81cd0dfea3017978f862b7b2e"
+    "sha256": "ad58918c027653518dac69d0fc470a9788fa3981b1de6bafcc6ba525720c42a6"
   },
-  "status": "V3_DEV_CONTINUING_MAIN_CI_GREEN",
+  "status": "G2_PROTOTYPES_COMPLETE_AWAIT_WIRING_DECISIONS",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -70,7 +70,7 @@
     {
       "id": "image-preview",
       "path": "src-tauri/src/image_pipeline.rs",
-      "sha256": "0096d02901a2ab068e7774732f98fb07068ed31beeed5ea5e1667c18afd35358",
+      "sha256": "9b5c8ccd2acdc9f2b86e20b8f498afbc6c3b0ac6fd0b3c339345de1e6a82cc91",
       "boundary": "320/1400px RGB8 JPEG; not high-bit-depth professional rendering"
     },
     {
@@ -270,13 +270,13 @@
           "sha256": "2369ffda3c92039b77a8dc75f2dfd2890467c4b002aaedb0b6f2185568ce2d6a"
         }
       ],
-      "backupSha256": "dc2c16c8c1f3827f4cffc470121714360c47eecedcf44c904b50fb0489759de5",
+      "backupSha256": "318d50a6ce53d212944b55d9a8e7ea1295b48bc5ad91a4f8a2135e8811b8aea7",
       "fixture": "generated JPEG and legacy v11 SQLite; no user data",
-      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmpkb0KNw",
+      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmplVPf4G",
       "foreignKeyViolations": 0,
       "legacyMigrations": 11,
       "restoredProjectionMatches": true,
-      "snapshotSha256": "cc2000fbb4674389667f6447ef4f1077af37681c59e81df39e16a5ecfdfe2d8f",
+      "snapshotSha256": "49278cffeb3123cbc4afc0d5f4c91d9bbf86b6e9b734d368b69922af3d5b7eb4",
       "snapshotUnchanged": true,
       "sourceSha256": "ddcce3e7c64670e2b67b55522783440118049c8107e958be51a5299df4b0709a",
       "sourceUnchanged": true,
@@ -607,59 +607,83 @@
   },
   "tests": [
     {
-      "id": "ci-restoration-batch",
+      "id": "ci-timeout-fix",
       "result": "PASS",
-      "commits": 8,
-      "head": "e3fcdaa",
-      "note": "lint/单测/E2E 1447 RPC/超时/fmt/文案/账户制共享/导出回执八层修复"
+      "head": "0758449",
+      "note": "foundation 45→60 分钟；40429261131 触顶后修复",
+      "run": 40434187276
     },
     {
-      "id": "postgresql-author-memory-suite",
+      "id": "color-rgb8-prototype",
       "result": "PASS",
-      "tests": 3,
-      "suites": "author-memory",
-      "head": "8bb2ae1",
-      "note": "Creator 隔离/跨项目只读/幂等写入/校验拒绝"
+      "head": "d87b3a6",
+      "tests": 12,
+      "note": "ColorSync RGB8 + 预登记参考值",
+      "run": 40408802288
     },
     {
-      "id": "postgresql-full-gate",
+      "id": "color-rgb16-prototype",
       "result": "PASS",
-      "suites": 15,
-      "tests": 114,
-      "exitCode": 0,
-      "head": "8bb2ae1"
+      "head": "2018c17",
+      "note": "64bpp LE + 跨精度参考值",
+      "run": 40415095009
     },
     {
-      "id": "author-memory-desktop-rust",
+      "id": "color-float-prototype",
       "result": "PASS",
+      "head": "4371242",
+      "note": "128bpp float，三精度收口",
+      "run": 40420194960
+    },
+    {
+      "id": "tile-pyramid-prototype",
+      "result": "PASS",
+      "head": "7f8363c",
       "tests": 5,
-      "head": "d4d3e70",
-      "note": "bearer/查询参数、AUTHORITY_MISMATCH、AUTH_REQUIRED、CLOUD_PROTOCOL、错误码透传"
+      "note": "内容寻址缓存键 + ≤4/3 内存界",
+      "run": 40425291158
     },
     {
-      "id": "author-memory-desktop-frontend",
+      "id": "pyramid-cancellation",
       "result": "PASS",
-      "tests": 18,
-      "files": 2,
-      "head": "d4d3e70",
-      "note": "仓库层转换/异常回执 + 面板共享分区只读/失败隔离"
+      "head": "30564b1",
+      "tests": 8,
+      "note": "CANCELLED 结构化回归，经 0758449 覆盖验证"
     },
     {
-      "id": "remote-ci-author-memory-api",
+      "id": "scaled-decode-prototype",
       "result": "PASS",
-      "run": 40388204296,
-      "head": "8bb2ae1"
+      "head": "4930f0e",
+      "tests": 3,
+      "note": "ImageIO 按长边解码，JPEG/PNG",
+      "run": 40439363737
     },
     {
-      "id": "remote-ci-author-memory-desktop",
+      "id": "g2-review-package",
       "result": "PASS",
-      "run": 40395672029,
-      "head": "d4d3e70"
+      "head": "3e78319",
+      "note": "FR3-014/015 评审包 + 4 决策点",
+      "run": 40460365889
+    },
+    {
+      "id": "25mp-decode-compare",
+      "result": "PASS",
+      "head": "086d8f6",
+      "note": "缩放 270ms/7.8MB 对全量 2324ms/100MB（8.6× 快 / 12.8× 省）",
+      "run": 40465015158
+    },
+    {
+      "id": "display-icc-prototype",
+      "result": "PASS",
+      "head": "8810482",
+      "tests": 19,
+      "note": "display_profile_bytes() + CI 虚拟显示器机器无关回归",
+      "run": 40470592050
     },
     {
       "id": "v3-baseline-legacy-restore",
       "result": "PASS",
-      "head": "d4d3e70"
+      "head": "8810482"
     },
     {
       "id": "g0-inventory",
@@ -667,30 +691,30 @@
       "pgTables": 46,
       "pgMigrations": 18,
       "sqliteMigrations": 33,
-      "head": "d4d3e70",
-      "migrationDeltaAllAdditive": true
+      "migrationDeltaAllAdditive": true,
+      "head": "8810482"
     }
   ],
   "remaining": [
-    "对方工作区 234 文件 WIP（canvas 命令/出版方向）待提交评审后合入",
-    "external_edit.rs 死路径清理推迟：对方 WIP 含 lib.rs，待其合入后处理",
-    "H0-03 任务草案已由 0389d1c 交付；原生 WKWebView UI 验收仍待",
-    "分类 #4 原生色彩转换、#7 服务端画布共编、G2 原生技术验证开放",
+    "用户 G2 接线决策（评审包 §5：①导入接入 scaled_decode ②金字塔接入目标 ③色彩变换应用点）——数据已备",
+    "对方工作区 234 文件 WIP（画布命令/出版）待提交合入；#7 服务端画布共编与 external_edit.rs 清理待其解锁",
+    "G2 原型接入产品管线（决策后实施：预览路径/画布瓦片/检视色彩）",
+    "真实 100MP 文件压力与设备校准/多屏/软打样保持 DEVICE 门槛",
     "真人/设备/供应商/生产验收全部保留（30 任务/10 评委/5 组双人/LR/C1/32 页书）"
   ],
   "session": {
     "restoredCiAt": "e3fcdaa",
-    "authorMemoryApiAt": "8bb2ae1",
-    "authorMemoryDesktopAt": "d4d3e70",
-    "notes": "v1.2.0 批次 8 层 CI 断裂修复后恢复绿线；作者记忆云端 API 与桌面只读接入落地"
+    "snapshotPrevAt": "6551351",
+    "g2PrototypesAt": "8810482",
+    "notes": "自 d4d3e70 后落地：G2 色彩三精度原型（FR3-014 收口，含显示器 ICC 采集）、FR3-015 金字塔/取消/按长边解码、25MP 对照数据、G2 评审包（docs/v3/G2-PROTOTYPE-REVIEW-2026-10-27.md，4 个决策点待用户）"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40395672029,
-    "headSha": "d4d3e7045bc9c2e9fe32e66d89e165f323749fbb",
+    "databaseId": 40470592050,
+    "headSha": "8810482db86e48a62428f6498c85f063659165c9",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40395672029",
-    "observedAt": "2026-10-26T21:08:31.437Z",
-    "note": "桌面端云端作者记忆只读接入合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40470592050",
+    "observedAt": "2026-10-27T08:41:47.647Z",
+    "note": "显示器 ICC 采集原型合入后全量门禁绿"
   }
 }
