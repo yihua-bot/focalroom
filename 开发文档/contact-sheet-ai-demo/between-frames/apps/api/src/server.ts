@@ -262,6 +262,15 @@ class ApiController {
       const versionDiff = action.match(/^versions\/(\d+)\/diff\/(\d+)$/);
       if (versionDiff && req.method === "GET")
         return s.versionDiff(headers, id, Number(versionDiff[1]), Number(versionDiff[2]));
+      if (action === "research" && req.method === "GET")
+        return s.researchList(headers, id);
+      if (action === "research" && req.method === "POST")
+        return s.researchCreate(headers, id, req.body);
+      const research = action.match(/^research\/([^/]+)$/);
+      if (research && req.method === "PATCH")
+        return s.researchUpdate(headers, id, research[1], req.body);
+      if (research && req.method === "DELETE")
+        return s.researchDelete(headers, id, research[1]);
       const version = action.match(/^versions\/(\d+)$/);
       if (version && req.method === "GET")
         return s.version(headers, id, Number(version[1]));

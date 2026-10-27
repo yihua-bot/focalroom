@@ -280,3 +280,45 @@ test('G3 revision diff compares immutable snapshots: field-level changes, bounda
   await call(`/projects/${diffProject}/versions/1/diff/2`, 'GET', outsider.token, undefined, 403);
   assert.equal((await call(`/projects/${diffProject}/versions/1/diff/2`, 'GET', diffViewer.token)).photos.changed.length, 1);
 });
+test('I1 research references are project-scoped auxiliary material: permission-gated CRUD, identity-separated from formal assets', async () => {
+  const revisionBefore = (await call(`/projects/${project}/snapshot`)).revision;
+  const assetsBefore = Number((await pool.query('SELECT count(*)::int AS n FROM fr_source_assets')).rows[0].n);
+
+  // 笔记与链接两类参考；作者/来源/许可元数据随行。
+  const note = await call(`/projects/${project}/research`, 'POST', owner.token,
+    { kind: 'note', title: '寇德卡画册编排笔记', body: '盲页开场，章节间留白节奏参考《Exiles》。', author: '内部整理', source: '画册《Exiles》', license: '内部参考' });
+  assert.ok(note.id);
+  const link = await call(`/projects/${project}/research`, 'POST', reviewer.token,
+    { kind: 'link', title: 'Magnum 展览页', url: 'https://www.magnumphotos.com/exhibition' });
+  assert.ok(link.id);
+
+  const list = await call(`/projects/${project}/research`, 'GET', viewer.token);
+  assert.equal(list.length, 2);
+  assert.equal(list.filter(item => item.kind === 'note').length, 1);
+  assert.equal(list[0].created_by_name, 'owner@fr.test');
+
+  // 校验：未知 kind、空正文笔记、坏 URL 链接全部 400。
+  await call(`/projects/${project}/research`, 'POST', owner.token, { kind: 'image', title: 'x' }, 400);
+  await call(`/projects/${project}/research`, 'POST', owner.token, { kind: 'note', title: 'x', body: '' }, 400);
+  await call(`/projects/${project}/research`, 'POST', owner.token, { kind: 'link', title: 'x', url: 'not-a-url' }, 400);
+
+  // 权限：观察者只读，未授权不可见。
+  await call(`/projects/${project}/research`, 'POST', viewer.token, { kind: 'note', title: 'x', body: 'y' }, 403);
+  await call(`/projects/${project}/research`, 'GET', outsider.token, undefined, 403);
+
+  // 修订：作者改自己的；不能改别人的；项目所有者可改任何人的。
+  await call(`/projects/${project}/research/${link.id}`, 'PATCH', reviewer.token, { title: 'Magnum 展览页（更新）' });
+  await call(`/projects/${project}/research/${note.id}`, 'PATCH', reviewer.token, { title: '越权' }, 403);
+  await call(`/projects/${project}/research/${link.id}`, 'PATCH', owner.token, { source: 'Magnum Photos' });
+  await call(`/projects/${project}/research/${randomUUID()}`, 'PATCH', owner.token, { title: 'x' }, 404);
+  await call(`/projects/${project}/research/${link.id}`, 'PATCH', owner.token, {}, 400);
+
+  // 删除：作者删自己的；缺失 404。
+  await call(`/projects/${project}/research/${link.id}`, 'DELETE', reviewer.token);
+  await call(`/projects/${project}/research/${link.id}`, 'DELETE', reviewer.token, undefined, 404);
+
+  // 参考是辅助资料：不推进正式修订，不进入资产身份域。
+  assert.equal((await call(`/projects/${project}/snapshot`)).revision, revisionBefore);
+  assert.equal(Number((await pool.query('SELECT count(*)::int AS n FROM fr_source_assets')).rows[0].n), assetsBefore);
+  assert.equal(Number((await pool.query('SELECT count(*)::int AS n FROM fr_research_references')).rows[0].n), 1);
+});

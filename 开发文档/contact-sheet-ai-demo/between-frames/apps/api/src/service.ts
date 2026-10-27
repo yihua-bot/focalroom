@@ -63,6 +63,30 @@ function diffEntities(before: SnapshotEntity[], after: SnapshotEntity[]) {
     changed,
   };
 }
+const researchReferenceSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("note"), title: z.string().trim().min(1).max(200),
+    body: z.string().trim().min(1).max(10000),
+    author: z.string().trim().min(1).max(200).optional(),
+    source: z.string().trim().min(1).max(500).optional(),
+    license: z.string().trim().min(1).max(500).optional(),
+  }),
+  z.strictObject({
+    kind: z.literal("link"), title: z.string().trim().min(1).max(200),
+    url: z.string().url().max(2000),
+    author: z.string().trim().min(1).max(200).optional(),
+    source: z.string().trim().min(1).max(500).optional(),
+    license: z.string().trim().min(1).max(500).optional(),
+  }),
+]);
+const researchEditSchema = z.strictObject({
+  title: z.string().trim().min(1).max(200).optional(),
+  body: z.string().trim().min(1).max(10000).optional(),
+  url: z.string().url().max(2000).optional(),
+  author: z.string().trim().min(1).max(200).optional(),
+  source: z.string().trim().min(1).max(500).optional(),
+  license: z.string().trim().min(1).max(500).optional(),
+});
 export class CloudService {
   /** 运维指标注册表（每实例独立；/metrics 抓取时含 DB 派生指标）。 */
   readonly metrics = new MetricsRegistry();
@@ -642,6 +666,71 @@ export class CloudService {
         photos: diffEntities(snapshotEntities(before.snapshot.photos), snapshotEntities(after.snapshot.photos)),
         sequences: diffEntities(snapshotEntities(before.snapshot.sequences), snapshotEntities(after.snapshot.sequences)),
       };
+    });
+  }
+  async researchList(headers: Headers, id: string) {
+    return this.authority.scope(headers, id, false, async ({ tx }) => (
+      await tx.query(
+        `SELECT r.id,r.kind,r.title,r.body,r.url,r.author,r.source,r.license,r.created_by,u.display_name AS created_by_name,r.created_at,r.updated_at
+         FROM fr_research_references r JOIN fr_users u ON u.id=r.created_by
+         WHERE r.project_id=$1 ORDER BY r.created_at,r.id`,
+        [id],
+      )
+    ).rows);
+  }
+  async researchCreate(headers: Headers, id: string, input: unknown) {
+    const value = researchReferenceSchema.parse(input);
+    return this.authority.scope(headers, id, true, async ({ tx, user, project, principal }) => {
+      assert(project.state === "SHARED" && principal.role !== "VIEWER", 403, "PERMISSION_DENIED", "当前角色不能添加研究参考");
+      const body = value.kind === "note" ? value.body : null;
+      const url = value.kind === "link" ? value.url : null;
+      return (await tx.query(
+        `INSERT INTO fr_research_references(project_id,kind,title,body,url,author,source,license,created_by)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         RETURNING id,kind,title,body,url,author,source,license,created_by,created_at,updated_at`,
+        [id, value.kind, value.title, body, url,
+          value.author ?? null, value.source ?? null, value.license ?? null, user.id],
+      )).rows[0];
+    });
+  }
+  async researchUpdate(headers: Headers, id: string, referenceId: string, input: unknown) {
+    const value = researchEditSchema.parse(input);
+    return this.authority.scope(headers, id, true, async ({ tx, user, principal }) => {
+      const current = (await tx.query(
+        "SELECT created_by FROM fr_research_references WHERE id=$1 AND project_id=$2 FOR UPDATE",
+        [referenceId, id],
+      )).rows[0];
+      assert(current, 404, "NOT_FOUND", "研究参考不存在");
+      assert(current.created_by === user.id || principal.can_approve || principal.can_edit_formal,
+        403, "PERMISSION_DENIED", "只能修改自己的研究参考，或由项目编辑处理");
+      const sets: string[] = [];
+      const values: unknown[] = [];
+      const column = (name: string, fieldValue: unknown) => {
+        values.push(fieldValue);
+        sets.push(`${name}=$${values.length}`);
+      };
+      for (const field of ["title", "body", "url", "author", "source", "license"] as const) {
+        if (value[field] !== undefined) column(field, value[field]);
+      }
+      assert(sets.length, 400, "VALIDATION_ERROR", "更新操作不包含任何字段");
+      values.push(referenceId, id);
+      return (await tx.query(
+        `UPDATE fr_research_references SET ${sets.join(",")},updated_at=now() WHERE id=$${values.length - 1} AND project_id=$${values.length} RETURNING id,kind,title,body,url,author,source,license,created_by,created_at,updated_at`,
+        values,
+      )).rows[0];
+    });
+  }
+  async researchDelete(headers: Headers, id: string, referenceId: string) {
+    return this.authority.scope(headers, id, true, async ({ tx, user, principal }) => {
+      const current = (await tx.query(
+        "SELECT created_by FROM fr_research_references WHERE id=$1 AND project_id=$2 FOR UPDATE",
+        [referenceId, id],
+      )).rows[0];
+      assert(current, 404, "NOT_FOUND", "研究参考不存在");
+      assert(current.created_by === user.id || principal.can_approve || principal.can_edit_formal,
+        403, "PERMISSION_DENIED", "只能删除自己的研究参考，或由项目编辑处理");
+      await tx.query("DELETE FROM fr_research_references WHERE id=$1 AND project_id=$2", [referenceId, id]);
+      return { deleted: true, id: referenceId };
     });
   }
   async reviseProposal(
