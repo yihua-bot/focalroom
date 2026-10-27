@@ -46,6 +46,7 @@ async function migrations() {
       "0023_author_memory.sql",
       "0024_billing_refunds.sql",
       "0025_canvas_commands.sql",
+      "0026_canvas_events.sql",
     ].map(
       async (name) => {
         const sql = await readFile(

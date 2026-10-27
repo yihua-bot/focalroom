@@ -311,7 +311,28 @@ export class BoardService {
         [command.commandId, id, board.project_id, user.id, command.idempotencyKey, hash,
           JSON.stringify(command), JSON.stringify(reply)],
       );
+      await tx.query(
+        "INSERT INTO fr_canvas_events(board_id,project_id,actor_id,revision,command_id,kind,detail) VALUES($1,$2,$3,$4,$5,'canvas.command',$6)",
+        [id, board.project_id, user.id, newRevision, command.commandId,
+          JSON.stringify({ operationCount: command.operations.length, affectedNodeIds: affected })],
+      );
       return reply;
+    });
+  }
+
+  async events(headers: Headers, boardId: unknown, after: unknown, limit: unknown) {
+    const id = idSchema.parse(boardId);
+    const cursor = z.coerce.number().int().min(0).default(0).parse(after);
+    const size = z.coerce.number().int().min(1).max(100).default(50).parse(limit);
+    return this.boardScope(headers, id, false, async ({ tx }) => {
+      const rows = (await tx.query(
+        "SELECT id,revision,command_id,kind,actor_id,detail,created_at FROM fr_canvas_events WHERE board_id=$1 AND id>$2 ORDER BY id LIMIT $3",
+        [id, cursor, size],
+      )).rows;
+      // BIGSERIAL 由 pg 以字符串返回；统一转为数字，客户端比较与续读游标才可靠。
+      const events = rows.map(row => ({ ...row, id: Number(row.id) }));
+      const nextCursor = events.length === size ? events[events.length - 1].id : null;
+      return { events, nextCursor };
     });
   }
 }

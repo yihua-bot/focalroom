@@ -252,3 +252,48 @@ test('G6 formal canvas commands: envelope, revision conflict, idempotency, locke
   assert.equal(last.newRevision, 4);
   assert.equal((await call('/boards/' + created.id + '/nodes', 'GET', owner)).length, 0);
 });
+
+test('G6 canvas event log: commands append ordered events; cursor replays incrementally', async () => {
+  const created = await call('/boards', 'POST', owner, { projectId: project, title: '事件画布' });
+  const envelope = (baseRevision, actions) => ({
+    schemaVersion: 3, commandId: randomUUID(), idempotencyKey: randomUUID(),
+    projectId: project, baseRevision,
+    operations: actions.map(action => ({ opId: randomUUID(), action })),
+  });
+  const post = body => call('/boards/' + created.id + '/commands', 'POST', owner, body);
+
+  // 三条命令 + 一次幂等重放 → 恰好三个事件（重放不追加）。
+  const nodeIds = [randomUUID(), randomUUID()];
+  const firstEnv = envelope(0, [{ type: 'createNode', nodeId: nodeIds[0], nodeType: 'photo', x: 0, y: 0, width: 100, height: 100 }]);
+  await post(firstEnv);
+  await post(firstEnv);
+  await post(envelope(1, [{ type: 'createNode', nodeId: nodeIds[1], nodeType: 'photo', x: 50, y: 50, width: 100, height: 100 }]));
+  await post(envelope(2, [{ type: 'moveNodes', moves: [{ nodeId: nodeIds[0], x: 10, y: 10 }] }]));
+
+  const all = await call('/boards/' + created.id + '/events?after=0&limit=100');
+  assert.equal(all.events.length, 3);
+  assert.equal(all.nextCursor, null, '取尽后无游标');
+  assert.deepEqual(all.events.map(e => e.revision), [1, 2, 3]);
+  assert.ok(all.events.every(e => e.command_id && e.kind === 'canvas.command'));
+  assert.ok(all.events.every(e => typeof e.id === 'number'), 'id 应为数字（BIGSERIAL 映射）');
+  assert.ok(all.events.every((e, i) => i === 0 || all.events[i - 1].id < e.id), '事件 id 严格递增');
+
+  // 游标分页：after=第一条 → 只剩两条。
+  const tail = await call('/boards/' + created.id + '/events?after=' + all.events[0].id + '&limit=100');
+  assert.equal(tail.events.length, 2);
+  assert.deepEqual(tail.events.map(e => e.revision), [2, 3]);
+
+  // limit 截断给出续读游标；续读到空后游标为 null。
+  const page = await call('/boards/' + created.id + '/events?after=0&limit=2');
+  assert.equal(page.events.length, 2);
+  assert.equal(page.nextCursor, page.events[1].id);
+  const rest = await call('/boards/' + created.id + '/events?after=' + page.nextCursor + '&limit=2');
+  assert.equal(rest.events.length, 1);
+  assert.equal(rest.events[0].revision, 3);
+  assert.equal(rest.nextCursor, null);
+
+  // 只读角色可读事件；无关用户拒绝。
+  const viewerView = await call('/boards/' + created.id + '/events', 'GET', viewer);
+  assert.equal(viewerView.events.length, 3);
+  await call('/boards/' + created.id + '/events', 'GET', outsider, undefined, 403);
+});

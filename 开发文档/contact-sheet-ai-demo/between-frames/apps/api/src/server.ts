@@ -161,6 +161,10 @@ class ApiController {
     if (boardCommands && req.method === "POST") {
       return s.boards.commands(headers, boardCommands[1], req.body);
     }
+    const boardEvents = path.match(/^\/boards\/([^/]+)\/events$/);
+    if (boardEvents && req.method === "GET") {
+      return s.boards.events(headers, boardEvents[1], req.query.after, req.query.limit);
+    }
     const annotationResolve = path.match(/^\/boards\/annotations\/([^/]+)\/resolve$/);
     if (annotationResolve && req.method === "POST") {
       return s.boards.resolve(headers, annotationResolve[1], req.body);
