@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { UNAVAILABLE_SUBSCRIPTION_CATALOG } from '@betweenframes/contracts';
 import type { AuthService, Headers } from './auth.ts';
@@ -6,7 +6,7 @@ import { transaction, digest } from './database.ts';
 import { assert } from './errors.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { grantAiTokensTx } from './hosted-ai.ts';
-import { StripeBillingGateway, type BillingConfig, type BillingGateway } from './billing-gateway.ts';
+import { StripeBillingGateway, type BillingConfig, type BillingGateway, type BillingPrice } from './billing-gateway.ts';
 
 export class BillingService {
   readonly pool: Pool;
@@ -178,5 +178,75 @@ export class BillingService {
       await tx.query('INSERT INTO fr_billing_events(id,digest,event_type) VALUES($1,$2,$3)',[event.id,fingerprint,event.type]);
       return {received:true};
     });
+  }
+
+  async seats(headers: Headers, workspaceId: unknown) {
+    const user = await this.auth.authenticate(headers, false);
+    const id = z.string().min(1).max(160).parse(workspaceId);
+    return transaction(this.pool, async tx => {
+      const workspace = await this.seatWorkspace(tx, id, user.id);
+      const subscription = (await tx.query(
+        "SELECT price_id,status,current_period_end FROM fr_billing_subscriptions WHERE user_id=$1 AND status IN ('active','trialing','past_due') AND current_period_end>now() ORDER BY current_period_end DESC,updated_at DESC LIMIT 1",
+        [workspace.owner_id],
+      )).rows[0] ?? null;
+      const price = subscription ? this.config?.prices.find(p => p.id === subscription.price_id) : undefined;
+      return { workspaceId: id, seatsLimit: price ? price.seats : 0, subscription, assignments: await this.seatRows(tx, id) };
+    });
+  }
+
+  async assignSeat(headers: Headers, workspaceId: unknown, input: unknown) {
+    const user = await this.auth.authenticate(headers, true);
+    const id = z.string().min(1).max(160).parse(workspaceId);
+    const value = z.strictObject({ userId: z.string().min(1).max(200) }).parse(input);
+    return transaction(this.pool, async tx => {
+      // 工作区锁串行化并发分配，防止配额被并行写入绕过。
+      await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,703))', [id]);
+      const workspace = await this.seatWorkspace(tx, id, user.id);
+      assert(value.userId !== workspace.owner_id, 409, 'SEAT_OWNER_IMPLICIT', '工作区所有者无需席位');
+      const member = (await tx.query('SELECT 1 FROM fr_memberships WHERE workspace_id=$1 AND user_id=$2', [id, value.userId])).rows[0];
+      assert(member, 409, 'NOT_A_MEMBER', '席位只能授予工作区成员');
+      // 配额按"他人持有数"计：满员时幂等重分既有持有者仍成功。
+      const others = Number((await tx.query('SELECT count(*)::int AS n FROM fr_team_seats WHERE workspace_id=$1 AND user_id<>$2', [id, value.userId])).rows[0].n);
+      const price = await this.activeSeatPrice(tx, workspace.owner_id);
+      assert(price, 402, 'SUBSCRIPTION_REQUIRED', '团队席位需要有效的团队订阅');
+      assert(others < price.seats, 409, 'TEAM_SEATS_EXHAUSTED', '团队席位已满，请升级方案');
+      await tx.query('INSERT INTO fr_team_seats(workspace_id,user_id,granted_by) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [id, value.userId, user.id]);
+      return { workspaceId: id, seatsLimit: price.seats, assignments: await this.seatRows(tx, id) };
+    });
+  }
+
+  async releaseSeat(headers: Headers, workspaceId: unknown, userId: unknown) {
+    const user = await this.auth.authenticate(headers, true);
+    const id = z.string().min(1).max(160).parse(workspaceId);
+    const target = z.string().min(1).max(200).parse(userId);
+    return transaction(this.pool, async tx => {
+      await this.seatWorkspace(tx, id, user.id);
+      const released = await tx.query('DELETE FROM fr_team_seats WHERE workspace_id=$1 AND user_id=$2', [id, target]);
+      assert(released.rowCount, 404, 'NOT_FOUND', '席位不存在');
+      return { released: true, userId: target };
+    });
+  }
+
+  private async seatWorkspace(tx: PoolClient, workspaceId: string, userId: string) {
+    const workspace = (await tx.query('SELECT id,owner_id FROM fr_workspaces WHERE id=$1', [workspaceId])).rows[0];
+    assert(workspace, 404, 'NOT_FOUND', '工作区不存在');
+    const membership = (await tx.query('SELECT role FROM fr_memberships WHERE workspace_id=$1 AND user_id=$2', [workspaceId, userId])).rows[0];
+    assert(membership && ['OWNER','ADMIN'].includes(membership.role), 403, 'PERMISSION_DENIED', '只有工作区管理员可管理团队席位');
+    return workspace;
+  }
+
+  private async seatRows(tx: PoolClient, workspaceId: string) {
+    return (await tx.query(
+      'SELECT s.user_id,u.display_name,s.granted_by,s.created_at AS granted_at FROM fr_team_seats s JOIN fr_users u ON u.id=s.user_id WHERE s.workspace_id=$1 ORDER BY s.created_at,s.user_id',
+      [workspaceId],
+    )).rows;
+  }
+
+  private async activeSeatPrice(tx: PoolClient, ownerId: string): Promise<BillingPrice | undefined> {
+    const priceId = (await tx.query(
+      "SELECT price_id FROM fr_billing_subscriptions WHERE user_id=$1 AND status IN ('active','trialing','past_due') AND current_period_end>now() ORDER BY current_period_end DESC,updated_at DESC LIMIT 1",
+      [ownerId],
+    )).rows[0]?.price_id;
+    return priceId ? this.config?.prices.find(p => p.id === priceId) : undefined;
   }
 }

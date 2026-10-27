@@ -8,7 +8,7 @@ import { migrate } from '../src/database.ts';
 import { LocalPreviewStore } from '../src/storage.ts';
 import { StripeBillingGateway } from '../src/billing-gateway.ts';
 
-const config={secret:'sk_test_fixture',webhookSecret:'whsec_fixture',prices:[{id:'price_monthly',interval:'month',amount:1900,currency:'USD',includedTokens:50000},{id:'price_yearly',interval:'year',amount:19000,currency:'USD',includedTokens:600000}]};
+const config={secret:'sk_test_fixture',webhookSecret:'whsec_fixture',prices:[{id:'price_monthly',interval:'month',amount:1900,currency:'USD',includedTokens:50000,seats:2},{id:'price_yearly',interval:'year',amount:19000,currency:'USD',includedTokens:600000}]};
 let pool,api,base,owner,other,disabledApi,noAiApi,salesOffApi;
 const customers=new Map(),sessions=new Map(),subscriptions=new Map(),invoices=new Map(),charges=new Map();
 let failAfterCreating=false, remoteCheckouts=0, priceChanged=false;
@@ -191,4 +191,52 @@ test('closing new sales retains existing customer management and signed notifica
   const body=JSON.stringify(event('evt_sales_off','customer.subscription.updated',{id:'sub_fixture'})),timestamp=Math.floor(Date.now()/1000);
   const signature='t='+timestamp+',v1='+createHmac('sha256',config.webhookSecret).update(timestamp+'.'+body).digest('hex');
   const notification=await fetch(address+'/api/v2/billing/webhook',{method:'POST',headers:{'content-type':'application/json','stripe-signature':signature},body});assert.equal(notification.status,200);
+});
+
+test('team seats follow the owner subscription quota; admin-gated, member-bound, idempotent',async()=>{
+  const register=(email,name)=>call('/auth/register',{method:'POST',account:null,body:{email,password:'billing-fixture-password',display_name:name}});
+  const teamOwner=await register('billing-team-owner@fr.test','团队所有者');
+  const seatAdmin=await register('billing-team-admin@fr.test','席位管理员');
+  const seatEditor=await register('billing-team-editor@fr.test','席位编辑');
+  const seatEditor2=await register('billing-team-editor2@fr.test','席位编辑二');
+  const workspace=(await call('/workspaces',{account:teamOwner}))[0].id;
+  const invite=async(account,role)=>{
+    const link=await call('/workspaces/'+workspace+'/invitations',{method:'POST',account:teamOwner,body:{email:account.user.email,role}});
+    await call('/invitations/accept',{method:'POST',account,body:{token:new URL(link.invite_url).hash.split('=')[1]}});
+  };
+  await invite(seatAdmin,'ADMIN');await invite(seatEditor,'EDITOR');await invite(seatEditor2,'EDITOR');
+  const seatsPath='/billing/workspaces/'+workspace+'/seats';
+  const seat=(account,userId,status=200)=>call(seatsPath,{method:'POST',account,body:{userId},status});
+
+  // 没有有效团队订阅：不可分配席位。
+  await seat(teamOwner,seatEditor.user.id,402);
+
+  // 所有者获得有效订阅（price_monthly 含 2 席位）。
+  await pool.query("INSERT INTO fr_billing_subscriptions(id,user_id,customer_id,price_id,status,current_period_end) VALUES('sub_team_fixture',$1,'cus_team_fixture','price_monthly','active',now()+interval '30 days')",[teamOwner.user.id]);
+  const list=await call(seatsPath,{account:teamOwner});
+  assert.equal(list.seatsLimit,2);assert.equal(list.assignments.length,0);assert.equal(list.subscription.price_id,'price_monthly');
+
+  // 分配、幂等重分、配额边界、权限与成员校验。
+  await seat(teamOwner,seatEditor.user.id);
+  await seat(teamOwner,seatEditor.user.id);
+  assert.equal((await call(seatsPath,{account:teamOwner})).assignments.length,1);
+  await seat(teamOwner,seatEditor2.user.id);
+  await seat(teamOwner,seatAdmin.user.id,409);
+  await seat(seatAdmin,seatEditor2.user.id);
+  await seat(seatEditor,seatAdmin.user.id,403);
+  await seat(teamOwner,other.user.id,409);
+  await seat(teamOwner,teamOwner.user.id,409);
+
+  // 释放与配额回收。
+  await call(seatsPath+'/'+seatEditor.user.id,{method:'DELETE',account:teamOwner});
+  await call(seatsPath+'/'+seatEditor.user.id,{method:'DELETE',account:teamOwner,status:404});
+  await seat(teamOwner,seatAdmin.user.id);
+  assert.equal((await call(seatsPath,{account:teamOwner})).assignments.length,2);
+
+  // 订阅失效：配额归零、分配冻结可查、仍可清理。
+  await pool.query("UPDATE fr_billing_subscriptions SET current_period_end=now()-interval '1 hour' WHERE id='sub_team_fixture'");
+  const lapsed=await call(seatsPath,{account:teamOwner});
+  assert.equal(lapsed.seatsLimit,0);assert.equal(lapsed.assignments.length,2);assert.equal(lapsed.subscription,null);
+  await seat(teamOwner,seatEditor.user.id,402);
+  await call(seatsPath+'/'+seatAdmin.user.id,{method:'DELETE',account:teamOwner});
 });

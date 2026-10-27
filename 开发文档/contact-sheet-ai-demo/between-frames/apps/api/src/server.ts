@@ -88,6 +88,11 @@ class ApiController {
     if (path === '/billing/checkout' && req.method === 'POST') return s.billing.checkout(headers,req.body);
     if (path === '/billing/manage' && req.method === 'POST') return s.billing.manage(headers);
     if (path === '/billing/cancel-checkout' && req.method === 'POST') return s.billing.cancelCheckout(headers);
+    const billingSeats = path.match(/^\/billing\/workspaces\/([^/]+)\/seats$/);
+    if (billingSeats && req.method === 'GET') return s.billing.seats(headers, billingSeats[1]);
+    if (billingSeats && req.method === 'POST') return s.billing.assignSeat(headers, billingSeats[1], req.body);
+    const billingSeat = path.match(/^\/billing\/workspaces\/([^/]+)\/seats\/([^/]+)$/);
+    if (billingSeat && req.method === 'DELETE') return s.billing.releaseSeat(headers, billingSeat[1], billingSeat[2]);
     if (path === '/billing/webhook' && req.method === 'POST') {
       assert(Buffer.isBuffer(req.body),400,'BILLING_SIGNATURE_INVALID','付款通知无效');
       return s.billing.webhook(req.body,typeof headers['stripe-signature']==='string'?headers['stripe-signature']:'');

@@ -6,6 +6,7 @@ export const priceSchema = z.strictObject({
   id: z.string().regex(/^price_[A-Za-z0-9]+$/).max(120), interval: z.enum(['month','year']),
   amount: z.number().int().positive().max(100000000), currency: z.enum(['USD','CNY','EUR','JPY','KRW']),
   includedTokens: z.number().int().positive().max(100000000),
+  seats: z.number().int().min(1).max(50).default(3),
 });
 export type BillingPrice = z.infer<typeof priceSchema>;
 export type BillingConfig = { secret: string; webhookSecret: string; prices: BillingPrice[]; salesEnabled?: boolean };
