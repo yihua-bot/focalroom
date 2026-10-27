@@ -3,8 +3,8 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-27T08:40:57.032Z",
-  "sourceHead": "8810482db86e48a62428f6498c85f063659165c9",
+  "observedAt": "2026-10-27T11:00:22.343Z",
+  "sourceHead": "a3686293ba25b0e4372b557f453e38af853c971a",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
@@ -12,7 +12,7 @@
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "ad58918c027653518dac69d0fc470a9788fa3981b1de6bafcc6ba525720c42a6"
   },
-  "status": "G2_PROTOTYPES_COMPLETE_AWAIT_WIRING_DECISIONS",
+  "status": "G2_PROTOTYPES_COMPLETE_BILLING_REFUNDS_LANDED_AWAIT_DECISIONS",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -27,6 +27,7 @@
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0021_ai_async.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0022_ai_durable_queue.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0023_author_memory.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0024_billing_refunds.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0020_asset_domain.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0021_canvas.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0022_external_edit.sql\"",
@@ -270,13 +271,13 @@
           "sha256": "2369ffda3c92039b77a8dc75f2dfd2890467c4b002aaedb0b6f2185568ce2d6a"
         }
       ],
-      "backupSha256": "318d50a6ce53d212944b55d9a8e7ea1295b48bc5ad91a4f8a2135e8811b8aea7",
+      "backupSha256": "dafe649f16a30642f9b9f08e2e531f5d101f1af6e6a9abf850fb25e648a79e8c",
       "fixture": "generated JPEG and legacy v11 SQLite; no user data",
-      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmplVPf4G",
+      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmplxJmL9",
       "foreignKeyViolations": 0,
       "legacyMigrations": 11,
       "restoredProjectionMatches": true,
-      "snapshotSha256": "49278cffeb3123cbc4afc0d5f4c91d9bbf86b6e9b734d368b69922af3d5b7eb4",
+      "snapshotSha256": "ba08481d032af47c11c575d961a2294b67c1a02de3cbd77f68fe58e7cf4e566b",
       "snapshotUnchanged": true,
       "sourceSha256": "ddcce3e7c64670e2b67b55522783440118049c8107e958be51a5299df4b0709a",
       "sourceUnchanged": true,
@@ -381,6 +382,7 @@
         "fr_billing_customers",
         "fr_billing_events",
         "fr_billing_invoices",
+        "fr_billing_refunds",
         "fr_billing_subscriptions",
         "fr_board_annotations",
         "fr_boards",
@@ -485,6 +487,10 @@
         {
           "version": "0023",
           "sha256": "52c430a862d0924ba036cd140501f92a68d075110d665ab28f3ba143667a5836"
+        },
+        {
+          "version": "0024",
+          "sha256": "533501880f978168b5b96028134248d6ced533c60fcac4ba65b99e1190fff8ea"
         }
       ],
       "registeredFiles": [
@@ -559,6 +565,10 @@
         {
           "path": "apps/api/migrations/0023_author_memory.sql",
           "sha256": "52c430a862d0924ba036cd140501f92a68d075110d665ab28f3ba143667a5836"
+        },
+        {
+          "path": "apps/api/migrations/0024_billing_refunds.sql",
+          "sha256": "533501880f978168b5b96028134248d6ced533c60fcac4ba65b99e1190fff8ea"
         }
       ],
       "unregisteredDesignFiles": [
@@ -610,111 +620,108 @@
       "id": "ci-timeout-fix",
       "result": "PASS",
       "head": "0758449",
-      "note": "foundation 45→60 分钟；40429261131 触顶后修复",
+      "note": "foundation 45→60 分钟",
       "run": 40434187276
     },
     {
       "id": "color-rgb8-prototype",
       "result": "PASS",
       "head": "d87b3a6",
-      "tests": 12,
-      "note": "ColorSync RGB8 + 预登记参考值",
       "run": 40408802288
     },
     {
       "id": "color-rgb16-prototype",
       "result": "PASS",
       "head": "2018c17",
-      "note": "64bpp LE + 跨精度参考值",
       "run": 40415095009
     },
     {
       "id": "color-float-prototype",
       "result": "PASS",
       "head": "4371242",
-      "note": "128bpp float，三精度收口",
+      "note": "三精度收口",
       "run": 40420194960
     },
     {
       "id": "tile-pyramid-prototype",
       "result": "PASS",
       "head": "7f8363c",
-      "tests": 5,
-      "note": "内容寻址缓存键 + ≤4/3 内存界",
       "run": 40425291158
     },
     {
       "id": "pyramid-cancellation",
       "result": "PASS",
       "head": "30564b1",
-      "tests": 8,
-      "note": "CANCELLED 结构化回归，经 0758449 覆盖验证"
+      "note": "经 0758449 覆盖验证"
     },
     {
       "id": "scaled-decode-prototype",
       "result": "PASS",
       "head": "4930f0e",
-      "tests": 3,
-      "note": "ImageIO 按长边解码，JPEG/PNG",
       "run": 40439363737
     },
     {
       "id": "g2-review-package",
       "result": "PASS",
       "head": "3e78319",
-      "note": "FR3-014/015 评审包 + 4 决策点",
       "run": 40460365889
     },
     {
       "id": "25mp-decode-compare",
       "result": "PASS",
       "head": "086d8f6",
-      "note": "缩放 270ms/7.8MB 对全量 2324ms/100MB（8.6× 快 / 12.8× 省）",
+      "note": "缩放 270ms/7.8MB 对全量 2324ms/100MB",
       "run": 40465015158
     },
     {
       "id": "display-icc-prototype",
       "result": "PASS",
       "head": "8810482",
-      "tests": 19,
-      "note": "display_profile_bytes() + CI 虚拟显示器机器无关回归",
       "run": 40470592050
+    },
+    {
+      "id": "billing-refund-dispute",
+      "result": "PASS",
+      "head": "a368629",
+      "note": "0024 迁移；billing 11/11、全套 PG 15 套件 115/115；幂等/缺口/争议回归",
+      "run": 40487450738
     },
     {
       "id": "v3-baseline-legacy-restore",
       "result": "PASS",
-      "head": "8810482"
+      "head": "a368629"
     },
     {
       "id": "g0-inventory",
       "result": "PASS",
-      "pgTables": 46,
-      "pgMigrations": 18,
+      "pgTables": 47,
+      "pgMigrations": 19,
       "sqliteMigrations": 33,
       "migrationDeltaAllAdditive": true,
-      "head": "8810482"
+      "head": "a368629"
     }
   ],
   "remaining": [
-    "用户 G2 接线决策（评审包 §5：①导入接入 scaled_decode ②金字塔接入目标 ③色彩变换应用点）——数据已备",
-    "对方工作区 234 文件 WIP（画布命令/出版）待提交合入；#7 服务端画布共编与 external_edit.rs 清理待其解锁",
-    "G2 原型接入产品管线（决策后实施：预览路径/画布瓦片/检视色彩）",
-    "真实 100MP 文件压力与设备校准/多屏/软打样保持 DEVICE 门槛",
+    "用户 G2 接线决策 ①②③（评审包 §5 已更新：④ 显示 ICC 与 25MP 对照已收口，仅剩 DEVICE 门槛的真实 100MP 压力）",
+    "对方工作区 234 文件 WIP（画布命令/出版/编辑历史）待提交合入；#7 服务端画布共编与 external_edit.rs 清理待其解锁",
+    "G2 原型接入产品管线（决策后实施：预览路径 scaled_decode / 画布瓦片 / 检视色彩变换）",
+    "真实 100MP/16-bit TIFF 文件压力与设备校准/多屏一致性保持 DEVICE 门槛",
     "真人/设备/供应商/生产验收全部保留（30 任务/10 评委/5 组双人/LR/C1/32 页书）"
   ],
   "session": {
     "restoredCiAt": "e3fcdaa",
-    "snapshotPrevAt": "6551351",
+    "snapshotPrevAt": "6677a27",
     "g2PrototypesAt": "8810482",
-    "notes": "自 d4d3e70 后落地：G2 色彩三精度原型（FR3-014 收口，含显示器 ICC 采集）、FR3-015 金字塔/取消/按长边解码、25MP 对照数据、G2 评审包（docs/v3/G2-PROTOTYPE-REVIEW-2026-10-27.md，4 个决策点待用户）"
+    "billingRefundsAt": "a368629",
+    "notes": "自 8810482 后落地：#10 退款与争议额度补偿（0024 迁移 + webhook 按比例撤回可用配额 + 幂等/缺口回归）；G2 评审包更新（④ 已收口，决策 ①②③ 待用户）"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40470592050,
-    "headSha": "8810482db86e48a62428f6498c85f063659165c9",
+    "databaseId": 40487450738,
+    "headSha": "a3686293ba25b0e4372b557f453e38af853c971a",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40470592050",
-    "observedAt": "2026-10-27T08:41:47.647Z",
-    "note": "显示器 ICC 采集原型合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40487450738",
+    "observedAt": "2026-10-27T11:01:09.470Z",
+    "note": "退款与争议额度补偿合入后全量门禁绿"
   }
 }
