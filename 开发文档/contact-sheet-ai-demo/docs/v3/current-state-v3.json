@@ -3,8 +3,8 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-27T19:39:02.724Z",
-  "sourceHead": "74e3dc36d4f00eb52ca1da572b7dffa911c2e910",
+  "observedAt": "2026-10-27T21:53:12.923Z",
+  "sourceHead": "e43c87ad719b778251506e4ab7b52b8cd501590f",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
@@ -12,7 +12,7 @@
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "6ac05feec1c245eee10f1e463571af2494dd8a5ce7008e5cb195213062257112"
   },
-  "status": "G6_PRESENCE_J5_SEATS_LANDED_MAIN_CI_GREEN",
+  "status": "G3_DIFF_LANDED_MAIN_CI_GREEN",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -767,13 +767,20 @@
       "run": 40565273862
     },
     {
+      "id": "g3-revision-diff",
+      "result": "PASS",
+      "head": "e43c87a",
+      "note": "GET /projects/:id/versions/:from/diff/:to；integration 19/19、全套 PG 122/122；字段级增删改/同版本400/缺失404/未授权403/观察者可读",
+      "run": 40584587721
+    },
+    {
       "id": "g0-inventory",
       "result": "PASS",
       "pgTables": 51,
       "pgMigrations": 23,
       "sqliteMigrations": 33,
       "migrationDeltaAllAdditive": true,
-      "head": "74e3dc3"
+      "head": "e43c87a"
     }
   ],
   "remaining": [
@@ -793,15 +800,16 @@
     "g6LifecycleAt": "5a04522",
     "boardPresenceAt": "11d020b",
     "teamSeatsAt": "74e3dc3",
-    "notes": "G6 共编服务端四批齐备（命令通道/事件游标/生命周期/Presence，0025–0027）；J5 团队席位（0028）落地；G2 决策④已收口、①②③待用户"
+    "g3DiffAt": "e43c87a",
+    "notes": "G6 共编服务端四批齐备（命令通道/事件游标/生命周期/Presence，0025–0027）；J5 团队席位（0028）落地；G3 版本 Diff 服务端落地（e43c87a）；G2 决策④已收口、①②③待用户"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40565273862,
-    "headSha": "74e3dc36d4f00eb52ca1da572b7dffa911c2e910",
+    "databaseId": 40584587721,
+    "headSha": "e43c87ad719b778251506e4ab7b52b8cd501590f",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40565273862",
-    "observedAt": "2026-10-27T19:39:02.724Z",
-    "note": "团队席位（0028）合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40584587721",
+    "observedAt": "2026-10-27T21:53:12.923Z",
+    "note": "G3 版本 Diff（e43c87a）合入后全量门禁绿"
   }
 }
