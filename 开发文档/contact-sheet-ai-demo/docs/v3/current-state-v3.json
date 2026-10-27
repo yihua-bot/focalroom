@@ -3,8 +3,8 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-27T11:00:22.343Z",
-  "sourceHead": "a3686293ba25b0e4372b557f453e38af853c971a",
+  "observedAt": "2026-10-27T14:14:44.757Z",
+  "sourceHead": "f41e0cee392ac4ec08e682f817b1cda5e174ad45",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
@@ -12,7 +12,7 @@
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "ad58918c027653518dac69d0fc470a9788fa3981b1de6bafcc6ba525720c42a6"
   },
-  "status": "G2_PROTOTYPES_COMPLETE_BILLING_REFUNDS_LANDED_AWAIT_DECISIONS",
+  "status": "G6_CANVAS_COEDIT_LANDED_MAIN_CI_GREEN",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -28,6 +28,8 @@
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0022_ai_durable_queue.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0023_author_memory.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0024_billing_refunds.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0025_canvas_commands.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0026_canvas_events.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0020_asset_domain.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0021_canvas.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0022_external_edit.sql\"",
@@ -271,13 +273,13 @@
           "sha256": "2369ffda3c92039b77a8dc75f2dfd2890467c4b002aaedb0b6f2185568ce2d6a"
         }
       ],
-      "backupSha256": "dafe649f16a30642f9b9f08e2e531f5d101f1af6e6a9abf850fb25e648a79e8c",
+      "backupSha256": "014c00ac02e594192bc63fa40e4f8c486fd68a736617d90b6aace1eb8a2856cc",
       "fixture": "generated JPEG and legacy v11 SQLite; no user data",
-      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmplxJmL9",
+      "fixtureDirectory": "/var/folders/8v/3tww3vkx10s77klhf8y_7hz80000gn/T/.tmpi9n73O",
       "foreignKeyViolations": 0,
       "legacyMigrations": 11,
       "restoredProjectionMatches": true,
-      "snapshotSha256": "ba08481d032af47c11c575d961a2294b67c1a02de3cbd77f68fe58e7cf4e566b",
+      "snapshotSha256": "a5a2a4c230495f6705a48178918327868a33af441920260674236ef736e51a62",
       "snapshotUnchanged": true,
       "sourceSha256": "ddcce3e7c64670e2b67b55522783440118049c8107e958be51a5299df4b0709a",
       "sourceUnchanged": true,
@@ -386,6 +388,8 @@
         "fr_billing_subscriptions",
         "fr_board_annotations",
         "fr_boards",
+        "fr_canvas_commands",
+        "fr_canvas_events",
         "fr_canvas_nodes",
         "fr_commands",
         "fr_comments",
@@ -491,6 +495,14 @@
         {
           "version": "0024",
           "sha256": "533501880f978168b5b96028134248d6ced533c60fcac4ba65b99e1190fff8ea"
+        },
+        {
+          "version": "0025",
+          "sha256": "7069440eb34e02f4f3d16e6349425d15f226f6e4d524644ec0492a7f36f81539"
+        },
+        {
+          "version": "0026",
+          "sha256": "53617220cf8c38f7bfdb2aaf7137163e3cc7445ab7caf4654db4ccd9d12237d9"
         }
       ],
       "registeredFiles": [
@@ -569,6 +581,14 @@
         {
           "path": "apps/api/migrations/0024_billing_refunds.sql",
           "sha256": "533501880f978168b5b96028134248d6ced533c60fcac4ba65b99e1190fff8ea"
+        },
+        {
+          "path": "apps/api/migrations/0025_canvas_commands.sql",
+          "sha256": "7069440eb34e02f4f3d16e6349425d15f226f6e4d524644ec0492a7f36f81539"
+        },
+        {
+          "path": "apps/api/migrations/0026_canvas_events.sql",
+          "sha256": "53617220cf8c38f7bfdb2aaf7137163e3cc7445ab7caf4654db4ccd9d12237d9"
         }
       ],
       "unregisteredDesignFiles": [
@@ -683,45 +703,60 @@
       "id": "billing-refund-dispute",
       "result": "PASS",
       "head": "a368629",
-      "note": "0024 迁移；billing 11/11、全套 PG 15 套件 115/115；幂等/缺口/争议回归",
+      "note": "0024；全套 PG 15 套件 115/115",
       "run": 40487450738
+    },
+    {
+      "id": "g6-canvas-command-channel",
+      "result": "PASS",
+      "head": "5099e67",
+      "note": "0025 迁移；boards 7/7、全套 PG 116/116；信封/修订冲突/幂等/锁节点/只读状态回归",
+      "run": 40506347386
+    },
+    {
+      "id": "g6-canvas-event-log",
+      "result": "PASS",
+      "head": "f41e0ce",
+      "note": "0026 迁移；boards 8/8、全套 PG 117/117；事件顺序/重放不追加/游标分页",
+      "run": 40512790905
     },
     {
       "id": "v3-baseline-legacy-restore",
       "result": "PASS",
-      "head": "a368629"
+      "head": "f41e0ce"
     },
     {
       "id": "g0-inventory",
       "result": "PASS",
-      "pgTables": 47,
-      "pgMigrations": 19,
+      "pgTables": 49,
+      "pgMigrations": 21,
       "sqliteMigrations": 33,
       "migrationDeltaAllAdditive": true,
-      "head": "a368629"
+      "head": "f41e0ce"
     }
   ],
   "remaining": [
-    "用户 G2 接线决策 ①②③（评审包 §5 已更新：④ 显示 ICC 与 25MP 对照已收口，仅剩 DEVICE 门槛的真实 100MP 压力）",
-    "对方工作区 234 文件 WIP（画布命令/出版/编辑历史）待提交合入；#7 服务端画布共编与 external_edit.rs 清理待其解锁",
-    "G2 原型接入产品管线（决策后实施：预览路径 scaled_decode / 画布瓦片 / 检视色彩变换）",
+    "用户 G2 接线决策 ①②③（评审包 §5；④ 已收口）——解锁 G2 原型接入产品管线",
+    "对方工作区 234 文件 WIP（画布命令/出版/编辑历史）待提交合入；#7 消费端（桌面画布客户端接入命令/事件通道）与 external_edit.rs 清理待其解锁",
+    "G6 后续增量：board 级 Presence、消费端重放语义（事件游标已具备，客户端 resync 逻辑属桌面侧）",
     "真实 100MP/16-bit TIFF 文件压力与设备校准/多屏一致性保持 DEVICE 门槛",
     "真人/设备/供应商/生产验收全部保留（30 任务/10 评委/5 组双人/LR/C1/32 页书）"
   ],
   "session": {
     "restoredCiAt": "e3fcdaa",
-    "snapshotPrevAt": "6677a27",
+    "snapshotPrevAt": "d2ce22a",
     "g2PrototypesAt": "8810482",
     "billingRefundsAt": "a368629",
-    "notes": "自 8810482 后落地：#10 退款与争议额度补偿（0024 迁移 + webhook 按比例撤回可用配额 + 幂等/缺口回归）；G2 评审包更新（④ 已收口，决策 ①②③ 待用户）"
+    "g6CanvasCoeditAt": "f41e0ce",
+    "notes": "#7 正式云端共编服务端两批落地：画布命令通道（0025）+ 事件日志与游标（0026）；G2 原型与 #10 退款补偿已收口"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40487450738,
-    "headSha": "a3686293ba25b0e4372b557f453e38af853c971a",
+    "databaseId": 40512790905,
+    "headSha": "f41e0cee392ac4ec08e682f817b1cda5e174ad45",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40487450738",
-    "observedAt": "2026-10-27T11:01:09.470Z",
-    "note": "退款与争议额度补偿合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40512790905",
+    "observedAt": "2026-10-27T14:15:47.376Z",
+    "note": "G6 事件日志与游标合入后全量门禁绿"
   }
 }
