@@ -3,8 +3,8 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-27T21:53:12.923Z",
-  "sourceHead": "e43c87ad719b778251506e4ab7b52b8cd501590f",
+  "observedAt": "2026-10-27T23:20:03.295Z",
+  "sourceHead": "c4f021070103a20daa7bd0c26df47b0905983e41",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
@@ -12,7 +12,7 @@
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "6ac05feec1c245eee10f1e463571af2494dd8a5ce7008e5cb195213062257112"
   },
-  "status": "G3_DIFF_LANDED_MAIN_CI_GREEN",
+  "status": "I1_RESEARCH_LANDED_MAIN_CI_GREEN",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -32,6 +32,7 @@
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0026_canvas_events.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0027_board_presence.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0028_team_seats.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0029_research_references.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0020_asset_domain.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0021_canvas.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0022_external_edit.sql\"",
@@ -414,6 +415,7 @@
         "fr_projects",
         "fr_proposals",
         "fr_rate_limits",
+        "fr_research_references",
         "fr_renditions",
         "fr_sessions",
         "fr_source_assets",
@@ -515,6 +517,10 @@
         {
           "version": "0028",
           "sha256": "a5386c947862b575903da8a34ec54efba83212d64272e39d0724e6f6a82f3711"
+        },
+        {
+          "version": "0029",
+          "sha256": "aef4e715189156d56069773e8755322344b989b3f03a4fa1711a801e415ec5b1"
         }
       ],
       "registeredFiles": [
@@ -609,6 +615,10 @@
         {
           "path": "apps/api/migrations/0028_team_seats.sql",
           "sha256": "a5386c947862b575903da8a34ec54efba83212d64272e39d0724e6f6a82f3711"
+        },
+        {
+          "path": "apps/api/migrations/0029_research_references.sql",
+          "sha256": "aef4e715189156d56069773e8755322344b989b3f03a4fa1711a801e415ec5b1"
         }
       ],
       "unregisteredDesignFiles": [
@@ -774,13 +784,20 @@
       "run": 40584587721
     },
     {
+      "id": "i1-research-references",
+      "result": "PASS",
+      "head": "c4f0210",
+      "note": "0029 迁移；integration 20/20、全套 PG 123/123；笔记/链接 CRUD+作者/来源/许可元数据；独立身份域不计入选；不推进正式修订",
+      "run": 40596112849
+    },
+    {
       "id": "g0-inventory",
       "result": "PASS",
-      "pgTables": 51,
-      "pgMigrations": 23,
+      "pgTables": 52,
+      "pgMigrations": 24,
       "sqliteMigrations": 33,
       "migrationDeltaAllAdditive": true,
-      "head": "e43c87a"
+      "head": "c4f0210"
     }
   ],
   "remaining": [
@@ -801,15 +818,16 @@
     "boardPresenceAt": "11d020b",
     "teamSeatsAt": "74e3dc3",
     "g3DiffAt": "e43c87a",
-    "notes": "G6 共编服务端四批齐备（命令通道/事件游标/生命周期/Presence，0025–0027）；J5 团队席位（0028）落地；G3 版本 Diff 服务端落地（e43c87a）；G2 决策④已收口、①②③待用户"
+    "researchReferencesAt": "c4f0210",
+    "notes": "G6 共编服务端四批齐备（0025–0027）；J5 团队席位（0028-0024 域）、G3 版本 Diff（e43c87a）、I1 研究笔记/链接（0029）落地；G2 决策④已收口、①②③待用户"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40584587721,
-    "headSha": "e43c87ad719b778251506e4ab7b52b8cd501590f",
+    "databaseId": 40596112849,
+    "headSha": "c4f021070103a20daa7bd0c26df47b0905983e41",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40584587721",
-    "observedAt": "2026-10-27T21:53:12.923Z",
-    "note": "G3 版本 Diff（e43c87a）合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40596112849",
+    "observedAt": "2026-10-27T23:20:03.295Z",
+    "note": "I1 研究参考（0029）合入后全量门禁绿"
   }
 }
