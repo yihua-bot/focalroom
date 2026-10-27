@@ -721,5 +721,42 @@ pub mod scaled_decode {
                 "VALIDATION_ERROR"
             );
         }
+
+        #[test]
+        fn stress_25mp_scaled_decode_vs_full_decode() {
+            use std::time::Instant;
+            // 25MP 确定性伪随机灰度：不可压缩内容让两条路径都付出真实解码/编码代价，
+            // 避免纯色 JPEG 的退化解码。计时用 --nocapture 查看，作 G2 决策点 1 的对照数据。
+            let edge = 5000u32;
+            let mut img = image::GrayImage::new(edge, edge);
+            let mut seed = 0x1234_5678u32;
+            for pixel in img.pixels_mut() {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                *pixel = image::Luma([(seed >> 24) as u8]);
+            }
+            let mut jpeg = Vec::new();
+            img.write_to(&mut Cursor::new(&mut jpeg), image::ImageFormat::Jpeg)
+                .unwrap();
+
+            let start = Instant::now();
+            let (w, h, rgba) = decode_rgba_scaled(&jpeg, 1400).unwrap();
+            let scaled_ms = start.elapsed().as_millis();
+            assert_eq!((w, h), (1400, 1400));
+            assert_eq!(rgba.len(), 1400 * 1400 * 4);
+
+            let start = Instant::now();
+            let full = image::load_from_memory(&jpeg).unwrap();
+            let full_ms = start.elapsed().as_millis();
+            assert_eq!((full.width(), full.height()), (edge, edge));
+
+            // 内存上界由 API 契约决定：全量缓冲 edge²×4 对缩放输出 1400²×4（约 12.8 倍）。
+            let full_bytes = edge as u64 * edge as u64 * 4;
+            let scaled_bytes = 1400u64 * 1400 * 4;
+            println!(
+                "25MP decode compare: scaled={scaled_ms}ms({scaled_bytes}B) full={full_ms}ms({full_bytes}B) ratio={:.1}x",
+                full_bytes as f64 / scaled_bytes as f64
+            );
+            assert!(full_bytes / scaled_bytes > 10);
+        }
     }
 }
