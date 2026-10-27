@@ -397,7 +397,7 @@ fn parse_icc_description(icc: &[u8]) -> String {
 #[cfg(target_os = "macos")]
 pub mod native_transform {
     use crate::domain::{AppError, Result};
-    use core_foundation::base::TCFType;
+    use core_foundation::base::{CFRelease, CFTypeRef, TCFType};
     use core_foundation::data::{CFData, CFDataRef};
     use core_graphics::color_space::CGColorSpace;
     use core_graphics::context::CGContext;
@@ -407,6 +407,9 @@ pub mod native_transform {
 
     unsafe extern "C" {
         fn CGColorSpaceCreateWithICCProfile(data: CFDataRef) -> *mut c_void;
+        fn CGMainDisplayID() -> u32;
+        fn CGDisplayCopyColorSpace(display: u32) -> *mut c_void;
+        fn CGColorSpaceCopyICCProfile(space: *mut c_void) -> CFDataRef;
     }
 
     fn space_from_icc(icc: &[u8]) -> Result<CGColorSpace> {
@@ -624,6 +627,30 @@ pub mod native_transform {
             }
         }
         Ok(())
+    }
+
+    /// 主显示器 ICC 配置字节（FR3-014 目标色彩空间采集原型）。
+    /// 可直接作为 transform_* 的 dst_icc；随显示器/校准变化，勿并入内容寻址缓存键。
+    pub fn display_profile_bytes() -> Result<Vec<u8>> {
+        unsafe {
+            let space = CGDisplayCopyColorSpace(CGMainDisplayID());
+            if space.is_null() {
+                return Err(AppError::new(
+                    "COLOR_DISPLAY_UNAVAILABLE",
+                    "无法获取主显示器色彩空间",
+                ));
+            }
+            let data = CGColorSpaceCopyICCProfile(space);
+            CFRelease(space as CFTypeRef);
+            if data.is_null() {
+                return Err(AppError::new(
+                    "COLOR_DISPLAY_UNAVAILABLE",
+                    "显示器色彩空间未提供 ICC 配置",
+                ));
+            }
+            let profile = CFData::wrap_under_create_rule(data);
+            Ok(profile.bytes().to_vec())
+        }
     }
 }
 
@@ -1128,6 +1155,23 @@ mod diagnostic_tests {
         assert!(super::native_transform::transform_rgb32f(&srgb, &srgb, &mut wrong, 1, 1).is_err());
         assert!(
             super::native_transform::transform_rgb32f(b"bad", &srgb, &mut pixels, 1, 1).is_err()
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn display_profile_is_valid_icc_and_transform_target() {
+        let profile = super::native_transform::display_profile_bytes().unwrap();
+        // ICC 头 128 字节、签名 "acsp" 位于偏移 36；不断言具体机型/校准身份（runner 显示配置各异）。
+        assert!(profile.len() >= 128, "ICC 过短: {}", profile.len());
+        assert_eq!(profile[36..40], *b"acsp");
+        let srgb = system_profile("sRGB Profile.icc");
+        let mut pixels = vec![255u8, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255];
+        super::native_transform::transform_rgb8(&srgb, &profile, &mut pixels, 4, 1).unwrap();
+        // 白色在 D65 基准的常见显示配置下应保持接近白色；宽容量适配不同默认配置。
+        assert!(
+            pixels[9] >= 250 && pixels[10] >= 250 && pixels[11] >= 250,
+            "白色漂移: {pixels:?}"
         );
     }
 }
