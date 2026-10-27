@@ -572,3 +572,154 @@ pub mod tile_pyramid {
         }
     }
 }
+
+/// FR3-015 局部解码原型：经 ImageIO 缩略图按目标长边解码，不为缩小视图加载全分辨率像素。
+/// 输出为预乘 alpha 的 RGBA8；区域级解码与原生管线接入在 G2 评审后推进。
+#[cfg(target_os = "macos")]
+pub mod scaled_decode {
+    use crate::domain::{AppError, Result};
+    use core_foundation::base::{CFRelease, CFType, CFTypeRef, TCFType};
+    use core_foundation::boolean::CFBoolean;
+    use core_foundation::data::{CFData, CFDataRef};
+    use core_foundation::dictionary::{CFDictionaryRef, CFMutableDictionary};
+    use core_foundation::number::CFNumber;
+    use core_foundation::string::{CFString, CFStringRef};
+    use core_graphics::color_space::CGColorSpace;
+    use core_graphics::context::CGContext;
+    use core_graphics::geometry::{CGPoint, CGRect, CGSize};
+    use core_graphics::image::CGImage;
+    use core_graphics::sys::CGImageRef;
+    use foreign_types::ForeignType;
+    use std::ffi::c_void;
+
+    type CGImageSourceRef = *const c_void;
+
+    #[link(name = "ImageIO", kind = "framework")]
+    unsafe extern "C" {
+        static kCGImageSourceThumbnailMaxPixelSize: CFStringRef;
+        static kCGImageSourceCreateThumbnailFromImageAlways: CFStringRef;
+        static kCGImageSourceCreateThumbnailWithTransform: CFStringRef;
+        fn CGImageSourceCreateWithData(
+            data: CFDataRef,
+            options: CFDictionaryRef,
+        ) -> CGImageSourceRef;
+        fn CGImageSourceCreateThumbnailAtIndex(
+            source: CGImageSourceRef,
+            index: usize,
+            options: CFDictionaryRef,
+        ) -> CGImageRef;
+    }
+
+    struct Source(CGImageSourceRef);
+
+    impl Drop for Source {
+        fn drop(&mut self) {
+            if !self.0.is_null() {
+                unsafe { CFRelease(self.0 as CFTypeRef) };
+            }
+        }
+    }
+
+    /// 就地把图像字节解码为长边不超过 max_edge 的预乘 RGBA8，保持纵横比。
+    pub fn decode_rgba_scaled(image: &[u8], max_edge: u32) -> Result<(u32, u32, Vec<u8>)> {
+        if max_edge == 0 {
+            return Err(AppError::new("VALIDATION_ERROR", "max_edge 必须为正"));
+        }
+        let data = CFData::from_buffer(image);
+        let raw =
+            unsafe { CGImageSourceCreateWithData(data.as_concrete_TypeRef(), std::ptr::null()) };
+        if raw.is_null() {
+            return Err(AppError::new("IMAGE_DECODE", "图像数据无法解析"));
+        }
+        let source = Source(raw);
+        let mut options = CFMutableDictionary::<CFString, CFType>::new();
+        // 全局常量键用 get 规则包装：包时持有、drop 释放，与常量本身的永久存活配对。
+        let size_key =
+            unsafe { CFString::wrap_under_get_rule(kCGImageSourceThumbnailMaxPixelSize) };
+        options.add(&size_key, &CFNumber::from(max_edge as i32).as_CFType());
+        let always_key =
+            unsafe { CFString::wrap_under_get_rule(kCGImageSourceCreateThumbnailFromImageAlways) };
+        options.add(&always_key, &CFBoolean::true_value().as_CFType());
+        let transform_key =
+            unsafe { CFString::wrap_under_get_rule(kCGImageSourceCreateThumbnailWithTransform) };
+        options.add(&transform_key, &CFBoolean::true_value().as_CFType());
+        let options = options.to_immutable();
+        let thumb = unsafe {
+            CGImageSourceCreateThumbnailAtIndex(source.0, 0, options.as_concrete_TypeRef())
+        };
+        if thumb.is_null() {
+            return Err(AppError::new("IMAGE_DECODE", "缩略图解码失败"));
+        }
+        let thumb = unsafe { CGImage::from_ptr(thumb) };
+        let width = thumb.width() as u32;
+        let height = thumb.height() as u32;
+        if width == 0 || height == 0 {
+            return Err(AppError::new("IMAGE_DECODE", "解码结果尺寸无效"));
+        }
+        let space = CGColorSpace::create_device_rgb();
+        // kCGImageAlphaPremultipliedLast=1：预乘 alpha 的 32bpp RGBA——
+        // macOS 位图不支持直连 alpha（kCGImageAlphaLast），Skip 系又会丢弃 alpha。
+        let mut ctx = CGContext::create_bitmap_context(
+            None,
+            width as usize,
+            height as usize,
+            8,
+            width as usize * 4,
+            &space,
+            1,
+        );
+        ctx.draw_image(
+            CGRect::new(
+                &CGPoint::new(0.0, 0.0),
+                &CGSize::new(width as f64, height as f64),
+            ),
+            &thumb,
+        );
+        Ok((width, height, ctx.data().to_vec()))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::io::Cursor;
+
+        fn encode(width: u32, height: u32, color: [u8; 3], format: image::ImageFormat) -> Vec<u8> {
+            let img = image::RgbImage::from_pixel(width, height, image::Rgb(color));
+            let mut bytes = Vec::new();
+            img.write_to(&mut Cursor::new(&mut bytes), format).unwrap();
+            bytes
+        }
+
+        #[test]
+        fn jpeg_decodes_to_requested_long_edge() {
+            let jpeg = encode(2000, 1000, [200, 30, 40], image::ImageFormat::Jpeg);
+            let (w, h, rgba) = decode_rgba_scaled(&jpeg, 500).unwrap();
+            assert_eq!((w, h), (500, 250));
+            assert_eq!(rgba.len(), 500 * 250 * 4);
+            assert!(rgba[0] > 150 && rgba[1] < 90 && rgba[2] < 90);
+        }
+
+        #[test]
+        fn png_decodes_and_original_size_is_respected() {
+            let png = encode(300, 150, [10, 200, 20], image::ImageFormat::Png);
+            let (w, h, rgba) = decode_rgba_scaled(&png, 100).unwrap();
+            assert_eq!((w, h), (100, 50));
+            assert_eq!(rgba.len(), 100 * 50 * 4);
+            let (w, h, _) = decode_rgba_scaled(&png, 1000).unwrap();
+            assert_eq!((w, h), (300, 150));
+        }
+
+        #[test]
+        fn invalid_input_is_rejected_with_structured_errors() {
+            assert_eq!(
+                decode_rgba_scaled(b"not an image", 100).unwrap_err().code,
+                "IMAGE_DECODE"
+            );
+            let jpeg = encode(64, 64, [0, 0, 0], image::ImageFormat::Jpeg);
+            assert_eq!(
+                decode_rgba_scaled(&jpeg, 0).unwrap_err().code,
+                "VALIDATION_ERROR"
+            );
+        }
+    }
+}
