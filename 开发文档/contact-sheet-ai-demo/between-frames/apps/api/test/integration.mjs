@@ -239,3 +239,44 @@ test('M4 project authority does not authorize cloud model transmission', async (
   await call(`/projects/${project}/agent-tasks/summarize`, 'POST', outsider.token, { kind: 'summarize_comments', consent_id: 'no-such-consent' }, 403);
   assert.equal((await pool.query('SELECT count(*) FROM fr_agent_task_results')).rows[0].count, before);
 });
+test('G3 revision diff compares immutable snapshots: field-level changes, boundaries and scoping', async () => {
+  // 独立项目 + 新观察者：两轮选片命令制造已知字段级差异。
+  const diffViewer = await call('/auth/register', 'POST', null, { email: 'diff-viewer@fr.test', password: 'test-password-123', display_name: 'diff-viewer@fr.test' });
+  const manifestDiff = { workspace_id: workspace, local_project_id: 'diff-fixture', promotion_id: randomUUID(), title: '版本比较项目', from_revision: 0,
+    snapshot: { photos: ['d1', 'd2'].map(id => ({ id, filename: `${id}.jpg`, source_sha256: 'd'.repeat(64), selection: 'UNDECIDED' })),
+      sequences: [{ id: 'sequence', title: '主序列', items: [] }] },
+    media_policy: { previews_only: true, strip_gps: true, max_long_edge: 2048, ai_upload_authorized: false } };
+  const start = await call('/promotions', 'POST', owner.token, manifestDiff);
+  const diffProject = start.project_id;
+  const jpeg = await sharp({ create: { width: 96, height: 64, channels: 3, background: '#98ba23' } }).jpeg().toBuffer();
+  for (const photo of manifestDiff.snapshot.photos) {
+    const response = await fetch(`${base}/api/v2/projects/${diffProject}/previews/${photo.id}`, { method: 'PUT', headers: { authorization: `Bearer ${owner.token}`, 'content-type': 'image/jpeg' }, body: jpeg });
+    assert.equal(response.status, 200);
+  }
+  await call(`/projects/${diffProject}/finalize`, 'POST', owner.token, { manifest_digest: start.manifest_digest });
+  const issue = (kind, payload, revision) => call(`/projects/${diffProject}/commands`, 'POST', owner.token,
+    { ...command(kind, payload), project_id: diffProject, expected_revision: revision });
+  await issue('photo.set_selection', { photo_ids: ['d1'], selection_state: 'KEEP' }, 0);
+  await issue('photo.set_selection', { photo_ids: ['d2'], selection_state: 'KEEP' }, 1);
+  const inviteDiff = await call(`/workspaces/${workspace}/invitations`, 'POST', owner.token, { email: diffViewer.user.email, role: 'VIEWER', project_id: diffProject });
+  await call('/invitations/accept', 'POST', diffViewer.token, { token: new URL(inviteDiff.invite_url).hash.split('=')[1] });
+
+  // 字段级差异：d2 的 selection 变化，d1 稳定，序列无差异。
+  const diff = await call(`/projects/${diffProject}/versions/1/diff/2`, 'GET', owner.token);
+  assert.equal(diff.from.revision, 1); assert.equal(diff.to.revision, 2);
+  assert.deepEqual(diff.photos.added, []); assert.deepEqual(diff.photos.removed, []);
+  assert.equal(diff.photos.changed.length, 1);
+  assert.equal(diff.photos.changed[0].id, 'd2');
+  assert.deepEqual(diff.photos.changed[0].fields.selection, { before: 'UNDECIDED', after: 'KEEP' });
+  assert.deepEqual(diff.sequences, { added: [], removed: [], changed: [] });
+
+  // 跨多版本：d1 与 d2 同时出现在 0→2 差异中。
+  const wide = await call(`/projects/${diffProject}/versions/0/diff/2`, 'GET', owner.token);
+  assert.deepEqual(wide.photos.changed.map(change => change.id).sort(), ['d1', 'd2']);
+
+  // 边界与权限：同版本 400、缺失版本 404、未授权 403、被授权观察者可读。
+  await call(`/projects/${diffProject}/versions/2/diff/2`, 'GET', owner.token, undefined, 400);
+  await call(`/projects/${diffProject}/versions/1/diff/99`, 'GET', owner.token, undefined, 404);
+  await call(`/projects/${diffProject}/versions/1/diff/2`, 'GET', outsider.token, undefined, 403);
+  assert.equal((await call(`/projects/${diffProject}/versions/1/diff/2`, 'GET', diffViewer.token)).photos.changed.length, 1);
+});

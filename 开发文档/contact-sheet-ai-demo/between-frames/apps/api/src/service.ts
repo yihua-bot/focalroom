@@ -29,6 +29,40 @@ const inviteInput = z.strictObject({
   role: z.enum(["ADMIN", "EDITOR", "REVIEWER", "VIEWER"]),
   project_id: z.string().min(1).max(160).optional(),
 });
+type SnapshotEntity = { id: string; [key: string]: unknown };
+// 版本快照在写入时经 manifest/命令通道校验；读取侧再验证结构，坏数据报错不静默。
+function snapshotEntities(value: unknown): SnapshotEntity[] {
+  assert(Array.isArray(value), 500, "SNAPSHOT_INVALID", "版本快照结构不合法");
+  return value.map((entity) => {
+    assert(
+      entity !== null && typeof entity === "object" &&
+        typeof (entity as Record<string, unknown>).id === "string",
+      500, "SNAPSHOT_INVALID", "版本快照结构不合法",
+    );
+    return entity as SnapshotEntity;
+  });
+}
+function diffEntities(before: SnapshotEntity[], after: SnapshotEntity[]) {
+  const beforeMap = new Map(before.map((entity) => [entity.id, entity]));
+  const afterMap = new Map(after.map((entity) => [entity.id, entity]));
+  const changed = after
+    .filter((entity) => beforeMap.has(entity.id))
+    .map((entity) => {
+      const prior = beforeMap.get(entity.id)!;
+      const fields: Record<string, { before: unknown; after: unknown }> = {};
+      for (const key of new Set([...Object.keys(prior), ...Object.keys(entity)])) {
+        if (key !== "id" && JSON.stringify(prior[key]) !== JSON.stringify(entity[key]))
+          fields[key] = { before: prior[key], after: entity[key] };
+      }
+      return { id: entity.id, fields };
+    })
+    .filter((entry) => Object.keys(entry.fields).length > 0);
+  return {
+    added: after.filter((entity) => !beforeMap.has(entity.id)).map((entity) => entity.id),
+    removed: before.filter((entity) => !afterMap.has(entity.id)).map((entity) => entity.id),
+    changed,
+  };
+}
 export class CloudService {
   /** 运维指标注册表（每实例独立；/metrics 抓取时含 DB 派生指标）。 */
   readonly metrics = new MetricsRegistry();
@@ -583,6 +617,31 @@ export class CloudService {
       ).rows[0];
       assert(row, 404, "NOT_FOUND", "历史版本不存在");
       return row;
+    });
+  }
+  async versionDiff(headers: Headers, id: string, from: number, to: number) {
+    assert(
+      Number.isSafeInteger(from) && Number.isSafeInteger(to) &&
+        from >= 0 && to >= 0 && from !== to,
+      400, "VALIDATION_ERROR", "版本号不合法",
+    );
+    return this.authority.scope(headers, id, false, async ({ tx }) => {
+      const rows = (
+        await tx.query(
+          "SELECT revision,snapshot,created_at FROM fr_versions WHERE project_id=$1 AND revision IN ($2,$3)",
+          [id, from, to],
+        )
+      ).rows;
+      const before = rows.find((row) => row.revision === from);
+      const after = rows.find((row) => row.revision === to);
+      assert(before && after, 404, "NOT_FOUND", "历史版本不存在");
+      return {
+        project_id: id,
+        from: { revision: from, created_at: before.created_at },
+        to: { revision: to, created_at: after.created_at },
+        photos: diffEntities(snapshotEntities(before.snapshot.photos), snapshotEntities(after.snapshot.photos)),
+        sequences: diffEntities(snapshotEntities(before.snapshot.sequences), snapshotEntities(after.snapshot.sequences)),
+      };
     });
   }
   async reviseProposal(

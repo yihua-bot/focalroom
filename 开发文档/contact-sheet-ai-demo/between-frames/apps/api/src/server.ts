@@ -259,6 +259,9 @@ class ApiController {
     const project = path.match(/^\/projects\/([^/]+)\/(.+)$/);
     if (project) {
       const [, id, action] = project;
+      const versionDiff = action.match(/^versions\/(\d+)\/diff\/(\d+)$/);
+      if (versionDiff && req.method === "GET")
+        return s.versionDiff(headers, id, Number(versionDiff[1]), Number(versionDiff[2]));
       const version = action.match(/^versions\/(\d+)$/);
       if (version && req.method === "GET")
         return s.version(headers, id, Number(version[1]));
