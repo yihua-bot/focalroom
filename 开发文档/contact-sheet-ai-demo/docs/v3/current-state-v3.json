@@ -3,16 +3,16 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-27T14:14:44.757Z",
-  "sourceHead": "f41e0cee392ac4ec08e682f817b1cda5e174ad45",
+  "observedAt": "2026-10-27T19:39:02.724Z",
+  "sourceHead": "74e3dc36d4f00eb52ca1da572b7dffa911c2e910",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
   "ciWorkflow": {
     "path": "../../../.github/workflows/betweenframes-v2.yml",
-    "sha256": "ad58918c027653518dac69d0fc470a9788fa3981b1de6bafcc6ba525720c42a6"
+    "sha256": "6ac05feec1c245eee10f1e463571af2494dd8a5ce7008e5cb195213062257112"
   },
-  "status": "G6_CANVAS_COEDIT_LANDED_MAIN_CI_GREEN",
+  "status": "G6_PRESENCE_J5_SEATS_LANDED_MAIN_CI_GREEN",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -30,6 +30,8 @@
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0024_billing_refunds.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0025_canvas_commands.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0026_canvas_events.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0027_board_presence.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0028_team_seats.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0020_asset_domain.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0021_canvas.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0022_external_edit.sql\"",
@@ -387,6 +389,7 @@
         "fr_billing_refunds",
         "fr_billing_subscriptions",
         "fr_board_annotations",
+        "fr_board_presence",
         "fr_boards",
         "fr_canvas_commands",
         "fr_canvas_events",
@@ -414,6 +417,7 @@
         "fr_renditions",
         "fr_sessions",
         "fr_source_assets",
+        "fr_team_seats",
         "fr_tickets",
         "fr_users",
         "fr_versions",
@@ -503,6 +507,14 @@
         {
           "version": "0026",
           "sha256": "53617220cf8c38f7bfdb2aaf7137163e3cc7445ab7caf4654db4ccd9d12237d9"
+        },
+        {
+          "version": "0027",
+          "sha256": "335429bf4ea4f24dedbc32c61a64e0719eeef3c10296157f3c768b481a8e9493"
+        },
+        {
+          "version": "0028",
+          "sha256": "a5386c947862b575903da8a34ec54efba83212d64272e39d0724e6f6a82f3711"
         }
       ],
       "registeredFiles": [
@@ -589,6 +601,14 @@
         {
           "path": "apps/api/migrations/0026_canvas_events.sql",
           "sha256": "53617220cf8c38f7bfdb2aaf7137163e3cc7445ab7caf4654db4ccd9d12237d9"
+        },
+        {
+          "path": "apps/api/migrations/0027_board_presence.sql",
+          "sha256": "335429bf4ea4f24dedbc32c61a64e0719eeef3c10296157f3c768b481a8e9493"
+        },
+        {
+          "path": "apps/api/migrations/0028_team_seats.sql",
+          "sha256": "a5386c947862b575903da8a34ec54efba83212d64272e39d0724e6f6a82f3711"
         }
       ],
       "unregisteredDesignFiles": [
@@ -726,37 +746,62 @@
       "head": "f41e0ce"
     },
     {
+      "id": "board-presence",
+      "result": "PASS",
+      "head": "11d020b",
+      "note": "0027 迁移；boards 10/10、全套 PG 120/120；编辑者广播/观察者只读/30秒惰性回收；CI 经 2×runner 异常终止后由 c70715b 超时修复验证",
+      "run": 40556221743
+    },
+    {
+      "id": "ci-timeout-90",
+      "result": "PASS",
+      "head": "c70715b",
+      "note": "foundation 60→90 分钟（contended 日超时上限）",
+      "run": 40556221743
+    },
+    {
+      "id": "team-seats",
+      "result": "PASS",
+      "head": "74e3dc3",
+      "note": "0028 迁移；billing 12/12、全套 PG 121/121；管理员门控/成员绑定/幂等/订阅档位配额",
+      "run": 40565273862
+    },
+    {
       "id": "g0-inventory",
       "result": "PASS",
-      "pgTables": 49,
-      "pgMigrations": 21,
+      "pgTables": 51,
+      "pgMigrations": 23,
       "sqliteMigrations": 33,
       "migrationDeltaAllAdditive": true,
-      "head": "f41e0ce"
+      "head": "74e3dc3"
     }
   ],
   "remaining": [
     "用户 G2 接线决策 ①②③（评审包 §5；④ 已收口）——解锁 G2 原型接入产品管线",
-    "对方工作区 234 文件 WIP（画布命令/出版/编辑历史）待提交合入；#7 消费端（桌面画布客户端接入命令/事件通道）与 external_edit.rs 清理待其解锁",
-    "G6 后续增量：board 级 Presence、消费端重放语义（事件游标已具备，客户端 resync 逻辑属桌面侧）",
+    "对方工作区 237 文件 WIP（画布命令/出版/编辑历史）待提交合入；#7 消费端（桌面画布客户端接入命令/事件通道）与 external_edit.rs 清理待其解锁",
+    "G6 服务端已备齐命令/事件/生命周期/Presence；消费端重放与 resync 属桌面侧，待对方 WIP 合入解锁",
+    "J5 余项：服务条款、支持与售后流程（团队席位/权限/账单管理已落地）",
     "真实 100MP/16-bit TIFF 文件压力与设备校准/多屏一致性保持 DEVICE 门槛",
     "真人/设备/供应商/生产验收全部保留（30 任务/10 评委/5 组双人/LR/C1/32 页书）"
   ],
   "session": {
     "restoredCiAt": "e3fcdaa",
-    "snapshotPrevAt": "d2ce22a",
+    "snapshotPrevAt": "f41e0ce",
     "g2PrototypesAt": "8810482",
     "billingRefundsAt": "a368629",
     "g6CanvasCoeditAt": "f41e0ce",
-    "notes": "#7 正式云端共编服务端两批落地：画布命令通道（0025）+ 事件日志与游标（0026）；G2 原型与 #10 退款补偿已收口"
+    "g6LifecycleAt": "5a04522",
+    "boardPresenceAt": "11d020b",
+    "teamSeatsAt": "74e3dc3",
+    "notes": "G6 共编服务端四批齐备（命令通道/事件游标/生命周期/Presence，0025–0027）；J5 团队席位（0028）落地；G2 决策④已收口、①②③待用户"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40512790905,
-    "headSha": "f41e0cee392ac4ec08e682f817b1cda5e174ad45",
+    "databaseId": 40565273862,
+    "headSha": "74e3dc36d4f00eb52ca1da572b7dffa911c2e910",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40512790905",
-    "observedAt": "2026-10-27T14:15:47.376Z",
-    "note": "G6 事件日志与游标合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40565273862",
+    "observedAt": "2026-10-27T19:39:02.724Z",
+    "note": "团队席位（0028）合入后全量门禁绿"
   }
 }
