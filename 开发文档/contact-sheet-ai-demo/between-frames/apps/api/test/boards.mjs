@@ -329,3 +329,39 @@ test('G6 board lifecycle: state transitions are editor-gated formal commands', a
   await post(transition(2, 'official'), 409);
   await post(envelope(2, [{ type: 'createNode', nodeType: 'photo', x: 0, y: 0, width: 10, height: 10 }]), 409);
 });
+
+test('G6 board presence: heartbeats broadcast editors; viewers read-only; stale entries expire', async () => {
+  // 早期 CSRF 测试已撤销 reviewer 的项目授权且未恢复；本测试建立自己的活跃评审者。
+  const editor = await call('/auth/register', 'POST', null,
+    { email: 'board-presence-editor@fr.test', password: 'board-test-password-123', display_name: 'board-presence-editor@fr.test' });
+  await invite(editor, 'REVIEWER');
+  const created = await call('/boards', 'POST', owner, { projectId: project, title: '在线协作画布' });
+  const presencePath = '/boards/' + created.id + '/presence';
+  const revisionBefore = (await pool.query('SELECT revision FROM fr_boards WHERE id=$1', [created.id])).rows[0].revision;
+
+  // 编辑者心跳广播本人与选区。
+  const first = await call(presencePath, 'POST', owner, { selection: { nodeId: 'node-1' } });
+  assert.equal(first.active.length, 1);
+  assert.equal(first.active[0].user_id, owner.user.id);
+  assert.equal(first.active[0].selection.nodeId, 'node-1');
+  const second = await call(presencePath, 'POST', editor, {});
+  assert.equal(second.active.length, 2);
+
+  // 观察者只读：不能心跳，但可查看名单；未授权者不可见。
+  await call(presencePath, 'POST', viewer, {}, 403);
+  assert.equal((await call(presencePath, 'GET', viewer)).active.length, 2);
+  await call(presencePath, 'GET', outsider, undefined, 403);
+
+  // 超时失活：回拨评审者最后心跳，下一次心跳惰性回收。
+  await pool.query(
+    "UPDATE fr_board_presence SET last_seen_at = now() - interval '2 minutes' WHERE board_id=$1 AND user_id=$2",
+    [created.id, editor.user.id],
+  );
+  const afterGc = await call(presencePath, 'POST', owner, {});
+  assert.equal(afterGc.active.length, 1);
+  assert.equal(afterGc.active[0].user_id, owner.user.id);
+
+  // 心跳是会话状态，不推进画布修订。
+  const revisionAfter = (await pool.query('SELECT revision FROM fr_boards WHERE id=$1', [created.id])).rows[0].revision;
+  assert.equal(revisionAfter, revisionBefore);
+});

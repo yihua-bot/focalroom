@@ -165,6 +165,13 @@ class ApiController {
     if (boardEvents && req.method === "GET") {
       return s.boards.events(headers, boardEvents[1], req.query.after, req.query.limit);
     }
+    const boardPresence = path.match(/^\/boards\/([^/]+)\/presence$/);
+    if (boardPresence && req.method === "POST") {
+      return s.boards.heartbeat(headers, boardPresence[1], req.body);
+    }
+    if (boardPresence && req.method === "GET") {
+      return s.boards.presence(headers, boardPresence[1]);
+    }
     const annotationResolve = path.match(/^\/boards\/annotations\/([^/]+)\/resolve$/);
     if (annotationResolve && req.method === "POST") {
       return s.boards.resolve(headers, annotationResolve[1], req.body);

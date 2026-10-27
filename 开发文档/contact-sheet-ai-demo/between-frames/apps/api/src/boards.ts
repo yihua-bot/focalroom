@@ -23,6 +23,7 @@ const annotationSchema = z.strictObject({
   body: z.string().trim().min(1).max(2000),
 });
 const resolveSchema = z.strictObject({ resolved: z.boolean() });
+const presenceSchema = z.strictObject({ selection: z.unknown().optional() });
 
 const nodeTypeSchema = z.enum(['photo', 'text', 'sticky', 'shape', 'arrow', 'ink', 'group', 'chapter']);
 const extentSchema = z.number().finite().min(1).max(10000);
@@ -351,5 +352,38 @@ export class BoardService {
       const nextCursor = events.length === size ? events[events.length - 1].id : null;
       return { events, nextCursor };
     });
+  }
+
+  async heartbeat(headers: Headers, boardId: unknown, input: unknown) {
+    const id = idSchema.parse(boardId);
+    const value = presenceSchema.parse(input ?? {});
+    return this.boardScope(headers, id, true, async (scope) => {
+      await scope.tx.query(
+        `INSERT INTO fr_board_presence(board_id,user_id,selection) VALUES($1,$2,$3)
+         ON CONFLICT (board_id,user_id) DO UPDATE SET last_seen_at=now(), selection=EXCLUDED.selection`,
+        [id, scope.user.id, value.selection === undefined ? null : JSON.stringify(value.selection)],
+      );
+      // 惰性回收：心跳时清除超过 30 秒未活跃的行，与实时通道失活窗口一致。
+      await scope.tx.query(
+        "DELETE FROM fr_board_presence WHERE board_id=$1 AND last_seen_at < now() - interval '30 seconds'",
+        [id],
+      );
+      return { active: await this.presenceRows(scope, id) };
+    });
+  }
+
+  async presence(headers: Headers, boardId: unknown) {
+    const id = idSchema.parse(boardId);
+    return this.boardScope(headers, id, false, async (scope) => ({ active: await this.presenceRows(scope, id) }));
+  }
+
+  private async presenceRows(scope: Scope, boardId: string) {
+    return (await scope.tx.query(
+      `SELECT p.user_id, u.display_name, p.last_seen_at, p.selection
+       FROM fr_board_presence p JOIN fr_users u ON u.id=p.user_id
+       WHERE p.board_id=$1 AND p.last_seen_at >= now() - interval '30 seconds'
+       ORDER BY p.last_seen_at DESC`,
+      [boardId],
+    )).rows;
   }
 }
