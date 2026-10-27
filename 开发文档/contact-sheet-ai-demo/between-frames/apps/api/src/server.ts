@@ -157,6 +157,10 @@ class ApiController {
         ? s.boards.nodes(headers, boardRead[1])
         : s.boards.annotations(headers, boardRead[1]);
     }
+    const boardCommands = path.match(/^\/boards\/([^/]+)\/commands$/);
+    if (boardCommands && req.method === "POST") {
+      return s.boards.commands(headers, boardCommands[1], req.body);
+    }
     const annotationResolve = path.match(/^\/boards\/annotations\/([^/]+)\/resolve$/);
     if (annotationResolve && req.method === "POST") {
       return s.boards.resolve(headers, annotationResolve[1], req.body);

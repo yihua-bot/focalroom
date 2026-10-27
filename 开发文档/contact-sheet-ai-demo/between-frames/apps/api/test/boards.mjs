@@ -187,3 +187,68 @@ test('H0-04 uuid-text cast does not error on legacy text asset ids', async () =>
   assert.equal(nodes.length, 1);
   assert.equal(nodes[0].photo_id, null, '旧 TEXT 引用正确无匹配，不报错');
 });
+
+test('G6 formal canvas commands: envelope, revision conflict, idempotency, locked-node and read-only policy', async () => {
+  const created = await call('/boards', 'POST', owner, { projectId: project, title: '命令画布' });
+  const envelope = (baseRevision, actions, override = {}) => ({
+    schemaVersion: 3, commandId: randomUUID(), idempotencyKey: randomUUID(),
+    projectId: project, baseRevision, ...override,
+    operations: actions.map(action => ({ opId: randomUUID(), action })),
+  });
+  const post = (body, status = 200) => call('/boards/' + created.id + '/commands', 'POST', owner, body, status);
+
+  // 快乐路径：建节点+批量移动，修订 0→1，节点真实生效。
+  const nodeId = randomUUID();
+  const firstEnvelope = envelope(0, [
+    { type: 'createNode', nodeId, nodeType: 'photo', x: 10, y: 20, width: 300, height: 200 },
+    { type: 'moveNodes', moves: [{ nodeId, x: 40, y: 50 }] },
+  ]);
+  const first = await post(firstEnvelope);
+  assert.equal(first.ok, true);
+  assert.equal(first.newRevision, 1);
+  assert.deepEqual(first.affectedNodeIds, [nodeId, nodeId]);
+  const applied = (await call('/boards/' + created.id + '/nodes', 'GET', owner)).find(n => n.id === nodeId);
+  assert.ok(applied, '命令创建的节点应存在');
+  assert.equal(applied.x, 40);
+  assert.equal(applied.y, 50);
+
+  // 幂等重放：同 commandId+同内容 → 同回执，不重复推进修订。
+  const replay = await post(firstEnvelope);
+  assert.deepEqual(replay, first);
+
+  // 同 commandId 换内容 → 幂等冲突。
+  await post({ ...firstEnvelope, baseRevision: 1, operations: [{ opId: randomUUID(), action: { type: 'updateNode', nodeId, x: 1 } }] }, 409);
+
+  // 过期 baseRevision → 修订冲突。
+  await post(envelope(0, [{ type: 'deleteNode', nodeId }]), 409);
+
+  // 锁定：可锁定；锁定后几何修改被拒；"只解锁"放行。
+  await post(envelope(1, [{ type: 'updateNode', nodeId, locked: true }]));
+  await post(envelope(2, [{ type: 'updateNode', nodeId, x: 99 }]), 409);
+  const unlock = await post(envelope(2, [{ type: 'updateNode', nodeId, locked: false }]));
+  assert.equal(unlock.newRevision, 3);
+
+  // 只读角色不能发正式命令。
+  await call('/boards/' + created.id + '/commands', 'POST', viewer, envelope(3, [{ type: 'deleteNode', nodeId }]), 403);
+
+  // official 状态只读；恢复草稿后命令恢复。
+  await pool.query("UPDATE fr_boards SET state='official' WHERE id=$1", [created.id]);
+  await post(envelope(3, [{ type: 'deleteNode', nodeId }]), 409);
+  await pool.query("UPDATE fr_boards SET state='draft' WHERE id=$1", [created.id]);
+
+  // 跨画布节点引用被拒（节点不属于命令目标画布）。
+  const other = await call('/boards', 'POST', owner, { projectId: project, title: '另一命令画布' });
+  await call('/boards/' + other.id + '/commands', 'POST', owner, envelope(0, [{ type: 'updateNode', nodeId, x: 5 }]), 409);
+
+  // 重复 opId 与空更新直接拒绝。
+  const dupOpId = randomUUID();
+  const dup = envelope(3, [{ type: 'updateNode', nodeId, x: 7 }, { type: 'updateNode', nodeId, y: 8 }]);
+  dup.operations = dup.operations.map(op => ({ ...op, opId: dupOpId }));
+  await post(dup, 400);
+  await post(envelope(3, [{ type: 'updateNode', nodeId }]), 400);
+
+  // 收尾：解锁后的节点可删除，修订继续推进。
+  const last = await post(envelope(3, [{ type: 'deleteNode', nodeId }]));
+  assert.equal(last.newRevision, 4);
+  assert.equal((await call('/boards/' + created.id + '/nodes', 'GET', owner)).length, 0);
+});
