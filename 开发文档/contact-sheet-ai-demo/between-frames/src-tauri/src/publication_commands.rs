@@ -11,6 +11,31 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{Sqlite, Transaction};
 use std::collections::BTreeSet;
+#[path = "publication_chapters.rs"]
+pub mod chapters;
+#[path = "publication_cover.rs"]
+pub mod cover;
+#[path = "publication_editing.rs"]
+mod editing;
+#[path = "publication_guides.rs"]
+pub mod guides;
+#[path = "publication_layers.rs"]
+pub mod layers;
+#[path = "publication_masters.rs"]
+pub mod masters;
+#[path = "publication_page_removal.rs"]
+pub mod page_removal;
+#[path = "publication_photo_versions.rs"]
+pub mod photo_versions;
+#[path = "publication_spreads.rs"]
+pub mod spreads;
+#[path = "publication_typography.rs"]
+pub mod typography;
+pub use editing::{
+    AddPage, FramePhoto, FrameReference, PageOrder, PageReference, PhotoFrameAdd, TextGeometry,
+    TextReference, TextUpdate,
+};
+pub use masters::{ApplyMaster, SaveMaster};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -35,7 +60,27 @@ pub enum PublicationAction {
     Create(CreatePublicationCommand),
     Generate(GeneratePublication),
     UpdateFrame(FrameUpdate),
+    SetPageGuides(guides::SetPageGuides),
+    SetCover(cover::SetCover),
+    SetChapters(chapters::SetChapters),
+    CreateChapter(chapters::CreateChapter),
+    SetPublicationLayers(layers::Layers),
+    SetSpreadFrame(spreads::SetSpreadFrame),
+    UnsetSpreadFrame(spreads::UnsetSpreadFrame),
+    AddFrame(PhotoFrameAdd),
+    SetFramePhoto(FramePhoto),
+    RemoveFrame(FrameReference),
     UpdatePage(PageUpdate),
+    AddPage(AddPage),
+    ReorderPages(PageOrder),
+    RemovePage(PageReference),
+    RemovePages(page_removal::RemovePages),
+    AddText(TextUpdate),
+    UpdateText(TextUpdate),
+    UpdateTextGeometry(TextGeometry),
+    RemoveText(TextReference),
+    SaveMaster(SaveMaster),
+    ApplyMaster(ApplyMaster),
     CaptureVersion(VersionLabel),
     RestoreVersion(VersionReference),
 }
@@ -43,6 +88,8 @@ pub enum PublicationAction {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GeneratePublication {
     pub photos_per_page: i64,
+    #[serde(default)]
+    pub replace_existing: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -120,7 +167,16 @@ fn validate(request: &PublicationCommandRequest) -> Result<()> {
         }
         if !matches!(
             op.action,
-            PublicationAction::UpdateFrame(_) | PublicationAction::UpdatePage(_)
+            PublicationAction::UpdateFrame(_)
+                | PublicationAction::AddFrame(_)
+                | PublicationAction::SetFramePhoto(_)
+                | PublicationAction::RemoveFrame(_)
+                | PublicationAction::UpdatePage(_)
+                | PublicationAction::AddPage(_)
+                | PublicationAction::AddText(_)
+                | PublicationAction::UpdateText(_)
+                | PublicationAction::UpdateTextGeometry(_)
+                | PublicationAction::RemoveText(_)
         ) && request.operations.len() != 1
         {
             return Err(invalid("保存或恢复版本需要单独确认"));
@@ -226,6 +282,10 @@ impl CommandHandler<'_> {
         let mut label = "调整版面".to_owned();
         let mut kind = "working";
         for op in &request.operations {
+            if !restoring && let Some(layout) = &before {
+                layers::guard(layout, &op.action)?;
+                chapters::guard(layout, &op.action)?;
+            }
             results.push(match &op.action {
                 PublicationAction::Create(data) => {
                     label = "创建出版物".into();
@@ -241,6 +301,14 @@ impl CommandHandler<'_> {
                 }
                 PublicationAction::Generate(data) => {
                     label = "从作品序列生成".into();
+                    if data.replace_existing {
+                        chapters::clear(&mut tx, &request.project_id, &request.publication_id)
+                            .await?;
+                        sqlx::query("DELETE FROM publication_pages WHERE publication_id=?")
+                            .bind(&request.publication_id)
+                            .execute(&mut *tx)
+                            .await?;
+                    }
                     json!(
                         self.generate_from_sequence_tx(
                             &mut tx,
@@ -253,6 +321,60 @@ impl CommandHandler<'_> {
                         .await?
                     )
                 }
+                PublicationAction::RemovePages(data) => {
+                    label = if data.chapter_id.is_some() {
+                        "移除章节页面"
+                    } else {
+                        "移除整组页面"
+                    }
+                    .into();
+                    page_removal::apply(
+                        &mut tx,
+                        &request.project_id,
+                        &request.publication_id,
+                        data,
+                    )
+                    .await?;
+                    Value::Null
+                }
+                PublicationAction::SetCover(data) => {
+                    label = "调整封面与书脊".into();
+                    cover::apply(&mut tx, &request.project_id, &request.publication_id, data)
+                        .await?;
+                    Value::Null
+                }
+                PublicationAction::SetChapters(data) => {
+                    label = "调整章节".into();
+                    chapters::set(&mut tx, &request.project_id, &request.publication_id, data)
+                        .await?;
+                    Value::Null
+                }
+                PublicationAction::CreateChapter(data) => {
+                    label = "新建章节页".into();
+                    chapters::create(&mut tx, &request.project_id, &request.publication_id, data)
+                        .await?;
+                    Value::Null
+                }
+                PublicationAction::SetPublicationLayers(data) => {
+                    layers::set(&mut tx, &request.project_id, &request.publication_id, data)
+                        .await?;
+                    Value::Null
+                }
+                PublicationAction::SetPageGuides(data) => {
+                    guides::set(&mut tx, &request.project_id, &request.publication_id, data)
+                        .await?;
+                    Value::Null
+                }
+                PublicationAction::SetSpreadFrame(data) => {
+                    spreads::set(&mut tx, &request.project_id, &request.publication_id, data)
+                        .await?;
+                    Value::Null
+                }
+                PublicationAction::UnsetSpreadFrame(data) => {
+                    spreads::unset(&mut tx, &request.project_id, &request.publication_id, data)
+                        .await?;
+                    Value::Null
+                }
                 PublicationAction::UpdateFrame(data) => {
                     update_frame(&mut tx, &request.project_id, &request.publication_id, data)
                         .await?;
@@ -262,9 +384,40 @@ impl CommandHandler<'_> {
                     update_page(&mut tx, &request.publication_id, data).await?;
                     Value::Null
                 }
+                action @ (PublicationAction::AddPage(_)
+                | PublicationAction::AddFrame(_)
+                | PublicationAction::SetFramePhoto(_)
+                | PublicationAction::RemoveFrame(_)
+                | PublicationAction::ReorderPages(_)
+                | PublicationAction::RemovePage(_)
+                | PublicationAction::AddText(_)
+                | PublicationAction::UpdateText(_)
+                | PublicationAction::UpdateTextGeometry(_)
+                | PublicationAction::RemoveText(_)) => {
+                    editing::apply(
+                        &mut tx,
+                        &request.project_id,
+                        &request.publication_id,
+                        action,
+                    )
+                    .await?;
+                    Value::Null
+                }
                 PublicationAction::CaptureVersion(data) => {
                     label = data.label.trim().into();
                     kind = "saved";
+                    Value::Null
+                }
+                PublicationAction::SaveMaster(data) => {
+                    label = "保存页面母版".into();
+                    masters::save(&mut tx, &request.project_id, &request.publication_id, data)
+                        .await?;
+                    Value::Null
+                }
+                PublicationAction::ApplyMaster(data) => {
+                    label = "应用页面母版".into();
+                    masters::apply(&mut tx, &request.project_id, &request.publication_id, data)
+                        .await?;
                     Value::Null
                 }
                 PublicationAction::RestoreVersion(data) => {
@@ -286,6 +439,9 @@ impl CommandHandler<'_> {
                     Value::Null
                 }
             });
+        }
+        if !restoring {
+            layers::reconcile(&mut tx, &request.project_id, &request.publication_id).await?;
         }
         let after =
             versions::layout_tx(&mut tx, &request.project_id, &request.publication_id).await?;
@@ -384,6 +540,7 @@ impl CommandHandler<'_> {
             revision,
             PublicationAction::Generate(GeneratePublication {
                 photos_per_page: data.photos_per_page.unwrap_or(1),
+                replace_existing: false,
             }),
         );
         let receipt = self
@@ -416,6 +573,45 @@ async fn update_frame(
     data: &FrameUpdate,
 ) -> Result<()> {
     let old:versions::LayoutFrame=sqlx::query_as("SELECT f.id,f.x_mm,f.y_mm,f.width_mm,f.height_mm,f.fit_mode,f.asset_id,f.rendition_id,f.crop_x,f.crop_y,f.crop_zoom FROM publication_frames f JOIN publication_pages p ON p.id=f.page_id WHERE f.id=? AND p.publication_id=?").bind(&data.frame_id).bind(publication).fetch_optional(&mut **tx).await?.ok_or_else(||AppError::new("NOT_FOUND","照片框已不存在，请重新打开页面"))?;
+    if data.asset_id.is_some()
+        && (old.asset_id != data.asset_id || old.rendition_id != data.rendition_id)
+    {
+        let page_id: String =
+            sqlx::query_scalar("SELECT page_id FROM publication_frames WHERE id=?")
+                .bind(&data.frame_id)
+                .fetch_one(&mut **tx)
+                .await?;
+        spreads::ensure_unique_photo(
+            tx,
+            publication,
+            &page_id,
+            data.asset_id.as_deref(),
+            data.rendition_id.as_deref(),
+            Some(&data.frame_id),
+        )
+        .await?;
+        let raw: Option<String> = sqlx::query_scalar(
+            "SELECT layout_json FROM publication_pages WHERE id=? AND publication_id=?",
+        )
+        .bind(&page_id)
+        .bind(publication)
+        .fetch_one(&mut **tx)
+        .await?;
+        if let Some(link) = spreads::links_raw(raw.as_deref())?
+            .iter()
+            .find(|link| link.frame_id == data.frame_id)
+        {
+            spreads::ensure_unique_photo(
+                tx,
+                publication,
+                &link.right_page_id,
+                data.asset_id.as_deref(),
+                data.rendition_id.as_deref(),
+                Some(&data.frame_id),
+            )
+            .await?;
+        }
+    }
     versions::source_tx(
         tx,
         project,

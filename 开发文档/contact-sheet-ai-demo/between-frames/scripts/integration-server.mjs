@@ -53,6 +53,7 @@ function rpc(command, args) {
   child.stdin.write(JSON.stringify({ id, command, args }) + '\n');
   return promise;
 }
+const publicationPreviewGrants = new Set();
 const server = createServer(async (request, response) => {
   const origin = request.headers.origin;
   if (origin && origin !== testOrigin) { response.writeHead(403); response.end(); return; }
@@ -68,7 +69,7 @@ const server = createServer(async (request, response) => {
     }
     if (url.pathname === '/asset') {
       const path = resolve(url.searchParams.get('path') || '');
-      if (!(path.startsWith(root + '/cache/') && path.endsWith('.jpg')) && !originalGrants.has(path)) { response.writeHead(403); response.end(); return; }
+      if (!(path.startsWith(root + '/cache/') && path.endsWith('.jpg')) && !originalGrants.has(path) && !publicationPreviewGrants.has(path)) { response.writeHead(403); response.end(); return; }
       response.setHeader('Content-Type', path.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'); response.end(await readFile(path)); return;
     }
     if (url.pathname !== '/rpc' || request.method !== 'POST' || request.headers['content-type'] !== 'application/json') { response.writeHead(404); response.end(); return; }
@@ -79,6 +80,11 @@ const server = createServer(async (request, response) => {
       ? { ok: true, value: await restartHarness() }
       : await rpc(command, args);
     if (command === 'get_original_photo' && result.ok) originalGrants.add(result.value.path ?? result.value);
+    if (result.ok && ['pub_photo_versions','pub_layout','pub_version','pub_master_preview'].includes(command)) {
+      const values=command==='pub_photo_versions'?[result.value.original,result.value.current,...result.value.choices]:result.value.previews;
+      for (const value of values) {const candidate=value.thumbnailPath;if(typeof candidate==='string'&&candidate.startsWith(root+'/editor-renders/previews/')&&/\/[a-f0-9]{64}-320\.jpg$/.test(candidate))publicationPreviewGrants.add(candidate);}
+    }
+
     response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(result));
   } catch (error) { response.writeHead(500, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ ok: false, error: { message: String(error) } })); }
 });

@@ -68,6 +68,10 @@ if [ "$SKIP_INTEGRATION" = "0" ]; then
   CARGO_TARGET_DIR="target-v1" npx playwright test --config "playwright.focal-agent.config.ts" "e2e/focal-agent.spec.ts" "e2e/focal-creative.spec.ts"
   step "智能编辑审稿与采纳恢复（独立临时库）"
   CARGO_TARGET_DIR="target-v1" npx playwright test --config "playwright.editorial.config.ts"
+  step "出版编辑、版本与未保存保护（独立临时库）"
+  CARGO_TARGET_DIR="target-v1" npx playwright test --config "playwright.publication.config.ts"
+  step "画布与出版工作区往返（独立临时库）"
+  CARGO_TARGET_DIR="target-v1" FOCALROOM_TEST_RPC_BASE="http://localhost:1457" npx playwright test --config "playwright.workspace.config.ts"
   step "M4/M5 PostgreSQL 与私有存储边界（全新临时 cluster）"
   npm run test:cloud:pg
   step "Focal AI 原生核心与真实本地网关（生成色块、隔离 PostgreSQL）"

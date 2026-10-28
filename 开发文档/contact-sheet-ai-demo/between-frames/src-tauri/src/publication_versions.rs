@@ -114,6 +114,7 @@ pub struct PublicationDocument {
     pub revision: i64,
     pub layout: PublicationLayout,
     pub previews: Vec<crate::publication_previews::FramePreview>,
+    pub master_states: Vec<crate::publication_commands::masters::MasterState>,
 }
 
 pub(crate) async fn source_tx(
@@ -141,7 +142,7 @@ pub(crate) async fn layout_tx(
 ) -> Result<PublicationLayout> {
     let publication:LayoutPublication=sqlx::query_as("SELECT b.id,b.project_id,b.title,b.pub_type,b.spec_json,b.state FROM publications b JOIN projects p ON p.id=b.project_id WHERE b.id=? AND b.project_id=? AND p.deleted_at IS NULL")
         .bind(id).bind(project).fetch_optional(&mut **tx).await?.ok_or_else(||AppError::new("NOT_FOUND","出版物不存在或项目已归档"))?;
-    let mut pages:Vec<LayoutPage>=sqlx::query_as("SELECT id,page_number,side,width_mm,height_mm,margin_mm,bleed_mm,layout_json FROM publication_pages WHERE publication_id=? ORDER BY page_number,id LIMIT 513").bind(id).fetch_all(&mut **tx).await?;
+    let mut pages:Vec<LayoutPage>=sqlx::query_as("SELECT id,page_number,side,width_mm,height_mm,margin_mm,bleed_mm,layout_json FROM publication_pages WHERE publication_id=? ORDER BY CASE WHEN page_number=-1 THEN 10001 ELSE page_number END,id LIMIT 513").bind(id).fetch_all(&mut **tx).await?;
     if pages.len() > 512 {
         return Err(invalid("出版物最多支持512页，请拆分为多个分册"));
     }
@@ -163,7 +164,16 @@ pub(crate) async fn layout_tx(
         }
     }
     let layout = PublicationLayout {
-        schema_version: 1,
+        schema_version: if crate::publication_commands::layers::has(&publication.spec_json)? {
+            3
+        } else if pages.iter().try_fold(false, |found, page| {
+            crate::publication_commands::spreads::links(page)
+                .map(|links| found || !links.is_empty())
+        })? {
+            2
+        } else {
+            1
+        },
         publication,
         pages,
     };
@@ -177,18 +187,18 @@ pub(crate) async fn layout_tx(
 }
 pub(crate) fn validate_layout(layout: &PublicationLayout) -> Result<()> {
     use std::collections::BTreeSet;
-    if layout.schema_version != 1 || layout.pages.len() > 512 {
+    if !matches!(layout.schema_version, 1..=3) || layout.pages.len() > 512 {
         return Err(invalid("此版面版本暂不支持打开"));
     }
-    let spec: serde_json::Value =
-        serde_json::from_str(&layout.publication.spec_json).map_err(serialization)?;
-    if !spec.is_object() || layout.publication.spec_json.len() > 32768 {
-        return Err(invalid("出版规格无效"));
-    }
+    crate::publication_commands::layers::spec(&layout.publication.spec_json)?;
+    crate::publication_commands::masters::masters(layout)?;
+    let spread_frames = crate::publication_commands::spreads::validate(layout)?;
     let mut ids = BTreeSet::new();
     let mut numbers = BTreeSet::new();
     let mut count = 0;
     for page in &layout.pages {
+        crate::publication_commands::masters::link(page)?;
+        crate::publication_commands::guides::read(page)?;
         if !ids.insert(&page.id)
             || !numbers.insert(page.page_number)
             || !matches!(
@@ -218,13 +228,15 @@ pub(crate) fn validate_layout(layout: &PublicationLayout) -> Result<()> {
             {
                 return Err(invalid("照片框或裁切设置无效"));
             }
-            rectangle(
-                page,
-                frame.x_mm,
-                frame.y_mm,
-                frame.width_mm,
-                frame.height_mm,
-            )?;
+            if !spread_frames.contains(&frame.id) {
+                rectangle(
+                    page,
+                    frame.x_mm,
+                    frame.y_mm,
+                    frame.width_mm,
+                    frame.height_mm,
+                )?;
+            }
         }
         for text in &page.texts {
             if !ids.insert(&text.id)
@@ -245,6 +257,7 @@ pub(crate) fn validate_layout(layout: &PublicationLayout) -> Result<()> {
             {
                 return Err(invalid("文字样式无效"));
             }
+            crate::publication_commands::typography::stored(text.style_json.as_deref())?;
             rectangle(page, text.x_mm, text.y_mm, text.width_mm, text.height_mm)?;
         }
         count += page.frames.len() + page.texts.len();
@@ -252,6 +265,9 @@ pub(crate) fn validate_layout(layout: &PublicationLayout) -> Result<()> {
     if count > 4096 {
         return Err(invalid("版面内容过多，请拆分为多个分册"));
     }
+    crate::publication_commands::layers::read(layout)?;
+    crate::publication_commands::chapters::read(layout)?;
+    crate::publication_commands::cover::validate(layout)?;
     Ok(())
 }
 pub(crate) fn rectangle(page: &LayoutPage, x: f64, y: f64, w: f64, h: f64) -> Result<()> {
@@ -362,11 +378,13 @@ impl Store {
                 .fetch_one(&mut *tx)
                 .await?;
         let previews = crate::publication_previews::project(&mut tx, &layout).await?;
+        let master_states = crate::publication_commands::masters::states(&layout)?;
         tx.commit().await?;
         Ok(PublicationDocument {
             revision,
             layout,
             previews,
+            master_states,
         })
     }
     pub async fn publication_layout(

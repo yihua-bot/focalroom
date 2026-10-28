@@ -1,9 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
 import { installAccountFixture } from './account-fixture';
+import { evidenceDirectory } from './evidence-directory';
+import { resolve } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+const rpcBase=process.env.FOCALROOM_TEST_RPC_BASE??'http://localhost:1422';
+
+test.beforeEach(async()=>{await mkdir(evidenceDirectory('legacy-workspace'),{recursive:true});});
 
 type Project = { id: string; photos: Array<{ id: string }>; revision: number };
 async function rpc<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
-  const response = await fetch('http://localhost:1422/rpc', {
+  const response = await fetch(rpcBase+'/rpc', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ command, args }),
   }).then(value => value.json());
   if (!response.ok) throw new Error(response.error.message);
@@ -15,24 +21,24 @@ async function installDesktopBridge(page: Page) {
     const url = new URL(route.request().url());
     return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ? route.continue() : route.abort();
   });
-  await page.addInitScript(() => {
+  await page.addInitScript((rpcBase) => {
     Object.assign(globalThis, {
       isTauri: true,
       __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} },
       __TAURI_INTERNALS__: {
         invoke: async (command: string, args: unknown) => {
-          if (command.startsWith('plugin:event|')) return 0;
-          const result = await fetch('http://localhost:1422/rpc', {
+          if (command.startsWith('plugin:event|') || command === 'set_native_menu_locale') return 0;
+          const result = await fetch(rpcBase+'/rpc', {
             method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ command, args }),
           }).then(response => response.json());
           if (!result.ok) throw result.error;
           return result.value;
         },
-        convertFileSrc: (path: string) => 'http://localhost:1422/asset?path=' + encodeURIComponent(path),
+        convertFileSrc: (path: string) => rpcBase+'/asset?path=' + encodeURIComponent(path),
         transformCallback: () => 0,
       },
     });
-  });
+  },rpcBase);
 }
 
 test('内置演示项目：创建画布、放照片、便签、撤销重做与重启恢复', async ({ page }) => {
@@ -48,7 +54,10 @@ test('内置演示项目：创建画布、放照片、便签、撤销重做与�
   const boards = page.getByRole('combobox', { name: '选择画布' });
   await expect(boards).toHaveValue(/.+/);
   const boardId = await boards.inputValue();
-  await page.getByRole('button', { name: /放入选中照片/ }).click();
+  await page.getByRole('button', { name: '添加照片', exact: true }).click();
+  await page.getByRole('button', { name: '工作台选区 · 1', exact: true }).click();
+  await page.getByRole('button', { name: '全选可添加照片', exact: true }).click();
+  await page.getByRole('button', { name: '添加 1 张到画布', exact: true }).click();
   await expect(page.locator('.canvas-photo-node img')).toHaveCount(1);
   await expect.poll(() => page.locator('.canvas-photo-node img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await page.getByRole('button', { name: '便签', exact: true }).click();
@@ -67,7 +76,7 @@ test('内置演示项目：创建画布、放照片、便签、撤销重做与�
   await expect(page.locator('.canvas-photo-node img')).toHaveCount(1);
   await expect(page.locator('.canvas-sticky-node')).toHaveText('演示项目也可以编排');
   expect(await rpc('canvas_snapshot', { projectId, boardId })).toEqual(before);
-  await page.screenshot({ path: '../docs/v3/evidence/canvas-demo-fix-2026-10-22/demo-canvas.png' });
+  await page.screenshot({ path: resolve(evidenceDirectory('legacy-workspace'), 'demo-canvas.png') });
 });
 
 test('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进程重启', async ({ page }) => {
@@ -97,7 +106,10 @@ test('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进�
   await expect(page.locator('.sequence-board')).toHaveCount(0);
   await page.getByRole('button', { name: '新建画布', exact: true }).click();
   await expect(page.getByRole('combobox', { name: '选择画布' })).toHaveValue(/.+/);
-  await page.getByRole('button', { name: /放入选中照片/ }).click();
+  await page.getByRole('button', { name: '添加照片', exact: true }).click();
+  await page.getByRole('button', { name: '工作台选区 · 1', exact: true }).click();
+  await page.getByRole('button', { name: '全选可添加照片', exact: true }).click();
+  await page.getByRole('button', { name: '添加 1 张到画布', exact: true }).click();
   await expect(page.locator('.canvas-photo-node img')).toHaveCount(1);
   await expect.poll(() => page.locator('.canvas-photo-node img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await page.getByRole('button', { name: '便签', exact: true }).click();
@@ -119,9 +131,12 @@ test('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进�
   await page.mouse.down();
   await page.mouse.move(drawArea!.x + drawArea!.width - 60, drawArea!.y + 80, { steps: 5 });
   await page.mouse.up();
+  // 指针预览和持久笔迹会替换同一个 path；先确认写入完成，再检查实际可绘制视口。
+  const inkBoardId=await page.getByRole('combobox',{name:'选择画布'}).inputValue();
+  await expect.poll(async()=> (await rpc<{nodes:Array<{nodeType:string}>}>('canvas_snapshot',{projectId,boardId:inkBoardId})).nodes.filter(node=>node.nodeType==='ink').length).toBe(1);
   await expect(page.locator('.canvas-board path')).toHaveCount(1);
-  expect(await page.locator('.canvas-board path').evaluate(path => (path as SVGElement).ownerSVGElement!.getBoundingClientRect().width)).toBeGreaterThan(0);
-  await page.screenshot({ path: '../docs/v3/evidence/agent-canvas-scope-2026-10-22/vector-rendering.png' });
+  await expect.poll(()=>page.locator('.canvas-board path').evaluate(path => (path as SVGElement).ownerSVGElement!.getBoundingClientRect().width)).toBeGreaterThan(0);
+  await page.screenshot({ path: resolve(evidenceDirectory('legacy-workspace'), 'vector-rendering.png') });
   await page.getByRole('button', { name: '画笔', exact: true }).click();
   await page.getByRole('button', { name: '撤销', exact: true }).click();
   await expect(page.locator('.canvas-board path')).toHaveCount(0);
@@ -164,13 +179,13 @@ test('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进�
   await page.getByRole('button', { name: '撤销', exact: true }).click();
   await expect.poll(positions).toEqual(beforeMove);
   await photo.click();
-  await page.getByRole('button', { name: '锁定 / 解锁', exact: true }).click();
+  await page.getByRole('button', { name: '锁定选中内容', exact: true }).click();
   await expect(photo.locator('.canvas-lock-badge')).toHaveCount(1);
   await page.getByRole('button', { name: '撤销', exact: true }).click();
   await expect(photo.locator('.canvas-lock-badge')).toHaveCount(0);
   await page.getByRole('button', { name: '重做', exact: true }).click();
   await expect(photo.locator('.canvas-lock-badge')).toHaveCount(1);
-  await page.screenshot({ path: '../docs/v3/evidence/canvas-commands-2026-10-22/canvas-history.png' });
+  await page.screenshot({ path: resolve(evidenceDirectory('legacy-workspace'), 'canvas-history.png') });
   await page.getByRole('button', { name: '出版物', exact: true }).click();
   await expect(page.getByText('出版功能需要桌面版。')).toHaveCount(0);
   await expect(page.locator('.canvas-wrapper')).toHaveCount(0);
@@ -178,13 +193,14 @@ test('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进�
   await page.getByRole('button', { name: '创建', exact: true }).click();
   await expect(page.locator('.publication-card')).toHaveCount(1);
   await page.getByRole('button', { name: /从序列生成/ }).click();
-  await expect(page.getByRole('status').filter({ hasText: '已生成 1 页初稿' })).toBeVisible();
-  await page.getByRole('button', { name: '查看页面', exact: true }).click();
-  await expect(page.locator('.publication-page-preview')).toHaveCount(2);
+  await expect(page.getByRole('dialog', { name: '版面与版本', exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '选择页面', exact: true }).locator('option')).toHaveCount(2);
   await expect.poll(() => page.locator('.publication-frame img').first().evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-  await page.screenshot({ path: '../docs/v3/evidence/canvas-commands-2026-10-22/publication.png' });
+  await page.screenshot({ path: resolve(evidenceDirectory('legacy-workspace'), 'publication.png') });
+  await page.getByRole('button', { name: '关闭对话框', exact: true }).click();
   await page.getByRole('button', { name: /从序列生成/ }).click();
-  await expect(page.getByRole('status').filter({ hasText: /已有页面/ })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '重新生成页面？', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '返回', exact: true }).click();
   await page.goto('about:blank');
   await rpc('test_process_restart');
   await page.goto('/');
@@ -217,7 +233,7 @@ test('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编�
   await expect(choose).toHaveValue(/.+/);
   const boardId = await choose.inputValue();
   let lost = false;
-  await page.route('http://localhost:1422/rpc', async route => {
+  await page.route(rpcBase+'/rpc', async route => {
     const data = route.request().postDataJSON();
     if (!lost && data?.command === 'canvas_execute' && data.args?.request?.operations?.[0]?.action?.type === 'AddText') {
       lost = true;
@@ -239,7 +255,7 @@ test('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编�
   await page.getByRole('button', { name: '叙事画布', exact: true }).click();
   await expect(page.locator('.canvas-sticky-node')).toHaveCount(1);
   await expect(page.getByRole('button', { name: '便签', exact: true })).toBeDisabled();
-  await page.screenshot({ path: '../docs/v3/evidence/canvas-commands-2026-10-22/pending-after-restart.png' });
+  await page.screenshot({ path: resolve(evidenceDirectory('legacy-workspace'), 'pending-after-restart.png') });
   await page.getByRole('button', { name: '确认上次操作', exact: true }).click();
   await expect(page.getByRole('button', { name: '确认上次操作', exact: true })).toHaveCount(0);
   const confirmed = await rpc<{ board: { revision: number }; nodes: unknown[] }>('canvas_snapshot', { projectId, boardId });
@@ -266,14 +282,14 @@ test('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编�
   expect(noticeBounds!.y + noticeBounds!.height).toBeLessThanOrEqual(canvasBounds!.y + canvasBounds!.height);
   await expect(page.locator('.canvas-sticky-node')).toHaveCount(2);
   await expect(page.getByRole('textbox', { name: '便签内容' })).toHaveValue('保留我的未提交想法');
-  await page.screenshot({ path: '../docs/v3/evidence/canvas-commands-2026-10-22/conflict-preserves-input.png' });
+  await page.screenshot({ path: resolve(evidenceDirectory('legacy-workspace'), 'conflict-preserves-input.png') });
   // 显式重新点击才能基于新快照保存，不偷偷改版本重试。
   await page.getByRole('button', { name: '保存便签', exact: true }).click();
   await expect(page.locator('.canvas-sticky-node')).toHaveCount(3);
   const final = await rpc<{ board: { revision: number } }>('canvas_snapshot', { projectId, boardId });
   expect(final.board.revision).toBe(6);
   expect(await rpc<string[][]>('test_fixture_checksums')).toEqual(sourceHashes);
-  await page.screenshot({ path: '../docs/v3/evidence/canvas-commands-2026-10-22/recovered.png' });
+  await page.screenshot({ path: resolve(evidenceDirectory('legacy-workspace'), 'recovered.png') });
 });
 
 test('SIMULATED Agent 画布委托：真实权限、独立分支、原布局对照、人工采纳与重启', async ({ page }) => {
@@ -290,7 +306,10 @@ test('SIMULATED Agent 画布委托：真实权限、独立分支、原布局对�
   await page.getByTestId('photo-1').getByRole('button', { name: /^查看第/ }).click();
   await page.getByRole('button', { name: '叙事画布', exact: true }).click();
   await page.getByRole('button', { name: '新建画布', exact: true }).click();
-  await page.getByRole('button', { name: /放入选中照片/ }).click();
+  await page.getByRole('button', { name: '添加照片', exact: true }).click();
+  await page.getByRole('button', { name: '工作台选区 · 1', exact: true }).click();
+  await page.getByRole('button', { name: '全选可添加照片', exact: true }).click();
+  await page.getByRole('button', { name: '添加 1 张到画布', exact: true }).click();
   await expect(page.locator('.canvas-photo-node')).toHaveCount(1);
   await page.getByRole('button', { name: '便签', exact: true }).click();
   await page.getByRole('textbox', { name: '便签内容' }).fill('原版意图：用留白维持节奏');
@@ -325,8 +344,8 @@ test('SIMULATED Agent 画布委托：真实权限、独立分支、原布局对�
   }
   const draftId = await page.getByRole('combobox', { name: '选择画布' }).inputValue();
   expect(draftId).not.toBe(sourceId);
-  await expect(page.getByRole('button', { name: /放入选中照片/ })).toBeDisabled();
-  await page.screenshot({ path: '../docs/v3/evidence/agent-canvas-scope-2026-10-22/proposal-with-baseline.png' });
+  await expect(page.getByRole('button', { name: /添加照片/ })).toBeDisabled();
+  await page.screenshot({ path: resolve(evidenceDirectory('legacy-workspace'), 'proposal-with-baseline.png') });
   await page.getByRole('button', { name: '另存为独立方案', exact: true }).click();
   await page.getByRole('button', { name: '取消', exact: true }).click();
   const pending = await rpc<{ board: { owning_task_id: string | null } }>('canvas_snapshot', { projectId: project.id, boardId: draftId });

@@ -78,6 +78,7 @@ pub struct MoveNodesCommand {
 #[serde(rename_all = "camelCase")]
 pub struct CanvasPhotoSource {
     pub asset_id: String,
+    pub photo_id: String,
     pub thumbnail_path: String,
 }
 
@@ -99,16 +100,9 @@ pub(crate) fn validate_rectangle(x: f64, y: f64, width: f64, height: f64) -> Res
 impl Store {
     /// 只提供画布所属项目中已关联照片的缓存路径，不暴露任意文件读取入口。
     pub async fn board_photo_sources(&self, board_id: &str) -> Result<Vec<CanvasPhotoSource>> {
-        let rows: Vec<(String, String)> = sqlx::query_as(
-            "SELECT a.id, MIN(p.thumbnail_path) FROM boards b JOIN canvas_nodes n ON n.board_id=b.id JOIN source_assets a ON a.id=n.asset_id AND a.project_id=b.project_id JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=b.project_id WHERE b.id=? AND n.node_type='photo' AND n.visible=1 GROUP BY a.id",
-        ).bind(board_id).fetch_all(&self.pool).await?;
-        Ok(rows
-            .into_iter()
-            .map(|(asset_id, thumbnail_path)| CanvasPhotoSource {
-                asset_id,
-                thumbnail_path,
-            })
-            .collect())
+        Ok(sqlx::query_as(
+            "SELECT a.id AS asset_id,MIN(p.id) AS photo_id,MIN(p.thumbnail_path) AS thumbnail_path FROM boards b JOIN canvas_nodes n ON n.board_id=b.id JOIN source_assets a ON a.id=n.asset_id AND a.project_id=b.project_id JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=b.project_id WHERE b.id=? AND n.node_type='photo' AND n.visible=1 GROUP BY a.id",
+        ).bind(board_id).fetch_all(&self.pool).await?)
     }
 }
 

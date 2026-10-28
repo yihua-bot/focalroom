@@ -27,6 +27,7 @@ export function useShortcuts({ shortcuts, photos, activeId, view, blocked, onCom
       if (blocked || event.defaultPrevented || event.repeat || event.altKey || event.isComposing || target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], .drag-handle')) return;
       const combo = eventToShortcut(event);
       const action = (Object.keys(shortcuts) as ShortcutActionId[]).find(id => shortcuts[id] === combo);
+      if (view !== 'grid' && view !== 'sequence' && action !== 'viewGrid' && action !== 'viewSequence' && action !== 'toggleAgent') return;
       if (!action) {
         // 方向键保留固定行为：左右切换（Shift 扩展选区），序列视图内上下移动。
         if (combo === 'arrowright' || combo === 'arrowleft') {

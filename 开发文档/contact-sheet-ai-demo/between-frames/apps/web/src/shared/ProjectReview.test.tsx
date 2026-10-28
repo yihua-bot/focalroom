@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProjectReview } from "./ProjectReview";
 import { request } from "../shared-api";
 
@@ -18,15 +18,19 @@ vi.mock("../shared-api", async importOriginal => ({
 }));
 const presenceState = {
   people: [] as { id: string; name: string; photo_id: string | null }[],
+  refresh: undefined as (() => Promise<void>) | undefined,
 };
 vi.mock("./useRealtime", () => ({
-  useRealtime: () => ({
+  useRealtime: (_id: string, _session: unknown, refresh: () => Promise<void>) => {
+    presenceState.refresh = refresh;
+    return ({
     online: true,
     people: presenceState.people,
     note: "",
     updateNote: vi.fn(),
     viewPhoto: vi.fn(),
-  }),
+    });
+  },
 }));
 
 const session = { id: "user-1", email: "e@fr.test", name: "编辑", csrf: "c" };
@@ -87,6 +91,7 @@ beforeEach(() => {
     return {};
   });
   presenceState.people = [];
+  presenceState.refresh = undefined;
   storage.clear();
 });
 
@@ -297,7 +302,65 @@ describe("提案差异预览", () => {
     fireEvent.click(screen.getByRole("button", { name: "提案" }));
     fireEvent.click(screen.getByRole("button", { name: "预览差异" }));
     await waitFor(() =>
-      expect(screen.getByText(/基线过期/)).toBeInTheDocument(),
+      expect(screen.getByText(/作品版本已更新，请按当前作品重新比较/)).toBeInTheDocument(),
     );
+  });
+
+  it("作品更新后不继续展示旧预览，明确刷新才读取新差异且不写正式作品", async () => {
+    let revision = 3;
+    vi.mocked(request).mockImplementation(async (path: string) => {
+      if (path === "/projects/p/snapshot")
+        return { ...proposalSnapshot(), revision };
+      if (path === "/projects/p/proposals/prop-1/diff")
+        return revision === 3 ? diffResult : {
+          ...diffResult, currentRevision: revision, stale: true, sequence: null,
+        };
+      return {};
+    });
+    render(<ProjectReview id="p" session={session} onBack={() => {}} />);
+    await screen.findByText("正式作品序列");
+    fireEvent.click(screen.getByRole("button", { name: "提案" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览差异" }));
+    await screen.findByText(/全量采纳后序列：p2.jpg、p1.jpg/);
+    revision = 4;
+    await act(async () => { await presenceState.refresh!(); });
+    expect(screen.queryByText(/全量采纳后序列/)).not.toBeInTheDocument();
+    expect(screen.getByText("作品已有更新，请刷新差异后重新比较。")).toBeInTheDocument();
+    expect(vi.mocked(request).mock.calls.filter(([path]) =>
+      path === "/projects/p/proposals/prop-1/diff")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "刷新差异" }));
+    await screen.findByText(/作品版本已更新，请按当前作品重新比较/);
+    expect(vi.mocked(request).mock.calls.every(([, , method]) =>
+      method === undefined || method === "GET")).toBe(true);
+  });
+
+  it("连续追加按草案末尾保存，已在草案中的照片不能重复追加", async () => {
+    const snapshot = proposalSnapshot();
+    snapshot.snapshot.photos.push({
+      id: "p3", filename: "p3.jpg", source_sha256: "c".repeat(64),
+      selection: "UNDECIDED",
+    });
+    vi.mocked(request).mockImplementation(async (path: string) =>
+      path === "/projects/p/snapshot" ? { ...snapshot, proposals: [] } : {});
+    render(<ProjectReview id="p" session={session} onBack={() => {}} />);
+    await screen.findByText("正式作品序列");
+    fireEvent.click(screen.getByRole("button", { name: "提案" }));
+    fireEvent.click(screen.getByRole("button", { name: "查看 p2.jpg" }));
+    fireEvent.click(screen.getByRole("button", { name: "追加到序列" }));
+    expect(screen.getByRole("button", { name: "追加到序列" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "查看 p3.jpg" }));
+    fireEvent.click(screen.getByRole("button", { name: "追加到序列" }));
+    fireEvent.change(screen.getByLabelText("提案标题"), { target: { value: "保持追加顺序" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存提案草案" }));
+    await waitFor(() => {
+      const writes = vi.mocked(request).mock.calls.filter(([path]) =>
+        path === "/projects/p/commands");
+      expect(writes).toHaveLength(1);
+      const { payload } = writes[0][3] as { payload: {
+        operations: { photo_id: string; to_index: number }[];
+      }};
+      expect(payload.operations.map(op => [op.photo_id, op.to_index]))
+        .toEqual([["p2", 1], ["p3", 2]]);
+    });
   });
 });

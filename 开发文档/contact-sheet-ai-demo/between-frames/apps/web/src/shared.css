@@ -4,6 +4,7 @@
   --fr-edge: #dedfd6;
   --fr-muted: #737a76;
   --fr-accent: #007da2;
+  --fr-on-dark: #edf1f4;
   background: var(--fr-bg);
   color: #202e31;
   min-height: 100dvh;
@@ -37,7 +38,7 @@
   background: #242c35;
   border: 1px solid var(--fr-edge);
   border-radius: 6px;
-  color: #202e31;
+  color: var(--fr-on-dark);
   padding: 7px 12px;
   cursor: pointer;
 }
@@ -634,6 +635,7 @@
 .fr-discussion {
   border-left: 1px solid var(--fr-edge);
   background: #151b21;
+  color: var(--fr-on-dark);
   overflow: auto;
 }
 .fr-discussion nav {

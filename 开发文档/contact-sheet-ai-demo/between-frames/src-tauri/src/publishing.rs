@@ -298,6 +298,27 @@ impl Store {
         if exists == 0 {
             return Err(AppError::new("NOT_FOUND", "出版物不存在或不属于此项目"));
         }
+        let spec: String =
+            sqlx::query_scalar("SELECT spec_json FROM publications WHERE id=? AND project_id=?")
+                .bind(publication_id)
+                .bind(project)
+                .fetch_one(&mut *tx)
+                .await?;
+        if crate::publication_commands::layers::has(&spec)? {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                "请在版面与版本中查看包含图层的出版物",
+            ));
+        }
+        let metadata: Vec<Option<String>> = sqlx::query_scalar("SELECT layout_json FROM publication_pages WHERE publication_id=? AND layout_json IS NOT NULL").bind(publication_id).fetch_all(&mut *tx).await?;
+        for raw in metadata {
+            if !crate::publication_commands::spreads::links_raw(raw.as_deref())?.is_empty() {
+                return Err(AppError::new(
+                    "CONFLICT",
+                    "请在版面与版本中查看连续跨页照片",
+                ));
+            }
+        }
         let pages: Vec<(String, i64, f64, f64)> = sqlx::query_as(
             "SELECT id,page_number,width_mm,height_mm FROM publication_pages WHERE publication_id=? ORDER BY page_number",
         ).bind(publication_id).fetch_all(&mut *tx).await?;

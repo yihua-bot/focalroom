@@ -1,6 +1,6 @@
 // G3 Narrative Canvas：无限自由画布——照片节点拖拽放置。
 // v3 蓝图 §03.4/§06：逻辑坐标独立于设备像素；照片引用资产不复制像素。
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
 import { useUIStore } from '../../stores/uiStore';
@@ -9,7 +9,11 @@ import { useAccount } from '../cloud-login/AccountProvider';
 import { CanvasNodes } from './CanvasNodes';
 import { EditorialReviewWorkspace } from './EditorialReviewWorkspace';
 import { EditorialHistoryDialog } from './EditorialHistoryDialog';
-import { Maximize } from 'lucide-react';
+import { Maximize, Trash2, Minus, Plus, MousePointer2, StickyNote, Pencil, MoveUpRight, Undo2, Redo2, LockKeyhole, UnlockKeyhole, Images } from 'lucide-react';
+import { insertionY } from './canvasLayout';
+import './canvas-workspace.css';
+import type { Photo } from '../../domain/models';
+import { CanvasPhotoPicker } from './CanvasPhotoPicker';
 
 import type { AnnotationInfo, BoardInfo, CanvasPhoto, CanvasRepository } from '../../domain/canvas';
 
@@ -19,10 +23,12 @@ async function readCanvas(repository: CanvasRepository, boardId: string) {
   return { nodes, annotations, board: undefined };
 }
 /** 无限画布：拖拽平移 + 滚轮缩放 + 照片节点拖拽放置。 */
-export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readOnly = false }: {
+export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, photos = [], sequencePhotoIds = [], readOnly = false }: {
   repository?: CanvasRepository;
   projectId: string;
   selectedPhotoIds: string[];
+  photos?: Photo[];
+  sequencePhotoIds?: string[];
   readOnly?: boolean;
 }) {
   const account = useAccount();
@@ -31,6 +37,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const openCanvasAgent = useUIStore(state => state.openCanvasAgent);
   const openDraftRevision = useUIStore(state => state.openDraftRevision);
   const [boards, setBoards] = useState<BoardInfo[]>([]);
+  const [boardsLoaded,setBoardsLoaded]=useState(false);
   const [activeBoard, setActiveBoard] = useState<string | null>(null);
   const [nodes, setNodes] = useState<CanvasPhoto[]>([]);
   const [creating, setCreating] = useState(false);
@@ -51,6 +58,10 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const [historyOpen, setHistoryOpen] = useState(false);
   const [showBaseline, setShowBaseline] = useState(true);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
+  const [removal, setRemoval] = useState<{ boardId: string; nodeIds: string[] } | null>(null);
+  const [grouping, setGrouping] = useState<{ boardId: string; nodeIds: string[]; label: string } | null>(null);
+  const [comment,setComment]=useState<{boardId:string;x:number;y:number;body:string}|null>(null);
   const [noteText, setNoteText] = useState('');
   const [adopting, setAdopting] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -59,12 +70,18 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const dragStart = useRef<{ x: number; y: number; nodeX: number; nodeY: number; positions: Map<string, { x: number; y: number }> } | null>(null);
   const panning = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const operationLock = useRef(false);
   const board = boards.find(value => value.id === activeBoard);
   const review = comparison?.boardId === activeBoard && comparison.value.draftRevision === board?.revision ? comparison.value : null;
   const editLocked = readOnly || activeBoard !== loadedBoard || pending.some(item => item.boardId === activeBoard) || Boolean(board?.owningTaskId) || board?.state === 'frozen';
+  const selectedNodes = nodes.filter(node => node.visible !== false && selectedNodeIds.has(node.id));
+  const selectionLocked=selectedNodes.length>0&&selectedNodes.every(node=>node.locked);
+  const placedPhotoIds = nodes.filter(node => node.nodeType === 'photo' && node.visible !== false).flatMap(node => node.photoId ?? node.assetId ?? []);
+  const canRemove = !editLocked && selectedNodes.length > 0 && selectedNodes.length <= 300 && selectedNodes.every(node => !node.locked);
 
   const run = async (action: () => Promise<void>) => {
-    if (readOnly || working) return;
+    if (readOnly || operationLock.current) return;
+    operationLock.current = true;
     setWorking(true);
     setNotice('');
     try { await action(); }
@@ -74,7 +91,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
         try { await loadBoards(); } catch { /* 保留首次冲突提示，用户可重新打开画布。 */ }
       }
     }
-    finally { setPending(repository?.pendingCommands?.(projectId) ?? []); setWorking(false); }
+    finally { operationLock.current = false; setPending(repository?.pendingCommands?.(projectId) ?? []); setWorking(false); }
   };
   // 节点跟随 activeBoard 变化加载（异步回调内 setState 合法）
   useEffect(() => {
@@ -83,6 +100,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
       repository.listBoards(projectId).then(list => {
         if (!active) return;
         setBoards(list);
+        setBoardsLoaded(true);
         setPending(repository.pendingCommands?.(projectId) ?? []);
         setActiveBoard(prev => list.some(value => value.id === requestedBoard) ? requestedBoard : list.some(value => value.id === prev) ? prev : (list[0]?.id ?? null));
       }).catch(error => { if (active) setNotice(error instanceof Error ? error.message : '读取画布失败'); });
@@ -159,31 +177,46 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     } finally { setCreating(false); }
   };
 
-  const placeSelected = async () => {
-    if (!repository || !activeBoard || selectedPhotoIds.length === 0) return;
-    if (selectedPhotoIds.length > 300) throw new Error('每次最多放入 300 张照片，请分次选择。');
+  const placeSelected = async (photoIds: string[]) => {
+    if (!repository || !activeBoard || editLocked || photoIds.length === 0) return;
+    if (photoIds.length > 300 || photoIds.some(id => !photos.some(photo => photo.id === id))) throw new Error(zh.canvasPhotoInvalid);
+    const current = await readCanvas(repository, activeBoard);
+    const placed = new Set(current.nodes.filter(node => node.nodeType === 'photo' && node.visible !== false).flatMap(node => node.photoId ?? node.assetId ?? []));
+    photoIds = [...new Set(photoIds)].filter(id => !placed.has(id));
+    if (!photoIds.length) { setNodes(current.nodes); setNotice(zh.canvasPhotoAllPlaced); return; }
     const startX = -pan.x / zoom + 50;
-    if (repository.placePhotos) await repository.placePhotos(projectId, activeBoard, selectedPhotoIds.map((assetId, i) => ({ assetId, x: startX + i * 240, y: 50, width: 220, height: 160 })));
-    else for (let i = 0; i < selectedPhotoIds.length; i++) await repository.placePhoto(projectId, activeBoard, selectedPhotoIds[i], startX + i * 240, 50, 220, 160);
+    const startY = insertionY(current.nodes, startX, -pan.y / zoom + 50, Math.min(5, photoIds.length) * 240 - 20, Math.ceil(photoIds.length / 5) * 180 - 20);
+    if (repository.placePhotos) await repository.placePhotos(projectId, activeBoard, photoIds.map((assetId, i) => ({ assetId, x: startX + (i % 5) * 240, y: startY + Math.floor(i / 5) * 180, width: 220, height: 160 })));
+    else for (let i = 0; i < photoIds.length; i++) await repository.placePhoto(projectId, activeBoard, photoIds[i], startX + (i % 5) * 240, startY + Math.floor(i / 5) * 180, 220, 160);
     await loadBoards();
+    setPhotoPickerOpen(false);
+  };
+
+  const removeSelected = async () => {
+    if (!repository || !removal || removal.boardId !== activeBoard || editLocked) return;
+    if (removal.nodeIds.some(id => !nodes.some(node => node.id === id && !node.locked && node.visible !== false))) throw new Error(zh.canvasRemoveLocked);
+    if (repository.deleteNodes) await repository.deleteNodes(projectId, activeBoard, removal.nodeIds);
+    else if (removal.nodeIds.length === 1) await repository.deleteNode(projectId, activeBoard, removal.nodeIds[0]);
+    else throw new Error(zh.canvasRemoveUnavailable);
+    setRemoval(null); setSelectedNodeIds(new Set()); setLinking(null);
+    await loadBoards();
+    setNotice(zh.canvasRemoved);
   };
 
   const toggleLockSelected = async () => {
-    if (!repository || !activeBoard || editLocked || selectedNodeIds.size === 0) return;
-    const first = nodes.find(n => selectedNodeIds.has(n.id));
-    if (!first) return;
-    const target = !first.locked;
-    if (repository.setNodesLocked) await repository.setNodesLocked(projectId, activeBoard, [...selectedNodeIds], target);
-    else for (const id of selectedNodeIds) await repository.setNodeLocked(projectId, activeBoard, id, target);
+    if (!repository || !activeBoard || editLocked || selectedNodes.length === 0) return;
+    const target = !selectionLocked;
+    if (repository.setNodesLocked) await repository.setNodesLocked(projectId, activeBoard, selectedNodes.map(node=>node.id), target);
+    else for (const node of selectedNodes) await repository.setNodeLocked(projectId, activeBoard, node.id, target);
     const ns = await repository.getNodes(activeBoard);
     setNodes(ns);
   };
+  const clearSelection=()=>{setSelectedNodeIds(new Set());containerRef.current?.focus({preventScroll:true});};
 
   const groupSelected = async () => {
-    if (!repository || !activeBoard || selectedNodeIds.size < 2) return;
-    const label = prompt('分组标签：')?.trim();
-    if (!label) return;
-    await repository.groupNodes(projectId, activeBoard, Array.from(selectedNodeIds), label);
+    if (!repository || !grouping || grouping.boardId !== activeBoard || grouping.nodeIds.length < 2 || !grouping.label.trim() || editLocked) return;
+    await repository.groupNodes(projectId, activeBoard, grouping.nodeIds, grouping.label.trim());
+    setGrouping(null);
     setSelectedNodeIds(new Set());
     const ns = await repository.getNodes(activeBoard);
     setNodes(ns);
@@ -192,10 +225,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const addSticky = async () => {
     if (!repository || !activeBoard || !noteText.trim()) return;
     const x = -pan.x / zoom + 60;
-    let y = -pan.y / zoom + 60;
-    const overlaps = nodes.filter(node => node.nodeType !== 'arrow' &&
-      node.x < x + 200 && node.x + node.width > x && node.y < y + 120 && node.y + node.height > y);
-    if (overlaps.length) y = Math.max(...overlaps.map(node => node.y + node.height)) + 24;
+    const y = insertionY(nodes, x, -pan.y / zoom + 60, 200, 120);
     await repository.addText(projectId, activeBoard, 'sticky', x, y, 200, 120, noteText.trim(), '#ffe082');
     setNoteText('');
     setNoteOpen(false);
@@ -215,21 +245,24 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     setZoom(scale);
     setPan({ x: rect.width / 2 - (left + right) / 2 * scale, y: rect.height / 2 - (top + bottom) / 2 * scale });
   };
-  const onWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const factor = e.deltaY < 0 ? 1.1 : 0.9;
-    const newZoom = Math.min(4, Math.max(1e-8, zoom * factor));
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    // 保持鼠标指向的画布点不变：screen = pan + zoom * board
+  const zoomAt = useCallback((value: number, mx: number, my: number) => {
+    const newZoom = Math.min(4, Math.max(1e-8, value));
     setPan({
       x: mx - (mx - pan.x) * (newZoom / zoom),
       y: my - (my - pan.y) * (newZoom / zoom),
     });
     setZoom(newZoom);
-  };
+  }, [pan.x, pan.y, zoom]);
+  const zoomCenter = (value: number) => { const rect=containerRef.current?.getBoundingClientRect();if(rect)zoomAt(value,rect.width/2,rect.height/2); };
+  useEffect(() => {
+    const surface=containerRef.current;if(!surface)return;
+    const wheel=(event:WheelEvent)=>{
+      event.preventDefault();if(dragging||resizing||working)return;
+      if(event.ctrlKey||event.metaKey){const rect=surface.getBoundingClientRect();zoomAt(zoom*(event.deltaY<0?1.1:0.9),event.clientX-rect.left,event.clientY-rect.top);}
+      else setPan(previous=>({x:previous.x-event.deltaX,y:previous.y-event.deltaY}));
+    };
+    surface.addEventListener('wheel',wheel,{passive:false});return()=>surface.removeEventListener('wheel',wheel);
+  },[repository,zoom,zoomAt,dragging,resizing,working]);
 
   // ── 交互：空格/中键平移 + 节点拖拽 ──
   const onNodeClick = async (nodeId: string) => {
@@ -264,6 +297,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
       const target = e.target as HTMLElement;
       const nodeEl = (target as HTMLElement).closest('[data-node-id]');
       if (nodeEl && e.button === 0) {
+        containerRef.current?.focus({ preventScroll: true });
         const nodeId = (nodeEl as HTMLElement).dataset.nodeId!;
         const node = nodes.find(n => n.id === nodeId);
         if (node && !editLocked) {
@@ -384,18 +418,14 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     panning.current = null;
   };
 
-  const onContextMenu = async (e: React.MouseEvent) => {
+  const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!repository || !activeBoard || editLocked) return;
-    const input = prompt('添加评论：');
-    if (!input?.trim()) return;
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const bx = (e.clientX - rect.left - pan.x) / zoom;
     const by = (e.clientY - rect.top - pan.y) / zoom;
-    await repository.addAnnotation(projectId, activeBoard, bx, by, input.trim());
-    const ans = await repository.getAnnotations(activeBoard);
-    setAnnotations(ans);
+    setNotice('');setComment({boardId:activeBoard,x:bx,y:by,body:''});
   };
 
   const cancelGesture = () => {
@@ -410,11 +440,17 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
+    if ((event.target as HTMLElement).closest('[role="dialog"]')) return;
     if ((event.target as HTMLElement).closest('input,textarea,select,[contenteditable="true"]')) return;
-    if (event.key === 'Escape') { cancelGesture(); return; }
+    if (event.key === 'Escape') { cancelGesture(); setSelectedNodeIds(new Set()); setLinkMode(false); setLinking(null); setInkMode(false); return; }
     if (editLocked) return;
     const key = event.key.toLowerCase();
-    if ((event.metaKey || event.ctrlKey) && (key === 'z' || key === 'y')) {
+    if ((event.metaKey||event.ctrlKey) && key==='a') {
+      event.preventDefault();setSelectedNodeIds(new Set(nodes.filter(node=>node.visible!==false&&node.nodeType!=='arrow').map(node=>node.id)));
+    } else if ((key === 'delete' || key === 'backspace') && !event.metaKey && !event.ctrlKey && !event.altKey && canRemove && activeBoard) {
+      event.preventDefault();
+      if (!working) { setNotice(''); setRemoval({ boardId: activeBoard, nodeIds: selectedNodes.map(node => node.id) }); }
+    } else if ((event.metaKey || event.ctrlKey) && (key === 'z' || key === 'y')) {
       event.preventDefault();
       if (!dragging && !resizing) void run(() => restoreHistory(key === 'y' || event.shiftKey));
     } else if (key === 'l' && !event.metaKey && !event.ctrlKey) {
@@ -429,16 +465,16 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   return (
     <div className="canvas-wrapper" onKeyDown={onKeyDown}>
       <div className="canvas-toolbar">
-        <select aria-label="选择画布" value={activeBoard ?? ''} disabled={working} onChange={e => { setNodes([]); setAnnotations([]); setNotice(''); setActiveBoard(e.target.value); setLinking(null); setLinkMode(false); setPan({ x: 0, y: 0 }); setZoom(1); }}>
-          {boards.length === 0 && <option value="">无画布</option>}
+        <select aria-label={zh.canvasChooseBoard} value={activeBoard ?? ''} disabled={working} onChange={e => { setNodes([]); setAnnotations([]); setNotice(''); setActiveBoard(e.target.value); setLinking(null); setLinkMode(false); setPan({ x: 0, y: 0 }); setZoom(1); }}>
+          {boards.length === 0 && <option value="">{zh.canvasNoBoards}</option>}
           {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
         </select>
-        <Button size="small" disabled={creating || working || readOnly} onClick={() => void run(createBoard)}>新建画布</Button>
+        <Button size="small" disabled={creating || working || readOnly} onClick={() => void run(createBoard)}>{zh.canvasNewBoard}</Button>
         {board && !board.owningTaskId && repository.editorialHistory && <Button size="small" disabled={working} onClick={() => setHistoryOpen(true)}>{zh.editorialHistory}</Button>}
         {board?.owningTaskId && repository.simulateMerge && <Button size="small" disabled={working || !review} onClick={() => setReviewing(true)}>{zh.editorialOpen}</Button>}
         {board?.owningTaskId && <Button size="small" disabled={working || readOnly || Boolean(repository.compareDraft && !review)} onClick={() => setAdopting(true)}>{zh.editorialSaveIndependent}</Button>}
-        <Button size="small" disabled={working || editLocked || !activeBoard || selectedPhotoIds.length === 0} onClick={() => void run(placeSelected)}>
-          放入选中照片（{selectedPhotoIds.length}）
+        <Button size="small" disabled={working || editLocked || !activeBoard || photos.length === 0} onClick={() => setPhotoPickerOpen(true)}>
+          {zh.canvasAddPhotos}
         </Button>
         <Button size="small" disabled={working || editLocked || !board?.revision} onClick={() => void run(async () => {
           if (!board?.revision || !repository) return;
@@ -449,16 +485,29 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           if (account) await account.requireSignIn('ai', () => openCanvasAgent(source));
           else openCanvasAgent(source);
         })}>{zh.chatArrangeBoard}</Button>
-        <Button size="small" aria-expanded={noteOpen} disabled={working || editLocked || !activeBoard} onClick={() => setNoteOpen(!noteOpen)}>便签</Button>
-        <Button size="small" aria-pressed={linkMode} disabled={working || editLocked || !activeBoard} onClick={() => { setLinkMode(!linkMode); setLinking(null); setInkMode(false); }}>{linkMode ? (linking ? '选择连接终点' : '选择连接起点') : '连接'}</Button>
-        <Button size="small" aria-pressed={inkMode} disabled={working || editLocked || !activeBoard} onClick={() => { setInkMode(!inkMode); setLinkMode(false); setLinking(null); }}>画笔</Button>
-        <Button size="small" disabled={working || editLocked || !activeBoard || selectedNodeIds.size < 2} onClick={() => void run(groupSelected)}>分组</Button>
-        <Button size="small" disabled={working || editLocked || !activeBoard} onClick={() => void run(() => restoreHistory(false))}>撤销</Button>
-        <Button size="small" disabled={working || editLocked || !activeBoard} onClick={() => void run(() => restoreHistory(true))}>重做</Button>
-        <Button size="small" disabled={working || editLocked || !activeBoard || selectedNodeIds.size === 0} onClick={() => void run(toggleLockSelected)}>锁定 / 解锁</Button>
-        <Button size="small" aria-label={zh.chatBoardFit} title={zh.chatBoardFit} disabled={working || !nodes.length} onClick={fitContent}><Maximize size={14} /></Button>
-        <span className="canvas-zoom-label">{zoom < 0.1 ? (zoom * 100).toPrecision(2) : Math.round(zoom * 100)}%</span>
       </div>
+      <div className="canvas-toolbar canvas-edit-tools" role="group" aria-label={zh.canvasEditTools}>
+        <div className="canvas-tool-cluster"><Button size="small" aria-pressed={!linkMode&&!inkMode} onClick={()=>{setLinkMode(false);setLinking(null);setInkMode(false);}}><MousePointer2 size={14}/>{zh.canvasSelectTool}</Button>
+          <Button size="small" aria-expanded={noteOpen} disabled={working || editLocked || !activeBoard} onClick={() => setNoteOpen(!noteOpen)}><StickyNote size={14}/>{zh.canvasNoteTool}</Button>
+          <Button size="small" aria-pressed={linkMode} disabled={working || editLocked || !activeBoard} onClick={() => { setLinkMode(!linkMode); setLinking(null); setInkMode(false); }}><MoveUpRight size={14}/>{zh.canvasConnectTool}</Button>
+          <Button size="small" aria-pressed={inkMode} disabled={working || editLocked || !activeBoard} onClick={() => { setInkMode(!inkMode); setLinkMode(false); setLinking(null); }}><Pencil size={14}/>{zh.canvasDrawTool}</Button></div>
+        <div className="canvas-tool-cluster"><Button size="small" disabled={working || editLocked || !activeBoard} onClick={() => void run(() => restoreHistory(false))}><Undo2 size={14}/>{zh.canvasUndo}</Button>
+          <Button size="small" disabled={working || editLocked || !activeBoard} onClick={() => void run(() => restoreHistory(true))}><Redo2 size={14}/>{zh.canvasRedo}</Button></div>
+
+      </div>
+      {photoPickerOpen && <CanvasPhotoPicker photos={photos} sequencePhotoIds={sequencePhotoIds} selectedPhotoIds={selectedPhotoIds} placedPhotoIds={placedPhotoIds} busy={working} canAdd={!editLocked} error={notice} onClose={() => setPhotoPickerOpen(false)} onAdd={ids => void run(() => placeSelected(ids))} />}
+      {removal && <Modal title={zh.canvasRemoveConfirm} description={zh.canvasRemoveHint.replace('{count}', String(removal.nodeIds.length))} onClose={() => { if (!working) setRemoval(null); }}>
+        {notice && <p role="alert">{notice}</p>}
+        <div className="dialog-actions"><Button disabled={working} onClick={() => setRemoval(null)}>{zh.canvasPhotoCancel}</Button><Button variant="primary" disabled={working || editLocked || removal.boardId !== activeBoard} onClick={() => void run(removeSelected)}>{working ? zh.canvasRemoving : zh.canvasRemoveConfirm}</Button></div>
+      </Modal>}
+      {grouping&&<Modal title={zh.canvasGroupTool} description={zh.canvasGroupHint.replace('{count}',String(grouping.nodeIds.length))} onClose={()=>{if(!working)setGrouping(null);}}><form onSubmit={event=>{event.preventDefault();void run(groupSelected);}}>
+        <label className="canvas-group-label-input">{zh.canvasGroupName}<input aria-label={zh.canvasGroupName} maxLength={50} value={grouping.label} disabled={working} placeholder={zh.canvasGroupPlaceholder} onChange={event=>setGrouping({...grouping,label:event.target.value})}/></label>
+        {notice&&<p role="alert">{notice}</p>}<div className="dialog-actions"><Button disabled={working} onClick={()=>setGrouping(null)}>{zh.canvasPhotoCancel}</Button><Button variant="primary" type="submit" disabled={working||editLocked||grouping.boardId!==activeBoard||!grouping.label.trim()}>{zh.canvasCreateGroup}</Button></div>
+      </form></Modal>}
+      {comment&&<Modal title={zh.canvasAddComment} onClose={()=>{if(!working)setComment(null);}}><form onSubmit={event=>{event.preventDefault();if(!repository||editLocked||comment.boardId!==activeBoard||!comment.body.trim())return;void run(async()=>{await repository.addAnnotation(projectId,comment.boardId,comment.x,comment.y,comment.body.trim());setComment(null);setAnnotations(await repository.getAnnotations(comment.boardId));});}}>
+        <label className="canvas-group-label-input">{zh.canvasCommentContent}<textarea aria-label={zh.canvasCommentContent} maxLength={5000} value={comment.body} disabled={working} onChange={event=>setComment({...comment,body:event.target.value})}/></label>
+        {notice&&<p role="alert">{notice}</p>}<div className="dialog-actions"><Button disabled={working} onClick={()=>setComment(null)}>{zh.canvasPhotoCancel}</Button><Button variant="primary" type="submit" disabled={working||editLocked||comment.boardId!==activeBoard||!comment.body.trim()}>{zh.canvasSaveComment}</Button></div>
+      </form></Modal>}
       {pending.length > 0 && <div className="canvas-pending" role="status">
         <span>有画布操作尚未确认。确认后可继续编辑。</span>
         {pending.map(item => <Button key={item.boardId} size="small" disabled={working || !repository.retryPending} onClick={() => void run(async () => {
@@ -467,7 +516,6 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           setNotice('上次操作已确认');
         })}>确认上次操作{pending.length > 1 ? ` · ${boards.find(board => board.id === item.boardId)?.title ?? '新画布'}` : ''}</Button>)}
       </div>}
-      {notice && <p role="status" className="canvas-notice">{notice}</p>}
       {board?.owningTaskId && repository.compareDraft && <div className="canvas-review" aria-label={zh.chatBoardChanges}>
         {review ? <>
           <div className="canvas-review-summary"><strong>{zh.chatBoardChanges}</strong>
@@ -478,16 +526,17 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
         </> : <Button size="small" disabled={working} onClick={() => void run(loadBoards)}>{zh.chatBoardRefresh}</Button>}
       </div>}
       {noteOpen && <form className="canvas-note-editor" onSubmit={event => { event.preventDefault(); void run(addSticky); }}>
-        <textarea aria-label="便签内容" placeholder="写下你的想法" maxLength={5000} value={noteText} disabled={working || editLocked} onChange={event => setNoteText(event.target.value)} />
-        <Button size="small" disabled={working || editLocked || !noteText.trim()} type="submit">保存便签</Button>
+        <textarea aria-label={zh.canvasNoteContent} placeholder={zh.canvasNotePlaceholder} maxLength={5000} value={noteText} disabled={working || editLocked} onChange={event => setNoteText(event.target.value)} />
+        <Button size="small" disabled={working || editLocked || !noteText.trim()} type="submit">{zh.canvasSaveNote}</Button>
         <Button size="small" disabled={working} onClick={() => setNoteOpen(false)}>取消</Button>
       </form>}
+      <div className="canvas-stage">
       <div
         ref={containerRef}
         className={`canvas-surface ${inkMode ? "ink-mode" : ""}`}
         tabIndex={0}
-        aria-label="叙事画布"
-        onWheel={onWheel}
+        aria-label={zh.canvasTitle}
+        aria-busy={Boolean(activeBoard&&activeBoard!==loadedBoard)}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={() => {
@@ -502,7 +551,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
           });
         }}
         onPointerCancel={cancelGesture}
-        onContextMenu={e => { e.preventDefault(); void run(() => onContextMenu(e)); }}
+        onContextMenu={onContextMenu}
       >
         <div
           className="canvas-board"
@@ -513,6 +562,8 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
             <span>{zh.chatBoardOriginal}</span>
           </div>)}
           <CanvasNodes nodes={nodes} selected={selectedNodeIds} dragging={dragging} editable={!editLocked}
+            photoNames={Object.fromEntries(photos.map(photo=>[photo.id,photo.name]))}
+            onKeyboardSelect={(id,extend)=>{if(editLocked)return;if(linkMode){void run(()=>onNodeClick(id));return;}setSelectedNodeIds(previous=>{const next=extend?new Set(previous):new Set<string>();if(!extend||!next.delete(id))next.add(id);return next;});}}
             onNodeClick={id => void run(() => onNodeClick(id))}
             onResize={(node, event) => {
               event.stopPropagation();
@@ -540,13 +591,33 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
               💬
             </div>
           ))}
-          {nodes.length === 0 && activeBoard && (
-            <div className="canvas-hint" style={{ left: -pan.x / zoom + 40, top: -pan.y / zoom + 40 }}>
-              从工具栏选照片放置到画布
-            </div>
-          )}
+
         </div>
       </div>
+      {notice && <p role="status" className="canvas-notice">{notice}</p>}
+      {boardsLoaded&&(!activeBoard||activeBoard===loadedBoard)&&!nodes.some(node=>node.visible!==false)&&<section className="canvas-start" aria-label={zh.canvasGetStarted}>
+        <Images size={28} aria-hidden="true"/>
+        <h3>{activeBoard?zh.canvasEmptyTitle:zh.canvasNoBoards}</h3>
+        <p>{readOnly?zh.canvasViewOnly:activeBoard?zh.canvasStartPhotos:zh.canvasStartBoard}</p>
+        {!readOnly&&(!activeBoard?<Button variant="primary" disabled={creating||working} onClick={()=>void run(createBoard)}>{zh.canvasCreateFirst}</Button>:!editLocked&&<div>
+          <Button variant="primary" disabled={working||!photos.length} onClick={()=>setPhotoPickerOpen(true)}>{zh.canvasChooseFirstPhotos}</Button>
+          <Button disabled={working} onClick={()=>setNoteOpen(true)}>{zh.canvasStartNote}</Button>
+        </div>)}
+      </section>}
+        {selectedNodes.length>0&&<div className="canvas-selection-actions" role="group" aria-label={zh.canvasSelectionActions}>
+          <span>{zh.canvasSelectedCount.replace('{count}',String(selectedNodes.length))}</span>
+          <Button size="small" title={selectedNodes.length>100?zh.canvasGroupLimit:undefined} disabled={working || editLocked || selectedNodes.length<2 || selectedNodes.length>100 || selectedNodes.some(node=>node.locked)} onClick={() => { if(activeBoard)setGrouping({boardId:activeBoard,nodeIds:selectedNodes.map(node=>node.id),label:''}); }}>{zh.canvasGroupTool}</Button>
+          <Button size="small" disabled={working || editLocked} onClick={() => void run(toggleLockSelected)}>{selectionLocked?<UnlockKeyhole size={14}/>:<LockKeyhole size={14}/>} {selectionLocked?zh.canvasUnlockSelection:zh.canvasLockSelection}</Button>
+          <Button size="small" disabled={working || !canRemove} title={selectedNodes.some(node => node.locked) ? zh.canvasRemoveLocked : selectedNodes.length>300?zh.canvasRemoveLimit:zh.canvasRemoveShortcut} onClick={() => { if (activeBoard) { setNotice(''); setRemoval({ boardId: activeBoard, nodeIds: selectedNodes.map(node => node.id) }); } }}><Trash2 size={14} />{zh.canvasRemove}{` (${selectedNodes.length})`}</Button>
+          <Button size="small" disabled={working} onClick={clearSelection}>{zh.canvasClearSelection}</Button>
+        </div>}
+      </div>
+      <footer className="canvas-statusbar"><span>{readOnly?zh.canvasViewOnly:linkMode?(linking?zh.canvasChooseConnectionEnd:zh.canvasChooseConnectionStart):inkMode?zh.canvasDrawingHint:zh.canvasNavigationHint}</span><div className="canvas-zoom-controls" role="group" aria-label={zh.canvasZoom}>
+        <Button size="small" aria-label={zh.canvasZoomOut} disabled={working} onClick={()=>zoomCenter(zoom/1.2)}><Minus size={14}/></Button>
+        <Button size="small" aria-label={zh.canvasResetZoom} disabled={working} onClick={()=>zoomCenter(1)}>{zoom<0.1?(zoom*100).toPrecision(2):Math.round(zoom*100)}%</Button>
+        <Button size="small" aria-label={zh.canvasZoomIn} disabled={working} onClick={()=>zoomCenter(zoom*1.2)}><Plus size={14}/></Button>
+        <Button size="small" aria-label={zh.chatBoardFit} title={zh.chatBoardFit} disabled={working||!nodes.length} onClick={fitContent}><Maximize size={14}/></Button>
+      </div></footer>
       {reviewing && review && board && <EditorialReviewWorkspace key={`${board.id}-${review.draftRevision}`} repository={repository} projectId={projectId} board={board} comparison={review} readOnly={readOnly}
         onRevise={() => {
           const revise = () => { setReviewing(false); openDraftRevision(projectId,{ kind: 'board', id: board.id, revision: review.draftRevision },board.title,zh.editorialReviseGoal,Math.max(1,(review.draftNodes ?? []).filter(n => n.nodeType === 'photo').length)); };

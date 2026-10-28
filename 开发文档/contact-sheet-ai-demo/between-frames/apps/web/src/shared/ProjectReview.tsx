@@ -15,6 +15,7 @@ import { useRealtime } from "./useRealtime";
 import { AccessPanel, HistoryPanel } from "./ReviewPanels";
 import { AgentAnalysis } from "./AgentAnalysis";
 import { BoardViewer } from "./BoardViewer";
+import { draftSequenceMembers } from "./proposalDraft";
 
 type CommentTarget =
   | { kind: "photo" }
@@ -318,6 +319,7 @@ export function ProjectReview({
     canApprove =
       ["OWNER", "ADMIN"].includes(state.principal.role) ||
       state.principal.can_approve;
+  const draftMembers = draftSequenceMembers(state.snapshot.sequences[0].items, operations);
   const photoComments = state.comments.filter(
     (c) => c.anchor.photo_id === selected && !c.parent_id,
   );
@@ -821,7 +823,13 @@ export function ProjectReview({
                         <p className="fr-warning">
                           提案基于 v{diff.baseRevision}，当前已是 v
                           {diff.currentRevision}
-                          ：基线过期，差异不再可投影，请按最新版本重建。
+                          ：作品版本已更新，请按当前作品重新比较。
+                        </p>
+                      ) : diff.currentRevision !== state.revision ? (
+                        <p className="fr-warning">
+                          {p.state === "SUBMITTED"
+                            ? "作品已有更新，请刷新差异后重新比较。"
+                            : "作品已有更新，请以当前作品和审稿结果为准。"}
                         </p>
                       ) : (
                         diff.sequence && (
@@ -979,9 +987,17 @@ export function ProjectReview({
                     {(["add", "move", "remove"] as const).map((op) => (
                       <button
                         key={op}
-                        disabled={!canWrite || !photo}
+                        disabled={!canWrite || !photo || (
+                          op === "add"
+                            ? draftMembers.has(selected)
+                            : !draftMembers.has(selected)
+                        )}
                         onClick={() =>
-                          setOperations((prev) => [
+                          setOperations((prev) => {
+                            const members = draftSequenceMembers(state.snapshot.sequences[0].items, prev);
+                            if (op === "add" ? members.has(selected) : !members.has(selected))
+                              return prev;
+                            return [
                             ...prev,
                             {
                               op,
@@ -990,14 +1006,12 @@ export function ProjectReview({
                               ...(op !== "remove"
                                 ? {
                                     to_index:
-                                      op === "add"
-                                        ? state.snapshot.sequences[0].items
-                                            .length
-                                        : 0,
+                                      op === "add" ? members.size : 0,
                                   }
                                 : {}),
                             },
-                          ])
+                            ];
+                          })
                         }
                       >
                         {op === "add"
