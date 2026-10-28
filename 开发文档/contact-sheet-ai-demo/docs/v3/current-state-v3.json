@@ -3,8 +3,8 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-27T23:20:03.295Z",
-  "sourceHead": "c4f021070103a20daa7bd0c26df47b0905983e41",
+  "observedAt": "2026-10-28T02:08:55.389Z",
+  "sourceHead": "def651137fdb3c2441a8959101f2f05ee64a38d8",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
@@ -12,7 +12,7 @@
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "6ac05feec1c245eee10f1e463571af2494dd8a5ce7008e5cb195213062257112"
   },
-  "status": "I1_RESEARCH_LANDED_MAIN_CI_GREEN",
+  "status": "G3_PROPOSAL_DIFF_LANDED_MAIN_CI_GREEN",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -791,13 +791,27 @@
       "run": 40596112849
     },
     {
+      "id": "g4-revocation-regression",
+      "result": "PASS",
+      "head": "ed324f4",
+      "note": "撤权后新图片票据/命令提交 403 断言；WS 测试 try/finally 连接清理（失败不再挂起套件）",
+      "run": 40609622987
+    },
+    {
+      "id": "g3-proposal-diff",
+      "result": "PASS",
+      "head": "def6511",
+      "note": "GET /projects/:id/proposals/:pid/diff；integration 21/21、全套 PG 124/124；stale 判定+增删移清单；投影复用 apply 顺序语义；预览无副作用；草稿仅作者可见",
+      "run": 40615367257
+    },
+    {
       "id": "g0-inventory",
       "result": "PASS",
       "pgTables": 52,
       "pgMigrations": 24,
       "sqliteMigrations": 33,
       "migrationDeltaAllAdditive": true,
-      "head": "c4f0210"
+      "head": "def6511"
     }
   ],
   "remaining": [
@@ -819,15 +833,17 @@
     "teamSeatsAt": "74e3dc3",
     "g3DiffAt": "e43c87a",
     "researchReferencesAt": "c4f0210",
-    "notes": "G6 共编服务端四批齐备（0025–0027）；J5 团队席位（0028-0024 域）、G3 版本 Diff（e43c87a）、I1 研究笔记/链接（0029）落地；G2 决策④已收口、①②③待用户"
+    "g4RevocationAt": "ed324f4",
+    "g3ProposalDiffAt": "def6511",
+    "notes": "G6 共编服务端四批齐备（0025–0027）；J5 团队席位（0028）、G3 双 Diff（版本间 e43c87a + 提案投影 def6511）、I1 研究笔记/链接（0029）、G4 撤权回归（ed324f4）落地；G2 决策④已收口、①②③待用户；服务端零冲突 lane 收口"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40596112849,
-    "headSha": "c4f021070103a20daa7bd0c26df47b0905983e41",
+    "databaseId": 40615367257,
+    "headSha": "def651137fdb3c2441a8959101f2f05ee64a38d8",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40596112849",
-    "observedAt": "2026-10-27T23:20:03.295Z",
-    "note": "I1 研究参考（0029）合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40615367257",
+    "observedAt": "2026-10-28T02:08:55.389Z",
+    "note": "G3 提案投影 Diff（def6511）合入后全量门禁绿"
   }
 }
