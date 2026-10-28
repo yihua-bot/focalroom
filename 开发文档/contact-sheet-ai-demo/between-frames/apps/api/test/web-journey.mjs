@@ -52,10 +52,11 @@ try {
   for (const element of [a.getByRole('heading', { name: '编辑提案', exact: true }), a.getByRole('button', { name: '刷新差异', exact: true })]) {
     const contrast = await element.evaluate(node => {
       const rgb = value => (value.match(/[\d.]+/g) || []).map(Number);
+      const style = element => element.ownerDocument.defaultView.getComputedStyle(element);
       const luminance = color => rgb(color).slice(0, 3).map(value => { const n = value / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; }).reduce((sum, n, index) => sum + n * [.2126, .7152, .0722][index], 0);
       let background = node;
-      while (background.parentElement && rgb(getComputedStyle(background).backgroundColor)[3] === 0) background = background.parentElement;
-      const light = luminance(getComputedStyle(node).color), dark = luminance(getComputedStyle(background).backgroundColor);
+      while (background.parentElement && rgb(style(background).backgroundColor)[3] === 0) background = background.parentElement;
+      const light = luminance(style(node).color), dark = luminance(style(background).backgroundColor);
       return (Math.max(light, dark) + .05) / (Math.min(light, dark) + .05);
     });
     assert.ok(contrast >= 4.5, 'Review heading and active action text must remain readable on their actual backgrounds');
@@ -64,7 +65,7 @@ try {
   await a.getByRole('button', { name: '批注', exact: true }).click(); await a.getByLabel('私人笔记', { exact: true }).fill('作者自己的节奏笔记'); await expect(a.getByLabel('私人笔记', { exact: true })).toHaveValue('作者自己的节奏笔记'); await expect(b.getByRole('button', { name: '批准选中改动' })).toHaveCount(0);
   await a.screenshot({ path: join(evidence, 'review-1440.png'), fullPage: true }); await a.setViewportSize({ width: 1280, height: 800 }); await a.screenshot({ path: join(evidence, 'review-1280.png'), fullPage: true }); assert.equal(await a.evaluate(() => globalThis.document.documentElement.scrollWidth > globalThis.innerWidth), false);
   await a.reload(); await expect(a.getByRole('heading', { name: '海岸的间隙', exact: true })).toBeVisible(); await expect(a.getByText('v1 · OWNER', { exact: true })).toBeVisible(); await expect(a.getByLabel('私人笔记', { exact: true })).toHaveValue('作者自己的节奏笔记');
-  await a.getByRole('button', { name: '版本', exact: true }).click(); await expect(a.getByText('v1', { exact: true })).toBeVisible(); await a.locator('.fr-version').filter({ hasText: 'v0' }).getByRole('button', { name: '查看版本' }).click(); await expect(a.getByText('正在查看 v0 · 只读', { exact: true })).toBeVisible(); await a.screenshot({ path: join(evidence, 'history-1280.png'), fullPage: true });
+  await a.getByRole('button', { name: '版本', exact: true }).click(); await expect(a.locator('.fr-version strong').filter({ hasText: 'v1' })).toBeVisible(); await a.locator('.fr-version').filter({ hasText: 'v0' }).getByRole('button', { name: '查看版本' }).click(); await expect(a.getByText('正在查看 v0 · 只读', { exact: true })).toBeVisible(); await a.screenshot({ path: join(evidence, 'history-1280.png'), fullPage: true });
   const projects = await (await fetch(`${base}/api/v2/projects`, { headers: { authorization: `Bearer ${owner.token}` } })).json(); const id = projects[0].id;
   // 第三个独立浏览器会话，验证 Viewer 的产品入口为只读。
   const inviteViewer = await (await fetch(`${base}/api/v2/workspaces/${workspace}/invitations`, { ...{ method: 'POST', headers: { authorization: `Bearer ${owner.token}`, 'content-type': 'application/json' } }, body: JSON.stringify({ email: viewer.user.email, role: 'VIEWER', project_id: id }) })).json();

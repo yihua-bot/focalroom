@@ -5,6 +5,8 @@ on:
       - '开发文档/contact-sheet-ai-demo/**'
       - '.github/workflows/betweenframes-v2.yml'
   push:
+    branches:
+      - main
     paths:
       - '开发文档/contact-sheet-ai-demo/**'
       - '.github/workflows/betweenframes-v2.yml'
@@ -29,6 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
+        timeout-minutes: 10
         with:
           node-version-file: 开发文档/contact-sheet-ai-demo/between-frames/.node-version
           cache: npm

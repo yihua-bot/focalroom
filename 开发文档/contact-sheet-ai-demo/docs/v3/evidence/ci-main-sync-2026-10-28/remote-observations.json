@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "main": {
+    "head": "000dc0389f125b2b16e45bda5361ec6ca258f63a",
+    "run": 40655775922,
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "old_pr": {
+    "head": "e792289a51d630ef35c5da6ff6f35a3c4febcaea",
+    "runs": [
+      40636924494,
+      40636917801
+    ],
+    "conclusion": "cancelled",
+    "location": "setup-node download; no tests started"
+  },
+  "earlier_failure": {
+    "head": "be4410d352883166162feaa20f4ae5addf6c7162",
+    "run": 40636602902,
+    "location": "3 getComputedStyle no-undef errors",
+    "fixed": true
+  },
+  "new_pr_ci": "Not yet triggered for this pending merge; must inspect new head after push"
+}

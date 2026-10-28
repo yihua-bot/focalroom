@@ -1,3 +1,15 @@
+# 2026-10-28 main000dc03同步与CI补修接续
+
+先读../docs/v3/CI-MAIN-SYNC-2026-10-28.md。当前分支codex/integrate-creative-workspace已合并已提交main000dc03（不含主checkout另一agent未提交的0030/六个API在途文件）。不要写这些共享文件或全局快照。PR #2已附加本任务，原237项WIP副本保留，但桌面增量已有be4410d/e792289远端提交，不要误认为尚未提交。
+
+main run40655775922 success已核验。旧PR be4410d run40636602902在新增contrast脚本报3个getComputedStyle no-undef，已改为元素所属document.defaultView作用域；e792289两run40636924494/40636917801在Node下载阶段耗尽90分钟，不是测试失败。工作流保留Node25.8.1和job90分钟，setup-node单步10分钟；feature只走PR、push仅main，避免重复macOS工作。未放宽测试。
+
+最新本地589前端/102文件、Lint/类型/契约/两前端构建和真实PG/Web三会话通过。247项Native/本地域源码及harness摘要与上一批一致，237库Rust/5本地记忆HTTP/124PG为前批结果，不冒称新跑。旧60桌面旅程不重复计数。所有本轮本地进程已结束；以下旧session均为历史。新远端CI需按最新head检查，不能把main绿/旧run取消说成PR绿。
+
+本聊天在共享main目录留下的同内容未跟踪交接Markdown已移出到Documents/BetweenFrames-Reviews/coordination-2026-10-28保留原文，未删除/改main索引或其他在途文件。G2接线、研究/Moodboard、Web形态已定，见INTEGRATION-REPLY-2026-10-28.md；商业事实不代填。完整目标继续，未生产/模型/Keychain/正式照片/发包。
+
+# 以下为此前联合整合记录
+
 # 2026-10-28 联合候选接续
 
 本工作区是focalroom-joint-integration，分支codex/integrate-creative-workspace，基于主线9a81a52组合本聊天此前画布/出版/审稿增量。原publication-versions工作区仍保留全部WIP，没有覆盖或清理。先读../docs/v3/INTEGRATION-REPLY-2026-10-28.md及联合整合报告；下面27日内容均为历史。

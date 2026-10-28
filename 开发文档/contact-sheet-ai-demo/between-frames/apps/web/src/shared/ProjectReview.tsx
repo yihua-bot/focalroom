@@ -1072,7 +1072,12 @@ export function ProjectReview({
             />
           )}
           {tab === "history" && (
-            <HistoryPanel id={id} session={session} revision={state.revision} />
+            <HistoryPanel
+              id={id}
+              session={session}
+              revision={state.revision}
+              photos={state.snapshot.photos}
+            />
           )}
         </aside>
       </main>

@@ -106,6 +106,29 @@ export const proposalDiffSchema = z.object({
     .nullable(),
 });
 export type ProposalDiff = z.infer<typeof proposalDiffSchema>;
+const diffChange = z.object({
+  id: z.string(),
+  fields: z.record(
+    z.string(),
+    z.object({ before: z.unknown(), after: z.unknown() }),
+  ),
+});
+export const versionDiffSchema = z.object({
+  project_id: z.string(),
+  from: z.object({ revision: z.number().int(), created_at: z.string() }),
+  to: z.object({ revision: z.number().int(), created_at: z.string() }),
+  photos: z.object({
+    added: z.array(z.string()),
+    removed: z.array(z.string()),
+    changed: z.array(diffChange),
+  }),
+  sequences: z.object({
+    added: z.array(z.string()),
+    removed: z.array(z.string()),
+    changed: z.array(diffChange),
+  }),
+});
+export type VersionDiff = z.infer<typeof versionDiffSchema>;
 export class CloudError extends Error {
   readonly code: string;
   constructor(code: string, message: string) {

@@ -753,6 +753,24 @@
 .fr-proposal .fr-diff p {
   font-size: 11px;
 }
+.fr-version-diff {
+  margin: 8px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #34424e;
+  border-radius: 7px;
+}
+.fr-version-diff select {
+  margin: 0 6px;
+}
+.fr-version-diff .fr-diff {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid #4a5d6e;
+  background: rgba(74, 93, 110, 0.12);
+}
+.fr-version-diff .fr-diff p {
+  font-size: 11px;
+}
 .fr-proposal .fr-check {
   font-size: 11px;
 }
