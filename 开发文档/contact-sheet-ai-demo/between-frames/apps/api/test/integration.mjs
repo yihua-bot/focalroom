@@ -330,3 +330,65 @@ test('I1 research references are project-scoped auxiliary material: permission-g
   assert.equal(Number((await pool.query('SELECT count(*)::int AS n FROM fr_source_assets')).rows[0].n), assetsBefore);
   assert.equal(Number((await pool.query('SELECT count(*)::int AS n FROM fr_research_references')).rows[0].n), 1);
 });
+test('G3 proposal diff previews operations against the current sequence without side effects', async () => {
+  // 独立项目：单元素序列，add/move/remove 三类操作的投影结果完全可预期。
+  const pdViewer = await call('/auth/register', 'POST', null, { email: 'pd-viewer@fr.test', password: 'test-password-123', display_name: 'pd-viewer@fr.test' });
+  const manifestPd = { workspace_id: workspace, local_project_id: 'proposal-diff-fixture', promotion_id: randomUUID(), title: '提案比较项目', from_revision: 0,
+    snapshot: { photos: ['pd1', 'pd2', 'pd3', 'pd4'].map(id => ({ id, filename: `${id}.jpg`, source_sha256: 'e'.repeat(64), selection: 'UNDECIDED' })),
+      sequences: [{ id: 'sequence', title: '主序列', items: ['pd1', 'pd2', 'pd3'].map(id => ({ id: `item-${id}`, photo_id: id })) }] },
+    media_policy: { previews_only: true, strip_gps: true, max_long_edge: 2048, ai_upload_authorized: false } };
+  const start = await call('/promotions', 'POST', owner.token, manifestPd);
+  const pdProject = start.project_id;
+  const jpeg = await sharp({ create: { width: 96, height: 64, channels: 3, background: '#23ba98' } }).jpeg().toBuffer();
+  for (const photo of manifestPd.snapshot.photos) {
+    const response = await fetch(`${base}/api/v2/projects/${pdProject}/previews/${photo.id}`, { method: 'PUT', headers: { authorization: `Bearer ${owner.token}`, 'content-type': 'image/jpeg' }, body: jpeg });
+    assert.equal(response.status, 200);
+  }
+  await call(`/projects/${pdProject}/finalize`, 'POST', owner.token, { manifest_digest: start.manifest_digest });
+  const invitePd = await call(`/workspaces/${workspace}/invitations`, 'POST', owner.token, { email: pdViewer.user.email, role: 'VIEWER', project_id: pdProject });
+  await call('/invitations/accept', 'POST', pdViewer.token, { token: new URL(invitePd.invite_url).hash.split('=')[1] });
+  const envelopePd = (kind, payload, revision = 0) => ({ ...command(kind, payload, revision), project_id: pdProject });
+  const issuePd = (envelope, token = owner.token, status = 200) => call(`/projects/${pdProject}/commands`, 'POST', token, envelope, status);
+
+  // 投影 Diff：增/删/移一目了然，语义与 apply 的顺序 splice 一致（base_revision 与命令版本一致）。
+  // moved 只报 before/after 都存在的照片：本次 pd1（0→2）与 pd3（2→0）真实换位。
+  const created = envelopePd('proposal.create', { title: '编排调整', base_revision: 0, operations: [
+    { op: 'add', operation_id: 'pd-add', photo_id: 'pd4', to_index: 3 },
+    { op: 'move', operation_id: 'pd-move', photo_id: 'pd1', to_index: 3 },
+    { op: 'remove', operation_id: 'pd-remove', photo_id: 'pd2' },
+  ] }, 0);
+  await issuePd(created);
+  await issuePd(envelopePd('proposal.submit', { proposal_id: created.command_id, expected_proposal_revision: 0 }, 0));
+
+  const diff = await call(`/projects/${pdProject}/proposals/${created.command_id}/diff`, 'GET', owner.token);
+  assert.equal(diff.stale, false); assert.equal(diff.state, 'SUBMITTED');
+  assert.equal(diff.currentRevision, 0);
+  assert.deepEqual(diff.sequence.before, ['pd1', 'pd2', 'pd3']);
+  assert.deepEqual(diff.sequence.after, ['pd3', 'pd4', 'pd1']);
+  assert.deepEqual(diff.sequence.added, ['pd4']);
+  assert.deepEqual(diff.sequence.removed, ['pd2']);
+  assert.deepEqual(diff.sequence.moved, [
+    { photo_id: 'pd3', fromIndex: 2, toIndex: 0 },
+    { photo_id: 'pd1', fromIndex: 0, toIndex: 2 },
+  ]);
+
+  // 预览无副作用：正式修订与序列不变。
+  assert.equal((await call(`/projects/${pdProject}/snapshot`)).revision, 0);
+  const versionRow = await call(`/projects/${pdProject}/versions/0`);
+  assert.deepEqual(versionRow.snapshot.sequences[0].items.map(item => item.photo_id), ['pd1', 'pd2', 'pd3']);
+
+  // 草稿仅作者可见：被授权观察者 404，作者可预览。
+  const draft = envelopePd('proposal.create', { title: '草稿预览', base_revision: 0, operations: [{ op: 'add', operation_id: 'pd-draft-add', photo_id: 'pd4', to_index: 3 }] }, 0);
+  await issuePd(draft);
+  await call(`/projects/${pdProject}/proposals/${draft.command_id}/diff`, 'GET', pdViewer.token, undefined, 404);
+  assert.equal((await call(`/projects/${pdProject}/proposals/${draft.command_id}/diff`, 'GET', owner.token)).state, 'DRAFT');
+
+  // 基线过期：推进正式修订后 stale=true 且不再投影。
+  await issuePd(envelopePd('photo.set_selection', { photo_ids: ['pd1'], selection_state: 'KEEP' }, 0));
+  const stale = await call(`/projects/${pdProject}/proposals/${created.command_id}/diff`, 'GET', owner.token);
+  assert.equal(stale.stale, true); assert.equal(stale.sequence, null);
+
+  // 边界与权限：缺失 404，未授权 403。
+  await call(`/projects/${pdProject}/proposals/${randomUUID()}/diff`, 'GET', owner.token, undefined, 404);
+  await call(`/projects/${pdProject}/proposals/${created.command_id}/diff`, 'GET', outsider.token, undefined, 403);
+});

@@ -63,6 +63,22 @@ function diffEntities(before: SnapshotEntity[], after: SnapshotEntity[]) {
     changed,
   };
 }
+type ProposalOperation = { op: "add" | "move" | "remove"; operation_id: string; photo_id: string; to_index?: number };
+// 提案操作在创建时经命令契约校验；读取侧轻量验证结构，坏数据报错不静默。
+function proposalOperations(value: unknown): ProposalOperation[] {
+  assert(Array.isArray(value), 500, "PROPOSAL_OPS_INVALID", "提案操作结构不合法");
+  return value.map((operation) => {
+    assert(operation !== null && typeof operation === "object", 500, "PROPOSAL_OPS_INVALID", "提案操作结构不合法");
+    const record = operation as Record<string, unknown>;
+    assert(
+      (record.op === "add" || record.op === "move" || record.op === "remove") &&
+        typeof record.operation_id === "string" && typeof record.photo_id === "string" &&
+        (record.to_index === undefined || typeof record.to_index === "number"),
+      500, "PROPOSAL_OPS_INVALID", "提案操作结构不合法",
+    );
+    return operation as ProposalOperation;
+  });
+}
 const researchReferenceSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("note"), title: z.string().trim().min(1).max(200),
@@ -731,6 +747,55 @@ export class CloudService {
         403, "PERMISSION_DENIED", "只能删除自己的研究参考，或由项目编辑处理");
       await tx.query("DELETE FROM fr_research_references WHERE id=$1 AND project_id=$2", [referenceId, id]);
       return { deleted: true, id: referenceId };
+    });
+  }
+  async proposalDiff(headers: Headers, id: string, proposalId: string) {
+    return this.authority.scope(headers, id, false, async ({ tx, user, project }) => {
+      const row = (await tx.query(
+        "SELECT state,base_revision,author_id,operations FROM fr_proposals WHERE id=$1 AND project_id=$2",
+        [proposalId, id],
+      )).rows[0];
+      assert(row, 404, "NOT_FOUND", "提案不存在");
+      // 未提交草案仅作者可见，与快照中的提案可见性一致。
+      assert(row.state !== "DRAFT" || row.author_id === user.id, 404, "NOT_FOUND", "提案不存在");
+      const sequence = project.snapshot.sequences[0];
+      assert(sequence && Array.isArray(sequence.items), 500, "SNAPSHOT_INVALID", "版本快照结构不合法");
+      if (row.base_revision !== project.revision) {
+        return { proposalId, state: row.state, baseRevision: row.base_revision, currentRevision: project.revision, stale: true, sequence: null };
+      }
+      const ops = proposalOperations(row.operations);
+      // 投影复用 apply 的顺序语义（逐操作 splice），预览本身不落任何状态。
+      const items = structuredClone(sequence.items) as { id: string; photo_id: string }[];
+      for (const op of ops) {
+        const index = items.findIndex((item) => item.photo_id === op.photo_id);
+        if (op.op === "add") {
+          assert(index < 0 && op.to_index! <= items.length, 409, "REVISION_CONFLICT", "新增照片已存在或位置越界");
+          items.splice(op.to_index!, 0, { id: `${proposalId}:${op.operation_id}`, photo_id: op.photo_id });
+        } else if (op.op === "remove") {
+          assert(index >= 0, 409, "REVISION_CONFLICT", "移除照片已不存在");
+          items.splice(index, 1);
+        } else {
+          assert(index >= 0 && op.to_index! < items.length, 409, "REVISION_CONFLICT", "重排照片已变化");
+          const [moved] = items.splice(index, 1);
+          items.splice(op.to_index!, 0, moved);
+        }
+      }
+      const before = (sequence.items as { id: string; photo_id: string }[]).map((item) => item.photo_id);
+      const after = items.map((item) => item.photo_id);
+      const moved = after
+        .map((photo_id, toIndex) => ({ photo_id, toIndex }))
+        .filter(({ photo_id, toIndex }) => before.includes(photo_id) && before.indexOf(photo_id) !== toIndex)
+        .map(({ photo_id, toIndex }) => ({ photo_id, fromIndex: before.indexOf(photo_id), toIndex }));
+      return {
+        proposalId, state: row.state, baseRevision: row.base_revision, currentRevision: project.revision, stale: false,
+        sequence: {
+          id: sequence.id,
+          before, after,
+          added: after.filter((photo_id) => !before.includes(photo_id)),
+          removed: before.filter((photo_id) => !after.includes(photo_id)),
+          moved,
+        },
+      };
     });
   }
   async reviseProposal(

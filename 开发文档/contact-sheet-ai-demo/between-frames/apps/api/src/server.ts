@@ -277,6 +277,9 @@ class ApiController {
       const proposal = action.match(/^proposals\/([^/]+)$/);
       if (proposal && req.method === "PATCH")
         return s.reviseProposal(headers, id, proposal[1], req.body);
+      const proposalDiff = action.match(/^proposals\/([^/]+)\/diff$/);
+      if (proposalDiff && req.method === "GET")
+        return s.proposalDiff(headers, id, proposalDiff[1]);
       if (action === "snapshot" && req.method === "GET")
         return s.snapshot(headers, id);
       if (action === "ai-comments" && req.method === "GET")
