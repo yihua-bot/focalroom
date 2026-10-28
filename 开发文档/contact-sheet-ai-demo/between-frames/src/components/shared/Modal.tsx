@@ -4,15 +4,16 @@ import type { ReactNode, RefObject } from 'react';
 import { useState } from 'react';
 import { zh } from '../../app/copy';
 
-export function Modal({ title, description, children, onClose, wide = false, initialFocusRef, className = '', closeLabel }: {
+export function Modal({ title, description, children, onClose, wide = false, initialFocusRef, className = '', closeLabel,onEscapeKeyDown }: {
   title: string; description?: string; children: ReactNode; onClose: () => void; wide?: boolean;
   initialFocusRef?: RefObject<HTMLElement | null>;
   className?: string; closeLabel?: string;
+  onEscapeKeyDown?:(event:KeyboardEvent)=>void;
 }) {
   const [returnFocus] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}>
     <Dialog.Portal><Dialog.Overlay className="modal-overlay" />
-      <Dialog.Content className={`modal ${wide ? 'modal-wide' : ''} ${className}`} {...(!description ? { 'aria-describedby': undefined } : {})} onOpenAutoFocus={event => { if (initialFocusRef?.current) { event.preventDefault(); initialFocusRef.current.focus(); } }} onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus?.isConnected) returnFocus.focus(); }}>
+      <Dialog.Content className={`modal ${wide ? 'modal-wide' : ''} ${className}`} {...(!description ? { 'aria-describedby': undefined } : {})} onEscapeKeyDown={onEscapeKeyDown} onOpenAutoFocus={event => { if (initialFocusRef?.current) { event.preventDefault(); initialFocusRef.current.focus(); } }} onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus?.isConnected) returnFocus.focus(); }}>
         <div className="modal-head"><div>
           <Dialog.Title>{title}</Dialog.Title></div>
           <Dialog.Close className="icon-button" aria-label={closeLabel ?? zh.close}><X size={20} /></Dialog.Close></div>

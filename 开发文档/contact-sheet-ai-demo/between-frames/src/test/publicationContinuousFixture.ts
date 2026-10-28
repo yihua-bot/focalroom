@@ -1,0 +1,6 @@
+import type { PublicationLayout,PublicationLayoutFrame,PublicationSpreadFrame } from '../domain/publication';
+export function continuousFixture(){
+  const frames=['cover','one','two','three'].map((asset):PublicationLayoutFrame=>({id:crypto.randomUUID(),xMm:15,yMm:15,widthMm:160,heightMm:227,fitMode:'fill',assetId:asset,renditionId:'render-'+asset,cropX:.2,cropY:.7,cropZoom:1.6,source:{assetId:asset,sourceSha256:'a'.repeat(64),width:6000,height:4000,sourceProfileDigest:null,renditionId:'render-'+asset,variantId:'variant-'+asset,renditionSha256:'b'.repeat(64),renditionWidth:5000,renditionHeight:3333,bitDepth:16,iccDigest:'icc',previewSha256:'c'.repeat(64)}}));
+  const pages=frames.map((frame,index)=>({id:crypto.randomUUID(),pageNumber:index,side:index===0?'cover':index%2?'right':'left',widthMm:190,heightMm:257,marginMm:15,bleedMm:3,layoutJson:index===2?' {"legacy": {"keep":[1,2]}} ':null,frames:[frame],texts:[]}));
+  const layout:PublicationLayout={schemaVersion:1,publication:{id:'book',projectId:'project',pubType:'photobook',title:'跨页',specJson:'{}',state:'draft'},pages};const data:PublicationSpreadFrame={frameId:frames[3].id,leftPageId:pages[2].id,rightPageId:pages[3].id,geometry:{xMm:15,yMm:20,widthMm:350,heightMm:210,fitMode:'fill',cropX:.2,cropY:.7,cropZoom:1.6}};return {layout,data};
+}

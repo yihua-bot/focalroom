@@ -177,7 +177,7 @@ impl Store {
         .await?;
         let annotations=sqlx::query_as("SELECT * FROM board_annotations WHERE board_id=? AND visible=1 ORDER BY created_at,rowid")
             .bind(&board.id).fetch_all(&mut *tx).await?;
-        let photo_sources=sqlx::query_as("SELECT a.id AS asset_id,MIN(p.thumbnail_path) AS thumbnail_path FROM canvas_nodes n JOIN source_assets a ON a.id=n.asset_id AND a.project_id=? JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=a.project_id WHERE n.board_id=? AND n.visible=1 AND n.node_type='photo' GROUP BY a.id")
+        let photo_sources=sqlx::query_as("SELECT a.id AS asset_id,MIN(p.id) AS photo_id,MIN(p.thumbnail_path) AS thumbnail_path FROM canvas_nodes n JOIN source_assets a ON a.id=n.asset_id AND a.project_id=? JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=a.project_id WHERE n.board_id=? AND n.visible=1 AND n.node_type='photo' GROUP BY a.id")
             .bind(project).bind(&board.id).fetch_all(&mut *tx).await?;
         tx.commit().await?;
         Ok(CanvasSnapshot {

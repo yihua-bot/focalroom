@@ -178,7 +178,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
     { id: 'help', group: '帮助', label: '快捷键与帮助', run: () => setDialog({ kind: 'help' }) },
   );
   if (local) paletteCommands.push({ id: 'quick-start', group: '项目', label: '快速开始：用一句话创建项目', run: () => { setArchived(false); setDialog({ kind: 'quickStart' }); } });
-  const panel = ui.inspectorOpen && route.page === 'workspace' && project ? <aside className="inspector" aria-label={zh.editorTitle}>
+  const panel = ui.inspectorOpen && (ui.view === 'grid' || ui.view === 'sequence') && route.page === 'workspace' && project ? <aside className="inspector" aria-label={zh.editorTitle}>
     <h2 className="editor-title">{zh.editorTitle}</h2>
     {active ? <PhotoInspector key={`${active.id}:${active.note}`} photo={active} busy={mutation.isPending || readOnly} onDecide={decide}
       onRate={(id, rating) => act(() => repository.rate(project.id, [id], rating))}
@@ -196,7 +196,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       : route.page === 'projects' ? <ProjectList projects={projects} onOpen={openProject} onCreate={() => { setArchived(false); setPendingGoal(null); setDialog({ kind: 'create' }); }} onQuickStart={local ? () => { setArchived(false); setDialog({ kind: 'quickStart' }); } : undefined} local={local} archived={archived}
         onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })}
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />
-      : project ? <Workspace key={project.id} canvas={local ? repository.canvas : undefined} publication={local ? repository.publication : undefined} project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending || readOnly} local={local} sharing={sharing.data ?? undefined} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
+      : project ? <Workspace key={project.id} canvas={local ? repository.canvas : undefined} publication={local ? repository.publication : undefined} sharingRepository={local ? repository.sharing : undefined} onSharingChanged={refresh} project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending || readOnly} local={local} sharing={sharing.data ?? undefined} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
         onEditorVersions={local && repository.editorVersions ? () => setDialog({ kind: 'editorVersions' }) : undefined} onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCopyPlan={copyPlan} onAICompare={aiCompare} onAIOrder={aiOrder} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
         : <EmptyState title={local ? '项目未找到' : '项目未找到'} hint={local ? '项目可能已归档，请返回项目列表查看。' : '请返回项目列表查看。'} action={<Button onClick={() => navigate(null)}>{zh.projects}</Button>} />}
   </AppShell>

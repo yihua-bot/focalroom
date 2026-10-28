@@ -1,0 +1,12 @@
+{
+  "cause": "Candidate verify-all.sh was edited while Vite-based browser suite was active; automatic reload removed dialog",
+  "script_mtime_utc": "2026-10-28T04:49:38.948281+00:00",
+  "document_requests_utc": [
+    "2026-10-28T04:49:37.574Z",
+    "2026-10-28T04:49:39.084Z"
+  ],
+  "assertion": "Use-this-version button expected disabled; dialog gone after navigation",
+  "remediation": "Freeze candidate files; retain failing trace; rerun unchanged assertion without UI/protocol changes",
+  "error_context_note": "Readable Markdown normalizes trailing whitespace from generated source excerpts; gzip preserves exact original bytes",
+  "raw_error_context_sha256": "0d51ba43cc76fded787f378c541196255d76fc2decad15dd6ccae571d56212a9"
+}

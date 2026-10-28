@@ -216,6 +216,8 @@ pub fn run() {
             commands::canvas_get_annotations,
             commands::pub_create,
             commands::pub_execute,
+            commands::pub_master_preview,
+            commands::pub_photo_versions,
             commands::pub_layout,
             commands::pub_versions,
             commands::pub_version,

@@ -17,8 +17,10 @@ import type { CanvasRepository } from '../domain/canvas';
 import type { PublicationRepository } from '../domain/publication';
 import { useAccount } from '../features/cloud-login/AccountProvider';
 import { useI18n } from '../i18n';
+import { SharingControls } from '../features/export/SharingControls';
+import type { SharingRepository } from '../domain/sharing';
 
-export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, onCopyPlan, onAICompare, onAIOrder, onEditorVersions, local = false, sharing, canvas, publication }: {
+export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, onCopyPlan, onAICompare, onAIOrder, onEditorVersions, local = false, sharing, canvas, publication, sharingRepository, onSharingChanged }: {
   project: Project; visible: Photo[]; kept: Photo[]; active?: Photo; busy: boolean;
   selectedIds: string[]; onSelect: (id: string, gesture?: SelectionGesture) => void;
   onBatchDecide: (status: PhotoStatus) => void; onBatchRate: (rating: number) => void;
@@ -31,6 +33,8 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   sharing?: import('../domain/sharing').SharingStatus;
   canvas?: CanvasRepository;
   publication?: PublicationRepository;
+  sharingRepository?: SharingRepository;
+  onSharingChanged?: () => void;
 }) {
   const ui = useUIStore();
   const { t } = useI18n();
@@ -38,8 +42,9 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   const openAI = () => { if (account) void account.requireSignIn('ai', ui.openAgent); else ui.openAgent(); };
   const filters: PhotoFilter[] = ['all', 'keep', 'undecided', 'reject'];
   const readOnly = !!sharing && sharing.authority !== 'local';
-  return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={openAI} readOnly={readOnly} />
-    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 请在线继续审稿，本机项目仅供查看。' : '共享尚未完成 · 编辑已暂停，请在导出窗口继续或取消共享。'}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
+  const photoWorkspace = ui.view === 'grid' || ui.view === 'sequence';
+  return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={openAI} readOnly={readOnly} compact={!photoWorkspace} />
+    {readOnly && ui.view !== 'sharing' && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 请在线继续审稿，本机项目仅供查看。' : zh.sharingResumeHint}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
     {(ui.view === 'grid' || ui.view === 'sequence') && <div className="history-toolbar" role="group" aria-label="编辑历史">
       <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">撤销</Button>
       <Button size="small" disabled={busy || !project.history?.redoGroupId} onClick={onRedo} title="⌘ / Ctrl Shift Z">重做</Button>
@@ -48,7 +53,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
       <Button size="small" disabled={busy} onClick={onActivity}>操作历史{project.events.length ? ` · ${project.events.length}` : ''}</Button>
       <span className="micro">{project.history?.undoCount ?? 0} 次可撤销编辑</span>
     </div>}
-    <div className="toolbar"><div className="filter-tabs" aria-label="照片筛选">{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter && ui.view === 'grid'}
+    {photoWorkspace && <div className="toolbar"><div className="filter-tabs" aria-label="照片筛选">{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter && ui.view === 'grid'}
       className={ui.filter === filter && ui.view === 'grid' ? 'active' : ''} onClick={() => ui.setFilter(filter)}>{String(zh['filters.' + filter] ?? filter)}<span className="count">{filter === 'all' ? project.photos.length : project.photos.filter(photo => photo.status === filter).length}</span></button>)}</div>
       <div className="toolbar-actions"><Button size="small" onClick={ui.toggleDensity} aria-label="切换网格密度" aria-pressed={ui.dense}><Columns3 size={15} /></Button>
         <Button size="small" disabled={project.photos.length < 2 || !active} onClick={onCompare}>{zh.compare}</Button><Button size="small" onClick={onExport}>{zh.export} ↗</Button>
@@ -69,13 +74,16 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
         {onAICompare && selectedIds.length === 2 && <Button size="small" disabled={busy} onClick={onAICompare} title="把两张选区照片交给Focal AI，比较叙事价值">AI 比较叙事价值</Button>}
         {onAIOrder && <Button size="small" disabled={busy} onClick={onAIOrder} title="把选区交给Focal AI，生成两版顺序方案">生成两版顺序</Button>}
         <Button size="small" variant="quiet" onClick={ui.clearSelection}>清除选区</Button></div>}
-    </div>
-    <div className="canvas-area"><div className="workspace-scroll"><div className="canvas-label"><span>{ui.view === 'grid' ? 'CONTACT SHEET' : ui.view === 'canvas' ? 'NARRATIVE CANVAS' : ui.view === 'publication' ? 'PUBLICATIONS' : 'SEQUENCE BOARD'}</span>
+    </div>}
+    <div className="canvas-area"><div className={`workspace-scroll${ui.view==='canvas'?' workspace-scroll--canvas':''}`}>{photoWorkspace && <div className="canvas-label"><span>{ui.view === 'grid' ? zh.workspace : zh.sequence}</span>
       <span>{ui.view === 'grid' ? `${visible.length} 张` : `${kept.length} 张`}</span>
-      {ui.view === 'sequence' && kept.length > 0 && <Button size="small" disabled={busy} onClick={onCopyPlan} title="把当前作品序列保存为独立的方案副本，可在作品版本中对比与恢复"><Copy size={13} /> 复制序列方案</Button>}</div>
+      {ui.view === 'sequence' && kept.length > 0 && <Button size="small" disabled={busy} onClick={onCopyPlan} title="把当前作品序列保存为独立的方案副本，可在作品版本中对比与恢复"><Copy size={13} /> 复制序列方案</Button>}</div>}
       {!local && <div className="preview-banner">{zh.preview}</div>}
-      {ui.view === 'publication' && <PublicationPanel key={project.id} repository={publication} projectId={project.id} sequenceCount={kept.length} readOnly={readOnly} />}
-      {ui.view === 'canvas' && <NarrativeCanvas key={project.id} repository={canvas} projectId={project.id} selectedPhotoIds={selectedIds} readOnly={readOnly} />}
+      {ui.view === 'publication' && <PublicationPanel key={project.id} repository={publication} projectId={project.id} sequenceCount={kept.length} photos={project.photos} sequencePhotoIds={project.sequence} selectedPhotoIds={selectedIds} readOnly={readOnly} />}
+      {ui.view === 'canvas' && <NarrativeCanvas key={project.id} repository={canvas} projectId={project.id} photos={project.photos} sequencePhotoIds={project.sequence} selectedPhotoIds={selectedIds} readOnly={readOnly} />}
+      {ui.view === 'sharing' && <section className="sharing-workspace"><h2>{zh.sharingWorkspace}</h2><p className="muted">{zh.sharingWorkspaceHint}</p>
+        {sharingRepository ? <SharingControls key={project.id} repository={sharingRepository} projectId={project.id} revision={project.revision ?? 0} onChanged={onSharingChanged} /> : <EmptyState title={zh.sharingDesktop} hint={zh.sharingDesktopHint} />}
+      </section>}
             {ui.view === 'grid' ? (visible.length ? <div className="grid-groups">
         {groupPhotos(visible, ui.grouping).map(group => group.label ? <section key={group.key} className="grid-group" aria-label={`分组 ${group.label}`}>
           <h3 className="grid-group-head">{group.label}</h3>
@@ -86,6 +94,6 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
           action={<Button onClick={project.photos.length ? () => { ui.setFilter('all'); ui.setSearch(''); } : onImport}>{project.photos.length ? zh.allPhotos : local ? zh.import : `${zh.import} · 桌面版`}</Button>} />)
         : ui.view === 'sequence' ? (kept.length ? <SequenceBoard photos={kept} activeId={active?.id ?? null} busy={busy} onSelect={ui.select} onReorder={onReorder} />
           : <EmptyState title={zh.emptySequence} hint={zh.sequenceHint} action={<Button onClick={() => ui.setFilter('all')}>{zh.toWorkspace}</Button>} />) : null}
-    </div>{ui.filmstripOpen && <SelectionDock photos={kept} onSelect={id => { ui.setFilter('all'); ui.setSearch(''); ui.select(id); }} onSequence={() => ui.setView('sequence')} />}</div>
+    </div>{photoWorkspace && ui.filmstripOpen && <SelectionDock photos={kept} onSelect={id => { ui.setFilter('all'); ui.setSearch(''); ui.select(id); }} onSequence={() => ui.setView('sequence')} />}</div>
   </>;
 }

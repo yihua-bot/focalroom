@@ -1,6 +1,6 @@
 import { CloudAccount } from "../features/cloud-login/CloudLoginView";
 import type { CloudAuthRepository } from "../domain/cloud-auth";
-import { Grid2X2, LayoutGrid, ListOrdered, FolderOpen, BookOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Grid2X2, LayoutGrid, ListOrdered, FolderOpen, BookOpen, Users, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useUIStore } from '../stores/uiStore';
 import type { Project, WorkspaceView } from '../domain/models';
 import type { SharingStatus } from '../domain/sharing';
@@ -32,8 +32,9 @@ export function SideNav({ project, page, view, onView, onProjects, onHelp, local
       <nav aria-label={project.title}>
         <button className={`nav ${view === 'grid' ? 'current' : ''}`} aria-current={view === 'grid' ? 'page' : undefined} aria-label={zh.workspace} onClick={() => onView('grid')}><Grid2X2 size={17} /><span>{zh.workspace}</span></button>
         <button className={`nav ${view === 'sequence' ? 'current' : ''}`} aria-current={view === 'sequence' ? 'page' : undefined} aria-label={zh.sequence} onClick={() => onView('sequence')}><ListOrdered size={17} /><span>{zh.sequence}</span></button>
-        <button className={`nav ${view === 'canvas' ? 'current' : ''}`} aria-current={view === 'canvas' ? 'page' : undefined} aria-label="叙事画布" onClick={() => onView('canvas')}><LayoutGrid size={17} /><span>叙事画布</span></button>
-        <button className={`nav ${view === 'publication' ? 'current' : ''}`} aria-current={view === 'publication' ? 'page' : undefined} aria-label="出版物" onClick={() => onView('publication')}><BookOpen size={17} /><span>出版物</span></button>
+        <button className={`nav ${view === 'canvas' ? 'current' : ''}`} aria-current={view === 'canvas' ? 'page' : undefined} aria-label={zh.canvasTitle} onClick={() => onView('canvas')}><LayoutGrid size={17} /><span>{zh.canvasTitle}</span></button>
+        <button className={`nav ${view === 'publication' ? 'current' : ''}`} aria-current={view === 'publication' ? 'page' : undefined} aria-label={zh.publicationTitle} onClick={() => onView('publication')}><BookOpen size={17} /><span>{zh.publicationTitle}</span></button>
+        <button className={`nav ${view === 'sharing' ? 'current' : ''}`} aria-current={view === 'sharing' ? 'page' : undefined} aria-label={zh.sharingWorkspace} onClick={() => onView('sharing')}><Users size={17} /><span>{zh.sharingWorkspace}</span></button>
       </nav>
     </>}
     <div className="sidebar-bottom"><CloudAccount repository={cloudAuth} onSettings={() => setSettingsPage('general')} onHelp={onHelp} onContact={() => setSettingsPage('contact')} /></div>

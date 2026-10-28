@@ -939,6 +939,64 @@ pub async fn canvas_get_annotations(
 }
 
 // ── G7 Publishing IPC ──
+fn allow_publication_previews<'a>(
+    app: &tauri::AppHandle,
+    paths: impl Iterator<Item = &'a Option<String>>,
+) -> Result<()> {
+    use tauri::Manager;
+    for path in paths.filter_map(Option::as_deref) {
+        app.asset_protocol_scope()
+            .allow_file(path)
+            .map_err(|_| AppError::new("VALIDATION_ERROR", "无法显示照片预览，请重新打开出版物"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn pub_photo_versions(
+    app: tauri::AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+    frame_id: String,
+    base_revision: i64,
+    cursor: Option<crate::publication_commands::photo_versions::VersionCursor>,
+) -> Result<crate::publication_commands::photo_versions::PhotoVersionsPage> {
+    let result = state
+        .store
+        .publication_photo_versions(
+            &project_id,
+            &publication_id,
+            &frame_id,
+            base_revision,
+            cursor,
+        )
+        .await?;
+    allow_publication_previews(
+        &app,
+        std::iter::once(&result.original.thumbnail_path)
+            .chain(std::iter::once(&result.current.thumbnail_path))
+            .chain(result.choices.iter().map(|v| &v.thumbnail_path)),
+    )?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn pub_master_preview(
+    app: tauri::AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+    base_revision: i64,
+    data: crate::publication_commands::ApplyMaster,
+) -> Result<crate::publication_commands::masters::MasterPreview> {
+    let result = state
+        .store
+        .publication_master_preview(&project_id, &publication_id, base_revision, &data)
+        .await?;
+    allow_publication_previews(&app, result.previews.iter().map(|v| &v.thumbnail_path))?;
+    Ok(result)
+}
 
 #[tauri::command]
 pub async fn pub_execute(
@@ -949,14 +1007,17 @@ pub async fn pub_execute(
 }
 #[tauri::command]
 pub async fn pub_layout(
+    app: tauri::AppHandle,
     state: State<'_, Backend>,
     project_id: String,
     publication_id: String,
 ) -> Result<crate::publication_versions::PublicationDocument> {
-    state
+    let result = state
         .store
         .publication_document(&project_id, &publication_id)
-        .await
+        .await?;
+    allow_publication_previews(&app, result.previews.iter().map(|v| &v.thumbnail_path))?;
+    Ok(result)
 }
 #[tauri::command]
 pub async fn pub_versions(
@@ -972,15 +1033,18 @@ pub async fn pub_versions(
 }
 #[tauri::command]
 pub async fn pub_version(
+    app: tauri::AppHandle,
     state: State<'_, Backend>,
     project_id: String,
     publication_id: String,
     version_id: String,
 ) -> Result<crate::publication_versions::PublicationVersion> {
-    state
+    let result = state
         .store
         .publication_version(&project_id, &publication_id, &version_id)
-        .await
+        .await?;
+    allow_publication_previews(&app, result.previews.iter().map(|v| &v.thumbnail_path))?;
+    Ok(result)
 }
 
 #[tauri::command]

@@ -14,6 +14,57 @@ struct Fixture {
     draft: String,
 }
 
+#[tokio::test]
+async fn review_and_compensation_sources_resolve_photo_aliases() {
+    let f = Fixture::new(1).await;
+    let photo = domain::id();
+    let asset = domain::id();
+    sqlx::query("INSERT INTO photos(id,project_id,import_index,original_path,filename,file_size,content_sha256,width,height,orientation,thumbnail_path,preview_path,created_at) VALUES(?,?,1,'/tmp/photo.jpg','photo.jpg',10,'review-photo',10,10,1,'/tmp/thumbnail.jpg','/tmp/preview.jpg','now')")
+        .bind(&photo).bind(&f.p).execute(&f.db.pool).await.unwrap();
+    sqlx::query("INSERT INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,created_at) VALUES(?,?,'review-photo','[]',10,10,10,'jpeg','now')")
+        .bind(&asset).bind(&f.p).execute(&f.db.pool).await.unwrap();
+    sqlx::query("INSERT INTO asset_aliases(photo_id,asset_id) VALUES(?,?)")
+        .bind(&photo)
+        .bind(&asset)
+        .execute(&f.db.pool)
+        .await
+        .unwrap();
+    let source_node =
+        f.db.place_photo_node(
+            &f.p,
+            &PlacePhotoNodeCommand {
+                board_id: f.source.clone(),
+                asset_id: asset.clone(),
+                x: 400.,
+                y: 0.,
+                width: 200.,
+                height: 150.,
+            },
+        )
+        .await
+        .unwrap();
+    let draft_node = domain::id();
+    sqlx::query("INSERT INTO canvas_nodes(id,board_id,node_type,asset_id,x,y,width,height,created_at,updated_at) VALUES(?,?,'photo',?,450,25,200,150,'now','now')")
+        .bind(&draft_node).bind(&f.draft).bind(&asset).execute(&f.db.pool).await.unwrap();
+    sqlx::query("INSERT INTO board_draft_node_origins(node_id,board_id,source_node_id,base_json) VALUES(?,?,?,?)")
+        .bind(&draft_node).bind(&f.draft).bind(&source_node.id).bind(encode(&source_node).unwrap()).execute(&f.db.pool).await.unwrap();
+    let comparison = f.db.canvas_comparison(&f.p, &f.draft).await.unwrap();
+    assert_eq!(comparison.photo_sources.len(), 1);
+    assert_eq!(comparison.photo_sources[0].asset_id, asset);
+    assert_eq!(comparison.photo_sources[0].photo_id, photo);
+    let receipt =
+        f.db.execute_canvas(f.request(f.selection(1).await).await)
+            .await
+            .unwrap();
+    let preview =
+        f.db.simulate_editorial_revert(&f.p, &f.source, &receipt.command_id)
+            .await
+            .unwrap();
+    assert_eq!(preview.photo_sources.len(), 1);
+    assert_eq!(preview.photo_sources[0].asset_id, asset);
+    assert_eq!(preview.photo_sources[0].photo_id, photo);
+}
+
 #[path = "canvas_merge_structure_tests.rs"]
 mod structural;
 

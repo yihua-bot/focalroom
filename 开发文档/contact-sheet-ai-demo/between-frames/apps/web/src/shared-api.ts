@@ -82,6 +82,30 @@ export const snapshotSchema = z.object({
 });
 export type CloudSnapshot = z.infer<typeof snapshotSchema>;
 export type DraftOperation = z.infer<typeof operation>;
+export const proposalDiffSchema = z.object({
+  proposalId: z.string(),
+  state: z.string(),
+  baseRevision: z.number().int(),
+  currentRevision: z.number().int(),
+  stale: z.boolean(),
+  sequence: z
+    .object({
+      id: z.string(),
+      before: z.array(z.string()),
+      after: z.array(z.string()),
+      added: z.array(z.string()),
+      removed: z.array(z.string()),
+      moved: z.array(
+        z.object({
+          photo_id: z.string(),
+          fromIndex: z.number().int(),
+          toIndex: z.number().int(),
+        }),
+      ),
+    })
+    .nullable(),
+});
+export type ProposalDiff = z.infer<typeof proposalDiffSchema>;
 export class CloudError extends Error {
   readonly code: string;
   constructor(code: string, message: string) {

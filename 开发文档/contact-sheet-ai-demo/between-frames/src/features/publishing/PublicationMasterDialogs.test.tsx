@@ -1,0 +1,32 @@
+import { cleanup,render,screen,waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach,beforeEach,expect,it,vi } from 'vitest';
+import type { PublicationDocument,PublicationMaster,PublicationRepository,PublicationMasterPreview } from '../../domain/publication';
+import { setCopyLocale } from '../../app/copy';
+import { PublicationApplyMaster,PublicationSaveMaster } from './PublicationMasterDialogs';
+const page={id:crypto.randomUUID(),pageNumber:1,side:'right',widthMm:190,heightMm:257,marginMm:15,bleedMm:3,layoutJson:null,frames:[],texts:[]};
+const other={...page,id:crypto.randomUUID(),pageNumber:2,side:'left'};
+const master:PublicationMaster={id:crypto.randomUUID(),revision:1,name:'留白',sourcePageId:page.id,widthMm:190,heightMm:257,marginMm:15,bleedMm:3,frames:[],texts:[]};
+const doc:PublicationDocument={revision:2,layout:{schemaVersion:1,publication:{id:crypto.randomUUID(),projectId:'p',title:'书',pubType:'photobook',specJson:'{}',state:'draft'},pages:[page,other]},previews:[]};
+const repo=(preview:PublicationRepository['previewMaster']):PublicationRepository=>({list:vi.fn(),create:vi.fn(),generate:vi.fn(),pages:vi.fn(),previewMaster:preview});
+beforeEach(()=>setCopyLocale('zh'));afterEach(()=>{cleanup();setCopyLocale('zh');});
+it('保存母版只在明确保存后提交来源页和文字选项',async()=>{
+  const onSave=vi.fn().mockResolvedValue(true),onClose=vi.fn();render(<PublicationSaveMaster page={page} masters={[]} busy={false} pending={false} notice="" onClose={onClose} onSave={onSave}/>);const user=userEvent.setup();await user.type(screen.getByRole('textbox',{name:'母版名称'}),'留白');await user.click(screen.getByRole('checkbox',{name:'包含本页文字（页码始终包含）'}));expect(onSave).not.toHaveBeenCalled();await user.click(screen.getByRole('button',{name:'保存为母版'}));expect(onSave).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({name:'留白',sourcePageId:page.id,includeText:true,expectedMasterRevision:null}));expect(onClose).toHaveBeenCalledOnce();
+});
+it('手工修改必须确认覆盖，改变选择后不会沿用旧范围的确认',async()=>{
+  const preview=vi.fn<NonNullable<PublicationRepository['previewMaster']>>().mockImplementation(async(_p,_b,_r,data)=>({...doc,overriddenPageIds:data.pageIds}));const onApply=vi.fn().mockResolvedValue(true),repository=repo(preview);const user=userEvent.setup();render(<PublicationApplyMaster projectId="p" publicationId={doc.layout.publication.id} document={doc} masters={[master]} activePageId={page.id} repository={repository} busy={false} pending={false} notice="" onClose={vi.fn()} onApply={onApply}/>);
+  await screen.findByText(/1 页有手工调整/);expect(screen.getByRole('button',{name:'应用母版'})).toBeDisabled();expect(onApply).not.toHaveBeenCalled();await user.click(screen.getByRole('checkbox',{name:'确认覆盖这些页面的版面调整及母版文字'}));expect(screen.getByRole('button',{name:'应用母版'})).toBeEnabled();await user.click(screen.getByRole('button',{name:'选择全部内页'}));await screen.findByText(/2 页有手工调整/);expect(screen.getByRole('checkbox',{name:'确认覆盖这些页面的版面调整及母版文字'})).not.toBeChecked();await user.click(screen.getByRole('checkbox',{name:'确认覆盖这些页面的版面调整及母版文字'}));await user.click(screen.getByRole('button',{name:'应用母版'}));expect(onApply).toHaveBeenCalledWith(expect.objectContaining({pageIds:[page.id,other.id],overwriteLocal:true,masterId:master.id}));
+});
+it('迟到预览与旧版面预览都不能解锁新的应用操作',async()=>{
+  let resolve!:(value:PublicationMasterPreview)=>void;const preview=vi.fn<NonNullable<PublicationRepository['previewMaster']>>().mockResolvedValueOnce({...doc,overriddenPageIds:[]}).mockImplementation(()=>new Promise(done=>{resolve=done;}));const repository=repo(preview),onApply=vi.fn();const props={projectId:'p',publicationId:doc.layout.publication.id,document:doc,masters:[master],activePageId:page.id,repository,busy:false,pending:false,notice:'',onClose:vi.fn(),onApply};
+  const view=render(<PublicationApplyMaster {...props}/>);await waitFor(()=>expect(screen.getByRole('button',{name:'应用母版'})).toBeEnabled());view.rerender(<PublicationApplyMaster {...props} document={{...doc,revision:3}}/>);expect(screen.getByRole('button',{name:'应用母版'})).toBeDisabled();await waitFor(()=>expect(preview).toHaveBeenCalledTimes(2));resolve({...doc,revision:3,overriddenPageIds:[]});await waitFor(()=>expect(screen.getByRole('button',{name:'应用母版'})).toBeEnabled());expect(onApply).not.toHaveBeenCalled();
+});
+
+it('母版明确选择是否管理已保存网格，未保存的查看网格不可冒充模板设置',async()=>{
+ const {publicationGuidesPreview,publicationPageGuides}=await import('./publicationGuides');const source={...page,layoutJson:publicationGuidesPreview(page,{...publicationPageGuides(page),verticalGuidesMm:[25]})},save=vi.fn().mockResolvedValue(true),user=userEvent.setup();render(<PublicationSaveMaster page={source} masters={[]} busy={false} pending={false} notice="" onClose={vi.fn()} onSave={save}/>);expect(screen.getByRole('checkbox',{name:'包含本页网格与参考线'})).toBeChecked();await user.type(screen.getByRole('textbox',{name:'母版名称'}),'网格母版');await user.click(screen.getByRole('button',{name:'保存为母版'}));expect(save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({includeGuides:true,sourcePageId:page.id}));cleanup();
+ render(<PublicationSaveMaster page={page} masters={[]} busy={false} pending={false} notice="" onClose={vi.fn()} onSave={save}/>);expect(screen.getByRole('checkbox',{name:'包含本页网格与参考线'})).toBeDisabled();expect(screen.getByText('先在「排版辅助」中保存本页网格与参考线，即可加入母版。')).toBeVisible();
+});
+
+it('带网格母版的应用预览展示实际参考线与替换说明，不自动提交；四语可读',async()=>{
+ const {publicationGuidesPreview,publicationPageGuides}=await import('./publicationGuides'),{zh}=await import('../../app/copy');const guides={...publicationPageGuides(page),verticalGuidesMm:[25]},guided={...master,guides},previewed={...doc,layout:{...doc.layout,pages:[{...page,layoutJson:publicationGuidesPreview(page,guides)},other]}};for(const locale of ['zh','en','ja','ko']){setCopyLocale(locale);const onApply=vi.fn(),preview=vi.fn<NonNullable<PublicationRepository['previewMaster']>>().mockResolvedValue({...previewed,overriddenPageIds:[]});render(<PublicationApplyMaster projectId="p" publicationId={doc.layout.publication.id} document={doc} masters={[guided]} activePageId={page.id} repository={repo(preview)} busy={false} pending={false} notice="" onClose={vi.fn()} onApply={onApply}/>);expect(screen.getByText(zh.publicationMasterGuidesReplace)).toBeVisible();await waitFor(()=>expect(document.querySelectorAll('.publication-guide-custom [data-guide-mm="25"]')).toHaveLength(1));expect(document.body.textContent).not.toMatch(/publication[A-Z]/);expect(onApply).not.toHaveBeenCalled();cleanup();}
+});

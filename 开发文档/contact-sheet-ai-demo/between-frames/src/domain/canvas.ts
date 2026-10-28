@@ -7,6 +7,7 @@ export interface CanvasNodeInfo {
   assetId: string | null; renditionRef: string | null;
 }
 export interface CanvasPhoto extends CanvasNodeInfo {
+  photoId?: string;
   thumbnailPath?: string;
   contentJson?: string | null;
   styleJson?: string | null;
@@ -90,6 +91,7 @@ export interface CanvasRepository {
   moveNodes(projectId: string, boardId: string, nodeIds: string[], dx: number, dy: number): Promise<void>;
   addText(projectId: string, boardId: string, nodeType: string, x: number, y: number, w: number, h: number, content: string, color?: string): Promise<CanvasNodeInfo>;
   deleteNode(projectId: string, boardId: string, nodeId: string): Promise<void>;
+  deleteNodes?(projectId: string, boardId: string, nodeIds: string[]): Promise<void>;
   addAnnotation(projectId: string, boardId: string, x: number, y: number, body: string): Promise<void>;
   resolveAnnotation(projectId: string, annotationId: string, resolved: boolean): Promise<void>;
   getAnnotations(boardId: string): Promise<AnnotationInfo[]>;

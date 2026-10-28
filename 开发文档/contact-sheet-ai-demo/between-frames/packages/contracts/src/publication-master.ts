@@ -1,0 +1,13 @@
+import { z } from 'zod';
+import { publicationPageGuidesSchema,publicationGuidesFitPage } from './publication-guides.ts';
+const id=z.uuid(),finite=z.number().finite(),revision=z.number().int().min(1).max(9_007_199_254_739_000);
+const geometry={xMm:finite,yMm:finite,widthMm:finite.positive(),heightMm:finite.positive()};
+export const savePublicationMasterSchema=z.strictObject({masterId:id,name:z.string().trim().min(1).max(80),sourcePageId:id,expectedMasterRevision:revision.nullable(),includeText:z.boolean(),includeGuides:z.boolean().optional()});
+export const applyPublicationMasterSchema=z.strictObject({masterId:id,masterRevision:revision,pageIds:z.array(id).min(1).max(100).refine(ids=>new Set(ids).size===ids.length),instanceId:id,overwriteLocal:z.boolean()});
+export const publicationMasterSchema=z.strictObject({id,revision,name:z.string().min(1).max(80),sourcePageId:id,widthMm:finite.min(50).max(2000),heightMm:finite.min(50).max(2000),marginMm:finite.nonnegative(),bleedMm:finite.min(0).max(25),frames:z.array(z.strictObject({slotId:id,...geometry,fitMode:z.enum(['fit','fill','stretch'])})).max(64),texts:z.array(z.strictObject({id,...geometry,contentJson:z.string().max(32768),styleJson:z.string().max(8192).nullable()})).max(16),guides:publicationPageGuidesSchema.optional()}).superRefine((master,context)=>{if(master.guides&&!publicationGuidesFitPage(master,master.guides))context.addIssue({code:'custom',message:'Grid and guides must fit the master page'});});
+const binding=z.strictObject({slotId:id,objectId:id});
+export const publicationMasterLinkSchema=z.strictObject({id,revision,signature:z.string().regex(/^[a-f0-9]{64}$/),frames:z.array(binding).max(100),texts:z.array(binding).max(16),guideSignature:z.string().regex(/^[a-f0-9]{64}$/).optional()});
+export type PublicationMaster=z.infer<typeof publicationMasterSchema>;
+export type SavePublicationMaster=z.infer<typeof savePublicationMasterSchema>;
+export type ApplyPublicationMaster=z.infer<typeof applyPublicationMasterSchema>;
+export type PublicationMasterLink=z.infer<typeof publicationMasterLinkSchema>;

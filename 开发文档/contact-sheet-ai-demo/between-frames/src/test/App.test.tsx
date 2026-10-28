@@ -20,6 +20,23 @@ async function open() {
   return { repository, user: userEvent.setup() };
 }
 describe('工作台交互', () => {
+  it('画布、共享评片和出版物使用独立工作区，隐藏照片筛选与检查器且不响应选片快捷键', async () => {
+    const { repository, user } = await open();
+    const before = await repository.get('sample-project');
+    expect(screen.getByRole('textbox', { name: '照片备注' })).toBeVisible();
+    for (const name of ['叙事画布', '共享评片', '出版物']) {
+      await user.click(screen.getByRole('button', { name }));
+      expect(screen.queryByLabelText('照片筛选')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '两图对比' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('textbox', { name: '照片备注' })).not.toBeInTheDocument();
+      expect(document.querySelector('.selection-dock')).not.toBeInTheDocument();
+      await user.keyboard('kx5');
+    }
+    expect(await repository.get('sample-project')).toEqual(before);
+    await user.click(screen.getByRole('button', { name: '选片工作台' }));
+    expect(screen.getByLabelText('照片筛选')).toBeVisible();
+    expect(screen.getByRole('textbox', { name: '照片备注' })).toBeVisible();
+  });
   it('切换语言后，项目导航和 AI 标题立即同步更新', async () => {
     const originalStorage = globalThis.localStorage;
     const storage = new Map([['focalroom-locale', 'zh']]);

@@ -19,6 +19,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 mod canvas_provider;
 #[path = "../harness_fixtures.rs"]
 mod fixtures;
+#[path = "../harness_publication_versions.rs"]
+mod publication_versions_fixture;
 
 struct Harness {
     cloud: Option<(String, String, Value)>,
@@ -229,6 +231,29 @@ impl Harness {
                 Value::Null
             }
             "pub_list" => json!(self.store.list_publications(id).await?),
+            "pub_photo_versions" => json!(
+                self.store
+                    .publication_photo_versions(
+                        id,
+                        string(args, "publicationId")?,
+                        string(args, "frameId")?,
+                        args["baseRevision"].as_i64().unwrap_or(-1),
+                        serde_json::from_value(args["cursor"].clone())
+                            .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?
+                    )
+                    .await?
+            ),
+            "pub_master_preview" => json!(
+                self.store
+                    .publication_master_preview(
+                        id,
+                        string(args, "publicationId")?,
+                        args["baseRevision"].as_i64().unwrap_or(-1),
+                        &serde_json::from_value(args["data"].clone())
+                            .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?
+                    )
+                    .await?
+            ),
             "pub_execute" => json!(
                 self.store
                     .execute_publication(serde_json::from_value(args["request"].clone()).map_err(
@@ -717,6 +742,16 @@ impl Harness {
                 json!(true)
             }
             "test_fixture_info" => fixtures::info(&self.root)?,
+            "test_publication_versions" => {
+                publication_versions_fixture::prepare(
+                    &self.store,
+                    &self.root,
+                    id,
+                    string(args, "publicationId")?,
+                    string(args, "frameId")?,
+                )
+                .await?
+            }
             "test_seed_demo" => {
                 let resources = self.root.join("demo-resources");
                 std::fs::create_dir_all(&resources)?;

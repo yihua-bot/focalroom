@@ -1,17 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { CanvasCommandClient } from './CanvasCommandClient';
 import type { CanvasCommandRequest } from '../domain/canvasCommands';
+import { MemoryStorage } from '../test/memoryStorage';
 const projectId = '15740517-8824-468c-b22b-6e099d67a197';
 const boardId = 'ff4082f2-44d9-483b-a82f-2fa07212f0a7';
-class MemoryStorage implements Storage {
-  private data = new Map<string, string>();
-  get length() { return this.data.size; }
-  clear() { this.data.clear(); }
-  getItem(key: string) { return this.data.get(key) ?? null; }
-  setItem(key: string, value: string) { this.data.set(key, value); }
-  removeItem(key: string) { this.data.delete(key); }
-  key(index: number) { return [...this.data.keys()][index] ?? null; }
-}
 const localStorage = new MemoryStorage();
 const actions = [{ type: 'Undo' as const, data: { boardId } }];
 function receipt(request: CanvasCommandRequest) {

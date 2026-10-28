@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CloudError,
   commandFor,
+  proposalDiffSchema,
   request,
   snapshotSchema,
   type CloudSnapshot,
   type DraftOperation,
+  type ProposalDiff,
   type Session,
   errorMessage as message,
 } from "../shared-api";
@@ -13,6 +15,7 @@ import { useRealtime } from "./useRealtime";
 import { AccessPanel, HistoryPanel } from "./ReviewPanels";
 import { AgentAnalysis } from "./AgentAnalysis";
 import { BoardViewer } from "./BoardViewer";
+import { draftSequenceMembers } from "./proposalDraft";
 
 type CommentTarget =
   | { kind: "photo" }
@@ -50,6 +53,9 @@ export function ProjectReview({
     id: string;
     revision: number;
   } | null>(null);
+  const [proposalDiffs, setProposalDiffs] = useState<
+    Record<string, ProposalDiff | "loading">
+  >({});
   const [photoPage, setPhotoPage] = useState(0),
     [sequencePage, setSequencePage] = useState(0);
   const [presenceDetail, setPresenceDetail] = useState(() => {
@@ -218,6 +224,31 @@ export function ProjectReview({
       setCommentTarget({ kind: "photo" });
     }
   };
+  const loadProposalDiff = useCallback(
+    async (proposalId: string) => {
+      setProposalDiffs((prev) => ({ ...prev, [proposalId]: "loading" }));
+      try {
+        const diff = proposalDiffSchema.parse(
+          await request(
+            `/projects/${id}/proposals/${proposalId}/diff`,
+            session,
+          ),
+        );
+        setProposalDiffs((prev) => ({ ...prev, [proposalId]: diff }));
+      } catch (error) {
+        setError(message(error));
+        setProposalDiffs((prev) => {
+          const next = { ...prev };
+          delete next[proposalId];
+          return next;
+        });
+      }
+    },
+    [id, session],
+  );
+  const filenameOf = (photoId: string) =>
+    state?.snapshot.photos.find((photo) => photo.id === photoId)?.filename ??
+    photoId;
   const saveProposal = async (submit: boolean) => {
     if (!state || !realtime.online || !title.trim() || !operations.length)
       return;
@@ -288,6 +319,7 @@ export function ProjectReview({
     canApprove =
       ["OWNER", "ADMIN"].includes(state.principal.role) ||
       state.principal.can_approve;
+  const draftMembers = draftSequenceMembers(state.snapshot.sequences[0].items, operations);
   const photoComments = state.comments.filter(
     (c) => c.anchor.photo_id === selected && !c.parent_id,
   );
@@ -736,7 +768,9 @@ export function ProjectReview({
           {tab === "proposals" && (
             <div className="fr-panel">
               <h2>编辑提案</h2>
-              {state.proposals.map((p) => (
+              {state.proposals.map((p) => {
+                const diff = proposalDiffs[p.id];
+                return (
                 <article className="fr-proposal" key={p.id}>
                   <h3>{p.title}</h3>
                   <p>
@@ -777,6 +811,62 @@ export function ProjectReview({
                       </span>
                     </label>
                   ))}
+                  {p.state === "SUBMITTED" && (
+                    <button onClick={() => void loadProposalDiff(p.id)}>
+                      {diff ? "刷新差异" : "预览差异"}
+                    </button>
+                  )}
+                  {diff === "loading" && <p>差异计算中…</p>}
+                  {diff && diff !== "loading" && (
+                    <div className="fr-diff">
+                      {diff.stale ? (
+                        <p className="fr-warning">
+                          提案基于 v{diff.baseRevision}，当前已是 v
+                          {diff.currentRevision}
+                          ：作品版本已更新，请按当前作品重新比较。
+                        </p>
+                      ) : diff.currentRevision !== state.revision ? (
+                        <p className="fr-warning">
+                          {p.state === "SUBMITTED"
+                            ? "作品已有更新，请刷新差异后重新比较。"
+                            : "作品已有更新，请以当前作品和审稿结果为准。"}
+                        </p>
+                      ) : (
+                        diff.sequence && (
+                          <>
+                            <p>
+                              全量采纳后序列：
+                              {diff.sequence.after.map(filenameOf).join("、") ||
+                                "（空）"}
+                            </p>
+                            {diff.sequence.added.length > 0 && (
+                              <p>
+                                新增：
+                                {diff.sequence.added
+                                  .map(filenameOf)
+                                  .join("、")}
+                              </p>
+                            )}
+                            {diff.sequence.removed.length > 0 && (
+                              <p>
+                                移除：
+                                {diff.sequence.removed
+                                  .map(filenameOf)
+                                  .join("、")}
+                              </p>
+                            )}
+                            {diff.sequence.moved.map((move) => (
+                              <p key={move.photo_id}>
+                                移动：{filenameOf(move.photo_id)}（第{" "}
+                                {move.fromIndex + 1} 张 → 第 {move.toIndex + 1}{" "}
+                                张）
+                              </p>
+                            ))}
+                          </>
+                        )
+                      )}
+                    </div>
+                  )}
                   {p.state === "DRAFT" && p.author_id === session.id && (
                     <button
                       disabled={!canWrite}
@@ -868,7 +958,8 @@ export function ProjectReview({
                       </p>
                     )}
                 </article>
-              ))}
+                );
+              })}
               {state.principal.role !== "VIEWER" && (
                 <section className="fr-proposal-builder">
                   <h3>{editingProposal ? "修订提案草案" : "新建序列提案"}</h3>
@@ -896,9 +987,17 @@ export function ProjectReview({
                     {(["add", "move", "remove"] as const).map((op) => (
                       <button
                         key={op}
-                        disabled={!canWrite || !photo}
+                        disabled={!canWrite || !photo || (
+                          op === "add"
+                            ? draftMembers.has(selected)
+                            : !draftMembers.has(selected)
+                        )}
                         onClick={() =>
-                          setOperations((prev) => [
+                          setOperations((prev) => {
+                            const members = draftSequenceMembers(state.snapshot.sequences[0].items, prev);
+                            if (op === "add" ? members.has(selected) : !members.has(selected))
+                              return prev;
+                            return [
                             ...prev,
                             {
                               op,
@@ -907,14 +1006,12 @@ export function ProjectReview({
                               ...(op !== "remove"
                                 ? {
                                     to_index:
-                                      op === "add"
-                                        ? state.snapshot.sequences[0].items
-                                            .length
-                                        : 0,
+                                      op === "add" ? members.size : 0,
                                   }
                                 : {}),
                             },
-                          ])
+                            ];
+                          })
                         }
                       >
                         {op === "add"

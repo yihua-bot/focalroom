@@ -1,6 +1,80 @@
 use super::*;
 use crate::image_pipeline;
 
+#[tokio::test]
+async fn regenerate_requires_explicit_replacement_and_preserves_previous_layout_atomically() {
+    let f = Fixture::new().await;
+    let before =
+        f.db.publication_layout(&f.project, &f.publication)
+            .await
+            .unwrap();
+    let history =
+        f.db.publication_versions(&f.project, &f.publication, None)
+            .await
+            .unwrap();
+    let old =
+        f.db.publication_version(&f.project, &f.publication, &history[0].id)
+            .await
+            .unwrap();
+    let request = f
+        .request(PublicationAction::Generate(GeneratePublication {
+            photos_per_page: 1,
+            replace_existing: false,
+        }))
+        .await;
+    assert_eq!(
+        f.db.execute_publication(request).await.unwrap_err().code,
+        "CONFLICT"
+    );
+    assert_eq!(
+        f.db.publication_layout(&f.project, &f.publication)
+            .await
+            .unwrap(),
+        before
+    );
+    let bad = f
+        .request(PublicationAction::Generate(GeneratePublication {
+            photos_per_page: 3,
+            replace_existing: true,
+        }))
+        .await;
+    assert!(f.db.execute_publication(bad).await.is_err());
+    assert_eq!(
+        f.db.publication_layout(&f.project, &f.publication)
+            .await
+            .unwrap(),
+        before
+    );
+    let request = f
+        .request(PublicationAction::Generate(GeneratePublication {
+            photos_per_page: 1,
+            replace_existing: true,
+        }))
+        .await;
+    let result = f.db.execute_publication(request.clone()).await.unwrap();
+    assert_eq!(result.results, vec![json!(3)]);
+    assert_eq!(
+        serde_json::to_value(f.db.execute_publication(request).await.unwrap()).unwrap(),
+        serde_json::to_value(result).unwrap()
+    );
+    let after =
+        f.db.publication_layout(&f.project, &f.publication)
+            .await
+            .unwrap();
+    assert_eq!(after.pages.len(), 4);
+    assert_ne!(after, before);
+    assert_eq!(
+        serde_json::to_value(
+            f.db.publication_version(&f.project, &f.publication, &history[0].id)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        serde_json::to_value(old).unwrap()
+    );
+    f.originals_unchanged();
+}
+
 struct Fixture {
     temp: tempfile::TempDir,
     db: Store,
@@ -591,3 +665,136 @@ async fn versions_are_append_only_paginated_and_upgrade_from_v32_preserves_publi
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn saved_rendition_stays_bound_when_current_variant_changes_and_rejects_wrong_identity() {
+    let f = Fixture::new().await;
+    let mut frame = f.frame().await;
+    let asset = frame.asset_id.clone().unwrap();
+    let mut renders = Vec::new();
+    for (index, color) in [[180, 30, 20], [20, 40, 190]].into_iter().enumerate() {
+        let path = f.temp.path().join(format!("render-{index}.jpg"));
+        image::RgbImage::from_pixel(64, 48, image::Rgb(color))
+            .save(&path)
+            .unwrap();
+        let prepared = image_pipeline::prepare(&path, &f.temp.path().join("cache")).unwrap();
+        let variant = domain::id();
+        let rendition = domain::id();
+        sqlx::query("INSERT INTO edit_variants(id,asset_id,name,is_current,created_at) VALUES(?,?,?,?,'now')").bind(&variant).bind(&asset).bind(format!("方向{index}")).bind(index as i64).execute(&f.db.pool).await.unwrap();
+        sqlx::query("INSERT INTO renditions(id,variant_id,sha256,width,height,bit_depth,source_type,file_path,file_size,created_at) VALUES(?,?,?,64,48,8,'self_render',?,?,'now')").bind(&rendition).bind(&variant).bind(&prepared.hash).bind(path.to_string_lossy().as_ref()).bind(prepared.size as i64).execute(&f.db.pool).await.unwrap();
+        renders.push((rendition, variant, prepared.hash));
+    }
+    frame.rendition_id = Some(renders[0].0.clone());
+    let command = f
+        .request(PublicationAction::UpdateFrame(frame.clone()))
+        .await;
+    let version = command.command_id.clone();
+    f.db.execute_publication(command).await.unwrap();
+    let saved =
+        f.db.publication_version(&f.project, &f.publication, &version)
+            .await
+            .unwrap();
+    let old_source = saved.layout.pages[0].frames[0].source.as_ref().unwrap();
+    assert_eq!(
+        old_source.rendition_sha256.as_deref(),
+        Some(renders[0].2.as_str())
+    );
+    assert!(
+        saved.previews[0]
+            .thumbnail_path
+            .as_ref()
+            .unwrap()
+            .ends_with(&format!("{}-320.jpg", renders[0].2))
+    );
+    frame.rendition_id = Some(renders[1].0.clone());
+    f.db.execute_publication(f.request(PublicationAction::UpdateFrame(frame)).await)
+        .await
+        .unwrap();
+    let old =
+        f.db.publication_version(&f.project, &f.publication, &version)
+            .await
+            .unwrap();
+    assert_eq!(old.layout, saved.layout);
+    assert_eq!(
+        old.previews[0].thumbnail_path,
+        saved.previews[0].thumbnail_path
+    );
+    let current =
+        f.db.publication_layout(&f.project, &f.publication)
+            .await
+            .unwrap();
+    assert_eq!(
+        current.pages[0].frames[0].rendition_id.as_ref(),
+        Some(&renders[1].0)
+    );
+    sqlx::query("UPDATE renditions SET sha256=? WHERE id=?")
+        .bind("f".repeat(64))
+        .bind(&renders[0].0)
+        .execute(&f.db.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        f.db.execute_publication(
+            f.request(PublicationAction::RestoreVersion(VersionReference {
+                version_id: version.clone()
+            }))
+            .await
+        )
+        .await
+        .unwrap_err()
+        .code,
+        "CONFLICT"
+    );
+    let old =
+        f.db.publication_version(&f.project, &f.publication, &version)
+            .await
+            .unwrap();
+    assert_eq!(old.layout, saved.layout);
+    assert!(old.previews[0].thumbnail_path.is_none());
+    assert_eq!(
+        f.db.publication_layout(&f.project, &f.publication)
+            .await
+            .unwrap(),
+        current
+    );
+    f.originals_unchanged();
+}
+
+#[path = "publication_editing_tests.rs"]
+mod page_editing;
+
+#[path = "publication_frame_tests.rs"]
+mod frame_editing;
+
+#[path = "publication_master_tests.rs"]
+mod page_masters;
+
+#[path = "publication_photo_version_tests.rs"]
+mod photo_versions;
+
+#[path = "publication_geometry_tests.rs"]
+mod object_geometry;
+
+#[path = "publication_spread_tests.rs"]
+mod continuous_spreads;
+
+#[path = "publication_layer_tests.rs"]
+mod layer_editing;
+
+#[path = "publication_guide_tests.rs"]
+mod page_guides;
+
+#[path = "publication_master_guide_tests.rs"]
+mod master_guides;
+
+#[path = "publication_chapter_tests.rs"]
+mod chapter_editing;
+
+#[path = "publication_page_removal_tests.rs"]
+mod page_group_removal;
+
+#[path = "publication_cover_tests.rs"]
+mod cover_editing;
+
+#[path = "publication_typography_tests.rs"]
+mod typography_editing;

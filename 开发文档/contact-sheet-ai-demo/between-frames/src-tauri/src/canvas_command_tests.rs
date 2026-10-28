@@ -147,6 +147,11 @@ async fn seeded_demo_supports_canvas_edit_undo_redo_and_replay_after_restart() {
     let snapshot = db.canvas_snapshot(p, &b).await.unwrap();
     assert_eq!(snapshot.nodes.len(), 2);
     assert_eq!(snapshot.photo_sources.len(), 1);
+    assert_eq!(snapshot.photo_sources[0].photo_id, projects[0].photos[0].id);
+    assert_eq!(
+        db.board_photo_sources(&b).await.unwrap()[0].photo_id,
+        projects[0].photos[0].id
+    );
     db.execute_canvas(request(
         p,
         &b,
@@ -344,6 +349,76 @@ async fn batch_revision_and_undo_redo_are_atomic_and_persisted() {
         &b,
         before,
         vec![CanvasAction::Undo(UndoCanvasCommand {
+            board_id: b.clone(),
+        })],
+    ))
+    .await
+    .unwrap();
+    assert!(db.canvas_snapshot(&p, &b).await.unwrap().nodes.is_empty());
+}
+
+#[tokio::test]
+async fn batch_removal_is_one_reversible_command_and_locked_content_rolls_back_all() {
+    let (_t, db, p, b) = fixture().await;
+    let add = request(&p, &b, 1, vec![text(&b, "A"), text(&b, "B")]);
+    let ids: Vec<_> = add.operations.iter().map(|op| op.op_id.clone()).collect();
+    db.execute_canvas(add).await.unwrap();
+    sqlx::query("UPDATE canvas_nodes SET locked=1 WHERE id=?")
+        .bind(&ids[1])
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let locked_revision = revision(&db, &p, &b).await;
+    let remove = |base| {
+        request(
+            &p,
+            &b,
+            base,
+            ids.iter()
+                .map(|id| {
+                    CanvasAction::DeleteNode(DeleteNodeCommand {
+                        board_id: b.clone(),
+                        node_id: id.clone(),
+                    })
+                })
+                .collect(),
+        )
+    };
+    assert!(db.execute_canvas(remove(locked_revision)).await.is_err());
+    assert_eq!(db.canvas_snapshot(&p, &b).await.unwrap().nodes.len(), 2);
+    assert_eq!(revision(&db, &p, &b).await, locked_revision);
+    sqlx::query("UPDATE canvas_nodes SET locked=0 WHERE id=?")
+        .bind(&ids[1])
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let base = revision(&db, &p, &b).await;
+    let command = remove(base);
+    let receipt = db.execute_canvas(command.clone()).await.unwrap();
+    assert_eq!(receipt.revision, base + 1);
+    assert!(db.canvas_snapshot(&p, &b).await.unwrap().nodes.is_empty());
+    assert_eq!(
+        encode(&db.execute_canvas(command).await.unwrap()).unwrap(),
+        encode(&receipt).unwrap()
+    );
+    db.execute_canvas(request(
+        &p,
+        &b,
+        receipt.revision,
+        vec![CanvasAction::Undo(UndoCanvasCommand {
+            board_id: b.clone(),
+        })],
+    ))
+    .await
+    .unwrap();
+    let restored = db.canvas_snapshot(&p, &b).await.unwrap();
+    assert_eq!(restored.nodes.len(), 2);
+    assert!(restored.nodes.iter().all(|node| ids.contains(&node.id)));
+    db.execute_canvas(request(
+        &p,
+        &b,
+        receipt.revision + 1,
+        vec![CanvasAction::Redo(RedoCanvasCommand {
             board_id: b.clone(),
         })],
     ))

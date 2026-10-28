@@ -8,7 +8,7 @@ import { CanvasCommandClient } from './CanvasCommandClient';
 import { editorialField, canvasBoardRecordSchema, canvasNodeRecordSchema as nodeSchema, canvasAnnotationRecordSchema as annotationSchema } from '@betweenframes/contracts';
 
 const boardSchema = canvasBoardRecordSchema.transform(value => ({ id: value.id, projectId: value.project_id, title: value.title, state: value.state, owningTaskId: value.owning_task_id, revision: value.revision }));
-const photoSourceSchema = z.object({ assetId: z.string(), thumbnailPath: z.string() });
+const photoSourceSchema = z.object({ assetId: z.string(), photoId: z.string().optional(), thumbnailPath: z.string() });
 const discussionSchema = z.object({ draftId: z.string(), draftRevision: z.number().int().positive(), cursor: z.number().int().nonnegative(), eventCount: z.number().int().nonnegative(), totalMessages: z.number().int().nonnegative(), nextOffset: z.number().int().nonnegative().nullable(), messages: z.array(z.object({ id: z.string(), threadId: z.string(), changeId: z.string().nullable(), body: z.string(), rootBody: z.string(), createdAt: z.string(), resolved: z.boolean(), isReply: z.boolean() })) });
 const structuralConflictSchema = z.object({changeId:z.string(),nodeId:z.string(),kind:z.enum(['current_removed','remove_changed']),currentModified:z.boolean(),relatedNodes:z.array(z.object({nodeId:z.string(),nodeType:z.string(),effect:z.enum(['detach','remove'])})).max(5000),preservedCommentCount:z.number().int().nonnegative().max(1000),resolved:z.boolean()});
 
@@ -108,8 +108,9 @@ export class TauriCanvasRepository implements CanvasRepository {
     if (snapshot.board.id !== boardId || snapshot.board.projectId !== version.projectId || snapshot.board.revision < version.revision) throw new Error('画布已更新，请重新打开后继续。');
     this.versions.set(boardId, { projectId: version.projectId, revision: snapshot.board.revision });
     const sources = new Map(snapshot.photoSources.map(p => [p.assetId, convertFileSrc(p.thumbnailPath)]));
+    const photoIds = new Map(snapshot.photoSources.map(p => [p.assetId, p.photoId]));
     for (const annotation of snapshot.annotations) this.annotationBoards.set(annotation.id, boardId);
-    return { board: snapshot.board, annotations: snapshot.annotations, nodes: snapshot.nodes.filter(n => n.visible).map(n => ({ ...n, thumbnailPath: n.assetId ? sources.get(n.assetId) : undefined })) };
+    return { board: snapshot.board, annotations: snapshot.annotations, nodes: snapshot.nodes.filter(n => n.visible).map(n => ({ ...n, photoId: n.assetId ? photoIds.get(n.assetId) : undefined, thumbnailPath: n.assetId ? sources.get(n.assetId) : undefined })) };
   }
   async getNodes(boardId: string) { return (await this.getSnapshot(boardId)).nodes; }
   async placePhoto(projectId: string, boardId: string, assetId: string, x: number, y: number, width: number, height: number) {
@@ -123,6 +124,9 @@ export class TauriCanvasRepository implements CanvasRepository {
   }
   async deleteNode(projectId: string, boardId: string, nodeId: string) {
     await this.edit(projectId, boardId, [{ type: 'DeleteNode', data: { boardId, nodeId } }]);
+  }
+  async deleteNodes(projectId: string, boardId: string, nodeIds: string[]) {
+    await this.edit(projectId, boardId, [...new Set(nodeIds)].map(nodeId => ({ type: 'DeleteNode', data: { boardId, nodeId } })));
   }
   async addAnnotation(projectId: string, boardId: string, x: number, y: number, body: string) {
     await this.edit(projectId, boardId, [{ type: 'AddAnnotation', data: { boardId, x, y, body } }]);
