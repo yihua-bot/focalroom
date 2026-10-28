@@ -3,8 +3,8 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-28T13:03:37.576Z",
-  "sourceHead": "ba33b1a48308244e5c9800ad235d4c39bf9b86d1",
+  "observedAt": "2026-10-28T14:44:22.170Z",
+  "sourceHead": "c63cd7e3af7dbe686c703e428941aede8eb2fd4c",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
@@ -12,7 +12,7 @@
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "6ac05feec1c245eee10f1e463571af2494dd8a5ce7008e5cb195213062257112"
   },
-  "status": "G2_WIRED_1_ACTIVE_3_READY_MAIN_CI_GREEN",
+  "status": "PRIVACY_TRILOGY_LANDED_MAIN_CI_GREEN",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -33,6 +33,10 @@
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0027_board_presence.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0028_team_seats.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0029_research_references.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0030_device_registry.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0031_private_sync.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0032_account_data_rights.sql\"",
+    "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/apps/api/migrations/0033_audited_private_erasure.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0020_asset_domain.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0021_canvas.sql\"",
     "A\t\"\\345\\274\\200\\345\\217\\221\\346\\226\\207\\346\\241\\243/contact-sheet-ai-demo/between-frames/src-tauri/migrations/0022_external_edit.sql\"",
@@ -373,6 +377,7 @@
       "fixture": "new isolated runner PostgreSQL; no production data",
       "tables": [
         "fr_acl_audit",
+        "fr_account_closures",
         "fr_agent_jobs",
         "fr_agent_scopes",
         "fr_agent_task_results",
@@ -398,10 +403,13 @@
         "fr_commands",
         "fr_comments",
         "fr_desktop_logins",
+        "fr_devices",
         "fr_download_events",
         "fr_drafts",
         "fr_edit_variants",
         "fr_email_verify_tokens",
+        "fr_erasure_audit",
+        "fr_erasure_objects",
         "fr_events",
         "fr_grants",
         "fr_invitations",
@@ -413,11 +421,13 @@
         "fr_presence",
         "fr_previews",
         "fr_projects",
+        "fr_project_sync",
         "fr_proposals",
         "fr_rate_limits",
         "fr_research_references",
         "fr_renditions",
         "fr_sessions",
+        "fr_sync_commands",
         "fr_source_assets",
         "fr_team_seats",
         "fr_tickets",
@@ -521,6 +531,22 @@
         {
           "version": "0029",
           "sha256": "aef4e715189156d56069773e8755322344b989b3f03a4fa1711a801e415ec5b1"
+        },
+        {
+          "version": "0030",
+          "sha256": "572fb1f016b120b1e4ed16748c44b50b4621c76cdf0bcdd9641b1afd33565077"
+        },
+        {
+          "version": "0031",
+          "sha256": "9d971f0d8c69a565570bd0d337aa2ddb216c0c152b6c39f130b51151b4a52740"
+        },
+        {
+          "version": "0032",
+          "sha256": "a8d203ccb3ba28c4e5a4e3232e6b999088250462903d13fba59bb8bb798135a2"
+        },
+        {
+          "version": "0033",
+          "sha256": "f5967bf9286bad7c39cb78384c28c99e5b0016226530790e33b8e6addab696c8"
         }
       ],
       "registeredFiles": [
@@ -619,6 +645,22 @@
         {
           "path": "apps/api/migrations/0029_research_references.sql",
           "sha256": "aef4e715189156d56069773e8755322344b989b3f03a4fa1711a801e415ec5b1"
+        },
+        {
+          "path": "apps/api/migrations/0030_device_registry.sql",
+          "sha256": "572fb1f016b120b1e4ed16748c44b50b4621c76cdf0bcdd9641b1afd33565077"
+        },
+        {
+          "path": "apps/api/migrations/0031_private_sync.sql",
+          "sha256": "9d971f0d8c69a565570bd0d337aa2ddb216c0c152b6c39f130b51151b4a52740"
+        },
+        {
+          "path": "apps/api/migrations/0032_account_data_rights.sql",
+          "sha256": "a8d203ccb3ba28c4e5a4e3232e6b999088250462903d13fba59bb8bb798135a2"
+        },
+        {
+          "path": "apps/api/migrations/0033_audited_private_erasure.sql",
+          "sha256": "f5967bf9286bad7c39cb78384c28c99e5b0016226530790e33b8e6addab696c8"
         }
       ],
       "unregisteredDesignFiles": [
@@ -854,14 +896,21 @@
       "run": 40687079548
     },
     {
+      "id": "privacy-trilogy-integration",
+      "result": "PASS",
+      "head": "c63cd7e",
+      "note": "并行会话闲置工作集成（第二次，ba33b1a 先例）：0031 iPhone 私有同步 + 0032 账号数据权利 + 0033 受审计私有擦除 + 桌面设备标识（消费 0030）+ 网站 privacy + ADR 0048/0049（29 文件 +766/-20）；全套门禁 PG 128/128、前端 395/395、Rust 378/0；CI 经一次 runner 异常终止后重跑绿",
+      "run": 40699756609
+    },
+    {
       "id": "g0-inventory",
       "result": "PASS",
-      "pgTables": 53,
-      "pgMigrations": 25,
+      "pgTables": 58,
+      "pgMigrations": 28,
       "sqliteMigrations": 33,
       "migrationDeltaAllAdditive": true,
-      "head": "ba33b1a",
-      "note": "0030_device_registry 已于 ba33b1a 提交入账；并行会话隐私三部曲 0031-0033 活跃在途（工作树实测可能更高，未提交不计入）"
+      "head": "c63cd7e",
+      "note": "0030-0033 全部已提交入账；共享工作树全净（仅剩仓库级未跟踪目录 FocalRoom-v4/mobile-ios 属其他工作流）"
     }
   ],
   "remaining": [
@@ -889,15 +938,16 @@
     "g2ScaledDecodeAt": "a408229",
     "g2DisplayMachineryAt": "a1ea760",
     "deviceRegistryAt": "ba33b1a",
-    "notes": "G2 用户批准 ①A②A③A（2026-10-28）：① 已激活导入路径；③ 机制落地休眠（激活待产品 A/B + 命令面）；② 顺延（对方团队 237 文件 WIP）。并行会话 0030 三流（设备注册/项目事件游标/回执查询）闲置后验证合入（ba33b1a，PG 126/126）；其新批次隐私三部曲 0031-0033 活跃在途（18 文件含 lib.rs/cloud_auth.rs，未触碰）"
+    "privacyTrilogyAt": "c63cd7e",
+    "notes": "G2 ① 已激活/③ 休眠待激活（A/B 决策+命令面）/② 顺延（对方团队 237 文件 WIP）。并行会话两批闲置工作先后验证合入：0030 三流（ba33b1a）+ 隐私三部曲 0031-0033（c63cd7e：iPhone 私有同步/账号数据权利/受审计擦除 + 桌面设备标识消费 0030 注册表）；共享树现已全净。新基线 PG 128/128、前端 395/395、Rust 378/0、58表/28迁移"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40687079548,
-    "headSha": "ba33b1a48308244e5c9800ad235d4c39bf9b86d1",
+    "databaseId": 40699756609,
+    "headSha": "c63cd7e3af7dbe686c703e428941aede8eb2fd4c",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40687079548",
-    "observedAt": "2026-10-28T13:03:37.576Z",
-    "note": "并行 0030 三流集成（ba33b1a）合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40699756609",
+    "observedAt": "2026-10-28T14:44:22.170Z",
+    "note": "隐私三部曲集成（c63cd7e）合入后全量门禁绿（一次 runner 异常终止后重跑）"
   }
 }
