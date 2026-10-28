@@ -122,19 +122,27 @@ async function websocket(account) {
 async function until(predicate) { const end = Date.now() + 6000; while (!predicate()) { assert.ok(Date.now() < end, '等待实时消息超时'); await new Promise(r => setTimeout(r, 25)); } }
 test('M5 authenticated WS, private Yjs, presence, snapshot reconnect and revoke', async () => {
   const a = await websocket(owner), b = await websocket(reviewer);
-  a.ws.send(JSON.stringify({ type: 'presence', photo_id: 'p1' })); await until(() => b.messages.some(m => m.type === 'presence' && m.users.some(u => u.id === owner.user.id && u.photo_id === 'p1')));
-  const doc = new Y.Doc(); doc.getText('note').insert(0, '私人草稿，不改正式序列'); a.ws.send(JSON.stringify({ type: 'draft', update: Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64') }));
-  await until(() => a.messages.some(m => m.type === 'draft')); assert.ok(!b.messages.some(m => m.type === 'draft'));
-  const mutate = command('photo.set_selection', { photo_ids: ['p1'], selection_state: 'KEEP' }, 1); await execute(mutate); await until(() => b.messages.some(m => m.type === 'events' && m.events.some(e => e.revision === 2)));
-  a.ws.close(); await new Promise(resolve => a.ws.once('close', resolve));
-  const reopened = await websocket(owner); const sync = reopened.messages.find(m => m.type === 'sync'); assert.equal(sync.revision, 2); const restored = new Y.Doc(); Y.applyUpdate(restored, Buffer.from(sync.draft, 'base64')); assert.equal(restored.getText('note').toString(), '私人草稿，不改正式序列');
-  const ticket = await call(`/projects/${project}/previews/p1/ticket`, 'POST', reviewer.token);
-  await call(`/projects/${project}/grants/${reviewer.user.id}`, 'DELETE');
-  await until(() => b.ws.readyState === WebSocket.CLOSED);
-  assert.equal((await fetch(`${base}${ticket.url}`)).status, 403, '未使用的旧媒体票据也必须拒绝');
-  await call(`/projects/${project}/snapshot`, 'GET', reviewer.token, undefined, 403);
-  assert.equal((await call(`/projects/${project}/snapshot`)).revision, 2);
-  reopened.ws.close(); doc.destroy(); restored.destroy();
+  // 断言失败也必须关闭连接：残留 WS 会挂住整个套件进程。
+  let reopened; const doc = new Y.Doc(); let restored;
+  try {
+    a.ws.send(JSON.stringify({ type: 'presence', photo_id: 'p1' })); await until(() => b.messages.some(m => m.type === 'presence' && m.users.some(u => u.id === owner.user.id && u.photo_id === 'p1')));
+    doc.getText('note').insert(0, '私人草稿，不改正式序列'); a.ws.send(JSON.stringify({ type: 'draft', update: Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64') }));
+    await until(() => a.messages.some(m => m.type === 'draft')); assert.ok(!b.messages.some(m => m.type === 'draft'));
+    const mutate = command('photo.set_selection', { photo_ids: ['p1'], selection_state: 'KEEP' }, 1); await execute(mutate); await until(() => b.messages.some(m => m.type === 'events' && m.events.some(e => e.revision === 2)));
+    a.ws.close(); await new Promise(resolve => a.ws.once('close', resolve));
+    reopened = await websocket(owner); const sync = reopened.messages.find(m => m.type === 'sync'); assert.equal(sync.revision, 2); restored = new Y.Doc(); Y.applyUpdate(restored, Buffer.from(sync.draft, 'base64')); assert.equal(restored.getText('note').toString(), '私人草稿，不改正式序列');
+    const ticket = await call(`/projects/${project}/previews/p1/ticket`, 'POST', reviewer.token);
+    await call(`/projects/${project}/grants/${reviewer.user.id}`, 'DELETE');
+    // 撤权后的新图片票据请求与命令提交必须立即阻断（G4 完整回归）。
+    await call(`/projects/${project}/previews/p1/ticket`, 'POST', reviewer.token, undefined, 403);
+    await execute(command('photo.set_selection', { photo_ids: ['p1'], selection_state: 'KEEP' }, 2), reviewer.token, 403);
+    await until(() => b.ws.readyState === WebSocket.CLOSED);
+    assert.equal((await fetch(`${base}${ticket.url}`)).status, 403, '未使用的旧媒体票据也必须拒绝');
+    await call(`/projects/${project}/snapshot`, 'GET', reviewer.token, undefined, 403);
+    assert.equal((await call(`/projects/${project}/snapshot`)).revision, 2);
+  } finally {
+    a.ws.close(); b.ws.close(); reopened?.ws.close(); doc.destroy(); restored?.destroy();
+  }
 });
 test('M5 cross-instance presence syncs through the PostgreSQL bus', async () => {
   const pool2 = new Pool({ connectionString: process.env.FOCALROOM_TEST_DATABASE_URL });
