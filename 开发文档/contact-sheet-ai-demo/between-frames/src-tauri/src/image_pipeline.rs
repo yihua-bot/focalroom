@@ -134,37 +134,46 @@ pub fn prepare(path: &Path, cache: &Path) -> Result<PreparedPhoto> {
     let preview = cache.join(format!("{hash}-1400.jpg"));
     std::fs::create_dir_all(cache)?;
     let mut native = false;
-    let mut bitmap = match decode(&path) {
-        Ok(bitmap) => bitmap,
-        Err(error)
-            if matches!(
-                extension.as_str(),
-                "heic"
-                    | "heif"
-                    | "dng"
-                    | "cr2"
-                    | "cr3"
-                    | "nef"
-                    | "arw"
-                    | "raf"
-                    | "orf"
-                    | "rw2"
-                    | "raw"
-            ) =>
-        {
-            native = true;
-            platform_decode(&path, cache).map_err(|native| {
-                AppError::new(
-                    "PLATFORM_DECODE",
-                    format!("平台解码不可用：{}；{}", error.message, native.message),
-                )
-            })?
+    let mut scaled_source: Option<(u32, u32)> = None;
+    let mut bitmap = match decode_scaled(&path, &extension) {
+        Some((source, scaled)) => {
+            scaled_source = Some(source);
+            scaled
         }
-        Err(error) => return Err(error),
+        None => match decode(&path) {
+            Ok(bitmap) => bitmap,
+            Err(error)
+                if matches!(
+                    extension.as_str(),
+                    "heic"
+                        | "heif"
+                        | "dng"
+                        | "cr2"
+                        | "cr3"
+                        | "nef"
+                        | "arw"
+                        | "raf"
+                        | "orf"
+                        | "rw2"
+                        | "raw"
+                ) =>
+            {
+                native = true;
+                platform_decode(&path, cache).map_err(|native| {
+                    AppError::new(
+                        "PLATFORM_DECODE",
+                        format!("平台解码不可用：{}；{}", error.message, native.message),
+                    )
+                })?
+            }
+            Err(error) => return Err(error),
+        },
     };
     let (width, height) = (bitmap.width(), bitmap.height());
     let (source_width, source_height) = if native {
         platform_dimensions(&path)?
+    } else if let Some(dims) = scaled_source {
+        dims
     } else {
         (width, height)
     };
@@ -220,6 +229,61 @@ pub fn prepare(path: &Path, cache: &Path) -> Result<PreparedPhoto> {
         height: source_height,
         thumbnail,
         preview,
+    })
+}
+
+/// G2-① 接入阈值：源长边超过该值走 ImageIO 缩放解码。2800 ≥ 预览 1400 的 2 倍，
+/// 缩放后再缩到 1400 无可见质量损失；对照数据见 G2 评审包 §2（25MP：270ms/7.8MB 对 2324ms/100MB）。
+#[cfg(target_os = "macos")]
+const SCALED_DECODE_THRESHOLD: u32 = 2800;
+
+/// 高分辨率光栅源在 macOS 经 ImageIO 按长边缩放解码，避免整图解码峰值内存；
+/// 尺寸从文件头读取（不解码像素），ImageIO 不支持或失败时返回 None 回退标准解码。
+#[cfg(target_os = "macos")]
+fn decode_scaled(path: &Path, extension: &str) -> Option<((u32, u32), image::DynamicImage)> {
+    if !matches!(extension, "jpg" | "jpeg" | "png" | "tif" | "tiff") {
+        return None;
+    }
+    let header = image::image_dimensions(path).ok()?;
+    if header.0.max(header.1) <= SCALED_DECODE_THRESHOLD {
+        return None;
+    }
+    let bytes = std::fs::read(path).ok()?;
+    let (width, height, rgba) =
+        scaled_decode::decode_rgba_scaled(&bytes, SCALED_DECODE_THRESHOLD).ok()?;
+    let buffer = image::RgbaImage::from_raw(width, height, rgba)?;
+    // ImageIO 缩略图已应用 EXIF 方向：90°/270° 旋转时文件头尺寸与方向不一致，按输出纵横比对齐。
+    let source = if (header.0 > header.1) != (width > height) {
+        (header.1, header.0)
+    } else {
+        header
+    };
+    Some((
+        source,
+        image::DynamicImage::ImageRgba8(unpremultiplied(buffer)),
+    ))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn decode_scaled(_path: &Path, _extension: &str) -> Option<((u32, u32), image::DynamicImage)> {
+    None
+}
+
+/// CoreGraphics 位图上下文输出预乘 alpha；去预乘后复用既有直 alpha 白底合成。
+#[cfg(target_os = "macos")]
+fn unpremultiplied(buffer: image::RgbaImage) -> image::RgbaImage {
+    image::RgbaImage::from_fn(buffer.width(), buffer.height(), |x, y| {
+        let pixel = buffer.get_pixel(x, y);
+        let alpha = pixel[3] as u32;
+        if alpha == 0 || alpha >= 255 {
+            return *pixel;
+        }
+        image::Rgba([
+            ((pixel[0] as u32 * 255 + alpha / 2) / alpha).min(255) as u8,
+            ((pixel[1] as u32 * 255 + alpha / 2) / alpha).min(255) as u8,
+            ((pixel[2] as u32 * 255 + alpha / 2) / alpha).min(255) as u8,
+            pixel[3],
+        ])
     })
 }
 
@@ -758,5 +822,78 @@ pub mod scaled_decode {
             );
             assert!(full_bytes / scaled_bytes > 10);
         }
+    }
+}
+
+#[cfg(test)]
+mod prepare_tests {
+    use super::*;
+
+    fn write_fixture(dir: &Path, name: &str, bitmap: image::DynamicImage) -> std::path::PathBuf {
+        let path = dir.join(name);
+        bitmap
+            .save_with_format(&path, image::ImageFormat::from_path(&path).unwrap())
+            .unwrap();
+        path
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn high_resolution_sources_decode_scaled_but_report_source_dimensions() {
+        let dir = tempfile::tempdir().unwrap();
+        // 6000×4000 超过 2800 阈值：走缩放解码；报告尺寸必须是真实源尺寸。
+        let bitmap = image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            6000,
+            4000,
+            image::Rgb([180, 60, 60]),
+        ));
+        let path = write_fixture(dir.path(), "large.jpg", bitmap);
+        let cache = dir.path().join("cache");
+        let prepared = prepare(&path, &cache).unwrap();
+        assert_eq!((prepared.width, prepared.height), (6000, 4000));
+        let preview = image::open(&prepared.preview).unwrap();
+        assert_eq!(preview.width().max(preview.height()), 1400);
+        let thumbnail = image::open(&prepared.thumbnail).unwrap();
+        assert_eq!(thumbnail.width().max(thumbnail.height()), 320);
+    }
+
+    #[test]
+    fn small_sources_keep_existing_decode_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let bitmap = image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            800,
+            600,
+            image::Rgb([30, 160, 90]),
+        ));
+        let path = write_fixture(dir.path(), "small.jpg", bitmap);
+        let cache = dir.path().join("cache");
+        let prepared = prepare(&path, &cache).unwrap();
+        assert_eq!((prepared.width, prepared.height), (800, 600));
+        assert!(prepared.preview.is_file());
+        assert!(prepared.thumbnail.is_file());
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn scaled_alpha_sources_composite_onto_white_correctly() {
+        let dir = tempfile::tempdir().unwrap();
+        // 3000×2000 半透明绿 PNG：去预乘后 50% 绿 over white 应接近 (128, 255, 128)。
+        // 若漏做去预乘，绿色通道会落到 ~192——该断言用于区分。
+        let mut rgba = image::RgbaImage::new(3000, 2000);
+        for (_, _, pixel) in rgba.enumerate_pixels_mut() {
+            *pixel = image::Rgba([0, 255, 0, 128]);
+        }
+        let path = write_fixture(
+            dir.path(),
+            "alpha.png",
+            image::DynamicImage::ImageRgba8(rgba),
+        );
+        let cache = dir.path().join("cache");
+        let prepared = prepare(&path, &cache).unwrap();
+        let preview = image::open(&prepared.preview).unwrap().to_rgb8();
+        let center = preview.get_pixel(preview.width() / 2, preview.height() / 2);
+        assert!((center[0] as i32 - 128).abs() <= 12, "got {center:?}");
+        assert!((center[1] as i32 - 255).abs() <= 12, "got {center:?}");
+        assert!((center[2] as i32 - 128).abs() <= 12, "got {center:?}");
     }
 }
