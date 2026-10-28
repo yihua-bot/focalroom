@@ -3,8 +3,8 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-28T11:39:14.611Z",
-  "sourceHead": "c8d44f6d06df896b1377e359c2f8f5a33554f25b",
+  "observedAt": "2026-10-28T13:03:37.576Z",
+  "sourceHead": "ba33b1a48308244e5c9800ad235d4c39bf9b86d1",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
@@ -847,14 +847,21 @@
       "run": 40676961980
     },
     {
+      "id": "parallel-0030-integration",
+      "result": "PASS",
+      "head": "ba33b1a",
+      "note": "并行会话闲置工作集成（5a04522 先例）：0030 设备注册与撤销（fr_devices 级联会话失效）+ 项目事件游标 GET /projects/:id/events + boards/projects UNKNOWN 回执查询；全套 PG 126/126（含其 2 条新集成测试）",
+      "run": 40687079548
+    },
+    {
       "id": "g0-inventory",
       "result": "PASS",
-      "pgTables": 52,
-      "pgMigrations": 24,
+      "pgTables": 53,
+      "pgMigrations": 25,
       "sqliteMigrations": 33,
       "migrationDeltaAllAdditive": true,
-      "head": "c8d44f6",
-      "note": "按 HEAD 提交态计数；工作树实测 53/25 系并行会话未提交的 0030_device_registry（database.ts 注册+迁移文件在共享树在途），未计入"
+      "head": "ba33b1a",
+      "note": "0030_device_registry 已于 ba33b1a 提交入账；并行会话隐私三部曲 0031-0033 活跃在途（工作树实测可能更高，未提交不计入）"
     }
   ],
   "remaining": [
@@ -881,15 +888,16 @@
     "g3WebDiffAt": "1abed2f",
     "g2ScaledDecodeAt": "a408229",
     "g2DisplayMachineryAt": "a1ea760",
-    "notes": "G2 用户批准 ①A②A③A（2026-10-28）：① scaled_decode 已激活导入路径；③ 显示器色彩渲染机制落地休眠（激活待产品 A/B + 命令面）；② 顺延（commands.rs/lib.rs 在对方 237 文件 WIP）。此前：G6 服务端四批/J5 席位/G3 双 Diff+双 Web 消费/I1 研究参考/G4 撤权回归全部落地。共享树检测到并行会话在途 0030_device_registry（7 文件未提交，未触碰）"
+    "deviceRegistryAt": "ba33b1a",
+    "notes": "G2 用户批准 ①A②A③A（2026-10-28）：① 已激活导入路径；③ 机制落地休眠（激活待产品 A/B + 命令面）；② 顺延（对方团队 237 文件 WIP）。并行会话 0030 三流（设备注册/项目事件游标/回执查询）闲置后验证合入（ba33b1a，PG 126/126）；其新批次隐私三部曲 0031-0033 活跃在途（18 文件含 lib.rs/cloud_auth.rs，未触碰）"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40676961980,
-    "headSha": "c8d44f6d06df896b1377e359c2f8f5a33554f25b",
+    "databaseId": 40687079548,
+    "headSha": "ba33b1a48308244e5c9800ad235d4c39bf9b86d1",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40676961980",
-    "observedAt": "2026-10-28T11:39:14.611Z",
-    "note": "G2 评审包勘误（c8d44f6）合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40687079548",
+    "observedAt": "2026-10-28T13:03:37.576Z",
+    "note": "并行 0030 三流集成（ba33b1a）合入后全量门禁绿"
   }
 }
