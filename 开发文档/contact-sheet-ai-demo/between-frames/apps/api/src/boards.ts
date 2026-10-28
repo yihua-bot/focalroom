@@ -132,7 +132,7 @@ export class BoardService {
     const id = projectIdSchema.parse(projectId);
     return this.projectScope(headers, id, false, async ({ tx }) => (
       await tx.query(
-        "SELECT id, project_id, title, state, created_at FROM fr_boards WHERE project_id=$1 ORDER BY created_at,id",
+        "SELECT id, project_id, title, state, revision, created_at FROM fr_boards WHERE project_id=$1 ORDER BY created_at,id",
         [id],
       )
     ).rows);
@@ -335,6 +335,19 @@ export class BoardService {
           JSON.stringify({ operationCount: command.operations.length, affectedNodeIds: affected })],
       );
       return reply;
+    });
+  }
+
+  async receipt(headers: Headers, boardId: unknown, commandId: unknown) {
+    const id = idSchema.parse(boardId);
+    const command = idSchema.parse(commandId);
+    return this.boardScope(headers, id, false, async ({ tx, user }) => {
+      const row = (await tx.query(
+        "SELECT reply FROM fr_canvas_commands WHERE board_id=$1 AND command_id=$2 AND actor_id=$3",
+        [id, command, user.id],
+      )).rows[0];
+      assert(row, 404, "NOT_FOUND", "未找到本人画布命令回执");
+      return row.reply;
     });
   }
 

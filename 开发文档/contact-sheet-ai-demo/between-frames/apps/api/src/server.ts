@@ -162,6 +162,10 @@ class ApiController {
         ? s.boards.nodes(headers, boardRead[1])
         : s.boards.annotations(headers, boardRead[1]);
     }
+    const boardReceipt = path.match(/^\/boards\/([^/]+)\/commands\/([^/]+)\/receipt$/);
+    if (boardReceipt && req.method === "GET") {
+      return s.boards.receipt(headers, boardReceipt[1], boardReceipt[2]);
+    }
     const boardCommands = path.match(/^\/boards\/([^/]+)\/commands$/);
     if (boardCommands && req.method === "POST") {
       return s.boards.commands(headers, boardCommands[1], req.body);
@@ -207,6 +211,16 @@ class ApiController {
     }
     if (path === "/workspaces" && req.method === "GET")
       return s.workspaces(headers);
+    if (path === "/devices" && req.method === "GET")
+      return s.devices(headers);
+    if (path === "/devices" && req.method === "POST")
+      return s.registerDevice(headers, req.body);
+    const deviceSession = path.match(/^\/devices\/([^/]+)\/session$/);
+    if (deviceSession && req.method === "POST")
+      return s.bindDeviceSession(headers, deviceSession[1]);
+    const device = path.match(/^\/devices\/([^/]+)$/);
+    if (device && req.method === "DELETE")
+      return s.revokeDevice(headers, device[1]);
     if (path === "/auth/google" && req.method === "POST") {
       const result = await s.googleLogin(req.body, req.socket.remoteAddress ?? "unknown");
       res.setHeader("Set-Cookie", s.auth.cookie(result.token));
@@ -282,6 +296,8 @@ class ApiController {
         return s.proposalDiff(headers, id, proposalDiff[1]);
       if (action === "snapshot" && req.method === "GET")
         return s.snapshot(headers, id);
+      if (action === "events" && req.method === "GET")
+        return s.projectEvents(headers, id, req.query.after, req.query.limit);
       if (action === "ai-comments" && req.method === "GET")
         return s.aiComments(headers, id);
       if (action === "agent-tasks/summarize" && req.method === "POST")
@@ -304,6 +320,9 @@ class ApiController {
         return s.revokeAgentScope(headers, id, action.slice(13));
       if (action === "commands" && req.method === "POST")
         return s.authority.command(headers, id, req.body);
+      const commandQuery = action.match(/^commands\/([^/]+)$/);
+      if (commandQuery && req.method === "GET")
+        return s.commandReceipt(headers, id, commandQuery[1]);
       if (action === "finalize" && req.method === "POST")
         return s.finalize(headers, id, req.body);
       if (action === "abort" && req.method === "POST")

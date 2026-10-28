@@ -392,3 +392,94 @@ test('G3 proposal diff previews operations against the current sequence without 
   await call(`/projects/${pdProject}/proposals/${randomUUID()}/diff`, 'GET', owner.token, undefined, 404);
   await call(`/projects/${pdProject}/proposals/${created.command_id}/diff`, 'GET', outsider.token, undefined, 403);
 });
+
+test('G2 project events expose append-only cursor increments for reconnecting clients', async () => {
+  const evManifest = { workspace_id: workspace, local_project_id: 'local-events', promotion_id: randomUUID(), title: '事件游标验收', from_revision: 0, snapshot: { photos: ['e1', 'e2'].map(id => ({ id, filename: `${id}.jpg`, source_sha256: 'b'.repeat(64), selection: 'UNDECIDED' })), sequences: [{ id: 'sequence', title: '主序列', items: [] }] }, media_policy: { previews_only: true, strip_gps: true, max_long_edge: 2048, ai_upload_authorized: false } };
+  const start = await call('/promotions', 'POST', owner.token, evManifest);
+  const evProject = start.project_id;
+  const jpeg = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#334455' } }).jpeg().toBuffer();
+  for (const photo of evManifest.snapshot.photos) {
+    const response = await fetch(`${base}/api/v2/projects/${evProject}/previews/${photo.id}`, { method: 'PUT', headers: { authorization: `Bearer ${owner.token}`, 'content-type': 'image/jpeg' }, body: jpeg });
+    assert.equal(response.status, 200, await response.text());
+  }
+  await call(`/projects/${evProject}/finalize`, 'POST', owner.token, { manifest_digest: start.manifest_digest });
+
+  const committed = await call(`/projects/${evProject}/events`);
+  assert.equal(committed.events.length, 1);
+  assert.equal(committed.events[0].kind, 'PromotionCommitted');
+  assert.equal(typeof committed.events[0].id, 'number');
+  assert.equal(committed.nextCursor, null);
+  const baseline = committed.events[0].id;
+
+  const first = command('photo.set_selection', { photo_ids: ['e1'], selection_state: 'KEEP' }, 0);
+  first.project_id = evProject; await call(`/projects/${evProject}/commands`, 'POST', owner.token, first);
+  const second = command('photo.set_selection', { photo_ids: ['e2'], selection_state: 'REJECT' }, 1);
+  second.project_id = evProject; await call(`/projects/${evProject}/commands`, 'POST', owner.token, second);
+
+  // after=游标 只返回增量；正式命令事件统一为 ProjectVersionCommitted。
+  const delta = await call(`/projects/${evProject}/events?after=${baseline}`);
+  assert.deepEqual(delta.events.map(event => event.kind), ['ProjectVersionCommitted', 'ProjectVersionCommitted']);
+  assert.deepEqual(delta.events.map(event => event.revision), [1, 2]);
+  assert.ok(delta.events[0].id > baseline && delta.events[1].id > delta.events[0].id);
+
+  // limit 分页续读：满页返回 nextCursor，空页返回 null。
+  const page = await call(`/projects/${evProject}/events?after=${baseline}&limit=1`);
+  assert.equal(page.events.length, 1); assert.equal(page.nextCursor, page.events[0].id);
+  const tail = await call(`/projects/${evProject}/events?after=${page.nextCursor}&limit=1`);
+  assert.equal(tail.events.length, 1); assert.equal(tail.nextCursor, tail.events[0].id);
+  const drained = await call(`/projects/${evProject}/events?after=${tail.nextCursor}&limit=1`);
+  assert.deepEqual(drained.events, []); assert.equal(drained.nextCursor, null);
+
+  // snapshot.cursor 与已读游标一致，客户端据此判断无需刷新。
+  const current = await call(`/projects/${evProject}/snapshot`);
+  assert.equal(Number(current.cursor), delta.events[1].id);
+  assert.deepEqual((await call(`/projects/${evProject}/events?after=${current.cursor}`)).events, []);
+
+  // 未授权读被拒；非法游标与未知项目按契约报错。
+  await call(`/projects/${evProject}/events`, 'GET', outsider.token, undefined, 403);
+  await call(`/projects/${evProject}/events?after=-1`, 'GET', owner.token, undefined, 400);
+  await call(`/projects/${randomUUID()}/events`, 'GET', owner.token, undefined, 404);
+});
+
+test('G2 device registry binds sessions, revocation cascades, and receipts are queryable', async () => {
+  const keyA = randomUUID(), keyB = randomUUID();
+  const first = await call('/devices', 'POST', owner.token, { device_key: keyA, name: 'iPhone 17 Pro', platform: 'ios' });
+  assert.equal(first.platform, 'ios');
+  const reregistered = await call('/devices', 'POST', owner.token, { device_key: keyA, name: 'iPhone 备用名', platform: 'ios' });
+  assert.equal(reregistered.id, first.id, '同一 device_key 重复注册不得新建设备');
+  assert.equal(reregistered.name, 'iPhone 备用名');
+  assert.deepEqual(await call(`/devices/${first.id}/session`, 'POST', owner.token, {}), { bound: true });
+
+  // 第二个会话代表第二台设备；绑定只作用于当前会话。
+  const secondLogin = await call('/auth/login', 'POST', null, { email: owner.user.email, password: 'test-password-123' });
+  const second = await call('/devices', 'POST', secondLogin.token, { device_key: keyB, name: 'Mac Studio', platform: 'mac' });
+  await call(`/devices/${second.id}/session`, 'POST', secondLogin.token, {});
+  const listed = await call('/devices', 'GET', secondLogin.token);
+  assert.equal(listed.length, 2);
+  assert.equal(listed.find(device => device.id === second.id).current, true);
+  assert.equal(listed.find(device => device.id === first.id).current, false);
+
+  // 不能绑定或撤销他人设备。
+  await call(`/devices/${first.id}/session`, 'POST', outsider.token, {}, 404);
+  await call(`/devices/${first.id}`, 'DELETE', outsider.token, undefined, 404);
+
+  // 回执查询：提交正式命令后可按 commandId 查询；未知编号与越权按契约返回。
+  const before = await call(`/projects/${project}/snapshot`);
+  const commandId = randomUUID();
+  await execute({ ...command('photo.set_selection', { photo_ids: ['p2'], selection_state: 'KEEP' }, before.revision), command_id: commandId, idempotency_key: commandId });
+  const receipt = await call(`/projects/${project}/commands/${commandId}`, 'GET', owner.token);
+  assert.equal(receipt.command_id, commandId);
+  assert.equal(receipt.reply.ok, true);
+  assert.equal(receipt.reply.new_revision, before.revision + 1);
+  await call(`/projects/${project}/commands/${randomUUID()}`, 'GET', owner.token, undefined, 404);
+  await call(`/projects/${project}/commands/${commandId}`, 'GET', outsider.token, undefined, 403);
+  await call(`/projects/${project}/commands/not-a-uuid`, 'GET', owner.token, undefined, 400);
+
+  // 撤销设备 A：其会话立即失效，另一设备不受影响；同 key 再注册得到新设备。
+  await call(`/devices/${first.id}`, 'DELETE', secondLogin.token);
+  await call('/auth/me', 'GET', owner.token, undefined, 401);
+  const me = await call('/auth/me', 'GET', secondLogin.token);
+  assert.equal(me.id, owner.user.id);
+  const reborn = await call('/devices', 'POST', secondLogin.token, { device_key: keyA, name: 'iPhone 重装', platform: 'ios' });
+  assert.notEqual(reborn.id, first.id);
+});

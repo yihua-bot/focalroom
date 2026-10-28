@@ -137,6 +137,59 @@ export class CloudService {
       )
     ).rows;
   }
+  async devices(headers: Headers) {
+    const user = await this.auth.authenticate(headers, false);
+    const rows = (
+      await this.pool.query(
+        `SELECT d.id,d.name,d.platform,d.created_at,d.last_seen_at,
+                EXISTS(SELECT 1 FROM fr_sessions s WHERE s.device_id=d.id AND s.digest=$2) AS current
+         FROM fr_devices d WHERE d.user_id=$1 ORDER BY d.last_seen_at DESC`,
+        [user.id, user.session],
+      )
+    ).rows;
+    return rows.map((row: { current: boolean }) => ({ ...row, current: !!row.current }));
+  }
+  async registerDevice(headers: Headers, input: unknown) {
+    const value = z
+      .strictObject({
+        device_key: z.uuid(),
+        name: z.string().trim().min(1).max(120),
+        platform: z.enum(["ios", "mac", "web", "desktop"]),
+      })
+      .parse(input);
+    const user = await this.auth.authenticate(headers, true);
+    // 同一 (user, device_key) 重复注册只刷新名称与活跃时间，不产生第二条设备。
+    return (
+      await this.pool.query(
+        `INSERT INTO fr_devices(user_id,device_key,name,platform) VALUES($1,$2,$3,$4)
+         ON CONFLICT(user_id,device_key)
+         DO UPDATE SET name=EXCLUDED.name, platform=EXCLUDED.platform, last_seen_at=now()
+         RETURNING id,name,platform,created_at,last_seen_at`,
+        [user.id, value.device_key, value.name, value.platform],
+      )
+    ).rows[0];
+  }
+  async bindDeviceSession(headers: Headers, id: string) {
+    const deviceId = z.uuid().parse(id);
+    const user = await this.auth.authenticate(headers, true);
+    const owned = (
+      await this.pool.query("SELECT id FROM fr_devices WHERE id=$1 AND user_id=$2", [deviceId, user.id])
+    ).rows[0];
+    assert(owned, 404, "NOT_FOUND", "设备不存在");
+    const bound = await this.pool.query(
+      "UPDATE fr_sessions SET device_id=$2 WHERE digest=$1 AND user_id=$3 AND (device_id IS NULL OR device_id<>$2)",
+      [user.session, deviceId, user.id],
+    );
+    return { bound: bound.rowCount === 1 };
+  }
+  async revokeDevice(headers: Headers, id: string) {
+    const deviceId = z.uuid().parse(id);
+    const user = await this.auth.authenticate(headers, true);
+    // 级联删除该设备名下会话；若含当前会话，客户端下一次请求即 401。
+    const revoked = await this.pool.query("DELETE FROM fr_devices WHERE id=$1 AND user_id=$2", [deviceId, user.id]);
+    assert(revoked.rowCount === 1, 404, "NOT_FOUND", "设备不存在");
+    return { revoked: true };
+  }
   async members(headers: Headers, workspaceId: string, removeId?: string) {
     return transaction(this.pool, async (tx) => {
       const user = await this.auth.authenticate(headers, !!removeId, tx);
@@ -640,6 +693,42 @@ export class CloudService {
         };
       },
     );
+  }
+  // 持久事件游标：客户端持 snapshot.cursor 按 after=<cursor> 增量拉取，事件只追加不修改。
+  async projectEvents(
+    headers: Headers,
+    id: string,
+    after: unknown,
+    limit: unknown,
+  ) {
+    const cursor = z.coerce.number().int().min(0).default(0).parse(after);
+    const size = z.coerce.number().int().min(1).max(100).default(50).parse(limit);
+    return this.authority.scope(headers, id, false, async ({ tx }) => {
+      const rows = (
+        await tx.query(
+          "SELECT id,kind,revision,actor_id,detail,created_at FROM fr_events WHERE project_id=$1 AND id>$2 ORDER BY id LIMIT $3",
+          [id, cursor, size],
+        )
+      ).rows;
+      // BIGSERIAL 由 pg 以字符串返回；统一转为数字，客户端比较与续读游标才可靠。
+      const events = rows.map((row: { id: string }) => ({ ...row, id: Number(row.id) }));
+      const nextCursor = events.length === size ? events[events.length - 1].id : null;
+      return { events, nextCursor };
+    });
+  }
+  // 回执查询：客户端 UNKNOWN 结果先按原 commandId 查权威回执，命中即视为已提交，不得盲目重发。
+  async commandReceipt(headers: Headers, id: string, commandId: unknown) {
+    const command = z.uuid().parse(commandId);
+    return this.authority.scope(headers, id, false, async ({ tx }) => {
+      const row = (
+        await tx.query(
+          "SELECT command_id,actor_id,idempotency_key,reply,created_at FROM fr_commands WHERE project_id=$1 AND command_id=$2",
+          [id, command],
+        )
+      ).rows[0];
+      assert(row, 404, "NOT_FOUND", "命令回执不存在");
+      return { command_id: row.command_id, actor_id: row.actor_id, idempotency_key: row.idempotency_key, reply: row.reply, created_at: row.created_at };
+    });
   }
   async version(headers: Headers, id: string, revision: number) {
     assert(
