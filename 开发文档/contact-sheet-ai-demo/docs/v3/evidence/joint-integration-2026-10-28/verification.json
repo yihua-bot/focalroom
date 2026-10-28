@@ -66,7 +66,7 @@
     },
     {
       "path": "开发文档/contact-sheet-ai-demo/docs/v3/FINAL-PLAN-REMAINING-2026-10-23.md",
-      "sha256": "ee5b2bf13fa26362505cee323a2b1910b0983fa89cdd235baf7078bd0de66aa7"
+      "sha256": "93767188116d81117f6d2aa38bafbac333f325bc6a0fa8db08b7529072504db0"
     }
   ],
   "remaining": [
@@ -635,5 +635,14 @@
       "path": "workspace-browser/legacy-workspace/vector-rendering.png",
       "sha256": "555c0bdf85060c8199cc4a73545ba9aa90b65ceb859fb65ff0da93c4b147de8b"
     }
-  ]
+  ],
+  "merge_resolution": {
+    "main_parent": "f378dc1a3072fc39dd320fadbdfb4167672aaab2",
+    "conflicts": [
+      "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/shared/ProjectReview.tsx",
+      "开发文档/contact-sheet-ai-demo/between-frames/apps/web/src/shared/ProjectReview.test.tsx"
+    ],
+    "resolution": "Retain already-tested superset of main Web preview plus stale/append fixes; main remaining-list update preserved",
+    "all_823_bound_source_bytes_unchanged": true
+  }
 }
