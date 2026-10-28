@@ -3,7 +3,7 @@ export type PhotoStatus = 'undecided' | 'keep' | 'reject';
 export type PhotoFilter = 'all' | PhotoStatus;
 export type WorkspaceView = 'grid' | 'sequence' | 'canvas' | 'publication';
 export type InspectorPanel = 'photo' | 'memory';
-export interface InspectionImage { src: string; kind: 'original' | 'derived_preview' | 'embedded_preview' }
+export interface InspectionImage { src: string; kind: 'original' | 'derived_preview' | 'embedded_preview' | 'display_managed' }
 
 export interface Photo {
   id: string;

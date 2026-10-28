@@ -58,6 +58,7 @@ export class TauriRepository implements DesktopProjectRepository {
         const source = z.discriminatedUnion('kind', [
           z.object({ path: z.string(), kind: z.literal('original') }),
           z.object({ path: z.string(), kind: z.literal('derived_preview') }),
+          z.object({ path: z.string(), kind: z.literal('display_managed') }),
           z.object({ dataUrl: z.string().max(5_600_000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/), kind: z.literal('embedded_preview') }),
         ])
           .parse(await command('get_original_photo', { projectId, photoId }));

@@ -39,7 +39,7 @@ export function PhotoViewport({ photo, zoom, onChange }: { photo: Photo; zoom: P
     return () => window.removeEventListener('resize', resize);
   }, []);
   const originalVisible = zoom.mode === 'actual' && Boolean(original.src);
-  const sourceLabel = original.kind === 'embedded_preview' ? 'RAW 内嵌 JPEG 预览' : original.kind === 'derived_preview' ? 'RAW 派生预览' : '原图';
+  const sourceLabel = original.kind === 'embedded_preview' ? 'RAW 内嵌 JPEG 预览' : original.kind === 'derived_preview' ? 'RAW 派生预览' : original.kind === 'display_managed' ? '原图 · 显示器色彩' : '原图';
   const src = originalVisible ? original.src! : photo.previewSrc ?? photo.src;
   const natural = loaded.src === src ? loaded : { width: 0, height: 0 };
   const waitingOriginal = zoom.mode === 'actual' && loadOriginal && !original.src && !original.error;
@@ -76,7 +76,7 @@ export function PhotoViewport({ photo, zoom, onChange }: { photo: Photo; zoom: P
       else setFailed(true);
     }}
       style={{ width, height, opacity: natural.width ? 1 : 0, transform: `translate(calc(-50% + ${x * width}px), calc(-50% + ${y * height}px))` }} />
-    {originalVisible && original.kind !== 'original' && <span className="original-badge" role="note">{sourceLabel} · {original.kind === 'embedded_preview' ? '非 RAW 全分辨率' : '非全分辨率'}</span>}
+    {originalVisible && original.kind !== 'original' && <span className="original-badge" role="note">{sourceLabel} · {original.kind === 'embedded_preview' ? '非 RAW 全分辨率' : original.kind === 'display_managed' ? '全分辨率 · 已按显示器 ICC 渲染' : '非全分辨率'}</span>}
     {failed && <p role="alert">预览无法加载，请重新打开项目检查缓存。</p>}
     {waitingOriginal && <p role="status">正在校验并加载原图…</p>}
     {zoom.mode === 'actual' && original.error && <p role="alert">{original.error}</p>}

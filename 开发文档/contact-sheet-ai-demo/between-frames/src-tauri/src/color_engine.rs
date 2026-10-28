@@ -99,6 +99,13 @@ pub fn read_source_profile(path: &Path) -> Result<Option<SourceProfile>> {
     }))
 }
 
+/// 检视渲染需要 ICC 字节本身（诊断接口只返回摘要）；按容器格式分段读取原始 ICC。
+pub fn embedded_icc_bytes(path: &Path) -> Result<Option<Vec<u8>>> {
+    let mut file = std::fs::File::open(path)?;
+    let file_len = file.metadata()?.len();
+    Ok(extract_embedded_icc(&mut file, file_len))
+}
+
 use std::io::{Read, Seek, SeekFrom};
 const MAX_ICC_BYTES: usize = 32 * 1024 * 1024;
 const MAX_METADATA_RECORDS: usize = 4096;
@@ -631,6 +638,31 @@ pub mod native_transform {
 
     /// 主显示器 ICC 配置字节（FR3-014 目标色彩空间采集原型）。
     /// 可直接作为 transform_* 的 dst_icc；随显示器/校准变化，勿并入内容寻址缓存键。
+    /// 无内嵌 ICC 的源按 sRGB 处理：与显示器 ICC 同源机制取得系统 sRGB 配置字节。
+    /// ColorSync 命名常量即字符串本身（kCGColorSpaceSRGB）。
+    pub fn srgb_profile_bytes() -> Result<Vec<u8>> {
+        let name = core_foundation::string::CFString::new("kCGColorSpaceSRGB");
+        let Some(space) =
+            core_graphics::color_space::CGColorSpace::create_with_name(name.as_concrete_TypeRef())
+        else {
+            return Err(AppError::new(
+                "COLOR_SRGB_UNAVAILABLE",
+                "无法创建系统 sRGB 色彩空间",
+            ));
+        };
+        unsafe {
+            let data = CGColorSpaceCopyICCProfile(space.as_ptr() as *mut std::ffi::c_void);
+            if data.is_null() {
+                return Err(AppError::new(
+                    "COLOR_SRGB_UNAVAILABLE",
+                    "系统 sRGB 未提供 ICC 配置",
+                ));
+            }
+            let profile = CFData::wrap_under_create_rule(data);
+            Ok(profile.bytes().to_vec())
+        }
+    }
+
     pub fn display_profile_bytes() -> Result<Vec<u8>> {
         unsafe {
             let space = CGDisplayCopyColorSpace(CGMainDisplayID());

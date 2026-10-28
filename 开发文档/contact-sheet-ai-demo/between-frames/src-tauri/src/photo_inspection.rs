@@ -29,12 +29,17 @@ pub enum InspectionSource {
         #[serde(rename = "dataUrl")]
         data_url: String,
     },
+    DisplayManaged {
+        path: PathBuf,
+    },
 }
 
 impl InspectionSource {
     pub fn path(&self) -> Option<&std::path::Path> {
         match self {
-            Self::Original { path } | Self::DerivedPreview { path } => Some(path),
+            Self::Original { path }
+            | Self::DerivedPreview { path }
+            | Self::DisplayManaged { path } => Some(path),
             Self::EmbeddedPreview { .. } => None,
         }
     }
@@ -44,6 +49,7 @@ impl InspectionSource {
             Self::Original { .. } => "original",
             Self::DerivedPreview { .. } => "derived_preview",
             Self::EmbeddedPreview { .. } => "embedded_preview",
+            Self::DisplayManaged { .. } => "display_managed",
         }
     }
 }
@@ -135,10 +141,46 @@ pub async fn original_path(
                 }
             }
         }
+        // G2-③：显示器色彩渲染机制已落地（render_display_managed + DisplayManaged 变体），
+        // 但自动接线与 M1 直通契约冲突（16-bit 保真/ICC 元数据保真/直通只读，5 项既有回归）。
+        // 激活方式（开关 opt-in 或替代直通）待产品决策；在此之前检视保持字节级直通。
         Ok(InspectionSource::Original { path })
     })
     .await
     .map_err(|error| AppError::new("BACKGROUND", error.to_string()))?
+}
+
+/// 解码→源ICC→显示ICC 变换→q92 JPEG→tmp+rename 原子写。ICC 参数注入便于测试。
+/// 生产接线按上方说明暂缓；仅测试引用期间显式豁免 dead_code。
+#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(target_os = "macos")]
+fn render_display_managed(
+    original: &std::path::Path,
+    source_icc: &[u8],
+    display_icc: &[u8],
+    target: &std::path::Path,
+) -> Result<()> {
+    let bitmap = image::open(original).map_err(|e| AppError::new("DECODE", e.to_string()))?;
+    let rgb = bitmap.to_rgb8();
+    let (width, height) = rgb.dimensions();
+    let mut pixels = rgb.into_raw();
+    crate::color_engine::native_transform::transform_rgb8(
+        source_icc,
+        display_icc,
+        &mut pixels,
+        width as usize,
+        height as usize,
+    )?;
+    let managed = image::RgbImage::from_raw(width, height, pixels)
+        .ok_or_else(|| AppError::new("DECODE", "变换后缓冲尺寸不匹配"))?;
+    let temporary = target.with_extension(format!("{}.tmp", crate::domain::id()));
+    let file = std::fs::File::create(&temporary)?;
+    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, 92);
+    managed
+        .write_with_encoder(encoder)
+        .map_err(|e| AppError::new("CACHE_WRITE", e.to_string()))?;
+    std::fs::rename(&temporary, target)?;
+    Ok(())
 }
 
 /// ISO-BMFF ftyp 盒校验 HEIF 家族 brand（heic/heix/hevc/hevx/mif1/msf1）。
@@ -186,4 +228,50 @@ fn bounded_preview(preview: &std::path::Path) -> Result<PathBuf> {
         ));
     }
     Ok(path)
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod display_tests {
+    use super::*;
+
+    fn system_profile(name: &str) -> Vec<u8> {
+        std::fs::read(std::path::Path::new("/System/Library/ColorSync/Profiles").join(name))
+            .unwrap_or_else(|error| panic!("缺少系统色彩配置 {name}: {error}"))
+    }
+
+    #[test]
+    fn p3_display_shifts_srgb_blue_toward_reference() {
+        let dir = tempfile::tempdir().unwrap();
+        // 评审参考值：sRGB→P3 蓝 (0,0,255)→(0,0,~245)；JPEG q92 有损放宽到 ±8。
+        let img = image::RgbImage::from_pixel(4, 1, image::Rgb([0, 0, 255]));
+        let original = dir.path().join("blue.png");
+        img.save_with_format(&original, image::ImageFormat::Png)
+            .unwrap();
+        let target = dir.path().join("managed.jpg");
+        render_display_managed(
+            &original,
+            &system_profile("sRGB Profile.icc"),
+            &system_profile("Display P3.icc"),
+            &target,
+        )
+        .unwrap();
+        let pixel = image::open(&target).unwrap().to_rgb8().get_pixel(1, 0).0;
+        assert!(pixel[2] < 253 && pixel[2] >= 235, "blue got {pixel:?}");
+        assert!(pixel[0] <= 8 && pixel[1] <= 8, "got {pixel:?}");
+    }
+
+    #[test]
+    fn identical_profiles_keep_pixels() {
+        let dir = tempfile::tempdir().unwrap();
+        let img = image::RgbImage::from_pixel(4, 1, image::Rgb([200, 30, 40]));
+        let original = dir.path().join("red.png");
+        img.save_with_format(&original, image::ImageFormat::Png)
+            .unwrap();
+        let target = dir.path().join("managed.jpg");
+        let srgb = system_profile("sRGB Profile.icc");
+        render_display_managed(&original, &srgb, &srgb, &target).unwrap();
+        let pixel = image::open(&target).unwrap().to_rgb8().get_pixel(2, 0).0;
+        assert!((pixel[0] as i32 - 200).abs() <= 8, "got {pixel:?}");
+        assert!((pixel[1] as i32 - 30).abs() <= 8, "got {pixel:?}");
+    }
 }
