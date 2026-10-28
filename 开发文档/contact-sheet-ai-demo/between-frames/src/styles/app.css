@@ -757,3 +757,8 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .quick-start-preview { margin-top: 12px; padding: 12px 14px; background: var(--surface, #141414); border: 1px solid var(--border, #454743); border-radius: 6px; }
 .quick-start-preview p { margin: 4px 0; font-size: 13px; color: var(--text, #e8e8e0); }
 .quick-start-preview strong { color: var(--accent, #b8a9e8); }
+
+/* G2-③ 色彩管理开关 */
+.color-managed-toggle{display:inline-flex;gap:8px;align-items:center;margin-left:8px}
+.color-managed-toggle .color-info{color:var(--text2,#8a8);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.color-managed-toggle .color-error{color:#e74c3c;font-size:11px}

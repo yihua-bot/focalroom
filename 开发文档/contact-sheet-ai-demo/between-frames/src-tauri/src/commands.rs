@@ -1020,3 +1020,111 @@ pub async fn pub_generate(
 ) -> Result<i64> {
     state.store.generate_from_sequence(&project_id, &cmd).await
 }
+
+// ── G2-③ 色彩管理检视开关 ──
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ColorManagedPreview {
+    pub data_url: String,
+    pub source_profile: String,
+    pub display_profile: String,
+    pub transform_applied: bool,
+}
+
+#[tauri::command]
+pub async fn get_color_managed_preview(
+    state: State<'_, Backend>,
+    project_id: String,
+    photo_id: String,
+) -> Result<ColorManagedPreview> {
+    // 读取预览路径
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT p.preview_path, p.original_path FROM photos p JOIN projects j ON j.id=p.project_id WHERE p.project_id=? AND p.id=? AND j.deleted_at IS NULL",
+    )
+    .bind(&project_id)
+    .bind(&photo_id)
+    .fetch_optional(&state.store.pool)
+    .await?;
+    let (preview_path, original_path) =
+        row.ok_or_else(|| crate::domain::AppError::new("NOT_FOUND", "照片不存在"))?;
+
+    // 读取源 ICC profile
+    let source_profile =
+        crate::color_engine::read_source_profile(std::path::Path::new(&original_path))
+            .ok()
+            .flatten();
+
+    // 获取显示器 profile
+    let display_icc = crate::color_engine::native_transform::display_profile_bytes()
+        .unwrap_or_else(|_| Vec::new());
+
+    let source_desc = source_profile
+        .as_ref()
+        .map(|p| p.description.clone())
+        .unwrap_or_else(|| "未嵌入（假定为 sRGB）".to_owned());
+    let display_desc = "显示器色彩空间".to_owned();
+
+    // 如果有源 profile 且显示器 profile 可用，做变换
+    let (data_url, transform_applied) =
+        if let (Some(_src), true) = (&source_profile, !display_icc.is_empty()) {
+            // 读预览 JPEG → 解码 → 变换 → 重编码
+            let preview_bytes = std::fs::read(&preview_path).map_err(|e| {
+                crate::domain::AppError::new("RESOURCE_MISSING", format!("预览缺失：{e}"))
+            })?;
+            let img = image::load_from_memory(&preview_bytes)
+                .map_err(|e| crate::domain::AppError::new("DECODE", e.to_string()))?;
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let mut pixels = rgb.as_raw().clone();
+            match crate::color_engine::native_transform::transform_rgb8(
+                &Vec::new(),
+                &display_icc,
+                &mut pixels,
+                w as usize,
+                h as usize,
+            ) {
+                Ok(()) => {
+                    let transformed = image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
+                        crate::domain::AppError::new("VALIDATION_ERROR", "像素重建失败")
+                    })?;
+                    let mut out = Vec::new();
+                    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 92);
+                    image::DynamicImage::ImageRgb8(transformed)
+                        .write_with_encoder(encoder)
+                        .map_err(|e| crate::domain::AppError::new("ENCODE", e.to_string()))?;
+                    (
+                        format!("data:image/jpeg;base64,{}", base64_encode(&out)),
+                        true,
+                    )
+                }
+                Err(_) => {
+                    // 变换失败回退到原始预览
+                    (
+                        format!("data:image/jpeg;base64,{}", base64_encode(&preview_bytes)),
+                        false,
+                    )
+                }
+            }
+        } else {
+            (
+                format!(
+                    "data:image/jpeg;base64,{}",
+                    base64_encode(&std::fs::read(&preview_path).unwrap_or_default())
+                ),
+                false,
+            )
+        };
+
+    Ok(ColorManagedPreview {
+        data_url,
+        source_profile: source_desc,
+        display_profile: display_desc,
+        transform_applied,
+    })
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(data)
+}

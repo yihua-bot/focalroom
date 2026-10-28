@@ -17,6 +17,42 @@ export function ZoomControls({ zoom, onChange, label, original = false }: { zoom
   </div>;
 }
 
+/** G2-③ 色彩管理开关：开启后照片经 ColorSync 变换到显示器色彩空间。 */
+export function ColorManagedToggle({ photo, projectId }: { photo: Photo; projectId: string }) {
+  const [enabled, setEnabled] = useState(false);
+  const [info, setInfo] = useState<{ source: string; display: string; applied: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const toggle = async () => {
+    if (busy) return;
+    const next = !enabled;
+    setEnabled(next);
+    if (!next) { setInfo(null); setError(''); return; }
+    setBusy(true); setError('');
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ dataUrl: string; sourceProfile: string; displayProfile: string; transformApplied: boolean }>(
+        'get_color_managed_preview', { projectId, photoId: photo.id },
+      );
+      setInfo({ source: result.sourceProfile, display: result.displayProfile, applied: result.transformApplied });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setEnabled(false);
+    } finally { setBusy(false); }
+  };
+
+  return <div className="color-managed-toggle" role="group" aria-label="色彩管理">
+    <Button size="small" aria-pressed={enabled} disabled={busy} onClick={() => void toggle()} title="开启后照片经 ColorSync 变换到你的显示器色彩空间">
+      🎨 {enabled ? '色彩管理已开启' : '色彩管理'}
+    </Button>
+    {info && <span className="micro color-info">
+      {info.applied ? `${info.source} → ${info.display}` : '直通模式（无变换）'}
+    </span>}
+    {error && <span className="micro color-error">{error}</span>}
+  </div>;
+}
+
 export function PhotoViewport({ photo, zoom, onChange }: { photo: Photo; zoom: PhotoZoom; onChange: (zoom: PhotoZoom) => void }) {
   const root = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
