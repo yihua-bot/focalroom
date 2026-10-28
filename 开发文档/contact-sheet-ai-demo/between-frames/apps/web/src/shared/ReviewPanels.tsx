@@ -3,8 +3,10 @@ import { sharedSnapshotSchema } from "@betweenframes/contracts";
 import { useEffect, useState } from "react";
 import {
   request,
+  versionDiffSchema,
   type Session,
   type CloudSnapshot,
+  type VersionDiff,
   errorMessage as message,
 } from "../shared-api";
 export function AccessPanel({
@@ -159,10 +161,12 @@ export function HistoryPanel({
   id,
   session,
   revision,
+  photos,
 }: {
   id: string;
   session: Session;
   revision: number;
+  photos: CloudSnapshot["snapshot"]["photos"];
 }) {
   const { fmtDate } = useWebI18n();
   const [viewing, setViewing] = useState<{
@@ -173,6 +177,27 @@ export function HistoryPanel({
       { revision: number; created_at: string; command_id: string }[]
     >([]),
     [error, setError] = useState("");
+  const [diffPair, setDiffPair] = useState({ from: "", to: "" });
+  const [versionDiff, setVersionDiff] = useState<VersionDiff | "loading" | null>(
+    null,
+  );
+  const filenameOf = (photoId: string) =>
+    photos.find((photo) => photo.id === photoId)?.filename ?? photoId;
+  const loadVersionDiff = async () => {
+    setVersionDiff("loading");
+    try {
+      const diff = versionDiffSchema.parse(
+        await request(
+          `/projects/${id}/versions/${diffPair.from}/diff/${diffPair.to}`,
+          session,
+        ),
+      );
+      setVersionDiff(diff);
+    } catch (e) {
+      setError(message(e));
+      setVersionDiff(null);
+    }
+  };
   useEffect(() => {
     request<typeof history>(`/projects/${id}/history`, session)
       .then(setHistory)
@@ -195,6 +220,101 @@ export function HistoryPanel({
               </li>
             ))}
           </ol>
+        </section>
+      )}
+      {history.length > 1 && (
+        <section className="fr-version-diff">
+          <h3>版本对比</h3>
+          <label>
+            从
+            <select
+              aria-label="对比起始版本"
+              value={diffPair.from}
+              onChange={(e) =>
+                setDiffPair((prev) => ({ ...prev, from: e.target.value }))
+              }
+            >
+              <option value="">选择版本</option>
+              {history.map((v) => (
+                <option key={v.revision} value={String(v.revision)}>
+                  v{v.revision}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            到
+            <select
+              aria-label="对比目标版本"
+              value={diffPair.to}
+              onChange={(e) =>
+                setDiffPair((prev) => ({ ...prev, to: e.target.value }))
+              }
+            >
+              <option value="">选择版本</option>
+              {history.map((v) => (
+                <option key={v.revision} value={String(v.revision)}>
+                  v{v.revision}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            disabled={
+              !diffPair.from || !diffPair.to || diffPair.from === diffPair.to
+            }
+            onClick={() => void loadVersionDiff()}
+          >
+            对比差异
+          </button>
+          {versionDiff === "loading" && <p>差异计算中…</p>}
+          {versionDiff && versionDiff !== "loading" && (
+            <div className="fr-diff">
+              <p>
+                v{versionDiff.from.revision} → v{versionDiff.to.revision}
+              </p>
+              {versionDiff.photos.added.length > 0 && (
+                <p>
+                  新增照片：
+                  {versionDiff.photos.added.map(filenameOf).join("、")}
+                </p>
+              )}
+              {versionDiff.photos.removed.length > 0 && (
+                <p>
+                  移除照片：
+                  {versionDiff.photos.removed.map(filenameOf).join("、")}
+                </p>
+              )}
+              {versionDiff.photos.changed.map((entry) => (
+                <p key={entry.id}>
+                  {filenameOf(entry.id)}：
+                  {Object.entries(entry.fields)
+                    .map(
+                      ([field, change]) =>
+                        `${field} ${String(change.before)} → ${String(change.after)}`,
+                    )
+                    .join("；")}
+                </p>
+              ))}
+              {(versionDiff.sequences.added.length > 0 ||
+                versionDiff.sequences.removed.length > 0 ||
+                versionDiff.sequences.changed.length > 0) && (
+                <p>
+                  序列：新增 {versionDiff.sequences.added.length} · 移除{" "}
+                  {versionDiff.sequences.removed.length} · 变更{" "}
+                  {versionDiff.sequences.changed.length}
+                </p>
+              )}
+              {versionDiff.photos.added.length === 0 &&
+                versionDiff.photos.removed.length === 0 &&
+                versionDiff.photos.changed.length === 0 &&
+                versionDiff.sequences.added.length === 0 &&
+                versionDiff.sequences.removed.length === 0 &&
+                versionDiff.sequences.changed.length === 0 && (
+                  <p>两个版本内容一致。</p>
+                )}
+            </div>
+          )}
         </section>
       )}
       {history.map((v) => (
