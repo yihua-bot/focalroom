@@ -42,6 +42,8 @@ pub struct CloudAuth {
     lock: tokio::sync::Mutex<()>,
     error: std::sync::Mutex<Option<String>>,
     avatar_cache: std::sync::Mutex<Option<std::path::PathBuf>>,
+    device_file: std::sync::Mutex<Option<std::path::PathBuf>>,
+    bound_session: std::sync::Mutex<Option<String>>,
 }
 impl CloudAuth {
     pub fn origin(&self) -> &str {
@@ -107,6 +109,8 @@ impl CloudAuth {
             lock: Default::default(),
             error: Default::default(),
             avatar_cache: Default::default(),
+            device_file: Default::default(),
+            bound_session: Default::default(),
         })
     }
     fn read(&self) -> Result<Record> {
@@ -117,6 +121,74 @@ impl CloudAuth {
                     .map_err(|_| AppError::new("KEYCHAIN_ERROR", "登录存储格式错误"))
             })
             .unwrap_or_else(|| Ok(Record::default()))
+    }
+    pub fn set_device_file(&self, file: std::path::PathBuf) {
+        *self.device_file.lock().unwrap_or_else(|p| p.into_inner()) = Some(file);
+    }
+    fn device_key(file: &std::path::Path) -> Result<String> {
+        use std::io::Write;
+        if let Ok(meta) = std::fs::symlink_metadata(file) {
+            if !meta.is_file() || meta.len() > 64 {
+                return Err(AppError::new("DEVICE_IDENTITY", "设备标识文件无效"));
+            }
+            let value = std::fs::read_to_string(file)
+                .map_err(|_| AppError::new("DEVICE_IDENTITY", "无法读取设备标识"))?;
+            uuid::Uuid::parse_str(&value)
+                .map_err(|_| AppError::new("DEVICE_IDENTITY", "设备标识格式无效"))?;
+            return Ok(value);
+        }
+        let value = uuid::Uuid::new_v4().to_string();
+        let mut target = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(file)
+            .map_err(|_| AppError::new("DEVICE_IDENTITY", "无法保存设备标识"))?;
+        target
+            .write_all(value.as_bytes())
+            .map_err(|_| AppError::new("DEVICE_IDENTITY", "无法保存设备标识"))?;
+        target
+            .sync_all()
+            .map_err(|_| AppError::new("DEVICE_IDENTITY", "无法保存设备标识"))?;
+        Ok(value)
+    }
+    async fn register_device(&self, token: &str) -> Result<()> {
+        if self
+            .bound_session
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_deref()
+            == Some(token)
+        {
+            return Ok(());
+        }
+        let file = self
+            .device_file
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        let Some(file) = file else {
+            return Ok(());
+        };
+        let key = Self::device_key(&file)?;
+        let device = self
+            .request(
+                "/devices",
+                Some(json!({"device_key":key,"name":"FocalRoom Mac","platform":"mac"})),
+                Some(token),
+            )
+            .await?;
+        let id = device["id"]
+            .as_str()
+            .filter(|id| uuid::Uuid::parse_str(id).is_ok())
+            .ok_or_else(|| AppError::new("CLOUD_PROTOCOL", "设备登记响应无效"))?;
+        self.request(
+            &format!("/devices/{id}/session"),
+            Some(json!({})),
+            Some(token),
+        )
+        .await?;
+        *self.bound_session.lock().unwrap_or_else(|p| p.into_inner()) = Some(token.to_owned());
+        Ok(())
     }
     fn save(&self, r: &Record) -> Result<()> {
         if r.pending.is_none() && r.session.is_none() {
@@ -270,6 +342,9 @@ impl CloudAuth {
             user: verified,
         });
         self.save(&r)?;
+        if let Some(session) = &r.session {
+            let _ = self.register_device(&session.token).await;
+        }
         *self.error.lock().unwrap_or_else(|p| p.into_inner()) = None;
         Ok(())
     }
@@ -419,6 +494,8 @@ impl CloudAuth {
                     if value.id != s.user.id {
                         return Err(AppError::new("CLOUD_PROTOCOL", "账户校验不匹配"));
                     }
+                    // 旧服务未提供设备端点时不阻断登录；下次状态刷新仍会重试登记。
+                    let _ = self.register_device(&s.token).await;
                     self.refresh_avatar(&value).await;
                     let mut value = value;
                     value.avatar = self.cached_avatar(&value);

@@ -1,4 +1,5 @@
 import {AccountAvatar} from "../../../src/components/shared/AccountAvatar";
+import { registerWebDevice } from './shared/device-registration';
 import { DesktopApproval, readDesktopRequest } from "./shared/DesktopApproval";
 import { MagicLogin as Login } from "./shared/MagicLogin";
 import { useEffect, useRef, useState } from "react";
@@ -91,6 +92,14 @@ export default function SharedApp() {
     [error, setError] = useState("");
   const desktopIntent = readDesktopRequest(new URL(location.href));
   const projectId = new URLSearchParams(route.slice(1)).get("project");
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    const register = () => { void registerWebDevice(session, () => active).catch(() => {}); };
+    register();
+    window.addEventListener('focus', register);
+    return () => { active = false; window.removeEventListener('focus', register); };
+  }, [session]);
   const openProject = (id: string | null) => {
     const hash = id ? `#project=${encodeURIComponent(id)}` : "";
     history.pushState(null, "", `/shared${hash}`);

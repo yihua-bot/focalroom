@@ -201,6 +201,12 @@ class ApiController {
       const u = await s.auth.authenticate(headers, false);
       return { id: u.id, email: u.email, name: u.name, avatar: u.avatar_url ?? null, emailVerified: !!u.email_verified_at, csrf: u.csrf };
     }
+    if (path === '/account/data-export' && req.method === 'POST') return s.data.export(headers, req.body);
+    if (path === '/account/erase' && req.method === 'POST') {
+      const receipt = await s.data.erase(headers, req.body);
+      res.setHeader('Set-Cookie', s.auth.cookie('', true));
+      return receipt;
+    }
     if (path === "/auth/logout" && req.method === "POST") {
       const u = await s.auth.authenticate(headers, true);
       await s.pool.query("DELETE FROM fr_sessions WHERE digest=$1", [
@@ -247,6 +253,8 @@ class ApiController {
       return s.projects(headers);
     if (path === "/promotions" && req.method === "POST")
       return s.promote(headers, req.body);
+    if (path === "/private-promotions" && req.method === "POST")
+      return s.promote(headers, req.body, true);
     if (path === "/invitations/accept" && req.method === "POST")
       return s.acceptInvite(headers, req.body);
     const member = path.match(/^\/workspaces\/([^/]+)\/members(?:\/([^/]+))?$/);
@@ -273,6 +281,8 @@ class ApiController {
     const project = path.match(/^\/projects\/([^/]+)\/(.+)$/);
     if (project) {
       const [, id, action] = project;
+      if (action === 'sync-state' && req.method === 'GET') return s.sync.read(headers, id);
+      if (action === 'sync-state' && req.method === 'POST') return s.sync.change(headers, id, req.body);
       const versionDiff = action.match(/^versions\/(\d+)\/diff\/(\d+)$/);
       if (versionDiff && req.method === "GET")
         return s.versionDiff(headers, id, Number(versionDiff[1]), Number(versionDiff[2]));
@@ -461,6 +471,7 @@ export async function createApi(options: {
       await closeRealtime();
       await app.close();
       await service.ai.drain();
+      await service.data.close();
     },
   };
 }

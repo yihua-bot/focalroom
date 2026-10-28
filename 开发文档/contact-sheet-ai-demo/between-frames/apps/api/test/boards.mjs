@@ -212,6 +212,14 @@ test('G6 formal canvas commands: envelope, revision conflict, idempotency, locke
   // 幂等重放：同 commandId+同内容 → 同回执，不重复推进修订。
   const replay = await post(firstEnvelope);
   assert.deepEqual(replay, first);
+  const receiptPath = '/boards/' + created.id + '/commands/' + firstEnvelope.commandId + '/receipt';
+  assert.deepEqual(await call(receiptPath, 'GET', owner), first, '丢回执后可只读查回原结果');
+  await call(receiptPath, 'GET', viewer, undefined, 404);
+  await call(receiptPath, 'GET', outsider, undefined, 403);
+  await call(receiptPath, 'GET', null, undefined, 401);
+  await call('/boards/' + board.id + '/commands/' + firstEnvelope.commandId + '/receipt', 'GET', owner, undefined, 404);
+  await call('/boards/' + created.id + '/commands/not-a-uuid/receipt', 'GET', owner, undefined, 400);
+  assert.equal((await call('/boards?project=' + project, 'GET', owner)).find(b => b.id === created.id).revision, 1);
 
   // 同 commandId 换内容 → 幂等冲突。
   await post({ ...firstEnvelope, baseRevision: 1, operations: [{ opId: randomUUID(), action: { type: 'updateNode', nodeId, x: 1 } }] }, 409);

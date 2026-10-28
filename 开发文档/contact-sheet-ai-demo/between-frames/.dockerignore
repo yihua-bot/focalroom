@@ -5,6 +5,16 @@
 **/dist
 test-results
 playwright-report
+**/test-results
+**/playwright-report
+**/DerivedData
+**/.build
+**/*.xcarchive
+**/*.ipa
+**/*.mobileprovision
+**/*.p12
+**/*.p8
+**/*.private.*
 *.sqlite*
 *.db
 **/.env*

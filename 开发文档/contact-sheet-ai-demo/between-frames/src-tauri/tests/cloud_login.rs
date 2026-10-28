@@ -34,6 +34,8 @@ struct Server {
     thread: Option<std::thread::JoinHandle<()>>,
     exchanges: Arc<Mutex<u32>>,
     reject: Arc<AtomicBool>,
+    device_keys: Arc<Mutex<Vec<String>>>,
+    device_bindings: Arc<Mutex<u32>>,
 }
 impl Server {
     fn new() -> Self {
@@ -47,6 +49,10 @@ impl Server {
         let calls = exchanges.clone();
         let reject = Arc::new(AtomicBool::new(false));
         let denied = reject.clone();
+        let device_keys = Arc::new(Mutex::new(Vec::new()));
+        let registered = device_keys.clone();
+        let device_bindings = Arc::new(Mutex::new(0));
+        let bound = device_bindings.clone();
         let thread = std::thread::spawn(move || {
             let mut state = String::new();
             let mut challenge = String::new();
@@ -117,6 +123,23 @@ impl Server {
                         used = true;
                         json!({"token":"f".repeat(64),"user":user})
                     }
+                } else if headers.starts_with("POST /api/v2/devices ") && !revoked {
+                    assert!(
+                        headers
+                            .to_lowercase()
+                            .contains(&format!("authorization: bearer {}", "f".repeat(64)))
+                    );
+                    assert_eq!(body["platform"], "mac");
+                    let key = body["device_key"].as_str().unwrap();
+                    assert!(uuid::Uuid::parse_str(key).is_ok());
+                    registered.lock().unwrap().push(key.to_owned());
+                    json!({"id":"11111111-1111-4111-8111-111111111111"})
+                } else if headers.starts_with(
+                    "POST /api/v2/devices/11111111-1111-4111-8111-111111111111/session ",
+                ) && !revoked
+                {
+                    *bound.lock().unwrap() += 1;
+                    json!({"bound":true})
                 } else if headers.starts_with("GET /api/v2/auth/me ") && !revoked {
                     assert!(
                         headers
@@ -141,6 +164,8 @@ impl Server {
             thread: Some(thread),
             exchanges,
             reject,
+            device_keys,
+            device_bindings,
         }
     }
     fn callback(&self, url: &str) -> String {
@@ -163,6 +188,34 @@ impl Drop for Server {
         }
     }
 }
+#[tokio::test]
+async fn desktop_device_identity_survives_restart_and_binds_each_session() {
+    let server = Server::new();
+    let vault = Arc::new(Vault::default());
+    let directory = tempfile::tempdir().unwrap();
+    let file = directory.path().join("device-id");
+    let auth = CloudAuth::new(&server.origin, "device-fixture", vault.clone()).unwrap();
+    auth.set_device_file(file.clone());
+    let url = auth.begin().await.unwrap();
+    auth.complete(&server.callback(&url)).await.unwrap();
+    assert_eq!(*server.device_bindings.lock().unwrap(), 1);
+    let original = std::fs::read_to_string(&file).unwrap();
+    let restarted = CloudAuth::new(&server.origin, "device-fixture", vault).unwrap();
+    restarted.set_device_file(file.clone());
+    assert!(restarted.status().await.unwrap().authenticated);
+    assert_eq!(*server.device_bindings.lock().unwrap(), 2);
+    assert!(
+        server
+            .device_keys
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|key| key == &original)
+    );
+    restarted.logout().await.unwrap();
+    assert_eq!(std::fs::read_to_string(file).unwrap(), original);
+}
+
 #[tokio::test]
 async fn pkce_callback_stores_only_in_vault_rejects_replay_and_reuses_session() {
     let server = Server::new();

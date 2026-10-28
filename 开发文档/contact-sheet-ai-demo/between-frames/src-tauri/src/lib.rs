@@ -87,6 +87,7 @@ pub fn run() {
                 .map_err(|error| std::io::Error::other(error.message))?,
             );
             cloud_auth.set_avatar_cache(cache.join("avatars"));
+            cloud_auth.set_device_file(directory.join("cloud-device-id"));
             let handle = app.handle().clone();
             let agent = agent::runtime::AgentEngine::hosted(store.clone(), cloud_auth.clone())
                 .with_notify(std::sync::Arc::new(move |project| {

@@ -37,8 +37,11 @@ export async function createAccount(tx: PoolClient, user: AccountUser, passwordH
 }
 export async function createSession(db: Pick<Pool, "query">, user: AccountUser) {
   const token = randomBytes(32).toString("hex"), csrf = randomBytes(24).toString("hex");
-  await db.query("INSERT INTO fr_sessions VALUES($1,$2,$3,now()+interval '24 hours')",
+  const inserted = await db.query(`WITH eligible AS (SELECT u.id FROM fr_users u WHERE u.id=$2
+    AND NOT EXISTS(SELECT 1 FROM fr_account_closures c WHERE c.user_id=u.id) FOR SHARE OF u)
+    INSERT INTO fr_sessions(digest,user_id,csrf,expires_at) SELECT $1,id,$3,now()+interval '24 hours' FROM eligible RETURNING digest`,
     [digest(token), user.id, csrf]);
+  assert(inserted.rowCount, 401, 'AUTH_REVOKED', '账号已关闭');
   return { token, csrf, user: { id: user.id, email: user.email, name: user.display_name, avatar: user.avatar_url ?? null } };
 }
 export class AuthService {
@@ -137,7 +140,7 @@ export class AuthService {
     );
     const row = (
       await tx.query(
-        "SELECT s.digest,s.csrf,u.id,u.email,u.display_name,u.avatar_url,u.email_verified_at FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s",
+        "SELECT s.digest,s.csrf,u.id,u.email,u.display_name,u.avatar_url,u.email_verified_at FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() AND NOT EXISTS(SELECT 1 FROM fr_account_closures c WHERE c.user_id=u.id) FOR SHARE OF s,u",
         [digest(token)],
       )
     ).rows[0];

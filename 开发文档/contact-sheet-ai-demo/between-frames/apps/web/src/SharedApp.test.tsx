@@ -26,7 +26,8 @@ it("已有浏览器会话进入桌面确认页，不跳到项目列表且不自�
  fireEvent.click(screen.getByRole("button",{name:"账户菜单"}));
  expect(screen.getByRole("menu")).toHaveTextContent(account.email);
  expect(screen.queryByText("项目列表")).not.toBeInTheDocument();
- expect(request).toHaveBeenCalledTimes(1);
+ expect(request).toHaveBeenCalledWith('/devices', account, 'POST', expect.objectContaining({ platform: 'web' }));
+ expect(request).not.toHaveBeenCalledWith('/auth/desktop/authorize', expect.anything(), expect.anything(), expect.anything());
 });
 it("验证码登录成功后保留桌面事务，统一进入账户确认页",async()=>{
  history.replaceState(null,"",desktopUrl);

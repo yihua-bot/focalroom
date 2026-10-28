@@ -1,10 +1,11 @@
-import { mkdir, readFile, open } from "node:fs/promises";
+import { mkdir, readFile, open, unlink } from "node:fs/promises";
 import { constants } from "node:fs";
 import { join } from "node:path";
 import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import sharp from "sharp";
 import { assert, ApiError } from "./errors.ts";
@@ -12,12 +13,18 @@ import { digest } from "./database.ts";
 export interface PreviewStore {
   put(key: string, bytes: Buffer): Promise<void>;
   get(key: string): Promise<Buffer>;
+  remove?(key: string): Promise<void>;
 }
 const validKey = (key: string) => /^[a-f0-9]{64}\.jpg$/.test(key);
 export class LocalPreviewStore implements PreviewStore {
   readonly directory: string;
   constructor(directory: string) {
     this.directory = directory;
+  }
+  async remove(key: string) {
+    assert(validKey(key), 400, 'VALIDATION_ERROR', '非法对象键');
+    try { await unlink(join(this.directory, key)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   }
   async put(key: string, bytes: Buffer) {
     assert(validKey(key), 400, "VALIDATION_ERROR", "非法对象键");
@@ -69,6 +76,10 @@ export class R2PreviewStore implements PreviewStore {
   constructor(client: S3Client, bucket: string) {
     this.client = client;
     this.bucket = bucket;
+  }
+  async remove(key: string) {
+    assert(validKey(key), 400, 'VALIDATION_ERROR', '非法对象键');
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
   async put(key: string, bytes: Buffer) {
     assert(validKey(key), 400, "VALIDATION_ERROR", "非法对象键");

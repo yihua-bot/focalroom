@@ -49,6 +49,8 @@ export class AuthorityService {
     user: Identity,
     project: Project,
   ): Promise<Scope["principal"]> {
+    const sync = (await tx.query('SELECT mode FROM fr_project_sync WHERE project_id=$1', [project.id])).rows[0];
+    if (sync && sync.mode !== 'SHARED' && project.owner_id !== user.id) throw denied();
     const membership = (
       await tx.query(
         "SELECT role FROM fr_memberships WHERE workspace_id=$1 AND user_id=$2",

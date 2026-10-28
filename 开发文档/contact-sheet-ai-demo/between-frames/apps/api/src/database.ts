@@ -51,6 +51,9 @@ async function migrations() {
       "0028_team_seats.sql",
       "0029_research_references.sql",
       "0030_device_registry.sql",
+      "0031_private_sync.sql",
+      "0032_account_data_rights.sql",
+      "0033_audited_private_erasure.sql",
     ].map(
       async (name) => {
         const sql = await readFile(

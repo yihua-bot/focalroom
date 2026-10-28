@@ -1,6 +1,8 @@
 import { requestMagicCode, verifyMagicCode, type MagicEmailDelivery } from "./magic-login.ts";
 import { loginWithGoogle } from "./google-login.ts";
 import { BoardService } from "./boards.ts";
+import { ProjectSyncService } from './project-sync.ts';
+import { AccountDataService } from './account-data.ts';
 import { BillingService } from './billing.ts';
 import type { BillingConfig, BillingGateway } from './billing-gateway.ts';
 import { DesktopLoginService } from "./desktop-login.ts";
@@ -113,6 +115,8 @@ export class CloudService {
   readonly accounts: AccountRecoveryService;
   readonly desktop: DesktopLoginService;
   readonly boards: BoardService;
+  readonly sync: ProjectSyncService;
+  readonly data: AccountDataService;
   readonly ai: HostedAiService;
   readonly billing: BillingService;
   private readonly magicEmail?: MagicEmailDelivery;
@@ -125,7 +129,9 @@ export class CloudService {
     this.desktop = new DesktopLoginService(pool, this.auth);
     this.authority = new AuthorityService(pool, this.auth);
     this.boards = new BoardService(this.authority);
+    this.sync = new ProjectSyncService(this.authority);
     this.store = store;
+    this.data = new AccountDataService(pool, this.auth, store);
     this.accounts = new AccountRecoveryService(pool, this.auth, origin, email);
   }
   async workspaces(headers: Headers) {
@@ -245,7 +251,7 @@ export class CloudService {
     const user = await this.auth.authenticate(headers, false);
     return (
       await this.pool.query(
-        "SELECT DISTINCT p.id,p.workspace_id,p.title,p.revision,p.state FROM fr_projects p LEFT JOIN fr_memberships m ON m.workspace_id=p.workspace_id AND m.user_id=$1 LEFT JOIN fr_grants g ON g.project_id=p.id AND g.user_id=$1 AND g.active WHERE (p.owner_id=$1 OR m.role IN ('OWNER','ADMIN') OR g.user_id=$1) AND p.state IN ('STAGING','SHARED') AND (p.state='SHARED' OR p.owner_id=$1) ORDER BY p.id",
+        "SELECT DISTINCT p.id,p.workspace_id,p.title,p.revision,p.state,s.mode AS sync_mode FROM fr_projects p LEFT JOIN fr_project_sync s ON s.project_id=p.id LEFT JOIN fr_memberships m ON m.workspace_id=p.workspace_id AND m.user_id=$1 LEFT JOIN fr_grants g ON g.project_id=p.id AND g.user_id=$1 AND g.active WHERE (p.owner_id=$1 OR m.role IN ('OWNER','ADMIN') OR g.user_id=$1) AND p.state IN ('STAGING','SHARED') AND (p.state='SHARED' OR p.owner_id=$1) AND (s.mode IS NULL OR s.mode='SHARED' OR p.owner_id=$1) ORDER BY p.id",
         [user.id],
       )
     ).rows;
@@ -267,6 +273,8 @@ export class CloudService {
         )
       ).rows[0];
       if (value.project_id) {
+        const mode = (await tx.query('SELECT mode FROM fr_project_sync WHERE project_id=$1', [value.project_id])).rows[0]?.mode;
+        assert(!mode || mode === 'SHARED', 409, 'PROJECT_PRIVATE', '请先由项目所有者显式开启共享');
         const project = (
           await tx.query(
             "SELECT * FROM fr_projects WHERE id=$1 AND workspace_id=$2 AND state='SHARED' FOR UPDATE",
@@ -340,6 +348,8 @@ export class CloudService {
         "邀请已使用、过期、撤销或与登录邮箱不匹配",
       );
       if (invite.project_id) {
+        const mode = (await tx.query('SELECT mode FROM fr_project_sync WHERE project_id=$1', [invite.project_id])).rows[0]?.mode;
+        assert(!mode || mode === 'SHARED', 409, 'PROJECT_PRIVATE', '项目已收回为私有');
         const project = (
           await tx.query(
             "SELECT id,owner_id FROM fr_projects WHERE id=$1 FOR UPDATE",
@@ -422,9 +432,9 @@ export class CloudService {
       return { revoked: true };
     });
   }
-  async promote(headers: Headers, input: unknown) {
+  async promote(headers: Headers, input: unknown, privateSync = false) {
     const value = promotionSchema.parse(input),
-      hash = digest(JSON.stringify(value));
+      hash = digest(JSON.stringify(privateSync ? { ...value, sync_mode: 'PRIVATE_SYNCED' } : value));
     return transaction(this.pool, async (tx) => {
       const user = await this.auth.authenticate(headers, true, tx);
       await tx.query("SELECT id FROM fr_workspaces WHERE id=$1 FOR SHARE", [
@@ -475,6 +485,7 @@ export class CloudService {
           hash,
         ],
       );
+      if (privateSync) await tx.query("INSERT INTO fr_project_sync(project_id,mode) VALUES($1,'SYNC_ENROLLING')", [id]);
       return { project_id: id, state: "STAGING", manifest_digest: hash };
     });
   }
@@ -509,6 +520,7 @@ export class CloudService {
           "MEDIA_CONFLICT",
           "照片已绑定不同预览",
         );
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', ['media:' + preview.key]);
         await this.store.put(preview.key, preview.data);
         await tx.query(
           "INSERT INTO fr_previews VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING",
@@ -608,6 +620,7 @@ export class CloudService {
           await tx.query("UPDATE fr_projects SET state='SHARED' WHERE id=$1", [
             id,
           ]);
+          await tx.query("UPDATE fr_project_sync SET mode='PRIVATE_SYNCED',updated_at=now() WHERE project_id=$1 AND mode='SYNC_ENROLLING'", [id]);
           await tx.query(
             "INSERT INTO fr_versions(project_id,revision,snapshot,actor_id,command_id) VALUES($1,$2,$3,$4,$5)",
             [
@@ -1056,6 +1069,7 @@ export class CloudService {
         await tx.query("UPDATE fr_projects SET state='ABORTED' WHERE id=$1", [
           id,
         ]);
+        await tx.query("UPDATE fr_project_sync SET mode='ENROLL_FAILED',updated_at=now() WHERE project_id=$1 AND mode='SYNC_ENROLLING'", [id]);
         return { aborted: true, manifest_digest };
       },
     );
@@ -1179,7 +1193,7 @@ export class CloudService {
   ) {
     const row = (
       await tx.query(
-        "SELECT u.id,u.email,u.display_name AS name,u.avatar_url,u.email_verified_at,s.csrf,s.digest AS session FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() FOR SHARE OF s",
+        "SELECT u.id,u.email,u.display_name AS name,u.avatar_url,u.email_verified_at,s.csrf,s.digest AS session FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() AND NOT EXISTS(SELECT 1 FROM fr_account_closures c WHERE c.user_id=u.id) FOR SHARE OF s,u",
         [session],
       )
     ).rows[0];
@@ -1365,12 +1379,17 @@ export class CloudService {
       const ok = avatar === "" || avatar.startsWith("data:image/") || avatar.startsWith("https://");
       assert(ok, 400, "VALIDATION_ERROR", "头像格式不支持");
     }
-    await this.pool.query(
-      "UPDATE fr_users SET display_name=COALESCE($2,display_name), avatar_url=COALESCE($3,avatar_url) WHERE id=$1",
-      [user.id, name ?? null, avatar ?? null],
-    );
-    const row = (await this.pool.query("SELECT id,email,display_name AS name,avatar_url,email_verified_at FROM fr_users WHERE id=$1", [user.id])).rows[0];
-    return { id: row.id, email: row.email, name: row.name, avatar: row.avatar_url ?? null, emailVerified: !!row.email_verified_at };
+    return transaction(this.pool, async tx => {
+      await tx.query('SELECT id FROM fr_users WHERE id=$1 FOR UPDATE', [user.id]);
+      const closed = (await tx.query('SELECT 1 FROM fr_account_closures WHERE user_id=$1', [user.id])).rowCount;
+      assert(!closed, 401, 'AUTH_REVOKED', '账号已关闭');
+      const row = (await tx.query(
+        "UPDATE fr_users SET display_name=COALESCE($2,display_name), avatar_url=COALESCE($3,avatar_url) WHERE id=$1 RETURNING id,email,display_name AS name,avatar_url,email_verified_at",
+        [user.id, name ?? null, avatar ?? null],
+      )).rows[0];
+      assert(row, 401, 'AUTH_REVOKED', '账号不可访问');
+      return { id: row.id, email: row.email, name: row.name, avatar: row.avatar_url ?? null, emailVerified: !!row.email_verified_at };
+    });
   }
 
   async googleLogin(input: unknown, ip: string) {
