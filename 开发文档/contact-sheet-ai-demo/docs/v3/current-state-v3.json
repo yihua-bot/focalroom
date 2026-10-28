@@ -3,8 +3,8 @@
   "product": "FocalRoom",
   "target": "v3.0",
   "gate": "G0",
-  "observedAt": "2026-10-28T02:08:55.389Z",
-  "sourceHead": "def651137fdb3c2441a8959101f2f05ee64a38d8",
+  "observedAt": "2026-10-28T11:39:14.611Z",
+  "sourceHead": "c8d44f6d06df896b1377e359c2f8f5a33554f25b",
   "changedSources": [],
   "branch": "main",
   "clientVersion": "1.2.0",
@@ -12,7 +12,7 @@
     "path": "../../../.github/workflows/betweenframes-v2.yml",
     "sha256": "6ac05feec1c245eee10f1e463571af2494dd8a5ce7008e5cb195213062257112"
   },
-  "status": "G3_PROPOSAL_DIFF_LANDED_MAIN_CI_GREEN",
+  "status": "G2_WIRED_1_ACTIVE_3_READY_MAIN_CI_GREEN",
   "scope": {
     "userDataOpened": false,
     "productionChanged": false,
@@ -805,13 +805,56 @@
       "run": 40615367257
     },
     {
+      "id": "g3-web-proposal-diff",
+      "result": "PASS",
+      "head": "f378dc1",
+      "note": "Web 提案卡差异预览（proposalDiffSchema + 全量采纳后序列/增删移/基线过期）；前端 391/391",
+      "run": 40633988704
+    },
+    {
+      "id": "g3-web-version-diff",
+      "result": "PASS",
+      "head": "1abed2f",
+      "note": "Web 历史页版本对比（versionDiffSchema + 字段级差异 + 同版本禁用）；首跑 journey strict-mode 冲突→定位修复→本地 13 流程全过（72a2c7a+1abed2f）；前端 393/393",
+      "run": 40650442876
+    },
+    {
+      "id": "evidence-refresh",
+      "result": "PASS",
+      "head": "000dc03",
+      "note": "Web journey 本地验证证据 7 张截图刷新（含新 Diff UI），共享树清理",
+      "run": 40655775922
+    },
+    {
+      "id": "g2-scaled-decode-wiring",
+      "result": "PASS",
+      "head": "a408229",
+      "note": "G2-① 已激活：prepare 长边>2800 的 jpg/png/tiff 走 ImageIO 缩放解码（头部尺寸+纵横比对齐、去预乘、失败回退）；Rust 全套 40 套件 0 失败",
+      "run": 40662825899
+    },
+    {
+      "id": "g2-display-machinery",
+      "result": "PASS",
+      "head": "a1ea760",
+      "note": "G2-③ 机制落地休眠：render_display_managed + DisplayManaged 变体 + 前端管线 + 真实 ColorSync 参考值测试（蓝 255→~245）；自动接线因 M1 直通契约 5 项回归暂缓；全套 Rust 377/0、前端 393/393",
+      "run": 40670413746
+    },
+    {
+      "id": "g2-errata",
+      "result": "PASS",
+      "head": "c8d44f6",
+      "note": "勘误：③ 激活双重前置（产品 A/B 决策 + 命令面在并行 WIP）——桌面无设置存储",
+      "run": 40676961980
+    },
+    {
       "id": "g0-inventory",
       "result": "PASS",
       "pgTables": 52,
       "pgMigrations": 24,
       "sqliteMigrations": 33,
       "migrationDeltaAllAdditive": true,
-      "head": "def6511"
+      "head": "c8d44f6",
+      "note": "按 HEAD 提交态计数；工作树实测 53/25 系并行会话未提交的 0030_device_registry（database.ts 注册+迁移文件在共享树在途），未计入"
     }
   ],
   "remaining": [
@@ -835,15 +878,18 @@
     "researchReferencesAt": "c4f0210",
     "g4RevocationAt": "ed324f4",
     "g3ProposalDiffAt": "def6511",
-    "notes": "G6 共编服务端四批齐备（0025–0027）；J5 团队席位（0028）、G3 双 Diff（版本间 e43c87a + 提案投影 def6511）、I1 研究笔记/链接（0029）、G4 撤权回归（ed324f4）落地；G2 决策④已收口、①②③待用户；服务端零冲突 lane 收口"
+    "g3WebDiffAt": "1abed2f",
+    "g2ScaledDecodeAt": "a408229",
+    "g2DisplayMachineryAt": "a1ea760",
+    "notes": "G2 用户批准 ①A②A③A（2026-10-28）：① scaled_decode 已激活导入路径；③ 显示器色彩渲染机制落地休眠（激活待产品 A/B + 命令面）；② 顺延（commands.rs/lib.rs 在对方 237 文件 WIP）。此前：G6 服务端四批/J5 席位/G3 双 Diff+双 Web 消费/I1 研究参考/G4 撤权回归全部落地。共享树检测到并行会话在途 0030_device_registry（7 文件未提交，未触碰）"
   },
   "remoteCI": {
     "conclusion": "success",
-    "databaseId": 40615367257,
-    "headSha": "def651137fdb3c2441a8959101f2f05ee64a38d8",
+    "databaseId": 40676961980,
+    "headSha": "c8d44f6d06df896b1377e359c2f8f5a33554f25b",
     "status": "completed",
-    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40615367257",
-    "observedAt": "2026-10-28T02:08:55.389Z",
-    "note": "G3 提案投影 Diff（def6511）合入后全量门禁绿"
+    "url": "https://github.com/yihua-bot/focalroom/actions/runs/40676961980",
+    "observedAt": "2026-10-28T11:39:14.611Z",
+    "note": "G2 评审包勘误（c8d44f6）合入后全量门禁绿"
   }
 }
