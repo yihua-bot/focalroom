@@ -1,0 +1,23 @@
+{
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/FocalRoom/AccountDataView.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AccountDataView.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AccountDataView.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AccountDataView.dia",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AccountDataView.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AccountDataView.swiftdeps"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/FocalRoom/AppModel.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AppModel.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AppModel.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AppModel.dia",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AppModel.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/AppModel.swiftdeps"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/FocalRoom/CollaborationViews.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/CollaborationViews.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/CollaborationViews.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/CollaborationViews.dia",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/CollaborationViews.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoom.build/Debug-iphonesimulator/FocalRoom.build/Objects-normal/arm64/CollaborationViews.swiftdeps"
+  }
+}

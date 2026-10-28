@@ -1,0 +1,54 @@
+name: FocalRoom iPhone
+on:
+  pull_request:
+    paths:
+      - '开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/**'
+      - '开发文档/contact-sheet-ai-demo/between-frames/apps/api/**'
+      - '开发文档/contact-sheet-ai-demo/between-frames/packages/contracts/**'
+      - '.github/workflows/focalroom-ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iphone-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iphone:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: 开发文档/contact-sheet-ai-demo/between-frames
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: 开发文档/contact-sheet-ai-demo/between-frames/.node-version
+          cache: npm
+          cache-dependency-path: 开发文档/contact-sheet-ai-demo/between-frames/package-lock.json
+      - name: 准备既有后端测试依赖
+        run: |
+          brew install postgresql@15
+          npm ci
+      - name: Swift 核心与既有契约
+        run: |
+          npm run typecheck
+          npm run contracts:check
+          swift test --package-path "apps/mobile-ios" --filter 'CoreTests.CoreTests|LocalLibraryTests|PhotoTransformTests'
+      - name: 创建独立 iPhone 模拟器
+        run: |
+          device_id="$(node "apps/mobile-ios/scripts/create-simulator.mjs")"
+          echo "FOCALROOM_IOS_SIMULATOR_ID=$device_id" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device_id"
+      - name: 原生界面与真实隔离后端
+        run: node "apps/api/test/run.mjs" "apps/mobile-ios/scripts/verify-live.mjs" --ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: focalroom-iphone-evidence
+          if-no-files-found: warn
+          path: |
+            开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/test-results/

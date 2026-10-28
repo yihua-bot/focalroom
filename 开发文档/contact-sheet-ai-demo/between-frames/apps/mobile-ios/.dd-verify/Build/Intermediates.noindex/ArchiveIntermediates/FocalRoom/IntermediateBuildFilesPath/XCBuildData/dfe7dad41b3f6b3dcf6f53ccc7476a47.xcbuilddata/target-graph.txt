@@ -1,0 +1,6 @@
+Target dependency graph (3 targets)
+Target 'FocalRoom' in project 'FocalRoom'
+➜ Explicit dependency on target 'FocalRoomCore' in project 'FocalRoomCore'
+Target 'FocalRoomCore' in project 'FocalRoomCore'
+➜ Explicit dependency on target 'FocalRoomCore' in project 'FocalRoomCore'
+Target 'FocalRoomCore' in project 'FocalRoomCore' (no dependencies)

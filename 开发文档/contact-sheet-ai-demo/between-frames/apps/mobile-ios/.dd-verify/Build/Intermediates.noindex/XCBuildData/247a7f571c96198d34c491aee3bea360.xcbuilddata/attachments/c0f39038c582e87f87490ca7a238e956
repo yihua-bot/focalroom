@@ -1,0 +1,89 @@
+{
+  "" : {
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/FocalRoomCore-primary.dia",
+    "emit-module-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/FocalRoomCore-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/FocalRoomCore-primary-emit-module.dia",
+    "pch" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/FocalRoomCore-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/FocalRoomCore-primary.swiftdeps"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/Sources/FocalRoomCore/AIChatStore.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/AIChatStore.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/AIChatStore.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/AIChatStore.dia",
+    "index-unit-output-path" : "/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/AIChatStore.o",
+    "llvm-bc" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/AIChatStore.bc",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/AIChatStore.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/AIChatStore.swiftdeps",
+    "swiftmodule" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/AIChatStore~partial.swiftmodule"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/Sources/FocalRoomCore/APIClient.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/APIClient.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/APIClient.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/APIClient.dia",
+    "index-unit-output-path" : "/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/APIClient.o",
+    "llvm-bc" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/APIClient.bc",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/APIClient.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/APIClient.swiftdeps",
+    "swiftmodule" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/APIClient~partial.swiftmodule"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/Sources/FocalRoomCore/LocalLibrary.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/LocalLibrary.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/LocalLibrary.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/LocalLibrary.dia",
+    "index-unit-output-path" : "/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/LocalLibrary.o",
+    "llvm-bc" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/LocalLibrary.bc",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/LocalLibrary.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/LocalLibrary.swiftdeps",
+    "swiftmodule" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/LocalLibrary~partial.swiftmodule"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/Sources/FocalRoomCore/Models.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/Models.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/Models.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/Models.dia",
+    "index-unit-output-path" : "/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/Models.o",
+    "llvm-bc" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/Models.bc",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/Models.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/Models.swiftdeps",
+    "swiftmodule" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/Models~partial.swiftmodule"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/Sources/FocalRoomCore/PhotoTransform.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PhotoTransform.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PhotoTransform.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PhotoTransform.dia",
+    "index-unit-output-path" : "/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PhotoTransform.o",
+    "llvm-bc" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PhotoTransform.bc",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PhotoTransform.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PhotoTransform.swiftdeps",
+    "swiftmodule" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PhotoTransform~partial.swiftmodule"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/Sources/FocalRoomCore/PreviewCache.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PreviewCache.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PreviewCache.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PreviewCache.dia",
+    "index-unit-output-path" : "/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PreviewCache.o",
+    "llvm-bc" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PreviewCache.bc",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PreviewCache.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PreviewCache.swiftdeps",
+    "swiftmodule" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/PreviewCache~partial.swiftmodule"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/Sources/FocalRoomCore/ScopedStore.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/ScopedStore.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/ScopedStore.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/ScopedStore.dia",
+    "index-unit-output-path" : "/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/ScopedStore.o",
+    "llvm-bc" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/ScopedStore.bc",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/ScopedStore.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/ScopedStore.swiftdeps",
+    "swiftmodule" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/ScopedStore~partial.swiftmodule"
+  },
+  "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/Sources/FocalRoomCore/VisionPreview.swift" : {
+    "const-values" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/VisionPreview.swiftconstvalues",
+    "dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/VisionPreview.d",
+    "diagnostics" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/VisionPreview.dia",
+    "index-unit-output-path" : "/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/VisionPreview.o",
+    "llvm-bc" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/VisionPreview.bc",
+    "object" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/VisionPreview.o",
+    "swift-dependencies" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/VisionPreview.swiftdeps",
+    "swiftmodule" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios/.dd-verify/Build/Intermediates.noindex/FocalRoomCore.build/Debug-iphonesimulator/FocalRoomCore.build/Objects-normal/x86_64/VisionPreview~partial.swiftmodule"
+  }
+}

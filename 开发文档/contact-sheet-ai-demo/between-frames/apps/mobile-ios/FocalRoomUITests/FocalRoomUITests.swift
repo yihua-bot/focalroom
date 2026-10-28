@@ -1,0 +1,500 @@
+import XCTest
+
+final class FocalRoomUITests: XCTestCase {
+    @MainActor
+    func testNativeLoginLibrarySelectionAndLogout() throws {
+        continueAfterFailure = false
+        let environment = ProcessInfo.processInfo.environment
+        guard let base = environment["FOCALROOM_IOS_TEST_BASE_URL"],
+              let projectID = environment["FOCALROOM_IOS_TEST_PROJECT_ID"],
+              let fileName = environment["FOCALROOM_IOS_TEST_FILE_NAME"] else {
+            throw XCTSkip("请通过本地隔离后端验证脚本运行，不访问生产服务")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["FOCALROOM_IOS_REVIEW_URL"] = base
+        app.launch()
+        addUIInterruptionMonitor(withDescription: "测试账户的系统密码保存提示") { alert in
+            let later = alert.buttons.matching(NSPredicate(format: "label IN %@", ["以后", "Not Now"])).firstMatch
+            if later.exists { later.tap(); return true }
+            return false
+        }
+        if app.buttons["账户"].waitForExistence(timeout: 3) {
+            app.buttons["账户"].tap()
+            logoutFromAccount(app)
+        }
+        XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10))
+        app.textFields["login.email"].tap()
+        app.textFields["login.email"].typeText("iphone@fr.test")
+        app.secureTextFields["login.password"].tap()
+        app.secureTextFields["login.password"].typeText("iphone-local-test-2026")
+        app.buttons["login.submit"].tap()
+        dismissPasswordPrompt(app)
+        let project = app.buttons["project.\(projectID)"]
+        XCTAssertTrue(project.waitForExistence(timeout: 15))
+        project.tap()
+        // 提案基线必须与服务端当前版本一致：先在 rev2 上部分采纳（→rev3），再做 KEEP 选片（→rev4）。
+        runProposalsSegment(app)
+        let photo = app.buttons["photo.ios-photo-1"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 15))
+        let libraryScreenshot = XCTAttachment(screenshot: app.screenshot())
+        libraryScreenshot.name = "iPhone 图库"
+        libraryScreenshot.lifetime = .keepAlways
+        add(libraryScreenshot)
+        photo.tap()
+        XCTAssertTrue(app.images["preview.loaded.ios-photo-1"].waitForExistence(timeout: 15), "必须显示经过摘要核验的真实后端预览")
+        XCTAssertTrue(app.buttons["selection.KEEP"].waitForExistence(timeout: 10))
+        app.buttons["selection.KEEP"].tap()
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '已选' AND enabled == true"), object: app.buttons["selection.KEEP"])
+        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 15), .completed)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "iPhone 授权预览与选片"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["photo.compare"].tap()
+        verifyComparison(app)
+        runResearchSegment(app)
+        verifySyncCenter(app, projectID: projectID)
+        runHistorySegment(app)
+
+        app.tabBars.buttons["消息"].tap()
+        XCTAssertTrue(app.staticTexts["iPhone 本地隔离测试批注"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["画布"].tap()
+        let board = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'board.'")).firstMatch
+        XCTAssertTrue(board.waitForExistence(timeout: 10))
+        board.tap()
+        // 节点视图带标识符与手势后被提升为独立无障碍元素，内部预览元素被吸收；以节点元素断言渲染。
+        let canvasNode = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'canvas.node.'")).firstMatch
+        XCTAssertTrue(canvasNode.waitForExistence(timeout: 10), "画布照片节点应渲染")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'canvas.edit.hint'")).firstMatch
+            .waitForExistence(timeout: 10), "草案画布应以编辑模式打开")
+        // 在照片节点上执行真实拖拽：走 moveNodes 权威命令路径。
+        let start = canvasNode.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = canvasNode.coordinate(withNormalizedOffset: CGVector(dx: 1.8, dy: 0.2))
+        start.press(forDuration: 0.6, thenDragTo: end)
+        let boardScreenshot = XCTAttachment(screenshot: app.screenshot())
+        boardScreenshot.name = "iPhone 画布编辑"
+        boardScreenshot.lifetime = .keepAlways
+        add(boardScreenshot)
+        app.tabBars.buttons["Focal AI"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == 'ai.balance'")).firstMatch
+            .waitForExistence(timeout: 10), "应显示账户 AI 额度")
+        let aiInput = app.textFields["ai.input"]
+        XCTAssertTrue(aiInput.waitForExistence(timeout: 5))
+        aiInput.tap()
+        aiInput.typeText("帮我看看节奏")
+        app.buttons["ai.send"].tap()
+        let aiReply = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '桩回复：'")).firstMatch
+        XCTAssertTrue(aiReply.waitForExistence(timeout: 30), "应收到模型桩回复")
+        let aiScreenshot = XCTAttachment(screenshot: app.screenshot())
+        aiScreenshot.name = "iPhone Focal AI 对话"
+        aiScreenshot.lifetime = .keepAlways
+        add(aiScreenshot)
+        // 收起键盘：return 键（中文键盘为“换行”）优先，否则滚动列表；键盘不收会遮挡标签栏。
+        if app.keyboards.firstMatch.exists {
+            let returnKey = app.keyboards.buttons.matching(NSPredicate(format: "label IN %@", ["return", "Return", "换行"])).firstMatch
+            if returnKey.exists { returnKey.tap() } else { app.swipeUp() }
+        }
+        let keyboardGone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"),
+                                                     object: app.keyboards.firstMatch)
+        XCTAssertEqual(XCTWaiter.wait(for: [keyboardGone], timeout: 5), .completed, "键盘应收起")
+        app.buttons["ai.attach"].tap()
+        let observedPhoto = app.buttons["ai.attach.photo.ios-photo-1"]
+        XCTAssertTrue(observedPhoto.waitForExistence(timeout: 5))
+        observedPhoto.tap()
+        app.buttons["完成"].firstMatch.tap()
+        aiInput.tap()
+        aiInput.typeText("观察这张照片")
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.buttons["ai.vision.confirm"].waitForExistence(timeout: 15))
+        app.buttons["取消"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["ai.send"].waitForExistence(timeout: 5))
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.buttons["ai.vision.confirm"].waitForExistence(timeout: 15), "取消授权后必须重新确认，不能自动发送")
+        XCTAssertTrue(app.staticTexts["照片发送授权"].exists || app.navigationBars["照片发送授权"].exists)
+        app.buttons["ai.vision.confirm"].tap()
+        let visionReply = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '桩回复：' AND label CONTAINS '观察 1 张预览'")).firstMatch
+        XCTAssertTrue(visionReply.waitForExistence(timeout: 30), "仅同意后实际发送受限预览")
+        if app.keyboards.firstMatch.exists {
+            app.swipeUp()
+        }
+        app.tabBars.buttons["项目"].tap()
+        // 中间段落的导航深度可能有残留：退到项目列表可见为止，最多三次。
+        for _ in 0..<3 {
+            if app.buttons["local.create"].waitForExistence(timeout: 5) { break }
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+        }
+        XCTAssertTrue(app.buttons["local.create"].waitForExistence(timeout: 5), "应能退回项目列表")
+        app.buttons["local.create"].tap()
+        app.textFields["local.title"].tap()
+        app.textFields["local.title"].typeText("iPhone 本机导入")
+        app.buttons["local.create.confirm"].tap()
+        let localProject = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'local.project.'")).firstMatch
+        XCTAssertTrue(localProject.waitForExistence(timeout: 10))
+        localProject.tap()
+        pickTwoPhotos(app)
+        let imported = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '已导入 2 张'"), object: app.staticTexts["local.import.summary"])
+        XCTAssertEqual(XCTWaiter.wait(for: [imported], timeout: 25), .completed)
+        let localPhotos = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'local.photo.'"))
+        XCTAssertEqual(localPhotos.count, 2)
+        pickTwoPhotos(app)
+        let duplicate = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '跳过重复 2 张'"), object: app.staticTexts["local.import.summary"])
+        XCTAssertEqual(XCTWaiter.wait(for: [duplicate], timeout: 25), .completed)
+        XCTAssertEqual(localPhotos.count, 2)
+        pickFile(app, filename: fileName)
+        let fileImported = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '已导入 1 张'"), object: app.staticTexts["local.import.summary"])
+        XCTAssertEqual(XCTWaiter.wait(for: [fileImported], timeout: 25), .completed)
+        XCTAssertEqual(localPhotos.count, 3)
+        let localScreenshot = XCTAttachment(screenshot: app.screenshot())
+        localScreenshot.name = "iPhone 本机图库与导入结果"
+        localScreenshot.lifetime = .keepAlways
+        add(localScreenshot)
+        localPhotos.element(boundBy: 0).tap()
+        app.buttons["local.selection.KEEP"].tap()
+        let localSelected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '已选' AND enabled == true"), object: app.buttons["local.selection.KEEP"])
+        XCTAssertEqual(XCTWaiter.wait(for: [localSelected], timeout: 10), .completed)
+        app.buttons["local.compare"].tap()
+        verifyComparison(app)
+        migrateToCloud(app)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(project.waitForExistence(timeout: 15), "钥匙串会话应在重启后恢复")
+        XCTAssertTrue(localProject.waitForExistence(timeout: 10), "本机项目和导入记录应在重启后保留")
+        let migratedBadge = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '已迁云'"), object: localProject)
+        XCTAssertEqual(XCTWaiter.wait(for: [migratedBadge], timeout: 10), .completed, "迁云状态应随本机记录持久化")
+        app.buttons["账户"].tap()
+        XCTAssertTrue(app.staticTexts["已登录设备"].waitForExistence(timeout: 10), "账户页应显示设备管理")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'device.revoke.'")).firstMatch.waitForExistence(timeout: 10),
+                      "本机设备应在登录后完成登记")
+        XCTAssertTrue(app.staticTexts["账单目录"].waitForExistence(timeout: 10), "账户页应显示账单目录")
+        // 账单区在长列表底部（快照证据：标题在 y≈798 屏幕边缘），先滚动让方案行进入可视区。
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["FocalRoom Pro"].waitForExistence(timeout: 10), "账单目录应列出服务方案")
+        let deviceScreenshot = XCTAttachment(screenshot: app.screenshot())
+        deviceScreenshot.name = "iPhone 账户设备管理"
+        deviceScreenshot.lifetime = .keepAlways
+        add(deviceScreenshot)
+        logoutFromAccount(app)
+        XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10))
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10), "退出状态应在重启后保持")
+        browseOfflineLibrary(app)
+    }
+
+    @MainActor
+    func testZAccountDeletionRequiresExplicitConfirmation() throws {
+        continueAfterFailure = false
+        guard let base = ProcessInfo.processInfo.environment["FOCALROOM_IOS_TEST_BASE_URL"] else {
+            throw XCTSkip("仅允许独立本地测试服务")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["FOCALROOM_IOS_REVIEW_URL"] = base
+        app.launch()
+        if app.buttons["账户"].waitForExistence(timeout: 2) {
+            app.buttons["账户"].tap()
+            logoutFromAccount(app)
+        }
+        XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10))
+        app.textFields["login.email"].tap()
+        app.textFields["login.email"].typeText("erase-ui@fr.test")
+        app.secureTextFields["login.password"].tap()
+        app.secureTextFields["login.password"].typeText("iphone-local-test-2026")
+        app.buttons["login.submit"].tap()
+        dismissPasswordPrompt(app)
+        XCTAssertTrue(app.buttons["账户"].waitForExistence(timeout: 15))
+        app.buttons["账户"].tap()
+        app.buttons["account.data.entry"].tap()
+        XCTAssertTrue(app.buttons["account.data.export"].waitForExistence(timeout: 10))
+        app.swipeUp()
+        XCTAssertFalse(app.buttons["account.erase"].isEnabled, "未核对邮箱、密码和范围时不能删除")
+        let email = app.textFields["account.erase.email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 5))
+        email.tap(); email.typeText("erase-ui@fr.test")
+        let password = app.secureTextFields["account.erase.password"]
+        password.tap(); password.typeText("iphone-local-test-2026")
+        app.swipeUp()
+        let understood = app.switches["account.erase.understand"]
+        understood.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(understood.value as? String, "1", "必须实际确认删除与保留范围")
+        app.buttons["account.erase"].tap()
+        XCTAssertTrue(app.buttons["确认删除账号"].waitForExistence(timeout: 5))
+        app.buttons["取消"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["account.erase"].exists, "取消最终确认后账号仍保留")
+        app.buttons["account.erase"].tap()
+        app.buttons["确认删除账号"].tap()
+        XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 15), "关闭回执后返回登录页")
+    }
+
+    @MainActor
+    private func dismissPasswordPrompt(_ app: XCUIApplication) {
+        let later = app.buttons.matching(NSPredicate(format: "label IN %@", ["以后", "Not Now"])).firstMatch
+        guard later.waitForExistence(timeout: 4) else { return }
+        // 系统 Sheet 暴露在宿主 AX 树中；用其实际屏幕框命中，避免跨服务坐标偏移。
+        let frame = later.frame
+        app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
+        XCTAssertTrue(later.waitForNonExistence(timeout: 5), "系统密码提示应先关闭")
+    }
+
+    @MainActor
+    private func logoutFromAccount(_ app: XCUIApplication) {
+        let logout = app.buttons["account.logout"]
+        for _ in 0..<4 {
+            if logout.exists && logout.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(logout.waitForExistence(timeout: 3))
+        logout.tap()
+        app.buttons["退出并清理本机缓存"].tap()
+    }
+
+    @MainActor
+    private func browseOfflineLibrary(_ app: XCUIApplication) {
+        let offlineEntry = app.buttons["offline.library"]
+        XCTAssertTrue(offlineEntry.waitForExistence(timeout: 10), "登录页应提供本机资料离线入口")
+        offlineEntry.tap()
+        let scope = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'offline.scope.'")).firstMatch
+        XCTAssertTrue(scope.waitForExistence(timeout: 10), "离线入口应列出已登记账户资料")
+        scope.tap()
+        let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'local.project.'")).firstMatch
+        XCTAssertTrue(project.waitForExistence(timeout: 10), "离线模式应列出本机项目")
+        project.tap()
+        let photos = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'local.photo.'"))
+        XCTAssertEqual(photos.count, 3, "离线只读仍可浏览全部本机照片")
+        photos.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '离线只读'")).firstMatch.waitForExistence(timeout: 10),
+                      "离线只读必须明确标识，不得冒充可编辑状态")
+        let offlineScreenshot = XCTAttachment(screenshot: app.screenshot())
+        offlineScreenshot.name = "iPhone 离线本机资料"
+        offlineScreenshot.lifetime = .keepAlways
+        add(offlineScreenshot)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        app.buttons["local.import"].tap()
+        let export = app.buttons.matching(NSPredicate(format: "label CONTAINS '导出项目'")).firstMatch
+        XCTAssertTrue(export.waitForExistence(timeout: 5), "离线模式应提供导出入口")
+        export.tap()
+        // 系统文件夹选择器部分渲染在远程进程；应用侧取消按钮呈现为 Other，需按元素类型分别轮询。
+        // 本段是旅程终点，只需证明选择器出现，不做系统表单交互，避免跨进程不稳定。
+        let cancelLabel = NSPredicate(format: "label == '取消' OR label == 'Cancel'")
+        let signals = [
+            app.buttons.matching(cancelLabel).firstMatch,
+            app.otherElements.matching(cancelLabel).firstMatch,
+            XCUIApplication(bundleIdentifier: "com.apple.DocumentsApp").buttons.matching(cancelLabel).firstMatch,
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS '浏览' OR label CONTAINS 'Browse'")).firstMatch,
+        ]
+        let visible = signals.first { $0.waitForExistence(timeout: 15) }
+        XCTAssertNotNil(visible, "导出应打开系统文件夹选择器")
+        let exportSheet = XCTAttachment(screenshot: app.screenshot())
+        exportSheet.name = "iPhone 导出文件夹选择器"
+        exportSheet.lifetime = .keepAlways
+        add(exportSheet)
+    }
+
+    @MainActor
+    private func waitEditorGone(_ app: XCUIApplication) {
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["research.save"])
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 10), .completed, "保存成功后编辑表单应收起")
+    }
+
+    @MainActor
+    private func runProposalsSegment(_ app: XCUIApplication) {
+        app.buttons["proposals.entry"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'proposals.row.'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "联调留下的 SUBMITTED 提案应出现在待审阅")
+        row.tap()
+        let toggles = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'proposals.op.'"))
+        XCTAssertTrue(toggles.element(boundBy: 0).waitForExistence(timeout: 5))
+        let accept = app.buttons["proposals.accept"]
+        XCTAssertTrue(accept.waitForExistence(timeout: 5))
+        // 取消第二项（move）：部分采纳只应用 add。
+        toggles.element(boundBy: 1).tap()
+        let oneLeft = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '1 项'"), object: accept)
+        XCTAssertEqual(XCTWaiter.wait(for: [oneLeft], timeout: 10), .completed, "取消第二项后勾选数应只剩一项")
+        accept.tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label CONTAINS '采纳 1 项'")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        // 等详情表单完全收起再继续：收起动画会遮挡返回键；收起本身也是采纳成功的证明。
+        let sheetGone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["proposals.accept"])
+        XCTAssertEqual(XCTWaiter.wait(for: [sheetGone], timeout: 10), .completed, "采纳后详情表单应收起")
+        let submittedGone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.staticTexts["待审阅"])
+        XCTAssertEqual(XCTWaiter.wait(for: [submittedGone], timeout: 10), .completed, "唯一待审提案处理完毕后应清空待审阅区")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+    }
+
+    @MainActor
+    private func runHistorySegment(_ app: XCUIApplication) {
+        app.buttons["history.entry"].tap()
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'version.row.'"))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), "版本历史应列出已提交版本")
+        // List 内按钮命中会被文本截获（研究段同类问题），按坐标选择两个版本。
+        if rows.count >= 2 {
+            rows.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            rows.element(boundBy: 1).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        let diffHeader = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '差异'")).firstMatch
+        XCTAssertTrue(diffHeader.waitForExistence(timeout: 15), "选择两个版本后应显示差异区")
+        let historyScreenshot = XCTAttachment(screenshot: app.screenshot())
+        historyScreenshot.name = "iPhone 版本历史与差异"
+        historyScreenshot.lifetime = .keepAlways
+        add(historyScreenshot)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+    }
+
+    @MainActor
+    private func verifySyncCenter(_ app: XCUIApplication, projectID: String) {
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["sync.center"].tap()
+        XCTAssertTrue(app.staticTexts["已缓存项目"].waitForExistence(timeout: 10))
+        let row = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'sync.row.'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "同步中心应列出已缓存项目")
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "iPhone 同步中心"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["完成"].firstMatch.tap()
+        // 重进夹具项目，恢复后续步骤假设的导航栈深度。
+        let projectButton = app.buttons["project.\(projectID)"]
+        XCTAssertTrue(projectButton.waitForExistence(timeout: 10))
+        projectButton.tap()
+    }
+
+    @MainActor
+    private func runResearchSegment(_ app: XCUIApplication) {
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["research.entry"].tap()
+        XCTAssertTrue(app.staticTexts["还没有研究资料"].waitForExistence(timeout: 10))
+        app.buttons["research.create"].tap()
+        let title = app.textFields["research.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText("iPhone 研究笔记")
+        XCTAssertTrue(app.buttons["research.voice.start"].waitForExistence(timeout: 5), "语音入口应可见")
+        let body = app.textViews["research.body"]
+        XCTAssertTrue(body.waitForExistence(timeout: 5))
+        body.tap()
+        body.typeText("盲页开场节奏参考。")
+        let researchScreenshot = XCTAttachment(screenshot: app.screenshot())
+        researchScreenshot.name = "iPhone 研究笔记编辑与语音入口"
+        researchScreenshot.lifetime = .keepAlways
+        add(researchScreenshot)
+        app.buttons["research.save"].tap()
+        waitEditorGone(app)
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'research.row.'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "保存后应回到列表并显示新条目")
+        // 卡片中心命中会被内部文本截获（与相册网格同类），按坐标执行系统触摸。
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText("（更新）")
+        app.buttons["research.save"].tap()
+        waitEditorGone(app)
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let delete = app.buttons["research.delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        delete.tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label == '删除'")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts["还没有研究资料"].waitForExistence(timeout: 10), "删除后应回到空列表")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+    }
+
+    @MainActor
+    private func migrateToCloud(_ app: XCUIApplication) {
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["local.import"].tap()
+        let migrate = app.buttons.matching(NSPredicate(format: "label CONTAINS '迁云'")).firstMatch
+        XCTAssertTrue(migrate.waitForExistence(timeout: 5), app.debugDescription)
+        migrate.tap()
+        let confirm = app.buttons["local.migrate.confirm"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)
+        confirm.tap()
+        let open = app.buttons["local.migrate.open"].firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 120), "迁云应在真实后端上完成并显示云端项目入口")
+        let progress = XCTAttachment(screenshot: app.screenshot())
+        progress.name = "iPhone 迁云完成"
+        progress.lifetime = .keepAlways
+        add(progress)
+        open.tap()
+        let cloudPhotos = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'photo.'"))
+        let cloudLibraryReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count == 3"), object: cloudPhotos)
+        XCTAssertEqual(XCTWaiter.wait(for: [cloudLibraryReady], timeout: 30), .completed, "云端项目应包含迁云的全部照片")
+        let cloudScreenshot = XCTAttachment(screenshot: app.screenshot())
+        cloudScreenshot.name = "iPhone 迁云后的云端图库"
+        cloudScreenshot.lifetime = .keepAlways
+        add(cloudScreenshot)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+    }
+
+    @MainActor
+    private func verifyComparison(_ app: XCUIApplication) {
+        XCTAssertTrue(app.buttons["compare.left.zoomIn"].waitForExistence(timeout: 10))
+        app.buttons["compare.left.zoomIn"].tap()
+        XCTAssertEqual(app.staticTexts["compare.left.zoom"].label, "2.0×")
+        XCTAssertEqual(app.staticTexts["compare.right.zoom"].label, "2.0×")
+        app.buttons["compare.lock"].tap()
+        XCTAssertEqual(app.buttons["compare.lock"].value as? String, "独立调整")
+        app.buttons["compare.right.zoomIn"].tap()
+        XCTAssertEqual(app.staticTexts["compare.left.zoom"].label, "2.0×")
+        XCTAssertEqual(app.staticTexts["compare.right.zoom"].label, "4.0×")
+        app.buttons["compare.reset"].tap()
+        XCTAssertEqual(app.staticTexts["compare.left.zoom"].label, "1.0×")
+        XCTAssertEqual(app.staticTexts["compare.right.zoom"].label, "1.0×")
+        app.buttons["compare.swap"].tap()
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "iPhone 双图比较"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["完成"].firstMatch.tap()
+    }
+
+    @MainActor
+    private func pickTwoPhotos(_ app: XCUIApplication) {
+        app.buttons["local.import"].tap()
+        app.buttons["从相册导入"].tap()
+        let images = app.images.matching(identifier: "PXGGridLayout-Info")
+        if images.firstMatch.waitForExistence(timeout: 5) {
+            XCTAssertGreaterThanOrEqual(images.count, 2)
+            // iOS 26 网格的 AX Image 没有独立命中点；在实际图像框中心执行系统触摸。
+            images.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            images.element(boundBy: 1).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        } else {
+            let cells = app.collectionViews.cells
+            XCTAssertTrue(cells.firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+            XCTAssertGreaterThanOrEqual(cells.count, 2)
+            cells.element(boundBy: 0).tap()
+            cells.element(boundBy: 1).tap()
+        }
+        let add = app.navigationBars.buttons.matching(NSPredicate(format: "label BEGINSWITH '添加' OR label BEGINSWITH 'Add' OR label == '完成' OR label == 'Done'")).firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 5), app.debugDescription)
+        add.tap()
+    }
+
+    @MainActor
+    private func pickFile(_ app: XCUIApplication, filename: String) {
+        app.buttons["local.import"].tap()
+        app.buttons["从文件导入"].tap()
+        let basename = String(filename.dropLast(4))
+        let file = app.cells.matching(NSPredicate(format: "label CONTAINS %@", basename)).firstMatch
+        if !file.waitForExistence(timeout: 5) {
+            let browse = app.buttons.matching(NSPredicate(format: "label == '浏览' OR label == 'Browse'")).firstMatch
+            if browse.exists { browse.tap() }
+            let onDevice = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["我的iPhone", "我的 iPhone", "On My iPhone"])).firstMatch
+            XCTAssertTrue(onDevice.waitForExistence(timeout: 5), app.debugDescription)
+            onDevice.tap()
+            let folder = app.cells.matching(NSPredicate(format: "label BEGINSWITH 'FocalRoom'")).firstMatch
+            XCTAssertTrue(folder.waitForExistence(timeout: 5), app.debugDescription)
+            folder.tap()
+        }
+        XCTAssertTrue(file.waitForExistence(timeout: 5), app.debugDescription)
+        file.tap()
+        let open = app.buttons.matching(NSPredicate(format: "label == '打开' OR label == 'Open'")).firstMatch
+        if open.waitForExistence(timeout: 3), open.isEnabled { open.tap() }
+    }
+}

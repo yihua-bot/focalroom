@@ -24,3 +24,13 @@ src-tauri/gen/schemas/
 .omo/
 .wrangler/
 **/*.schema
+# Xcode / iOS build artifacts
+DerivedData/
+*.xcuserstate
+build/
+ios/Pods/
+FocalRoom-v4/
+apps/mobile-ios/DerivedData/
+apps/mobile-ios/build/
+*.ipa
+*.dSYM.zip
