@@ -742,6 +742,15 @@
   margin: 6px 0 0;
   font-size: 11px;
 }
+.fr-proposal .fr-diff {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid #4a5d6e;
+  background: rgba(74, 93, 110, 0.12);
+}
+.fr-proposal .fr-diff p {
+  font-size: 11px;
+}
 .fr-proposal .fr-check {
   font-size: 11px;
 }

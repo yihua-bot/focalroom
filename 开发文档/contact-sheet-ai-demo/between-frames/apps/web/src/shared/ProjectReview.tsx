@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CloudError,
   commandFor,
+  proposalDiffSchema,
   request,
   snapshotSchema,
   type CloudSnapshot,
   type DraftOperation,
+  type ProposalDiff,
   type Session,
   errorMessage as message,
 } from "../shared-api";
@@ -50,6 +52,9 @@ export function ProjectReview({
     id: string;
     revision: number;
   } | null>(null);
+  const [proposalDiffs, setProposalDiffs] = useState<
+    Record<string, ProposalDiff | "loading">
+  >({});
   const [photoPage, setPhotoPage] = useState(0),
     [sequencePage, setSequencePage] = useState(0);
   const [presenceDetail, setPresenceDetail] = useState(() => {
@@ -218,6 +223,31 @@ export function ProjectReview({
       setCommentTarget({ kind: "photo" });
     }
   };
+  const loadProposalDiff = useCallback(
+    async (proposalId: string) => {
+      setProposalDiffs((prev) => ({ ...prev, [proposalId]: "loading" }));
+      try {
+        const diff = proposalDiffSchema.parse(
+          await request(
+            `/projects/${id}/proposals/${proposalId}/diff`,
+            session,
+          ),
+        );
+        setProposalDiffs((prev) => ({ ...prev, [proposalId]: diff }));
+      } catch (error) {
+        setError(message(error));
+        setProposalDiffs((prev) => {
+          const next = { ...prev };
+          delete next[proposalId];
+          return next;
+        });
+      }
+    },
+    [id, session],
+  );
+  const filenameOf = (photoId: string) =>
+    state?.snapshot.photos.find((photo) => photo.id === photoId)?.filename ??
+    photoId;
   const saveProposal = async (submit: boolean) => {
     if (!state || !realtime.online || !title.trim() || !operations.length)
       return;
@@ -736,7 +766,9 @@ export function ProjectReview({
           {tab === "proposals" && (
             <div className="fr-panel">
               <h2>编辑提案</h2>
-              {state.proposals.map((p) => (
+              {state.proposals.map((p) => {
+                const diff = proposalDiffs[p.id];
+                return (
                 <article className="fr-proposal" key={p.id}>
                   <h3>{p.title}</h3>
                   <p>
@@ -777,6 +809,56 @@ export function ProjectReview({
                       </span>
                     </label>
                   ))}
+                  {p.state === "SUBMITTED" && (
+                    <button onClick={() => void loadProposalDiff(p.id)}>
+                      {diff ? "刷新差异" : "预览差异"}
+                    </button>
+                  )}
+                  {diff === "loading" && <p>差异计算中…</p>}
+                  {diff && diff !== "loading" && (
+                    <div className="fr-diff">
+                      {diff.stale ? (
+                        <p className="fr-warning">
+                          提案基于 v{diff.baseRevision}，当前已是 v
+                          {diff.currentRevision}
+                          ：基线过期，差异不再可投影，请按最新版本重建。
+                        </p>
+                      ) : (
+                        diff.sequence && (
+                          <>
+                            <p>
+                              全量采纳后序列：
+                              {diff.sequence.after.map(filenameOf).join("、") ||
+                                "（空）"}
+                            </p>
+                            {diff.sequence.added.length > 0 && (
+                              <p>
+                                新增：
+                                {diff.sequence.added
+                                  .map(filenameOf)
+                                  .join("、")}
+                              </p>
+                            )}
+                            {diff.sequence.removed.length > 0 && (
+                              <p>
+                                移除：
+                                {diff.sequence.removed
+                                  .map(filenameOf)
+                                  .join("、")}
+                              </p>
+                            )}
+                            {diff.sequence.moved.map((move) => (
+                              <p key={move.photo_id}>
+                                移动：{filenameOf(move.photo_id)}（第{" "}
+                                {move.fromIndex + 1} 张 → 第 {move.toIndex + 1}{" "}
+                                张）
+                              </p>
+                            ))}
+                          </>
+                        )
+                      )}
+                    </div>
+                  )}
                   {p.state === "DRAFT" && p.author_id === session.id && (
                     <button
                       disabled={!canWrite}
@@ -868,7 +950,8 @@ export function ProjectReview({
                       </p>
                     )}
                 </article>
-              ))}
+                );
+              })}
               {state.principal.role !== "VIEWER" && (
                 <section className="fr-proposal-builder">
                   <h3>{editingProposal ? "修订提案草案" : "新建序列提案"}</h3>

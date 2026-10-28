@@ -195,3 +195,109 @@ describe("协作者 Presence 展示", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("提案差异预览", () => {
+  const proposalSnapshot = () => {
+    const base = makeSnapshot();
+    return {
+      ...base,
+      snapshot: {
+        ...base.snapshot,
+        photos: [
+          ...base.snapshot.photos,
+          {
+            id: "p2",
+            filename: "p2.jpg",
+            source_sha256: "b".repeat(64),
+            selection: "UNDECIDED",
+          },
+        ],
+      },
+      proposals: [
+        {
+          id: "prop-1",
+          author_id: "u2",
+          author: "林编辑",
+          title: "编排调整",
+          base_revision: 3,
+          revision: 0,
+          nonce: "nonce-1",
+          state: "SUBMITTED",
+          operations: [
+            {
+              op: "add" as const,
+              operation_id: "op-1",
+              photo_id: "p2",
+              to_index: 1,
+            },
+          ],
+        },
+      ],
+    };
+  };
+  const diffResult = {
+    proposalId: "prop-1",
+    state: "SUBMITTED",
+    baseRevision: 3,
+    currentRevision: 3,
+    stale: false,
+    sequence: {
+      id: "seq",
+      before: ["p1"],
+      after: ["p2", "p1"],
+      added: ["p2"],
+      removed: [],
+      moved: [{ photo_id: "p1", fromIndex: 0, toIndex: 1 }],
+    },
+  };
+
+  it("预览差异展示全量采纳后的序列变化（增/移）", async () => {
+    vi.mocked(request).mockImplementation(async (path: string) => {
+      if (path === "/projects/p/snapshot") return proposalSnapshot();
+      if (path === "/projects/p/proposals/prop-1/diff") return diffResult;
+      return {};
+    });
+    render(<ProjectReview id="p" session={session} onBack={() => {}} />);
+    await waitFor(() =>
+      expect(screen.getByText("正式作品序列")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "提案" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览差异" }));
+    await waitFor(() =>
+      expect(
+        screen.getByText(/全量采纳后序列：p2.jpg、p1.jpg/),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/新增：p2.jpg/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/移动：p1.jpg（第 1 张 → 第 2 张）/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "刷新差异" }),
+    ).toBeInTheDocument();
+  });
+
+  it("基线过期的提案显示不可投影提示", async () => {
+    vi.mocked(request).mockImplementation(async (path: string) => {
+      if (path === "/projects/p/snapshot") return proposalSnapshot();
+      if (path === "/projects/p/proposals/prop-1/diff")
+        return {
+          ...diffResult,
+          stale: true,
+          baseRevision: 2,
+          currentRevision: 3,
+          sequence: null,
+        };
+      return {};
+    });
+    render(<ProjectReview id="p" session={session} onBack={() => {}} />);
+    await waitFor(() =>
+      expect(screen.getByText("正式作品序列")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "提案" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览差异" }));
+    await waitFor(() =>
+      expect(screen.getByText(/基线过期/)).toBeInTheDocument(),
+    );
+  });
+});
