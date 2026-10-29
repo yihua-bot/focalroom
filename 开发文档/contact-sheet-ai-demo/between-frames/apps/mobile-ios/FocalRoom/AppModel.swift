@@ -700,6 +700,121 @@ final class AppModel {
         try await chat.replace(updated)
     }
 
+    // MARK: - AI 草案闭环（模型建议 → 人工确认 → 权威提案 → 部分采纳）
+
+    private(set) var lastDraft: AIDraftProposal?
+
+    func requestDraft() async {
+        guard !aiSending, let api, let credentials, let chat else { return }
+        guard let snapshot, currentProject == .cloud(snapshot.project_id), !snapshot.snapshot.photos.isEmpty else {
+            notice = currentProject == nil ? "请先在项目页打开一个云端项目。" : "当前项目没有照片。"
+            return
+        }
+        aiSending = true
+        defer { aiSending = false }
+        lastDraft = nil
+        let requestID = UUID().uuidString.lowercased()
+        let instruction = "请从本项目的照片中给出选片与排序建议。只返回一个 JSON 代码块，格式："
+            + "```json {\"title\":\"...\",\"operations\":[{\"op\":\"add|remove|move\",\"photo\":\"文件名\",\"to_index\":0}]}```"
+            + " photo 必须精确使用下列文件名之一："
+            + snapshot.snapshot.photos.map(\.filename).joined(separator: "、")
+        let userMessage = AIChatMessage(id: UUID().uuidString.lowercased(), role: "user",
+                                        text: "请根据当前项目生成选片草案", requestID: requestID, state: .unknown)
+        do { try await chat.append(userMessage) }
+        catch { notice = "无法保存消息，请重试。"; return }
+        chatMessages.append(userMessage)
+        let generation = epoch
+        do {
+            _ = try await api.aiSubmit(input: AIConversationInput(history: [("user", instruction)],
+                                                                  instructions: "你是摄影编辑助手，只输出规定格式的 JSON。"),
+                                       requestID: requestID, token: credentials.token)
+            let job = try await pollAIJob(requestID: requestID, api: api, token: credentials.token, generation: generation)
+            try? await replaceMessage(userMessage, state: .sent, failure: nil, in: chat)
+            let text = job.result?.text ?? ""
+            try? await chat.append(AIChatMessage(id: UUID().uuidString.lowercased(), role: "assistant",
+                                                 text: text.isEmpty ? "（模型未返回文本）" : text,
+                                                 requestID: requestID, state: .sent))
+            chatMessages = (try? await chat.messages()) ?? chatMessages
+            if let draft = AIDraftProposal.parse(text, photos: snapshot.snapshot.photos) {
+                lastDraft = draft
+            } else {
+                notice = "模型未返回可识别的草案格式，请重试。"
+            }
+            await loadAIAccount()
+        } catch {
+            notice = message(error)
+        }
+    }
+
+    func submitDraftAsProposal() async {
+        guard !busy, let draft = lastDraft, let snapshot,
+              let api, let credentials, currentProject == .cloud(snapshot.project_id), !offline else { return }
+        let generation = epoch
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            let photoIDs = Dictionary(uniqueKeysWithValues: snapshot.snapshot.photos.map { ($0.filename, $0.id) })
+            let operations = draft.operations.enumerated().map { index, op in
+                ProposalCreateCommand.DraftOperation(op: op.op,
+                                                     operation_id: "draft-\(index)-\(UUID().uuidString.prefix(8).lowercased())",
+                                                     photo_id: photoIDs[op.photoFilename] ?? op.photoFilename,
+                                                     to_index: op.toIndex)
+            }
+            let create = try ProposalCreateCommand(snapshot: snapshot, title: draft.title, operations: operations)
+            try await projectRead(snapshot.project_id) {
+                try await api.createProposal(create, token: credentials.token)
+            }
+            let submit = ProposalSubmitCommand(snapshot: snapshot, proposalID: create.command_id)
+            try await projectRead(snapshot.project_id) {
+                try await api.submitProposal(submit, token: credentials.token)
+            }
+            lastDraft = nil
+            notice = "草案已提交为提案，可在项目的“提案”中逐项采纳。"
+            await reloadSnapshot()
+        } catch {
+            notice = message(error)
+        }
+    }
+
+    // MARK: - 评论协作（发送回复 / 解决 / 重开）
+
+    func replyComment(threadID: String, body: String) async {
+        guard !busy, let snapshot, let api, let credentials,
+              currentProject == .cloud(snapshot.project_id), !offline else { return }
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 2000 else { notice = "评论内容为空或过长。"; return }
+        let generation = epoch
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            try await projectRead(snapshot.project_id) {
+                try await api.replyComment(projectID: snapshot.project_id, threadID: threadID,
+                                           body: trimmed, idempotencyKey: UUID().uuidString.lowercased(),
+                                           token: credentials.token)
+            }
+            await reloadSnapshot()
+        } catch {
+            notice = message(error)
+        }
+    }
+
+    func resolveComment(threadID: String, resolve: Bool) async {
+        guard !busy, let snapshot, let api, let credentials,
+              currentProject == .cloud(snapshot.project_id), !offline else { return }
+        let generation = epoch
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            try await projectRead(snapshot.project_id) {
+                _ = try await api.resolveComment(projectID: snapshot.project_id, threadID: threadID,
+                                                 resolve: resolve, snapshot: snapshot, token: credentials.token)
+            }
+            await reloadSnapshot()
+        } catch {
+            notice = message(error)
+        }
+    }
+
     func image(photoID: String) async throws -> UIImage {
         guard let api, let credentials, let snapshot,
               let descriptor = snapshot.previews.first(where: { $0.photo_id == photoID }) else {

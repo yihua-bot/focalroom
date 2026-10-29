@@ -310,6 +310,53 @@ public struct APIClient: Sendable {
         return receipt
     }
 
+    // 提案创建/提交：产品路径。创建为非正式命令（不推进版本）；回执仅核对 ok/事件绑定。
+    public func createProposal(_ command: ProposalCreateCommand, token: String) async throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        _ = try await submitProjectCommandBody(projectID: command.project_id,
+                                               body: try encoder.encode(command), token: token)
+    }
+
+    public func submitProposal(_ command: ProposalSubmitCommand, token: String) async throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        _ = try await submitProjectCommandBody(projectID: command.project_id,
+                                               body: try encoder.encode(command), token: token)
+    }
+
+    // 评论回复：既有线程追加；body 与幂等键必填，服务端同事务审计与回执。
+    public func replyComment(projectID: String, threadID: String, body: String, idempotencyKey: String, token: String) async throws {
+        struct Input: Encodable { let body: String; let idempotency_key: String }
+        struct Result: Decodable { let id: String }
+        let result = try await call(Result.self, ["projects", projectID, "comments", threadID, "replies"],
+                                    token: token, body: try JSONEncoder().encode(Input(body: body, idempotency_key: idempotencyKey)))
+        guard !result.id.isEmpty else { throw APIError.invalidResponse }
+    }
+
+    // 评论处理（解决/重开）：正式命令路径，状态由服务端校验。
+    public func resolveComment(projectID: String, threadID: String, resolve: Bool, snapshot: ProjectSnapshot, token: String) async throws -> CommandReceipt {
+        struct Envelope: Encodable {
+            let version: String
+            let command_id: String
+            let workspace_id: String
+            let project_id: String
+            let expected_revision: Int
+            let idempotency_key: String
+            let kind: String
+            let payload: Payload
+            struct Payload: Encodable { let thread_id: String; let state: String }
+        }
+        let id = UUID().uuidString.lowercased()
+        let envelope = Envelope(version: "2.0", command_id: id, workspace_id: snapshot.workspace_id,
+                                project_id: snapshot.project_id, expected_revision: snapshot.revision,
+                                idempotency_key: id, kind: "comment.resolve",
+                                payload: .init(thread_id: threadID, state: resolve ? "RESOLVED" : "REOPENED"))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return try await submitProjectCommandBody(projectID: projectID, body: try encoder.encode(envelope), token: token)
+    }
+
     public func nodes(boardID: String, token: String) async throws -> [BoardNode] {
         let values = try await call([BoardNode].self, ["boards", boardID, "nodes"], token: token)
         guard values.allSatisfy({ $0.board_id == boardID && $0.x.isFinite && $0.y.isFinite &&

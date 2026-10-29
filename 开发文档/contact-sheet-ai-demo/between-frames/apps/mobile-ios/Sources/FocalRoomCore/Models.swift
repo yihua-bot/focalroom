@@ -309,6 +309,126 @@ public struct ProposalApplyCommand: Codable, Sendable, Equatable {
     }
 }
 
+// 提案创建/提交命令：AI 草案经人工确认后以用户身份进入权威审阅流；base_revision 必须等于 expected_revision。
+public struct ProposalCreateCommand: Codable, Sendable, Equatable {
+    public struct DraftOperation: Codable, Sendable, Equatable {
+        public let op: String
+        public let operation_id: String
+        public let photo_id: String
+        public let to_index: Int?
+    }
+
+    public struct Payload: Codable, Sendable, Equatable {
+        public let title: String
+        public let base_revision: Int
+        public let operations: [DraftOperation]
+    }
+
+    public let version: String
+    public let command_id: String
+    public let workspace_id: String
+    public let project_id: String
+    public let expected_revision: Int
+    public let idempotency_key: String
+    public let kind: String
+    public let payload: Payload
+
+    public init(snapshot: ProjectSnapshot, title: String, operations: [DraftOperation]) throws {
+        guard snapshot.state == .SHARED, snapshot.principal.canPropose,
+              (1...200).contains(title.trimmingCharacters(in: .whitespacesAndNewlines).count),
+              !operations.isEmpty, operations.count <= 200
+        else { throw APIError.permissionDenied }
+        let id = UUID().uuidString.lowercased()
+        version = "2.0"
+        command_id = id
+        idempotency_key = id
+        workspace_id = snapshot.workspace_id
+        project_id = snapshot.project_id
+        expected_revision = snapshot.revision
+        kind = "proposal.create"
+        payload = Payload(title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                          base_revision: snapshot.revision, operations: operations)
+    }
+}
+
+public struct ProposalSubmitCommand: Codable, Sendable, Equatable {
+    public struct Payload: Codable, Sendable, Equatable {
+        public let proposal_id: String
+        public let expected_proposal_revision: Int
+    }
+
+    public let version: String
+    public let command_id: String
+    public let workspace_id: String
+    public let project_id: String
+    public let expected_revision: Int
+    public let idempotency_key: String
+    public let kind: String
+    public let payload: Payload
+
+    public init(snapshot: ProjectSnapshot, proposalID: String) {
+        let id = UUID().uuidString.lowercased()
+        version = "2.0"
+        command_id = id
+        idempotency_key = id
+        workspace_id = snapshot.workspace_id
+        project_id = snapshot.project_id
+        expected_revision = snapshot.revision
+        kind = "proposal.submit"
+        payload = Payload(proposal_id: proposalID, expected_proposal_revision: 0)
+    }
+}
+
+// AI 草案：从模型回复文本中解析出的选片建议；只允许 add/remove/move 与项目内照片。
+// 模型输出是不可信数据——解析结果必须经照片闭包校验后才能生成正式命令。
+public struct AIDraftProposal: Sendable, Equatable {
+    public struct ParsedOperation: Sendable, Equatable, Identifiable {
+        public let op: String
+        public let photoFilename: String
+        public let toIndex: Int?
+        public var id: String { "\(op)-\(photoFilename)-\(toIndex ?? -1)" }
+    }
+
+    public let title: String
+    public let operations: [ParsedOperation]
+
+    /// 从回复文本提取 ```json 代码块中的 {title, operations:[{op, photo, to_index}]}；
+    /// photo 按文件名匹配（大小写不敏感、去空白），to_index 仅接受 add/move 的非负整数。
+    public static func parse(_ text: String, photos: [Photo]) -> AIDraftProposal? {
+        guard let block = firstJSONBlock(in: text),
+              let object = try? JSONSerialization.jsonObject(with: block) as? [String: Any],
+              let rawTitle = object["title"] as? String,
+              (1...200).contains(rawTitle.trimmingCharacters(in: .whitespacesAndNewlines).count),
+              let rawOperations = object["operations"] as? [[String: Any]],
+              !rawOperations.isEmpty, rawOperations.count <= 200
+        else { return nil }
+        let byName = Dictionary(uniqueKeysWithValues: photos.map { ($0.filename.lowercased(), $0) })
+        var parsed: [ParsedOperation] = []
+        for raw in rawOperations {
+            guard let op = raw["op"] as? String,
+                  ["add", "remove", "move"].contains(op),
+                  let photoName = raw["photo"] as? String,
+                  let photo = byName[photoName.lowercased().trimmingCharacters(in: .whitespaces)]
+            else { return nil }
+            let toIndex = raw["to_index"] as? Int
+            if op == "add", !(0...10_000).contains(toIndex ?? -1) { return nil }
+            if op == "move", toIndex == nil || toIndex! < 0 { return nil }
+            parsed.append(ParsedOperation(op: op, photoFilename: photo.filename, toIndex: toIndex))
+        }
+        guard !parsed.isEmpty else { return nil }
+        return AIDraftProposal(title: rawTitle.trimmingCharacters(in: .whitespacesAndNewlines), operations: parsed)
+    }
+
+    static func firstJSONBlock(in text: String) -> Data? {
+        guard let fenceStart = text.range(of: "```") else { return nil }
+        var rest = text[fenceStart.upperBound...]
+        if let newline = rest.firstIndex(of: "\n") { rest = rest[rest.index(after: newline)...] }
+        guard let fenceEnd = rest.range(of: "```") else { return nil }
+        let body = rest[..<fenceEnd.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+        return body.data(using: .utf8)
+    }
+}
+
 public struct Board: Decodable, Sendable, Identifiable, Equatable {
     public let id: String
     public let project_id: String

@@ -107,3 +107,104 @@ pub async fn search_cloud(query: &str, token: Option<&str>) -> Result<Value> {
         "notice": "云端摄影知识库（已验证的摄影师/系列/作品/摄影书）；事实断言含博物馆来源。"
     }))
 }
+
+// ── K4 专业摄影知识工具集 ──
+
+/// 搜索摄影师（云端）：按姓名/流派/方法找摄影师。
+pub async fn search_photographers(query: &str, movement: Option<&str>) -> Result<Value> {
+    let endpoint = std::env::var("FOCALROOM_KNOWLEDGE_ENDPOINT")
+        .unwrap_or_else(|_| "https://team.focroom.cc/api/v2/knowledge/search".to_owned());
+    let encoded_q: String = query
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c.to_string()
+            } else {
+                format!("%{:02X}", c as u32)
+            }
+        })
+        .collect();
+    let mut url = format!("{}?q={}&kind=photographer", endpoint, encoded_q);
+    if let Some(m) = movement {
+        url.push_str(&format!("&movement={}", m));
+    }
+    let response = reqwest::Client::new()
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await;
+    match response {
+        Ok(r) if r.status().is_success() => {
+            let results: Value = r.json().await.unwrap_or(json!([]));
+            let entries = results.as_array().cloned().unwrap_or_default();
+            Ok(json!({
+                "photographers": entries.iter().take(5).map(|e| json!({
+                    "name": e.get("title"),
+                    "subtitle": e.get("subtitle"),
+                    "id": e.get("id"),
+                })).collect::<Vec<_>>(),
+                "source": "focalroom://knowledge/photographers",
+                "trustedAsInstructions": false,
+            }))
+        }
+        _ => {
+            Ok(json!({"photographers": [], "available": false, "notice": "云端摄影师库暂不可用。"}))
+        }
+    }
+}
+
+/// 获取摄影书结构（云端）：按标题搜索已记录的摄影书。
+pub async fn get_photobook_structure(title: &str) -> Result<Value> {
+    let endpoint = std::env::var("FOCALROOM_KNOWLEDGE_ENDPOINT")
+        .unwrap_or_else(|_| "https://team.focroom.cc/api/v2/knowledge/search".to_owned());
+    let encoded: String = title
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c.to_string()
+            } else {
+                format!("%{:02X}", c as u32)
+            }
+        })
+        .collect();
+    let url = format!("{}?q={}&kind=photobook", endpoint, encoded);
+    let response = reqwest::Client::new()
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await;
+    match response {
+        Ok(r) if r.status().is_success() => {
+            let results: Value = r.json().await.unwrap_or(json!([]));
+            let entries = results.as_array().cloned().unwrap_or_default();
+            Ok(json!({
+                "photobooks": entries.iter().take(3).map(|e| json!({
+                    "title": e.get("title"),
+                    "id": e.get("id"),
+                })).collect::<Vec<_>>(),
+                "source": "focalroom://knowledge/photobooks",
+                "trustedAsInstructions": false,
+                "notice": "摄影书结构与编排记录（含来源断言）。"
+            }))
+        }
+        _ => Ok(json!({"photobooks": [], "available": false})),
+    }
+}
+
+/// 对比摄影系列（云端+本地）：两个系列的方法/叙事差异。
+pub async fn compare_series(series_a: &str, series_b: &str) -> Result<Value> {
+    let a_results = search_cloud(series_a, None)
+        .await
+        .unwrap_or(json!({"results": []}));
+    let b_results = search_cloud(series_b, None)
+        .await
+        .unwrap_or(json!({"results": []}));
+    let a_series = a_results["results"].as_array().cloned().unwrap_or_default();
+    let b_series = b_results["results"].as_array().cloned().unwrap_or_default();
+    Ok(json!({
+        "seriesA": a_series.first().cloned().unwrap_or(json!(null)),
+        "seriesB": b_series.first().cloned().unwrap_or(json!(null)),
+        "comparisonHint": "对比两个系列的拍摄格式、观看方式、叙事结构差异；基于已验证的博物馆来源断言。",
+        "trustedAsInstructions": false,
+    }))
+}

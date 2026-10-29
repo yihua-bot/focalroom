@@ -205,7 +205,8 @@ final class FocalRoomUITests: XCTestCase {
         runResearchSegment(app, projectID: projectID)
         verifySyncCenter(app, projectID: projectID)
         runHistorySegment(app)
-
+        // 返回动画期间 TabBar 可能短暂缺席；先等其回到 AX 树再切标签。
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15), "标签栏应可用")
         app.tabBars.buttons["消息"].tap()
         XCTAssertTrue(app.staticTexts["iPhone 本地隔离测试批注"].waitForExistence(timeout: 10))
         app.tabBars.buttons["画布"].tap()
