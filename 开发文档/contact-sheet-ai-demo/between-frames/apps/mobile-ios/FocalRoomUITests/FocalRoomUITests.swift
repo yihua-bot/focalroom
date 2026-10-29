@@ -2,6 +2,73 @@ import XCTest
 
 final class FocalRoomUITests: XCTestCase {
     @MainActor
+    func testProjectSelectionInAITabCanvasAndMessages() throws {
+        continueAfterFailure = false
+        let environment = ProcessInfo.processInfo.environment
+        guard let base = environment["FOCALROOM_IOS_TEST_BASE_URL"],
+              let firstID = environment["FOCALROOM_IOS_PICKER_FIRST_ID"],
+              let secondID = environment["FOCALROOM_IOS_PICKER_SECOND_ID"] else {
+            throw XCTSkip("项目切换验证仅使用独立的本地后端夹具")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["FOCALROOM_IOS_REVIEW_URL"] = base
+        app.launch()
+        XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10))
+        app.textFields["login.email"].tap()
+        app.textFields["login.email"].typeText("picker@fr.test")
+        app.secureTextFields["login.password"].tap()
+        app.secureTextFields["login.password"].typeText("iphone-local-test-2026")
+        app.buttons["login.submit"].tap()
+        dismissPasswordPrompt(app)
+        XCTAssertTrue(app.buttons["local.create"].waitForExistence(timeout: 15))
+        app.buttons["local.create"].tap()
+        app.textFields["local.title"].tap()
+        app.textFields["local.title"].typeText("选择器本机项目")
+        app.buttons["local.create.confirm"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'local.project.'")).firstMatch.waitForExistence(timeout: 5))
+
+        for tab in ["Focal AI", "画布", "消息"] {
+            app.tabBars.buttons[tab].tap()
+            let context = app.buttons["project.context"]
+            XCTAssertTrue(context.waitForExistence(timeout: 5))
+            for (projectID, title, marker) in [(secondID, "切换项目乙", "乙项目内容"), (firstID, "切换项目甲", "甲项目内容")] {
+                context.tap()
+                let option = app.buttons["project.choose.\(projectID)"]
+                XCTAssertTrue(option.waitForExistence(timeout: 10), "\(tab) 应能直接选择项目")
+                option.tap()
+                let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", title), object: context)
+                XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 10), .completed)
+                XCTAssertFalse(app.buttons["project.choose.done"].exists, "打开项目后应收起选择页")
+                if tab != "Focal AI" {
+                    XCTAssertTrue(app.staticTexts[marker].waitForExistence(timeout: 10), "\(tab) 应刷新为所选项目内容")
+                    let other = marker == "甲项目内容" ? "乙项目内容" : "甲项目内容"
+                    XCTAssertFalse(app.staticTexts[other].exists, "不得残留另一项目的画布或消息")
+                }
+            }
+            context.tap()
+            let local = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'project.choose.local.'")).firstMatch
+            XCTAssertTrue(local.waitForExistence(timeout: 5), "三个 Tab 均应显示本机项目")
+            local.tap()
+            XCTAssertTrue(app.navigationBars["本机图库"].waitForExistence(timeout: 5))
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(app.buttons["project.choose.done"].waitForExistence(timeout: 5))
+            if tab == "消息" {
+                let search = app.searchFields.firstMatch
+                search.tap()
+                search.typeText("没有这个项目")
+                XCTAssertTrue(app.staticTexts["project.choose.empty"].waitForExistence(timeout: 5))
+                XCTAssertFalse(app.buttons["project.choose.\(firstID)"].exists)
+            }
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "\(tab) 项目选择"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            app.buttons["project.choose.done"].tap()
+            XCTAssertEqual(context.value as? String, "尚未选择", "进入本机项目须清除旧云端上下文")
+        }
+    }
+
+    @MainActor
     func testNativeLoginLibrarySelectionAndLogout() throws {
         continueAfterFailure = false
         let environment = ProcessInfo.processInfo.environment

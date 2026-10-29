@@ -44,6 +44,14 @@ export async function createSession(db: Pick<Pool, "query">, user: AccountUser) 
   assert(inserted.rowCount, 401, 'AUTH_REVOKED', '账号已关闭');
   return { token, csrf, user: { id: user.id, email: user.email, name: user.display_name, avatar: user.avatar_url ?? null } };
 }
+
+// 候选密码与 scrypt-v1 哈希的恒时比较；格式不符按不匹配处理。
+export async function passwordMatches(candidate: string, hash: string | null | undefined) {
+  const parts: string[] = hash?.split("$") ?? [];
+  const actual = await derivePassword(candidate, parts[1] ?? "focalroom-dummy-password");
+  const expected = Buffer.from(parts[2] ?? "".padEnd(64, "0"), "hex");
+  return parts[0] === "scrypt-v1" && actual.length === expected.length && timingSafeEqual(actual, expected);
+}
 export class AuthService {
   readonly pool: Pool;
   readonly origin: string;

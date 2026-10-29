@@ -19,7 +19,8 @@ import {
   parseCloudCommand,
   type Scope,
 } from "./authority.ts";
-import { AuthService, type Headers } from "./auth.ts";
+import { AuthService, type Headers, passwordMatches } from "./auth.ts";
+import { hashPassword, validPassword } from "./password.ts";
 import { digest, transaction } from "./database.ts";
 import { assert, ApiError } from "./errors.ts";
 import { sanitizePreview, type PreviewStore } from "./storage.ts";
@@ -1389,6 +1390,25 @@ export class CloudService {
       )).rows[0];
       assert(row, 401, 'AUTH_REVOKED', '账号不可访问');
       return { id: row.id, email: row.email, name: row.name, avatar: row.avatar_url ?? null, emailVerified: !!row.email_verified_at };
+    });
+  }
+
+  // 登录态设置/修改密码：提供 current_password 时先校验；验证码新建的账号可直接设置。
+  async setPassword(user: { id: string }, input: unknown) {
+    const body = (input ?? {}) as Record<string, unknown>;
+    const password = typeof body.password === "string" ? body.password : "";
+    const current = typeof body.current_password === "string" ? body.current_password : undefined;
+    assert(validPassword(password), 400, "VALIDATION_ERROR", "新密码至少 8 位，且不超过 1024 字节");
+    return transaction(this.pool, async tx => {
+      await tx.query('SELECT id FROM fr_users WHERE id=$1 FOR UPDATE', [user.id]);
+      const closed = (await tx.query('SELECT 1 FROM fr_account_closures WHERE user_id=$1', [user.id])).rowCount;
+      assert(!closed, 401, 'AUTH_REVOKED', '账号已关闭');
+      if (current !== undefined) {
+        const row = (await tx.query('SELECT password_hash FROM fr_users WHERE id=$1', [user.id])).rows[0];
+        assert(await passwordMatches(current, row?.password_hash), 401, "UNAUTHORIZED", "当前密码不正确");
+      }
+      await tx.query("UPDATE fr_users SET password_hash=$2 WHERE id=$1", [user.id, await hashPassword(password)]);
+      return { updated: true };
     });
   }
 

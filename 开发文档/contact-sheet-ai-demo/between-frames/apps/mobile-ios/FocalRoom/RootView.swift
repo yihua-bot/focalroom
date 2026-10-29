@@ -46,10 +46,13 @@ private struct LoginView: View {
     @Bindable var model: AppModel
     @State private var email = ""
     @State private var password = ""
+    @State private var code = ""
+    @State private var mode: Mode = .password
     @State private var offlineLibrary = false
     @State private var offlineScopes: [LocalScopeEntry] = []
     @FocusState private var focus: Field?
-    private enum Field { case email, password }
+    private enum Field { case email, password, code }
+    private enum Mode: String, CaseIterable { case password = "密码登录"; case code = "验证码登录" }
 
     var body: some View {
         ScrollView {
@@ -64,17 +67,50 @@ private struct LoginView: View {
 
                 VStack(alignment: .leading, spacing: 18) {
                     Text("登录你的工作空间").font(.headline)
+                    Picker("登录方式", selection: $mode) {
+                        ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("login.mode")
                     TextField("邮箱", text: $email)
-                        .textContentType(.username).keyboardType(.emailAddress)
+                        .textContentType(.emailAddress).keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .focused($focus, equals: .email).submitLabel(.next)
-                        .onSubmit { focus = .password }
+                        .onSubmit { focus = mode == .password ? .password : nil }
                         .accessibilityIdentifier("login.email")
                     Divider()
-                    SecureField("密码", text: $password)
-                        .textContentType(.password).focused($focus, equals: .password).submitLabel(.go)
-                        .onSubmit { submit() }
-                        .accessibilityIdentifier("login.password")
+                    if mode == .password {
+                        SecureField("密码", text: $password)
+                            .textContentType(.password).focused($focus, equals: .password).submitLabel(.go)
+                            .onSubmit { submit() }
+                            .accessibilityIdentifier("login.password")
+                    } else {
+                        HStack(spacing: 12) {
+                            Button {
+                                focus = nil
+                                let entered = email
+                                Task { await model.requestLoginCode(email: entered) }
+                            } label: {
+                                if model.busy { ProgressView().tint(.black) } else { Text("获取验证码").font(.subheadline).fontWeight(.medium) }
+                            }
+                            .foregroundStyle(.black).padding(.horizontal, 14).frame(minHeight: 44)
+                            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 10))
+                            .disabled(!email.contains("@") || model.busy)
+                            .opacity(email.contains("@") ? 1 : 0.4)
+                            .accessibilityIdentifier("login.code.request")
+                            TextField("6 位验证码", text: $code)
+                                .keyboardType(.numberPad)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                .focused($focus, equals: .code).submitLabel(.go)
+                                .onSubmit { submit() }
+                                .accessibilityIdentifier("login.code")
+                        }
+                        if model.codeSent {
+                            Text("验证码已发送到邮箱（10 分钟内有效）；新邮箱将自动创建账号。")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("login.code.sent")
+                        }
+                    }
                 }
                 .padding(22).background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
 
@@ -93,7 +129,7 @@ private struct LoginView: View {
                 Button(action: submit) {
                     HStack {
                         Spacer()
-                        if model.busy { ProgressView().tint(.black) } else { Text("进入 FocalRoom").fontWeight(.semibold) }
+                        if model.busy { ProgressView().tint(.black) } else { Text(mode == .password ? "进入 FocalRoom" : "验证并进入").fontWeight(.semibold) }
                         Spacer()
                     }.frame(minHeight: 52)
                 }
@@ -130,14 +166,24 @@ private struct LoginView: View {
         }
     }
 
-    private var valid: Bool { email.contains("@") && password.count >= 8 && !model.address.isEmpty }
+    private var valid: Bool {
+        guard email.contains("@"), !model.address.isEmpty else { return false }
+        return mode == .password ? password.count >= 8 : code.count == 6 && code.allSatisfy(\.isNumber)
+    }
     private func submit() {
         guard valid, !model.busy else { return }
         focus = nil
-        let enteredPassword = password
-        Task {
-            await model.login(email: email, password: enteredPassword)
-            password = ""
+        let enteredPassword = password, enteredCode = code
+        if mode == .password {
+            Task {
+                await model.login(email: email, password: enteredPassword)
+                password = ""
+            }
+        } else {
+            Task {
+                await model.magicLogin(email: email, code: enteredCode)
+                code = ""
+            }
         }
     }
 }
@@ -154,22 +200,121 @@ struct EmptyWorkspace: View {
 
 struct ProjectContext: View {
     let model: AppModel
+    @State private var choosingProject = false
 
     var body: some View {
-        Menu {
-            ForEach(model.projects.filter { $0.state == .SHARED }) { project in
-                Button(project.title) { Task { await model.openProject(project.id) } }
-            }
-        } label: {
-            HStack {
-                Text(model.snapshot?.title ?? "选择项目").lineLimit(1)
+        Button { choosingProject = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "folder")
+                Text(model.projects.first { $0.id == model.selectedProjectID }?.title ?? "选择项目").lineLimit(1)
                 Image(systemName: "chevron.down").font(.caption)
                 Spacer()
+                if model.loadingProject { ProgressView() }
                 if model.offline { Label("离线缓存", systemImage: "wifi.slash").font(.caption) }
             }
+            .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+            .contentShape(Rectangle())
             .padding(.horizontal).padding(.vertical, 12)
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("project.context")
+        .accessibilityLabel("选择项目")
+        .accessibilityValue(model.projects.first { $0.id == model.selectedProjectID }?.title ?? "尚未选择")
         .disabled(model.busy)
+        .sheet(isPresented: $choosingProject) { ProjectChooser(model: model) }
+    }
+}
+
+private struct ProjectChooser: View {
+    let model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var refreshing = false
+    @State private var opening: String?
+
+    private var cloudProjects: [ProjectSummary] {
+        model.projects.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    if refreshing { Label { Text("正在刷新项目…") } icon: { ProgressView() } }
+                    if model.offline {
+                        Label("离线时仅显示已缓存的项目，画布与分析任务需联网。", systemImage: "wifi.slash")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    ForEach(cloudProjects) { project in
+                        Button {
+                            opening = project.id
+                            Task {
+                                await model.openProject(project.id)
+                                opening = nil
+                                if model.snapshot?.project_id == project.id { dismiss() }
+                            }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(project.title).foregroundStyle(.primary)
+                                    Text(project.state != .SHARED ? "正在准备，暂不可打开" : project.sync_mode == .PRIVATE_SYNCED ? "私有同步" : "已同步")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if opening == project.id { ProgressView() }
+                                else if model.selectedProjectID == project.id { Image(systemName: "checkmark") }
+                            }.frame(minHeight: 44).contentShape(Rectangle())
+                        }
+                        .disabled(project.state != .SHARED || opening != nil || model.busy)
+                        .accessibilityIdentifier("project.choose.\(project.id)")
+                    }
+                    if cloudProjects.isEmpty {
+                        Text(query.isEmpty ? "还没有已同步项目。可在下方打开本机项目，迁云后在这里切换。" : "未找到匹配的已同步项目")
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("project.choose.empty")
+                    }
+                } header: { Text("已同步项目") }
+                if let library = model.localLibrary {
+                    let localProjects = library.projects.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
+                    if !localProjects.isEmpty {
+                        Section {
+                            ForEach(localProjects) { project in
+                                NavigationLink {
+                                    LocalProjectView(library: library, migration: model.migration, model: model, projectID: project.id)
+                                        .onAppear { model.openLocalContext() }
+                                } label: {
+                                    Label(project.title, systemImage: "iphone")
+                                        .frame(minHeight: 44)
+                                }
+                                .disabled(opening != nil || model.busy)
+                                .accessibilityIdentifier("project.choose.local.\(project.id)")
+                            }
+                        } header: { Text("本机项目") } footer: {
+                            Text("本机项目可在这里查看与迁云。项目画布、消息与照片分析使用已同步的云端项目；不会自动上传照片。")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("选择项目").navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $query, prompt: "搜索项目")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }.accessibilityIdentifier("project.choose.done")
+                        .disabled(opening != nil)
+                }
+            }
+            .task { await refresh() }
+            .refreshable { await refresh() }
+            .interactiveDismissDisabled(opening != nil)
+        }
+    }
+
+    private func refresh() async {
+        guard !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
+        await model.reloadProjects()
+        await model.localLibrary?.reload()
     }
 }
 
@@ -187,6 +332,8 @@ private struct AccountView: View {
                     Text(model.credentials?.user.email ?? "").foregroundStyle(.secondary)
                     NavigationLink("隐私与数据") { AccountDataView(model: model) }
                         .accessibilityIdentifier("account.data.entry")
+                    NavigationLink("设置密码") { SetPasswordView(model: model) }
+                        .accessibilityIdentifier("account.password.entry")
                 }
                 Section("工作空间") {
                     Text(model.address).font(.footnote).textSelection(.enabled)
@@ -269,5 +416,56 @@ private struct AccountView: View {
                 }
             }
         }
+    }
+}
+
+/// 登录态设置或修改密码；验证码登录的新账号可不填当前密码。
+private struct SetPasswordView: View {
+    let model: AppModel
+    @State private var current = ""
+    @State private var next = ""
+    @State private var confirm = ""
+    @State private var saved = false
+
+    private var valid: Bool {
+        next.count >= 8 && next == confirm && !model.busy
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                SecureField("当前密码（验证码登录的新账号可不填）", text: $current)
+                    .textContentType(.password)
+                    .accessibilityIdentifier("password.current")
+                SecureField("新密码（至少 8 位）", text: $next)
+                    .textContentType(.newPassword)
+                    .accessibilityIdentifier("password.new")
+                SecureField("再次输入新密码", text: $confirm)
+                    .textContentType(.newPassword)
+                    .accessibilityIdentifier("password.confirm")
+            } footer: {
+                Text("设置密码后，可在登录页使用「密码登录」；验证码登录继续可用。")
+            }
+            Section {
+                Button {
+                    let entered = next, enteredCurrent = current.isEmpty ? nil : current
+                    current = ""; next = ""; confirm = ""
+                    Task {
+                        await model.setPassword(entered, current: enteredCurrent)
+                        saved = true
+                    }
+                } label: {
+                    if model.busy { ProgressView() } else { Text("保存新密码") }
+                }
+                .disabled(!valid)
+                .accessibilityIdentifier("password.save")
+                if saved, model.notice?.contains("已更新") == true {
+                    Label("已保存", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .accessibilityIdentifier("password.saved")
+                }
+            }
+        }
+        .navigationTitle("设置密码")
     }
 }

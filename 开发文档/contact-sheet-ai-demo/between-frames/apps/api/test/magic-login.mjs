@@ -76,7 +76,10 @@ test('M4 OTP creates an authenticated cookie session, verified account and owner
   assert.equal(data.user.email, email); assert.equal(data.is_new_user, true);
   assert.match(cookie, /HttpOnly/); assert.match(cookie, /SameSite=Strict/); assert.match(cookie, /; Secure/);
   assert.match(cookie, /Path=\/api\/v2/);
-  assert.equal(Object.hasOwn(data, 'token'), false, '原始会话令牌只通过 HttpOnly Cookie 返回');
+  // Bearer 客户端（iPhone 验证码登录）从响应体读取令牌，与 /auth/login 对齐；值与 Cookie 会话一致。
+  assert.match(data.token, /^[a-f0-9]{64}$/, 'verify 应在响应体返回 Bearer 令牌');
+  assert.ok(cookie.includes(`fr_session=${data.token}`), 'Cookie 会话与响应体令牌一致');
+  const bearer = { authorization: `Bearer ${data.token}` };
   const cookieHeader = cookie.split(';')[0];
   assert.notEqual(cookieHeader.slice(11), data.csrf);
   const current = await call('/auth/me', undefined, { cookie: cookieHeader });
@@ -89,6 +92,25 @@ test('M4 OTP creates an authenticated cookie session, verified account and owner
   await call('/auth/logout', {}, { cookie: cookieHeader, origin, 'x-focalroom-csrf': data.csrf });
   await call('/auth/me', undefined, { cookie: cookieHeader }, 401);
   await login(email, code, 400);
+});
+
+test('set-password lets a magic-verified account set and then change its password', async () => {
+  const { email, code } = await send();
+  const { data } = await login(email, code);
+  const bearer = { authorization: `Bearer ${data.token}` };
+  // 未登录拒绝。
+  await call('/auth/set-password', { password: 'no-auth-12345' }, {}, 401);
+  // 弱密码拒绝。
+  await call('/auth/set-password', { password: 'short' }, bearer, 400);
+  // 验证码新建的账号无需当前密码即可设置。
+  await call('/auth/set-password', { password: 'first-password-123' }, bearer);
+  await call('/auth/login', { email, password: 'first-password-123' });
+  // 已有密码后，错误的当前密码拒绝。
+  await call('/auth/set-password', { password: 'second-password-456', current_password: 'wrong-current-9' }, bearer, 401);
+  // 正确的当前密码可以修改。
+  await call('/auth/set-password', { password: 'second-password-456', current_password: 'first-password-123' }, bearer);
+  await call('/auth/login', { email, password: 'second-password-456' });
+  await call('/auth/login', { email, password: 'first-password-123' }, {}, 401);
 });
 
 test('M4 OTP reuses existing accounts without changing password or duplicating workspaces', async () => {

@@ -39,6 +39,7 @@ struct BoardsView: View {
     @State private var boards: [Board] = []
     @State private var loading = false
     @State private var error: String?
+    @State private var loadID = UUID()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -74,11 +75,22 @@ struct BoardsView: View {
     }
 
     private func load() async {
+        let request = UUID()
+        loadID = request
         boards = []; error = nil; loading = true
-        defer { loading = false }
-        do { boards = try await model.boards() }
+        defer { if loadID == request { loading = false } }
+        guard let projectID = model.selectedProjectID, !model.offline else { return }
+        do {
+            let values = try await model.boards()
+            guard !Task.isCancelled, loadID == request, model.selectedProjectID == projectID else { return }
+            boards = values
+        }
         catch is CancellationError { }
-        catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+        catch {
+            if !Task.isCancelled, loadID == request, model.selectedProjectID == projectID {
+                self.error = error.localizedDescription
+            }
+        }
     }
 }
 

@@ -237,7 +237,12 @@ class ApiController {
     if (path === "/auth/magic/verify" && req.method === "POST") {
       const result = await s.verifyMagicLogin(req.body, req.socket.remoteAddress ?? "unknown");
       res.setHeader("Set-Cookie", s.auth.cookie(result.token));
-      return { user: result.user, csrf: result.csrf, is_new_user: result.is_new_user };
+      // Bearer 客户端（iPhone）从响应体读取会话令牌，与 /auth/login 对齐。
+      return { user: result.user, csrf: result.csrf, is_new_user: result.is_new_user, token: result.token };
+    }
+    if (path === "/auth/set-password" && req.method === "POST") {
+      const u = await s.auth.authenticate(headers, true);
+      return s.setPassword(u, req.body);
     }
     if (path === "/auth/verify-email" && req.method === "POST")
       return s.accounts.verifyEmail(req.body);

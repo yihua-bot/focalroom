@@ -181,6 +181,34 @@ public struct APIClient: Sendable {
         return result
     }
 
+    /// 请求邮箱验证码：服务端发送 6 位码到邮箱；同邮箱旧码作废。
+    public func magicRequest(email: String) async throws {
+        struct Input: Encodable { let email: String }
+        struct Result: Decodable { let sent: Bool }
+        let result = try await call(Result.self, ["auth", "magic", "request"],
+                                   body: JSONEncoder().encode(Input(email: email)))
+        guard result.sent else { throw APIError.invalidResponse }
+    }
+
+    /// 验证码登录：新邮箱自动建号（随机未知密码），返回与密码登录一致的会话。
+    public func magicVerify(email: String, code: String) async throws -> Credentials {
+        struct Input: Encodable { let email: String; let code: String }
+        let result = try await call(Credentials.self, ["auth", "magic", "verify"],
+                                   body: JSONEncoder().encode(Input(email: email, code: code)))
+        guard result.token.count == 64, result.token.allSatisfy({ "0123456789abcdef".contains($0) }),
+              !result.user.id.isEmpty else { throw APIError.invalidResponse }
+        return result
+    }
+
+    /// 登录态设置或修改密码；验证码新建账号可不带当前密码。
+    public func setPassword(token: String, password: String, current: String?) async throws {
+        struct Input: Encodable { let password: String; let current_password: String? }
+        struct Result: Decodable { let updated: Bool }
+        let result = try await call(Result.self, ["auth", "set-password"], token: token,
+                                    body: JSONEncoder().encode(Input(password: password, current_password: current)))
+        guard result.updated else { throw APIError.invalidResponse }
+    }
+
     public func currentUser(token: String) async throws -> User { try await call(User.self, ["auth", "me"], token: token) }
 
     public func logout(token: String) async throws {

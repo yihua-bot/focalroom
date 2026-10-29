@@ -224,14 +224,19 @@ struct FocalAIView: View {
     }
 
     private func loadTasks() async {
-        guard model.selectedProjectID != nil, !model.offline else { return }
+        results = []; jobs = []; tasksError = nil
+        guard let projectID = model.selectedProjectID, !model.offline else { return }
         do {
-            results = try await model.agentResults()
-            jobs = try await model.agentJobs()
+            let loadedResults = try await model.agentResults()
+            guard !Task.isCancelled, model.selectedProjectID == projectID else { return }
+            let loadedJobs = try await model.agentJobs()
+            guard !Task.isCancelled, model.selectedProjectID == projectID else { return }
+            results = loadedResults
+            jobs = loadedJobs
             tasksError = nil
         } catch is CancellationError {
         } catch {
-            if !Task.isCancelled { tasksError = "任务读取失败，切换项目后重试。" }
+            if !Task.isCancelled, model.selectedProjectID == projectID { tasksError = "任务读取失败，切换项目后重试。" }
         }
     }
 

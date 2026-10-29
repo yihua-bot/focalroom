@@ -47,6 +47,8 @@ final class AppModel {
     private(set) var pendingBoards: Set<String> = []
     var notice: String?
     var address = "https://team.focroom.cc"
+    /// 验证码已发送到邮箱的提示状态；登录成功或切换模式时清除。
+    var codeSent = false
 
     @ObservationIgnored private var api: APIClient?
     @ObservationIgnored private var store: ScopedStore?
@@ -106,6 +108,56 @@ final class AppModel {
             busy = false
             await reloadProjects()
             await registerCurrentDevice()
+        } catch { if generation == epoch { notice = message(error) } }
+    }
+
+    /// 请求邮箱验证码；成功后提示查收，旧验证码在服务端作废。
+    func requestLoginCode(email: String) async {
+        guard !busy else { return }
+        busy = true
+        notice = nil
+        let generation = epoch
+        defer { if generation == epoch { busy = false } }
+        do {
+            let configuration = try configuration(address)
+            try await APIClient(configuration: configuration).magicRequest(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+            guard generation == epoch else { return }
+            codeSent = true
+        } catch { if generation == epoch { notice = message(error) } }
+    }
+
+    func magicLogin(email: String, code: String) async {
+        guard !busy else { return }
+        busy = true
+        notice = nil
+        let generation = epoch
+        defer { if generation == epoch { busy = false } }
+        do {
+            let configuration = try configuration(address)
+            let value = try await APIClient(configuration: configuration).magicVerify(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), code: code)
+            guard generation == epoch else { return }
+            try vault.save(SavedSession(address: configuration.identity, credentials: value))
+            activate(value, configuration: configuration)
+            codeSent = false
+            busy = false
+            await reloadProjects()
+            await registerCurrentDevice()
+        } catch { if generation == epoch { notice = message(error) } }
+    }
+
+    /// 登录态设置/修改密码；验证码新建的账号可不带当前密码。
+    func setPassword(_ password: String, current: String?) async {
+        guard let api, !busy else { return }
+        busy = true
+        notice = nil
+        let generation = epoch
+        defer { if generation == epoch { busy = false } }
+        do {
+            try await api.setPassword(token: credentials?.token ?? "", password: password, current: current)
+            guard generation == epoch else { return }
+            notice = "密码已更新。下次登录可使用邮箱与新密码。"
         } catch { if generation == epoch { notice = message(error) } }
     }
 
