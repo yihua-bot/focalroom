@@ -9,16 +9,18 @@ public struct AIChatMessage: Codable, Sendable, Identifiable, Equatable {
     public let text: String
     public let createdAt: Date
     public let requestID: String?
+    public let localProjectID: String?
     public var state: State
     public var failure: String?
 
     public init(id: String, role: String, text: String, createdAt: Date = Date(),
-                requestID: String? = nil, state: State = .sent, failure: String? = nil) {
+                requestID: String? = nil, state: State = .sent, failure: String? = nil, localProjectID: String? = nil) {
         self.id = id
         self.role = role
         self.text = text
         self.createdAt = createdAt
         self.requestID = requestID
+        self.localProjectID = localProjectID
         self.state = state
         self.failure = failure
     }
@@ -45,6 +47,11 @@ public actor AIChatStore {
 
     public func messages() throws -> [AIChatMessage] {
         try read().messages
+    }
+
+    // 旧消息没有本机项目归属，继续留在原账户对话中，不倒填到任意本机项目。
+    public func messages(localProjectID: String?) throws -> [AIChatMessage] {
+        try read().messages.filter { $0.localProjectID == localProjectID }
     }
 
     public func append(_ message: AIChatMessage) throws {
@@ -83,7 +90,8 @@ public actor AIChatStore {
         guard document.version == 1, document.scope == scope,
               document.messages.count <= Self.messageLimit,
               Set(document.messages.map(\.id)).count == document.messages.count,
-              document.messages.allSatisfy({ ["user", "assistant"].contains($0.role) && !$0.text.isEmpty })
+              document.messages.allSatisfy({ ["user", "assistant"].contains($0.role) && !$0.text.isEmpty &&
+                  ($0.localProjectID == nil || UUID(uuidString: $0.localProjectID!) != nil) })
         else { throw APIError.invalidResponse }
         return document
     }

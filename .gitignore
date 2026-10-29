@@ -34,3 +34,5 @@ apps/mobile-ios/DerivedData/
 apps/mobile-ios/build/
 *.ipa
 *.dSYM.zip
+.swift-build/
+*.xcresult

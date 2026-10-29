@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum AppLinks {
+    static let privacyPolicy = URL(string: "https://focroom.cc/privacy/")!
+}
+
 @main
 struct FocalRoomApp: App {
     @State private var model = AppModel()

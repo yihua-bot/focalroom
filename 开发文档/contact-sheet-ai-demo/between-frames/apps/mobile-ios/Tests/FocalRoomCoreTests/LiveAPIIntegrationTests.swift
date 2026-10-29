@@ -8,6 +8,50 @@ import UniformTypeIdentifiers
 
 @MainActor
 final class LiveAPIIntegrationTests: XCTestCase {
+    func testMagicCodeLoginAndSetPassword() async throws {
+        guard let base = ProcessInfo.processInfo.environment["FOCALROOM_IOS_TEST_BASE_URL"],
+              let codesPath = ProcessInfo.processInfo.environment["FOCALROOM_IOS_TEST_MAGIC_CODES"] else {
+            throw XCTSkip("验证码联调需 scripts/verify-live.mjs 注入邮件夹具与验证码收集文件")
+        }
+        let configuration = try APIConfiguration(base, allowLoopbackHTTP: true)
+        let client = APIClient(configuration: configuration)
+        let email = "magic-\(UUID().uuidString.prefix(8))@fr.test"
+        try await client.magicRequest(email: email)
+        let code = try await pollMagicCode(email: email, path: codesPath)
+        // 验证码登录自动建号并返回与密码登录一致的会话。
+        let credentials = try await client.magicVerify(email: email, code: code)
+        XCTAssertEqual(credentials.user.email, email)
+        // 验证码新建账号无已知密码：设置密码不需要当前密码。
+        try await client.setPassword(token: credentials.token, password: "magic-set-pw-2026", current: nil)
+        let loggedIn = try await client.login(email: email, password: "magic-set-pw-2026")
+        XCTAssertEqual(loggedIn.user.id, credentials.user.id)
+        // 已有密码后，错误当前密码必须拒绝。
+        do {
+            try await client.setPassword(token: loggedIn.token, password: "another-pw-789", current: "wrong-current-1")
+            XCTFail("错误当前密码不得修改")
+        } catch let error as APIError {
+            if case .server(let status, let serverCode) = error {
+                XCTAssertEqual(status, 401); XCTAssertEqual(serverCode, "UNAUTHORIZED")
+            } else { XCTFail("应为服务端 401：\(error)") }
+        }
+    }
+
+    /// 从验证码收集文件轮询读取匹配邮箱的最新验证码（夹具异步投递，最多等 5 秒）。
+    private func pollMagicCode(email: String, path: String) async throws -> String {
+        let url = URL(fileURLWithPath: path)
+        for _ in 0..<25 {
+            if let lines = try? String(contentsOf: url, encoding: .utf8).split(separator: "\n").reversed() {
+                for line in lines {
+                    if let entry = try? JSONDecoder().decode(MagicCodeEntry.self, from: Data(line.utf8)),
+                       entry.email == email, let code = entry.code { return code }
+                }
+            }
+            try await Task.sleep(nanoseconds: 200_000_000)
+        }
+        throw XCTSkip("5 秒内未收到 \(email) 的验证码夹具")
+    }
+    private struct MagicCodeEntry: Decodable { let email: String; let code: String? }
+
     func testRealBackendLoginMediaLostReceiptReplayAndLogout() async throws {
         guard let base = ProcessInfo.processInfo.environment["FOCALROOM_IOS_TEST_BASE_URL"] else {
             throw XCTSkip("独立本地后端集成测试需通过 scripts/verify-live.mjs 启动")

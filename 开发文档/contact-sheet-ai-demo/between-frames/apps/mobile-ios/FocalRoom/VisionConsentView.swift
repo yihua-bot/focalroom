@@ -3,14 +3,15 @@ import FocalRoomCore
 
 struct PreparedVision: Identifiable {
     struct Photo {
-        let descriptor: PreviewDescriptor
+        let photoID: String
+        let contentSHA: String
         let filename: String
         let preview: VisionPreview
     }
     let id: UUID
     let generation: UUID
     let accountID: String
-    let projectID: String
+    let project: ProjectReference
     let text: String
     let createdAt: Date
     let photos: [Photo]
@@ -31,7 +32,7 @@ struct VisionConsentView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("即将发送的照片") {
-                    ForEach(draft.photos, id: \.descriptor.photo_id) { photo in
+                    ForEach(draft.photos, id: \.photoID) { photo in
                         HStack {
                             if let image = UIImage(data: photo.preview.jpeg) {
                                 Image(uiImage: image).resizable().scaledToFit().frame(width: 80, height: 80)

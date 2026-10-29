@@ -4,7 +4,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join, basename } from 'node:path';
-import { writeFile, mkdir, readFile, open, unlink, cp } from 'node:fs/promises';
+import { writeFile, mkdir, readFile, open, unlink, cp, appendFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import sharp from 'sharp';
 import { createApi } from '../../api/src/server.ts';
@@ -21,6 +21,7 @@ const savedEvidenceDirectory = join(root, 'test-results', basename(directory));
 await mkdir(evidenceDirectory, { recursive: true });
 // 放到本轮临时目录，避免产物变化触发本地 Swift package 的重复解析。
 const verificationBuild = join(directory, 'ios-build');
+const magicCodesPath = join(directory, 'magic-codes.jsonl');
 const pool = new Pool({ connectionString: process.env.FOCALROOM_TEST_DATABASE_URL });
 let api;
 let visionCalls = 0;
@@ -56,7 +57,11 @@ try {
     }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   api = await createApi({ pool, store: new LocalPreviewStore(join(directory, 'ios-previews')), origin: 'http://127.0.0.1:1424',
-    hostedAi: { key: 'stub-key', initialTokens: 50000 }, hostedAiTransport: aiTransport });
+    hostedAi: { key: 'stub-key', initialTokens: 50000 }, hostedAiTransport: aiTransport,
+    magicEmail: async (email, code) => {
+      await appendFile(magicCodesPath, JSON.stringify({ email, code }) + '\n');
+      return true;
+    } });
   await api.app.listen(0, '127.0.0.1');
   const base = await api.app.getUrl();
   const call = async (path, token, body) => {
@@ -112,7 +117,8 @@ try {
     schemaVersion: 3, commandId: boardCommandID, idempotencyKey: boardCommandID, projectId: projectID, baseRevision: 0,
     operations: [{ opId: randomUUID(), action: { type: 'createNode', nodeType: 'photo', x: 0, y: 0, width: 320, height: 240, assetId: asset.asset_id } }],
   });
-  const env = { FOCALROOM_IOS_TEST_BASE_URL: base, FOCALROOM_IOS_TEST_PROJECT_ID: projectID };
+  const env = { FOCALROOM_IOS_TEST_BASE_URL: base, FOCALROOM_IOS_TEST_PROJECT_ID: projectID,
+    FOCALROOM_IOS_TEST_MAGIC_CODES: magicCodesPath };
   if (process.argv.includes('--serve')) {
     console.log(JSON.stringify({ base, projectID, fixture_only: true, email: 'iphone@fr.test', password, directory }));
     await writeFile(join(directory, 'ios-review.json'), JSON.stringify({ base, projectID, fixture_only: true }));

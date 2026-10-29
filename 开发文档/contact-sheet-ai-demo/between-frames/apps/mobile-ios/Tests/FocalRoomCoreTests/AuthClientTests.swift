@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import FocalRoomCore
 
@@ -8,10 +9,11 @@ final class AuthStubTransport: HTTPTransport, @unchecked Sendable {
     var respond: ((URLRequest) -> HTTPResponse)?
 
     func send(_ request: URLRequest, limit: Int) async throws -> HTTPResponse {
-        lock.lock(); defer { lock.unlock() }
-        requests.append(request)
-        guard let respond else { throw URLError(.notConnectedToInternet) }
-        return respond(request)
+        try lock.withLock {
+            requests.append(request)
+            guard let respond else { throw URLError(.notConnectedToInternet) }
+            return respond(request)
+        }
     }
 }
 
@@ -28,10 +30,10 @@ final class AuthStubTransport: HTTPTransport, @unchecked Sendable {
         transport.respond = { _ in HTTPResponse(data: Data("{\"sent\":true}".utf8), status: 200) }
         let client = APIClient(configuration: try APIConfiguration("https://example.com"), transport: transport)
         try await client.magicRequest(email: "A@FR.test")
-        let request = #require(transport.requests.first)
+        let request = try #require(transport.requests.first)
         #expect(request.url?.path == "/api/v2/auth/magic/request")
-        let body = #expect(try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: String])
-        #expect(body?.count == 1 && body?["email"] == "A@fr.test", "请求只含规整为小写的邮箱")
+        let body = try #require(JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: String])
+        #expect(body.count == 1 && body["email"] == "A@FR.test", "请求只含输入邮箱，邮箱规整由服务端负责")
         transport.respond = { _ in HTTPResponse(data: Data("{\"sent\":false}".utf8), status: 200) }
         await #expect(throws: APIError.invalidResponse) {
             _ = try await client.magicRequest(email: "b@fr.test")
@@ -44,7 +46,7 @@ final class AuthStubTransport: HTTPTransport, @unchecked Sendable {
         let client = APIClient(configuration: try APIConfiguration("https://example.com"), transport: transport)
         let value = try await client.magicVerify(email: "a@fr.test", code: "123456")
         #expect(value.token == token && value.user.id == "user-1")
-        let request = #expect(transport.requests.first)
+        let request = try #require(transport.requests.first)
         #expect(request.url?.path == "/api/v2/auth/magic/verify")
         transport.respond = { _ in HTTPResponse(data: self.credentialsJSON(token: "not-hex-token"), status: 200) }
         await #expect(throws: APIError.invalidResponse) {
@@ -58,15 +60,15 @@ final class AuthStubTransport: HTTPTransport, @unchecked Sendable {
         let client = APIClient(configuration: try APIConfiguration("https://example.com"), transport: transport)
         let token = String(repeating: "a", count: 64)
         try await client.setPassword(token: token, password: "new-password-123", current: "old-password-9")
-        let request = #expect(transport.requests.first)
+        let request = try #require(transport.requests.first)
         #expect(request.url?.path == "/api/v2/auth/set-password")
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer \(token)")
-        let body = try #expect(JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: String])
-        #expect(body?["password"] == "new-password-123" && body?["current_password"] == "old-password-9")
+        let body = try #require(JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: String])
+        #expect(body["password"] == "new-password-123" && body["current_password"] == "old-password-9")
         try await client.setPassword(token: token, password: "fresh-password-456", current: nil)
-        let second = #expect(transport.requests.last)
-        let secondBody = try #expect(JSONSerialization.jsonObject(with: second.httpBody ?? Data()) as? [String: String])
-        #expect(secondBody?["current_password"] == nil, "验证码新建账号允许省略当前密码")
+        let second = try #require(transport.requests.last)
+        let secondBody = try #require(JSONSerialization.jsonObject(with: second.httpBody ?? Data()) as? [String: String])
+        #expect(secondBody["current_password"] == nil, "验证码新建账号允许省略当前密码")
         transport.respond = { _ in HTTPResponse(data: Data("{\"updated\":false}".utf8), status: 200) }
         await #expect(throws: APIError.invalidResponse) {
             _ = try await client.setPassword(token: token, password: "another-789", current: nil)

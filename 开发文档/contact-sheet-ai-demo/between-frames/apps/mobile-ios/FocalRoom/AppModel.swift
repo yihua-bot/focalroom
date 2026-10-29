@@ -5,6 +5,12 @@ import ImageIO
 import UIKit
 import FocalRoomCore
 
+// 本机与云端编号属于不同身份域，不能把本机编号传入云端项目接口。
+enum ProjectReference: Equatable, Hashable {
+    case local(String)
+    case cloud(String)
+}
+
 // 设备身份：每次安装生成一次的稳定 UUID，存于 UserDefaults（非机密），配合服务端幂等注册。
 @MainActor enum DeviceIdentity {
     private static let key = "focalroom.device-key"
@@ -28,7 +34,30 @@ final class AppModel {
     private(set) var credentials: Credentials?
     private(set) var projects: [ProjectSummary] = []
     private(set) var snapshot: ProjectSnapshot?
-    private(set) var selectedProjectID: String?
+    private(set) var currentProject: ProjectReference?
+    var selectedProjectID: String? {
+        if case .cloud(let id) = currentProject { return id }
+        return nil
+    }
+    var selectedLocalProjectID: String? {
+        if case .local(let id) = currentProject { return id }
+        return nil
+    }
+    var selectedLocalProject: LocalProject? {
+        localLibrary?.projects.first { $0.id == selectedLocalProjectID }
+    }
+    var currentProjectTitle: String? {
+        if let local = selectedLocalProject { return local.title }
+        return projects.first { $0.id == selectedProjectID }?.title
+    }
+    struct ObservationPhoto: Identifiable {
+        let id: String
+        let filename: String
+    }
+    var observationPhotos: [ObservationPhoto] {
+        if let local = selectedLocalProject { return local.photos.map { .init(id: $0.id, filename: $0.filename) } }
+        return snapshot?.snapshot.photos.map { .init(id: $0.id, filename: $0.filename) } ?? []
+    }
     private(set) var pending: PendingSelection?
     private(set) var cachedAt: Date?
     private(set) var offline = false
@@ -229,9 +258,11 @@ final class AppModel {
         if generation == epoch { await loadDevices() }
     }
 
-    func openLocalContext() {
-        guard !busy else { return }
+    func openLocalContext(_ id: String) {
+        guard !busy, localLibrary?.projects.contains(where: { $0.id == id }) == true else { return }
+        if currentProject == .local(id) { return }
         resetProject()
+        currentProject = .local(id)
         images.removeAllObjects()
     }
 
@@ -272,7 +303,7 @@ final class AppModel {
         }
         guard projects.contains(where: { $0.id == id && $0.state == .SHARED }) else { return }
         resetProject()
-        selectedProjectID = id
+        currentProject = .cloud(id)
         await reloadSnapshot()
     }
 
@@ -877,7 +908,9 @@ final class AppModel {
 
     private func resetProject() {
         projectRequest = UUID()
-        selectedProjectID = nil
+        currentProject = nil
+        chatMessages = []
+        visionDraftID = nil
         snapshot = nil
         pending = nil
         cachedAt = nil

@@ -24,7 +24,7 @@ struct LocalProjectsSection: View {
             ForEach(projects) { project in
                 NavigationLink {
                     LocalProjectView(library: library, migration: model.migration, model: model, projectID: project.id)
-                        .onAppear { model.openLocalContext() }
+                        .onAppear { model.openLocalContext(project.id) }
                 } label: {
                     HStack(spacing: 16) {
                         Image(systemName: project.migration?.phase == .migrated ? "icloud" : "iphone").font(.title2)

@@ -149,6 +149,10 @@ private struct LoginView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                Link("隐私政策", destination: AppLinks.privacyPolicy)
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("login.privacy")
+
                 #if DEBUG
                 Text("iPhone 开发预览").font(.caption2).foregroundStyle(.tertiary)
                 #else
@@ -269,7 +273,7 @@ private struct ProjectChooser: View {
                         .accessibilityIdentifier("project.choose.\(project.id)")
                     }
                     if cloudProjects.isEmpty {
-                        Text(query.isEmpty ? "还没有已同步项目。可在下方打开本机项目，迁云后在这里切换。" : "未找到匹配的已同步项目")
+                        Text(query.isEmpty ? "还没有已同步项目。请在本机项目中迁云，或通过已有邀请加入项目。" : "未找到匹配的已同步项目")
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("project.choose.empty")
                     }

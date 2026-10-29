@@ -58,6 +58,11 @@ final class FocalRoomUITests: XCTestCase {
                 search.typeText("没有这个项目")
                 XCTAssertTrue(app.staticTexts["project.choose.empty"].waitForExistence(timeout: 5))
                 XCTAssertFalse(app.buttons["project.choose.\(firstID)"].exists)
+                // 系统搜索展开时收起导航工具栏，须先关闭搜索再结束选择。
+                let closeSearch = app.buttons.matching(NSPredicate(format: "label IN %@", ["关闭", "取消", "Close", "Cancel"])).firstMatch
+                XCTAssertTrue(closeSearch.waitForExistence(timeout: 5))
+                closeSearch.tap()
+                XCTAssertTrue(app.buttons["project.choose.done"].waitForExistence(timeout: 5))
             }
             let screenshot = XCTAttachment(screenshot: app.screenshot())
             screenshot.name = "\(tab) 项目选择"

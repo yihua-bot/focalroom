@@ -73,8 +73,10 @@ try {
     });
     projectIDs.push(id);
   }
+  const beforeProjects = (await pool.query('SELECT id,revision,snapshot FROM fr_projects ORDER BY id')).rows;
+  const beforeBoards = (await pool.query('SELECT id,revision FROM fr_boards ORDER BY id')).rows;
   const args = ['-project', 'FocalRoom.xcodeproj', '-scheme', 'FocalRoom', '-configuration', 'Debug', '-destination', `id=${device}`,
-    '-derivedDataPath', join(directory, 'Xcode'), '-parallel-testing-enabled', 'NO', 'CODE_SIGN_IDENTITY=-'];
+    '-derivedDataPath', process.env.FOCALROOM_IOS_PICKER_DERIVED_DATA ?? join(directory, 'Xcode'), '-parallel-testing-enabled', 'NO', 'CODE_SIGN_IDENTITY=-'];
   await run([...args, 'build-for-testing']);
   await run([...args, '-only-testing:FocalRoomUITests/FocalRoomUITests/testProjectSelectionInAITabCanvasAndMessages',
     '-resultBundlePath', join(evidenceDirectory, 'ProjectPicker.xcresult'), 'test-without-building'], {
@@ -82,9 +84,9 @@ try {
     TEST_RUNNER_FOCALROOM_IOS_PICKER_FIRST_ID: projectIDs[0],
     TEST_RUNNER_FOCALROOM_IOS_PICKER_SECOND_ID: projectIDs[1],
   });
-  const rows = (await pool.query('SELECT id,revision FROM fr_projects ORDER BY id')).rows;
-  assert.equal(rows.length, 2, '切换项目不得创建云端副本');
-  assert.ok(rows.every(row => row.revision === 1), '切换项目不得修改作品版本');
+  const rows = (await pool.query('SELECT id,revision,snapshot FROM fr_projects ORDER BY id')).rows;
+  assert.deepEqual(rows, beforeProjects, '切换项目不得创建云端副本、修改作品版本或快照');
+  assert.deepEqual((await pool.query('SELECT id,revision FROM fr_boards ORDER BY id')).rows, beforeBoards, '切换项目不得修改画布');
   const evidence = { fixture_only: true, source_baseline: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
     tabs: ['Focal AI', '画布', '消息'], cloud_projects: 2, cloud_mode: 'PRIVATE_SYNCED', local_project_visible: true,
     search_tested: true, cloud_revision_unchanged: true, actual_model_calls: 0 };

@@ -22,6 +22,10 @@ struct AccountDataView: View {
 
     var body: some View {
         Form {
+            Section("隐私政策") {
+                Link("查看完整隐私政策", destination: AppLinks.privacyPolicy)
+                    .accessibilityIdentifier("account.privacy.policy")
+            }
             Section("取回账号资料") {
                 Text("导出个人资料、设备、所属工作区、拥有的项目、本人评论/研究/提案和计量记录，不含密码或会话凭据。原片请另用本机项目导出取回。")
                     .font(.footnote).foregroundStyle(.secondary)
