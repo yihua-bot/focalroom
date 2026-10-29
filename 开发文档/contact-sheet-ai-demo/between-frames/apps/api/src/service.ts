@@ -787,15 +787,30 @@ export class CloudService {
       };
     });
   }
-  async researchList(headers: Headers, id: string) {
-    return this.authority.scope(headers, id, false, async ({ tx }) => (
-      await tx.query(
+  async researchList(headers: Headers, id: string, query?: unknown, kind?: unknown) {
+    const filter = z.strictObject({
+      q: z.string().trim().min(1).max(200).optional(),
+      kind: z.enum(['note', 'link']).optional(),
+    }).parse({ q: typeof query === 'string' && query.trim() ? query.trim() : undefined, kind: typeof kind === 'string' ? kind : undefined });
+    return this.authority.scope(headers, id, false, async ({ tx }) => {
+      const clauses = ['r.project_id = $1'];
+      const params: unknown[] = [id];
+      if (filter.kind) {
+        params.push(filter.kind);
+        clauses.push(`r.kind = $${params.length}`);
+      }
+      if (filter.q) {
+        params.push(`%${filter.q}%`);
+        const like = `$${params.length}`;
+        clauses.push(`(r.title ILIKE ${like} OR r.body ILIKE ${like} OR r.url ILIKE ${like} OR r.author ILIKE ${like} OR r.source ILIKE ${like} OR r.license ILIKE ${like})`);
+      }
+      return (await tx.query(
         `SELECT r.id,r.kind,r.title,r.body,r.url,r.author,r.source,r.license,r.created_by,u.display_name AS created_by_name,r.created_at,r.updated_at
          FROM fr_research_references r JOIN fr_users u ON u.id=r.created_by
-         WHERE r.project_id=$1 ORDER BY r.created_at,r.id`,
-        [id],
-      )
-    ).rows);
+         WHERE ${clauses.join(' AND ')} ORDER BY r.created_at,r.id`,
+        params,
+      )).rows;
+    });
   }
   async researchCreate(headers: Headers, id: string, input: unknown) {
     const value = researchReferenceSchema.parse(input);

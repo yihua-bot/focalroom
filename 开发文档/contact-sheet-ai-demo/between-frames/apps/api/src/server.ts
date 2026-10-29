@@ -292,7 +292,7 @@ class ApiController {
       if (versionDiff && req.method === "GET")
         return s.versionDiff(headers, id, Number(versionDiff[1]), Number(versionDiff[2]));
       if (action === "research" && req.method === "GET")
-        return s.researchList(headers, id);
+        return s.researchList(headers, id, req.query.q, req.query.kind);
       if (action === "research" && req.method === "POST")
         return s.researchCreate(headers, id, req.body);
       const research = action.match(/^research\/([^/]+)$/);

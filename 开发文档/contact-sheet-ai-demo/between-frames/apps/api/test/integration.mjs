@@ -305,6 +305,18 @@ test('I1 research references are project-scoped auxiliary material: permission-g
   assert.equal(list.filter(item => item.kind === 'note').length, 1);
   assert.equal(list[0].created_by_name, 'owner@fr.test');
 
+  // 搜索：按文本命中笔记/链接，按 kind 过滤，组合查询，空结果。
+  const byText = await call(`/projects/${project}/research?q=${encodeURIComponent('寇德卡')}`, 'GET', viewer.token);
+  assert.equal(byText.length, 1);
+  assert.equal(byText[0].id, note.id);
+  const byKind = await call(`/projects/${project}/research?kind=link`, 'GET', viewer.token);
+  assert.equal(byKind.length, 1);
+  assert.equal(byKind[0].id, link.id);
+  const combined = await call(`/projects/${project}/research?kind=note&q=${encodeURIComponent('Magnum')}`, 'GET', viewer.token);
+  assert.equal(combined.length, 0);
+  const empty = await call(`/projects/${project}/research?q=${encodeURIComponent('不存在的关键词')}`, 'GET', viewer.token);
+  assert.equal(empty.length, 0);
+
   // 校验：未知 kind、空正文笔记、坏 URL 链接全部 400。
   await call(`/projects/${project}/research`, 'POST', owner.token, { kind: 'image', title: 'x' }, 400);
   await call(`/projects/${project}/research`, 'POST', owner.token, { kind: 'note', title: 'x', body: '' }, 400);
