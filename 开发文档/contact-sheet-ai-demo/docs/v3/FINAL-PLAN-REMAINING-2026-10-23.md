@@ -92,7 +92,7 @@
 
 ### I. 研究与知识记忆（用户追加方向 / G1、G3、G4）
 
-- [ ] I1 研究笔记/链接服务端已落地（0029）；**canvas reference 节点已落地**（`0262c914`：0034 桌面迁移 SQLite CHECK 重建 + AddReference 契约/Rust 命令/前端虚线卡片渲染 + 服务端 nodeType 扩展——reference 独立类型自动排除于 photoSources/选片）；Agent 检索关联仍开。
+- [ ] I1 研究笔记/链接服务端已落地（0029）；**canvas reference 节点已落地**（`0262c914`：0034 桌面迁移 SQLite CHECK 重建 + AddReference 契约/Rust 命令/前端虚线卡片渲染——reference 独立类型自动排除于 photoSources/选片）；**I2 搜索 API 已落地**（`333503bb`：GET /projects/:id/research?q=&kind=——标题/正文/URL/作者/来源/许可 ILIKE 全字段 + kind 过滤 + 组合查询）；Agent 检索工具接线与创作循环关联仍开。
 - [ ] I2 授权研究内容的版本化 Agent 检索及完整创作循环关联；现有 8 篇原创方法札记不是完整摄影文献资料库。
 - [ ] I3 云端作者长期记忆与 Creator 隔离：实际 schema（0023）、路由接入与 Creator 隔离已落地（8bb2ae1），桌面消费（shared_cloud 拉取 + cloud_author_memories IPC + 记忆面板共享分区）已接（d4d3e70）；检索与撤权的完整回归仍开，不能以 API 存在推定全链路可用。
 - [ ] I4 明确区分项目记忆、个人长期偏好与一次性理由；本地确认/纠正/删除已有实现，新增跨项目或云授权不得自动扩大。
