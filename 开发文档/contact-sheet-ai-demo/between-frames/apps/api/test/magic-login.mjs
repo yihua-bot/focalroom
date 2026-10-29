@@ -85,6 +85,8 @@ test('M4 OTP creates an authenticated cookie session, verified account and owner
   const current = await call('/auth/me', undefined, { cookie: cookieHeader });
   assert.equal(current.data.id, data.user.id);
   assert.equal(current.data.csrf, data.csrf);
+  const viaBearer = await call('/auth/me', undefined, bearer);
+  assert.equal(viaBearer.data.id, data.user.id, '响应体令牌应可直接作为 Bearer 认证');
   const workspaces = await call('/workspaces', undefined, { cookie: cookieHeader });
   assert.equal(workspaces.data.length, 1); assert.equal(workspaces.data[0].role, 'OWNER');
   assert.ok((await pool.query('SELECT email_verified_at FROM fr_users WHERE id=$1', [data.user.id])).rows[0].email_verified_at);
