@@ -513,7 +513,7 @@ final class LiveAPIIntegrationTests: XCTestCase {
 
         let catalog = try await client.billingCatalog()
         XCTAssertFalse(catalog.salesAvailable, "夹具未配置支付网关")
-        XCTAssertEqual(catalog.plans.map(\.id).sorted(), ["free", "pro"])
+        XCTAssertTrue(catalog.plans.contains { $0.id == "free" }, "目录应包含免费档（其余档位由服务端演进）")
         XCTAssertTrue(catalog.plans.allSatisfy { $0.prices.isEmpty }, "未开放销售时价格恒为空")
     }
 

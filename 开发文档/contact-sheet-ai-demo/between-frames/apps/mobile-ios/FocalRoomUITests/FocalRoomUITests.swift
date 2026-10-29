@@ -63,7 +63,7 @@ final class FocalRoomUITests: XCTestCase {
             XCTAssertFalse(app.staticTexts["甲项目内容"].exists)
             app.buttons["project.context.local.library"].tap()
             XCTAssertTrue(app.navigationBars["本机图库"].waitForExistence(timeout: 5))
-            app.navigationBars.buttons.element(boundBy: 0).tap()
+            popBack(app)
             XCTAssertEqual(context.value as? String, "选择器本机项目")
             context.tap()
             XCTAssertTrue(app.buttons["project.choose.done"].waitForExistence(timeout: 5))
@@ -202,7 +202,7 @@ final class FocalRoomUITests: XCTestCase {
         add(screenshot)
         app.buttons["photo.compare"].tap()
         verifyComparison(app)
-        runResearchSegment(app)
+        runResearchSegment(app, projectID: projectID)
         verifySyncCenter(app, projectID: projectID)
         runHistorySegment(app)
 
@@ -273,7 +273,7 @@ final class FocalRoomUITests: XCTestCase {
         // 中间段落的导航深度可能有残留：退到项目列表可见为止，最多三次。
         for _ in 0..<3 {
             if app.buttons["local.create"].waitForExistence(timeout: 5) { break }
-            app.navigationBars.buttons.element(boundBy: 0).tap()
+            popBack(app)
         }
         XCTAssertTrue(app.buttons["local.create"].waitForExistence(timeout: 5), "应能退回项目列表")
         app.buttons["local.create"].tap()
@@ -300,6 +300,7 @@ final class FocalRoomUITests: XCTestCase {
         localScreenshot.name = "iPhone 本机图库与导入结果"
         localScreenshot.lifetime = .keepAlways
         add(localScreenshot)
+        runLocalCanvasSegment(app)
         localPhotos.element(boundBy: 0).tap()
         app.buttons["local.selection.KEEP"].tap()
         let localSelected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '已选' AND enabled == true"), object: app.buttons["local.selection.KEEP"])
@@ -420,7 +421,7 @@ final class FocalRoomUITests: XCTestCase {
         offlineScreenshot.name = "iPhone 离线本机资料"
         offlineScreenshot.lifetime = .keepAlways
         add(offlineScreenshot)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        popBack(app)
 
         app.buttons["local.import"].tap()
         let export = app.buttons.matching(NSPredicate(format: "label CONTAINS '导出项目'")).firstMatch
@@ -472,7 +473,43 @@ final class FocalRoomUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [sheetGone], timeout: 10), .completed, "采纳后详情表单应收起")
         let submittedGone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.staticTexts["待审阅"])
         XCTAssertEqual(XCTWaiter.wait(for: [submittedGone], timeout: 10), .completed, "唯一待审提案处理完毕后应清空待审阅区")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // 表单收起动画期间存在两条导航栏，element(boundBy:0) 会解析到正在消失的那条；等已处理区出现再按系统返回键。
+        XCTAssertTrue(app.staticTexts["已处理"].waitForExistence(timeout: 10), "处理后的提案应进入已处理区")
+        let back = app.buttons["BackButton"].firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10), "返回键应可用")
+        back.tap()
+    }
+
+    @MainActor
+    private func runLocalCanvasSegment(_ app: XCUIApplication) {
+        app.buttons["local.import"].tap()
+        let entry = app.buttons["local.canvas.entry"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5), "本机项目菜单应提供画布入口")
+        entry.tap()
+        XCTAssertTrue(app.staticTexts["从右上角添加照片或便签开始布局"].waitForExistence(timeout: 10))
+
+        // 便签：新建 → 撤销 → 重做
+        app.buttons["canvas.add.note"].tap()
+        let node = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'local.canvas.node.'")).firstMatch
+        XCTAssertTrue(node.waitForExistence(timeout: 10), "便签节点应出现")
+        let noteText = app.staticTexts["便签：新便签"]
+        XCTAssertTrue(noteText.waitForExistence(timeout: 5))
+        app.buttons["canvas.undo"].tap()
+        XCTAssertTrue(app.staticTexts["从右上角添加照片或便签开始布局"].waitForExistence(timeout: 10), "撤销后画布应清空")
+        app.buttons["canvas.redo"].tap()
+        XCTAssertTrue(noteText.waitForExistence(timeout: 10), "重做后便签应恢复")
+
+        // 照片节点：从项目照片选择添加
+        app.buttons["canvas.add.photo"].tap()
+        let pick = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'canvas.pick.photo.'")).firstMatch
+        XCTAssertTrue(pick.waitForExistence(timeout: 10), "照片选择表应列出项目照片")
+        pick.tap()
+        let canvasScreenshot = XCTAttachment(screenshot: app.screenshot())
+        canvasScreenshot.name = "iPhone 本机画布编辑"
+        canvasScreenshot.lifetime = .keepAlways
+        add(canvasScreenshot)
+        popBack(app)
     }
 
     @MainActor
@@ -491,12 +528,12 @@ final class FocalRoomUITests: XCTestCase {
         historyScreenshot.name = "iPhone 版本历史与差异"
         historyScreenshot.lifetime = .keepAlways
         add(historyScreenshot)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        popBack(app)
     }
 
     @MainActor
     private func verifySyncCenter(_ app: XCUIApplication, projectID: String) {
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        popBack(app)
         app.buttons["sync.center"].tap()
         XCTAssertTrue(app.staticTexts["已缓存项目"].waitForExistence(timeout: 10))
         let row = app.descendants(matching: .any)
@@ -513,9 +550,49 @@ final class FocalRoomUITests: XCTestCase {
         projectButton.tap()
     }
 
+    private enum Anchor { case library, root, viewer, unknown }
+
+    // 导航栏按钮在本模拟器上间歇不可解析；回退用左缘右滑（根视图上是安全空操作），不做盲点坐标点击。
     @MainActor
-    private func runResearchSegment(_ app: XCUIApplication) {
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+    private func popBack(_ app: XCUIApplication) {
+        let button = app.navigationBars.buttons.element(boundBy: 0)
+        if button.waitForExistence(timeout: 3) {
+            button.tap()
+            return
+        }
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5)))
+    }
+
+    @MainActor
+    private func runResearchSegment(_ app: XCUIApplication, projectID: String) {
+        // 比较表单收起后系统时序不定（照片页/图库/项目根，AX 树会短暂缺失导航栏）；
+        // 以三个锚点轮询直至任一出现，再按位置回到图库。
+        var anchor: Anchor = .unknown
+        for _ in 0..<15 {
+            if app.buttons["research.entry"].firstMatch.exists { anchor = .library; break }
+            if app.buttons["project.\(projectID)"].firstMatch.exists { anchor = .root; break }
+            if app.buttons["photo.compare"].firstMatch.exists { anchor = .viewer; break }
+            Thread.sleep(forTimeInterval: 1)
+        }
+        switch anchor {
+        case .library: break
+        case .root:
+            app.buttons["project.\(projectID)"].tap()
+            XCTAssertTrue(app.buttons["research.entry"].firstMatch.waitForExistence(timeout: 10), "应进入图库层")
+        case .viewer:
+            // 表单收起动画期间导航栏可能整体不在 AX 树；用左缘右滑触发系统返回手势。
+            Thread.sleep(forTimeInterval: 2)
+            let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
+            let target = app.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+            edge.press(forDuration: 0.05, thenDragTo: target)
+            if !app.buttons["research.entry"].firstMatch.waitForExistence(timeout: 10) {
+                edge.press(forDuration: 0.05, thenDragTo: target)
+            }
+            XCTAssertTrue(app.buttons["research.entry"].firstMatch.waitForExistence(timeout: 10), "应退回图库层")
+        case .unknown:
+            XCTFail("比较表单收起后应有可识别的落点")
+        }
         app.buttons["research.entry"].tap()
         XCTAssertTrue(app.staticTexts["还没有研究资料"].waitForExistence(timeout: 10))
         app.buttons["research.create"].tap()
@@ -544,20 +621,26 @@ final class FocalRoomUITests: XCTestCase {
         app.buttons["research.save"].tap()
         waitEditorGone(app)
         XCTAssertTrue(row.waitForExistence(timeout: 10))
+        // 列表保存后重载有一次数据刷新；稳定后重开详情做删除。
+        Thread.sleep(forTimeInterval: 1)
         row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        // 删除区在表单底部；先确认表单打开，再上滚露出删除区（懒加载行在元素点击时会重解析，改坐标点击）。
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["research.save"].waitForExistence(timeout: 10), "详情表单应打开")
+        app.swipeUp()
         let delete = app.buttons["research.delete"]
-        XCTAssertTrue(delete.waitForExistence(timeout: 5))
-        delete.tap()
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "上滚后应见删除入口")
+        delete.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let confirm = app.buttons.matching(NSPredicate(format: "label == '删除'")).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
         XCTAssertTrue(app.staticTexts["还没有研究资料"].waitForExistence(timeout: 10), "删除后应回到空列表")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        popBack(app)
     }
 
     @MainActor
     private func migrateToCloud(_ app: XCUIApplication) {
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        popBack(app)
         app.buttons["local.import"].tap()
         let migrate = app.buttons.matching(NSPredicate(format: "label CONTAINS '迁云'")).firstMatch
         XCTAssertTrue(migrate.waitForExistence(timeout: 5), app.debugDescription)
@@ -579,7 +662,7 @@ final class FocalRoomUITests: XCTestCase {
         cloudScreenshot.name = "iPhone 迁云后的云端图库"
         cloudScreenshot.lifetime = .keepAlways
         add(cloudScreenshot)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        popBack(app)
     }
 
     @MainActor

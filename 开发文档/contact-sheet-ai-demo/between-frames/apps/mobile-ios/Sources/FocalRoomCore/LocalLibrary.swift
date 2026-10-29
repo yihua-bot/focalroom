@@ -85,6 +85,7 @@ public struct LocalProject: Codable, Sendable, Identifiable, Equatable {
     public fileprivate(set) var updatedAt: Date
     public fileprivate(set) var photos: [LocalPhoto]
     public fileprivate(set) var migration: LocalMigration?
+    public fileprivate(set) var canvas: LocalCanvas?
 }
 
 public enum LocalImportResult: Sendable {
@@ -343,6 +344,119 @@ public actor LocalLibrary {
         try write(document)
     }
 
+    // 应用画布操作并原子提交；返回逆操作供撤销栈使用。迁云期间与迁云后画布冻结。
+    @discardableResult
+    public func applyCanvasOperation(projectID: String, _ operation: LocalCanvasOperation) throws -> LocalCanvasOperation {
+        var document = try read()
+        guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else {
+            throw LocalLibraryError.invalidProject
+        }
+        guard document.projects[index].migration == nil else { throw LocalLibraryError.projectFrozen }
+        let photoIDs = Set(document.projects[index].photos.map(\.id))
+        var canvas = document.projects[index].canvas ?? LocalCanvas()
+        let inverse: LocalCanvasOperation
+
+        switch operation {
+        case .createNode(let node):
+            guard !canvas.nodes.contains(where: { $0.id == node.id }),
+                  canvas.nodes.count < LocalCanvas.nodeLimit else { throw LocalLibraryError.invalidProject }
+            canvas.nodes.append(node)
+            inverse = .removeNode(id: node.id)
+
+        case .removeNode(let id):
+            guard let position = canvas.nodes.firstIndex(where: { $0.id == id }) else {
+                throw LocalLibraryError.invalidProject
+            }
+            let removed = canvas.nodes.remove(at: position)
+            let attached = canvas.annotations.filter { $0.nodeID == id }
+            canvas.annotations.removeAll { $0.nodeID == id }
+            inverse = .restoreNode(removed, annotations: attached)
+
+        case .restoreNode(let node, let annotations):
+            guard !canvas.nodes.contains(where: { $0.id == node.id }) else { throw LocalLibraryError.invalidProject }
+            canvas.nodes.append(node)
+            canvas.annotations.append(contentsOf: annotations)
+            inverse = .removeNode(id: node.id)
+
+        case .moveNode(let id, let x, let y):
+            guard let position = canvas.nodes.firstIndex(where: { $0.id == id }) else {
+                throw LocalLibraryError.invalidProject
+            }
+            let old = canvas.nodes[position]
+            canvas.nodes[position].x = x
+            canvas.nodes[position].y = y
+            inverse = .moveNode(id: id, x: old.x, y: old.y)
+
+        case .resizeNode(let id, let width, let height):
+            guard let position = canvas.nodes.firstIndex(where: { $0.id == id }) else {
+                throw LocalLibraryError.invalidProject
+            }
+            let old = canvas.nodes[position]
+            canvas.nodes[position].width = width
+            canvas.nodes[position].height = height
+            inverse = .resizeNode(id: id, width: old.width, height: old.height)
+
+        case .updateNoteText(let id, let text):
+            guard let position = canvas.nodes.firstIndex(where: { $0.id == id }),
+                  canvas.nodes[position].kind == .note, text.count <= LocalCanvas.textLimit else {
+                throw LocalLibraryError.invalidProject
+            }
+            let old = canvas.nodes[position].text
+            canvas.nodes[position].text = text
+            inverse = .updateNoteText(id: id, text: old ?? "")
+
+        case .bringToFront(let id):
+            guard let position = canvas.nodes.firstIndex(where: { $0.id == id }) else {
+                throw LocalLibraryError.invalidProject
+            }
+            let old = canvas.nodes[position].zOrder
+            let top = canvas.nodes.map(\.zOrder).max() ?? 0
+            canvas.nodes[position].zOrder = top + 1
+            inverse = .setNodeOrder(id: id, zOrder: old)
+
+        case .setNodeOrder(let id, let zOrder):
+            guard let position = canvas.nodes.firstIndex(where: { $0.id == id }) else {
+                throw LocalLibraryError.invalidProject
+            }
+            let old = canvas.nodes[position].zOrder
+            canvas.nodes[position].zOrder = zOrder
+            inverse = .setNodeOrder(id: id, zOrder: old)
+
+        case .createAnnotation(let annotation):
+            guard !canvas.annotations.contains(where: { $0.id == annotation.id }),
+                  canvas.annotations.count < LocalCanvas.annotationLimit else { throw LocalLibraryError.invalidProject }
+            canvas.annotations.append(annotation)
+            inverse = .removeAnnotation(id: annotation.id)
+
+        case .removeAnnotation(let id):
+            guard let position = canvas.annotations.firstIndex(where: { $0.id == id }) else {
+                throw LocalLibraryError.invalidProject
+            }
+            let removed = canvas.annotations.remove(at: position)
+            inverse = .createAnnotation(removed)
+
+        case .updateAnnotationBody(let id, let body):
+            guard let position = canvas.annotations.firstIndex(where: { $0.id == id }),
+                  body.count <= LocalCanvas.textLimit else { throw LocalLibraryError.invalidProject }
+            let old = canvas.annotations[position].body
+            canvas.annotations[position].body = body
+            inverse = .updateAnnotationBody(id: id, body: old)
+        }
+
+        try canvas.validated(photoIDs: photoIDs)
+        document.projects[index].canvas = canvas
+        document.projects[index].updatedAt = Date()
+        try write(document)
+        return inverse
+    }
+
+    public func canvas(projectID: String) throws -> LocalCanvas? {
+        guard let project = try read().projects.first(where: { $0.id == projectID }) else {
+            throw LocalLibraryError.invalidProject
+        }
+        return project.canvas
+    }
+
     // 迁云上传载荷：校验本机预览字节；超出服务端 8 MiB 上限时用更低质量重编码（仅派生预览，不动原片）。
     public func uploadPayload(projectID: String, photoID: String) throws -> Data {
         let data = try preview(projectID: projectID, photoID: photoID)
@@ -456,6 +570,12 @@ public actor LocalLibrary {
                       manifest?.promotion_id == record.promotionID && manifest?.local_project_id == project.id
               })
         else { throw LocalLibraryError.corruptLibrary }
+        for project in document.projects {
+            if let canvas = project.canvas {
+                try canvas.validated(photoIDs: Set(project.photos.map(\.id)))
+            }
+        }
+        return document
         return document
     }
 

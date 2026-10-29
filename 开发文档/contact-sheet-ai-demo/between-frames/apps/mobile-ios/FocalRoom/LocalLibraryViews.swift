@@ -184,6 +184,15 @@ struct LocalProjectView: View {
                 }
                 .disabled(library.isExporting || project?.photos.isEmpty != false)
                 .accessibilityIdentifier("local.export")
+                if project?.migration == nil, !library.readOnly {
+                    NavigationLink {
+                        LocalCanvasView(model: LocalCanvasModel(library: library.library, projectID: projectID),
+                                        library: library)
+                    } label: {
+                        Label("本机画布", systemImage: "rectangle.3.group")
+                    }
+                    .accessibilityIdentifier("local.canvas.entry")
+                }
             } label: { Image(systemName: "plus") }
                 .disabled(library.isImporting || library.isExporting)
                 .accessibilityLabel("导入照片").accessibilityIdentifier("local.import")

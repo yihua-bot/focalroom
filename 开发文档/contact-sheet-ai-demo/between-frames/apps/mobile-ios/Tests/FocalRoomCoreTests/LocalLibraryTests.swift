@@ -861,6 +861,118 @@ final class ReadingSurfaceTests: XCTestCase {
 }
 
 @MainActor
+final class LocalCanvasTests: XCTestCase {
+    func testCanvasOperationsRoundtripUndoAndRestart() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let source = directory.appendingPathComponent("photo.jpg")
+        try jpeg().write(to: source)
+        let root = directory.appendingPathComponent("library")
+        let scope = AccountScope(configuration: try APIConfiguration("https://example.com"), userID: "one")
+        let library = LocalLibrary(root: root, scope: scope)
+        let project = try await library.createProject(title: "画布项目")
+        guard case .imported(let photo) = try await library.importFile(source, projectID: project.id) else { return XCTFail() }
+
+        // 新建画布：照片节点 + 便签 + 批注
+        let photoNode = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .photo, photoID: photo.id,
+                                        x: 0, y: 0, width: 240, height: 180, zOrder: 0)
+        let noteNode = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .note, text: "开场笔记",
+                                       x: 300, y: 40, width: 200, height: 120, zOrder: 1)
+        let undoRemovePhoto = try await library.applyCanvasOperation(projectID: project.id, .createNode(photoNode))
+        _ = try await library.applyCanvasOperation(projectID: project.id, .createNode(noteNode))
+        let annotation = LocalCanvasAnnotation(id: UUID().uuidString.lowercased(), nodeID: photoNode.id, body: "这里裁掉边缘")
+        _ = try await library.applyCanvasOperation(projectID: project.id, .createAnnotation(annotation))
+        var canvas = try await library.canvas(projectID: project.id)
+        XCTAssertEqual(canvas?.nodes.count, 2)
+        XCTAssertEqual(canvas?.annotations.count, 1)
+
+        // 移动 + 撤销：逆操作精确还原坐标
+        let inverseMove = try await library.applyCanvasOperation(projectID: project.id,
+                                                                 .moveNode(id: photoNode.id, x: 500, y: 320))
+        canvas = try await library.canvas(projectID: project.id)
+        XCTAssertEqual(canvas?.nodes.first { $0.id == photoNode.id }?.x, 500)
+        _ = try await library.applyCanvasOperation(projectID: project.id, inverseMove)
+        canvas = try await library.canvas(projectID: project.id)
+        XCTAssertEqual(canvas?.nodes.first { $0.id == photoNode.id }?.x, 0)
+
+        // 删除照片节点连批注一起删，撤销完整恢复
+        let undoRemove = try await library.applyCanvasOperation(projectID: project.id, .removeNode(id: photoNode.id))
+        canvas = try await library.canvas(projectID: project.id)
+        XCTAssertEqual(canvas?.nodes.count, 1)
+        XCTAssertEqual(canvas?.annotations.count, 0)
+        _ = try await library.applyCanvasOperation(projectID: project.id, undoRemove)
+        canvas = try await library.canvas(projectID: project.id)
+        XCTAssertEqual(canvas?.nodes.count, 2)
+        XCTAssertEqual(canvas?.annotations.count, 1)
+
+        // 重启（新实例）后画布持久
+        let reopened = LocalLibrary(root: root, scope: scope)
+        let restored = try await reopened.canvas(projectID: project.id)
+        XCTAssertEqual(restored?.nodes.map(\.id).sorted(), [photoNode.id, noteNode.id].sorted())
+        XCTAssertEqual(restored?.annotations.first?.body, "这里裁掉边缘")
+
+        // 旧库无画布字段 → canvas 为 nil，兼容解码
+        let emptyProject = try await reopened.createProject(title: "无画布")
+        let none = try await reopened.canvas(projectID: emptyProject.id)
+        XCTAssertNil(none)
+    }
+
+    func testCanvasRejectsInvalidReferencesAndBounds() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let source = directory.appendingPathComponent("photo.jpg")
+        try jpeg().write(to: source)
+        let scope = AccountScope(configuration: try APIConfiguration("https://example.com"), userID: "one")
+        let library = LocalLibrary(root: directory.appendingPathComponent("library"), scope: scope)
+        let project = try await library.createProject(title: "校验")
+        guard case .imported(let photo) = try await library.importFile(source, projectID: project.id) else { return XCTFail() }
+
+        // 照片引用不存在
+        let ghost = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .photo, photoID: UUID().uuidString.lowercased(),
+                                    x: 0, y: 0, width: 240, height: 180, zOrder: 0)
+        do { _ = try await library.applyCanvasOperation(projectID: project.id, .createNode(ghost)); XCTFail("幽灵照片引用必须拒绝") }
+        catch LocalLibraryError.corruptLibrary { }
+        // 坐标越界
+        let far = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .note, text: "x",
+                                  x: 1_000_000, y: 0, width: 200, height: 120, zOrder: 0)
+        do { _ = try await library.applyCanvasOperation(projectID: project.id, .createNode(far)); XCTFail("越界坐标必须拒绝") }
+        catch LocalLibraryError.corruptLibrary { }
+        // 尺寸过小
+        let tiny = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .note, text: "x",
+                                   x: 0, y: 0, width: 10, height: 10, zOrder: 0)
+        do { _ = try await library.applyCanvasOperation(projectID: project.id, .createNode(tiny)); XCTFail("过小尺寸必须拒绝") }
+        catch LocalLibraryError.corruptLibrary { }
+        // 对照片节点改文本
+        let photoNode = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .photo, photoID: photo.id,
+                                        x: 0, y: 0, width: 240, height: 180, zOrder: 0)
+        _ = try await library.applyCanvasOperation(projectID: project.id, .createNode(photoNode))
+        do { _ = try await library.applyCanvasOperation(projectID: project.id, .updateNoteText(id: photoNode.id, text: "不该允许")); XCTFail("照片节点无文本") }
+        catch LocalLibraryError.invalidProject { }
+        // 批注锚定不存在的节点
+        let orphan = LocalCanvasAnnotation(id: UUID().uuidString.lowercased(), nodeID: UUID().uuidString.lowercased(), body: "孤儿")
+        do { _ = try await library.applyCanvasOperation(projectID: project.id, .createAnnotation(orphan)); XCTFail("孤儿批注必须拒绝") }
+        catch LocalLibraryError.corruptLibrary { }
+        // 迁云后画布冻结
+        _ = try await library.beginMigration(projectID: project.id, workspaceID: "w")
+        do { _ = try await library.applyCanvasOperation(projectID: project.id, .moveNode(id: photoNode.id, x: 1, y: 1)); XCTFail("迁云期间画布冻结") }
+        catch LocalLibraryError.projectFrozen { }
+    }
+
+    private func jpeg() throws -> Data {
+        let context = try XCTUnwrap(CGContext(data: nil, width: 96, height: 64, bitsPerComponent: 8, bytesPerRow: 0,
+                                              space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor(red: 0.4, green: 0.6, blue: 0.3, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 96, height: 64))
+        let image = try XCTUnwrap(context.makeImage())
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, nil)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+}
+
+@MainActor
 final class PhotoTransformTests: XCTestCase {
     func testLockedAndIndependentZoomAndPosition() {
         var state = ComparisonState()
