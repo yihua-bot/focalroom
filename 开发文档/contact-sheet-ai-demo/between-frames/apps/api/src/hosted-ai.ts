@@ -78,6 +78,14 @@ export async function grantAiTokensTx(tx: PoolClient, userId: string, grantId: s
 
 }
 
+/// J5 决策（2026-10-28）：免费层每月 100 万 tokens。
+/// 按 (userId, 年月) 确定性编号幂等发放——同月重复调用不重复发放，
+/// 跨月自动进入新月额度。付费订阅期间不调用（订阅发票发放）。
+export async function ensureFreeTierMonthlyGrant(pool: Pool, userId: string, monthlyTokens: number) {
+  const monthKey = new Date().toISOString().slice(0, 7);
+  return transaction(pool, tx => grantAiTokensTx(tx, userId, `free_tier:${userId}:${monthKey}`, monthlyTokens, `free_tier_monthly:${monthKey}`));
+}
+
 // 只供线下核账后的管理操作；活跃请求不能提前退款，流水和账本在同一事务结算。
 export async function reconcileAiRequest(pool: Pool, userId: string, requestId: string, charged: number, billingReference: string) {
   assert(Number.isSafeInteger(charged) && charged >= 0 && billingReference.trim().length > 0 && billingReference.length <= 200,

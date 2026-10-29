@@ -5,7 +5,7 @@ import type { AuthService, Headers } from './auth.ts';
 import { transaction, digest } from './database.ts';
 import { assert } from './errors.ts';
 import { checkRateLimit } from './rate-limit.ts';
-import { grantAiTokensTx } from './hosted-ai.ts';
+import { grantAiTokensTx, ensureFreeTierMonthlyGrant } from './hosted-ai.ts';
 import { StripeBillingGateway, type BillingConfig, type BillingGateway, type BillingPrice } from './billing-gateway.ts';
 
 export class BillingService {
@@ -27,6 +27,10 @@ export class BillingService {
     const user=await this.auth.authenticate(headers,false);
     const sub=(await this.pool.query("SELECT * FROM fr_billing_subscriptions WHERE user_id=$1 ORDER BY current_period_end DESC,updated_at DESC LIMIT 1",[user.id])).rows[0];
     const paid=!!sub && ['active','trialing','past_due'].includes(sub.status) && new Date(sub.current_period_end).getTime()>Date.now();
+    // J5 免费层月度额度：无有效订阅时按月幂等发放；测试环境不配置则不发放。
+    if (!paid && this.config?.freeTierMonthlyTokens) {
+      await ensureFreeTierMonthlyGrant(this.pool, user.id, this.config.freeTierMonthlyTokens);
+    }
     const balance=(await this.pool.query('SELECT granted,spent,reserved FROM fr_ai_accounts WHERE user_id=$1',[user.id])).rows[0];
     const granted=Number(balance?.granted??0),available=Math.max(0,granted-Number(balance?.spent??0)-Number(balance?.reserved??0));
     const invoices=(await this.pool.query('SELECT id,amount,currency,status,issued_at FROM fr_billing_invoices WHERE user_id=$1 ORDER BY issued_at DESC LIMIT 30',[user.id])).rows;

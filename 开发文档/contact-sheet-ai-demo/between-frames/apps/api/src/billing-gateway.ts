@@ -9,7 +9,7 @@ export const priceSchema = z.strictObject({
   seats: z.number().int().min(1).max(50).default(3),
 });
 export type BillingPrice = z.infer<typeof priceSchema>;
-export type BillingConfig = { secret: string; webhookSecret: string; prices: BillingPrice[]; salesEnabled?: boolean };
+export type BillingConfig = { secret: string; webhookSecret: string; prices: BillingPrice[]; salesEnabled?: boolean; freeTierMonthlyTokens?: number };
 export function billingConfig(): BillingConfig | undefined {
   const salesEnabled = process.env.FOCALROOM_BILLING_ENABLED === '1';
   const secret = process.env.FOCALROOM_STRIPE_SECRET_KEY ?? '';
