@@ -10,6 +10,7 @@ import {
   errorMessage as message,
 } from "./shared-api";
 import { ProjectHome } from "./shared/ProjectHome";
+import { KnowledgeSearch } from "./shared/KnowledgeSearch";
 import { ProjectReview } from "./shared/ProjectReview";
 import { AccountRecovery, readAccountLink, VerificationRequest } from "./shared/AccountRecovery";
 import { WebLanguageSwitcher,useWebI18n } from "./i18n";
@@ -92,6 +93,7 @@ export default function SharedApp() {
     [error, setError] = useState("");
   const desktopIntent = readDesktopRequest(new URL(location.href));
   const projectId = new URLSearchParams(route.slice(1)).get("project");
+  const explore = new URLSearchParams(route.slice(1)).has("explore");
   useEffect(() => {
     if (!session) return;
     let active = true;
@@ -177,6 +179,8 @@ export default function SharedApp() {
         <Login onLogin={setSession} />
       ) : desktopIntent ? (
         <DesktopApproval session={session} intent={desktopIntent} />
+      ) : explore ? (
+        <KnowledgeSearch session={session} />
       ) : projectId ? (
         <ProjectReview
           key={projectId}

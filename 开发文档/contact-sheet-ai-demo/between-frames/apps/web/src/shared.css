@@ -1035,3 +1035,39 @@
 .board-annotation-item p{margin:4px 0;color:var(--ink,#202e31)}
 .board-annotation-item.resolved{opacity:.5;text-decoration:line-through}
 .board-annotation-item button{background:none;border:1px solid var(--fr-edge);border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;margin-top:4px}
+
+/* K4 Focal Photography Intelligence — 摄影研究 Explore */
+.fr-knowledge{max-width:1200px;margin:0 auto;padding:24px 24px 48px}
+.fr-knowledge-header h1{font-size:24px;margin:0 0 4px}
+.fr-knowledge-header p{margin:0 0 16px;color:var(--fr-muted);font-size:13px}
+.fr-knowledge-form{display:flex;gap:8px;margin-bottom:12px}
+.fr-knowledge-form input{flex:1;max-width:520px;border:1px solid var(--fr-edge);border-radius:8px;padding:10px 12px;font-size:14px;background:var(--fr-surface);color:var(--ink,#202e31)}
+.fr-knowledge-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}
+.fr-knowledge-filters button{border:1px solid var(--fr-edge);border-radius:999px;background:none;padding:4px 14px;font-size:12px;cursor:pointer;color:var(--fr-muted)}
+.fr-knowledge-filters button.active{background:var(--ink,#202e31);color:var(--fr-surface);border-color:var(--ink,#202e31)}
+.fr-knowledge-error{color:#b3261e;font-size:13px}
+.fr-knowledge-empty{color:var(--fr-muted);font-size:13px}
+.fr-knowledge-body{display:flex;gap:24px;align-items:flex-start}
+.fr-knowledge-results{list-style:none;margin:0;padding:0;flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.fr-knowledge-results button{display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;border:1px solid var(--fr-edge);border-radius:8px;background:var(--fr-surface);padding:10px 14px;font-size:14px;cursor:pointer;flex-wrap:wrap}
+.fr-knowledge-results button:hover,.fr-knowledge-results button.active{border-color:var(--ink,#202e31)}
+.fr-knowledge-kind{flex:none;font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.06);color:var(--fr-muted)}
+.fr-knowledge-kind[data-kind="photographer"]{background:#e2edf4;color:#1d5a7a}
+.fr-knowledge-kind[data-kind="series"]{background:#e7f0e4;color:#3c6e47}
+.fr-knowledge-kind[data-kind="artwork"]{background:#f3eadf;color:#8a5a2b}
+.fr-knowledge-kind[data-kind="photobook"]{background:#eee4f0;color:#6b4a78}
+.fr-knowledge-title{font-weight:600;color:var(--ink,#202e31)}
+.fr-knowledge-subtitle{font-size:12px;color:var(--fr-muted)}
+.fr-knowledge-photographer{font-size:12px;color:var(--fr-muted);margin-left:auto}
+.fr-knowledge-detail{flex:1;min-width:0;border:1px solid var(--fr-edge);border-radius:10px;background:var(--fr-surface);padding:20px;position:sticky;top:16px}
+.fr-knowledge-detail h2{margin:0 0 4px;font-size:20px}
+.fr-knowledge-detail h3{margin:16px 0 6px;font-size:13px;color:var(--fr-muted)}
+.fr-knowledge-meta{margin:0 0 8px;font-size:13px;color:var(--fr-muted)}
+.fr-knowledge-list{list-style:none;margin:0;padding:0;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.fr-knowledge-list a{color:#1d5a7a}
+.fr-knowledge-claims{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.fr-knowledge-claims li{display:flex;gap:8px;align-items:baseline;font-size:13px}
+.fr-knowledge-claim-type{flex:none;font-size:11px;padding:2px 8px;border-radius:4px;background:#e2edf4;color:#1d5a7a}
+.fr-knowledge-claim-type[data-status="verified"]{background:#e7f0e4;color:#3c6e47}
+.fr-knowledge-claim-type[data-status="imported"]{background:#f3eadf;color:#8a5a2b}
+@media (max-width:800px){.fr-knowledge-body{flex-direction:column}.fr-knowledge-detail{position:static;width:100%}}
