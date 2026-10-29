@@ -48,6 +48,13 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  const [message, setMessage] = useState(initialRevision?.message ?? saved?.goal ?? initialGoal ?? '');
  const [count, setCount] = useState(initialRevision?.count ?? saved?.count ?? initialCount ?? 20);
  const [scopeSelection, setScopeSelection] = useState(initialRevision ? false : saved?.scopeSelection ?? false);
+  // 联动：用户在网格选中照片时自动切换到"选中的照片"（取消选中则回退到项目范围）
+  const [userToggled, setUserToggled] = useState(false);
+  useEffect(() => {
+    if (userToggled || initialRevision) return;
+    const shouldScope = selectedIds.length > 0 && selectedIds.length <= 500;
+    if (shouldScope !== scopeSelection) setScopeSelection(shouldScope);
+  }, [selectedIds.length, userToggled, scopeSelection, initialRevision]);
  const [imageLimit, setImageLimit] = useState(100);
  const [duration, setDuration] = useState(defaultAgentBudget.maxDurationSeconds);
  const [allowQueuedRecovery, setAllowQueuedRecovery] = useState(false);
@@ -260,11 +267,13 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
       <button type="submit" className="chat-send" aria-label={zh.chatSend} disabled={blocked || busy || running || selectionEmpty || !message.trim()}><ArrowUp size={19} /></button>
      </div>
     </div>
-    <div className="chat-scope-row"><Image size={13} /><select aria-label={zh.chatScope} value={scopeSelection ? 'selected' : 'project'} disabled={busy} onChange={event => { const enabled = event.target.value === 'selected'; setScopeSelection(enabled); saveDraft(project.id, { goal: message, count, scopeSelection: enabled }); }}>
+    <div className="chat-scope-row"><Image size={13} /><select aria-label={zh.chatScope} value={scopeSelection ? 'selected' : 'project'} disabled={busy} onChange={event => { const enabled = event.target.value === 'selected'; setUserToggled(true); setScopeSelection(enabled); saveDraft(project.id, { goal: message, count, scopeSelection: enabled }); }}>
      <option value="project">{zh.chatProjectPhotos} · {project.photos.length}</option><option value="selected">{zh.chatSelectedPhotos} · {selectedIds.length}</option>
     </select></div>
    </form>
-   {selectionEmpty ? <p className="chat-footnote">{zh.chatSelectPhotos}</p> : project.photos.length > 0 && vision ? <p className="chat-footnote">{zh.chatSendConsent.replace('{count}', String(imageLimit)).replace('{provider}', config?.hostedAccount?.provider ?? config?.observation?.modelId ?? config?.modelId ?? 'FocalRoom AI')}</p> : null}
+   {selectionEmpty && <p className="chat-footnote">{zh.chatSelectPhotos}</p>}
+   {scopeSelection && selectedIds.length > 500 && <p className="chat-footnote warning">选中 {selectedIds.length} 张超过单次上限 500 张——请先筛选或分批处理</p>}
+   {!selectionEmpty && !(scopeSelection && selectedIds.length > 500) && project.photos.length > 0 && vision && <p className="chat-footnote">{zh.chatSendConsent.replace('{count}', String(imageLimit)).replace('{provider}', config?.hostedAccount?.provider ?? config?.observation?.modelId ?? config?.modelId ?? 'FocalRoom AI')}</p>}
    {allowQueuedRecovery && <p className="chat-footnote">{zh.chatQueuePrivacy}</p>}
   </footer>
   {settingsOpen && <Modal title={zh.settings} onClose={onSettingsClose}>
