@@ -3,6 +3,8 @@ import FocalRoomCore
 
 struct CommentsView: View {
     let model: AppModel
+    @State private var replyTarget: Comment?
+    @State private var replyDraft = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,24 +18,70 @@ struct CommentsView: View {
                 EmptyWorkspace(title: "还没有评论", detail: "这里会显示当前项目已同步的评论。", symbol: "bubble.left")
             } else {
                 List(model.snapshot?.comments ?? []) { comment in
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text(comment.reviewer).font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Text(comment.state == "RESOLVED" ? "已解决" : "待处理").font(.caption).foregroundStyle(.secondary)
-                        }
-                        Text(comment.body).font(.body).textSelection(.enabled)
-                        if let photoID = comment.anchor.photo_id,
-                           let photo = model.snapshot?.snapshot.photos.first(where: { $0.id == photoID }) {
-                            NavigationLink { PhotoViewer(model: model, projectID: model.snapshot?.project_id ?? "", photoID: photoID) } label: {
-                                Label(photo.filename, systemImage: "photo").font(.caption)
-                            }
-                        }
-                        if comment.parent_id != nil { Text("线程回复").font(.caption2).foregroundStyle(.secondary) }
-                    }.padding(.vertical, 8)
+                    row(comment)
                 }.listStyle(.plain).refreshable { await model.reloadSnapshot() }
             }
         }.navigationTitle("消息").navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $replyTarget, onDismiss: { replyDraft = "" }) { comment in
+            replySheet(comment)
+        }
+    }
+
+    private func row(_ comment: Comment) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(comment.reviewer).font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(comment.state == "RESOLVED" ? "已解决" : "待处理").font(.caption).foregroundStyle(.secondary)
+            }
+            Text(comment.body).font(.body).textSelection(.enabled)
+            if let photoID = comment.anchor.photo_id,
+               let photo = model.snapshot?.snapshot.photos.first(where: { $0.id == photoID }) {
+                NavigationLink { PhotoViewer(model: model, projectID: model.snapshot?.project_id ?? "", photoID: photoID) } label: {
+                    Label(photo.filename, systemImage: "photo").font(.caption)
+                }
+            }
+            if comment.parent_id != nil { Text("线程回复").font(.caption2).foregroundStyle(.secondary) }
+            if canInteract {
+                HStack(spacing: 16) {
+                    Button("回复") { replyDraft = ""; replyTarget = comment }
+                        .font(.caption)
+                        .accessibilityIdentifier("comment.reply.\(comment.id)")
+                    Button(comment.state == "RESOLVED" ? "重新打开" : "标记解决") {
+                        Task { await model.resolveComment(threadID: comment.id, resolve: comment.state != "RESOLVED") }
+                    }
+                    .font(.caption)
+                    .accessibilityIdentifier("comment.resolve.\(comment.id)")
+                }
+            }
+        }.padding(.vertical, 8)
+    }
+
+    private var canInteract: Bool {
+        guard let snapshot = model.snapshot else { return false }
+        return !model.offline && snapshot.principal.canPropose
+    }
+
+    private func replySheet(_ comment: Comment) -> some View {
+        NavigationStack {
+            TextEditor(text: $replyDraft)
+                .padding()
+                .navigationTitle("回复 \(comment.reviewer)").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("取消") { replyTarget = nil } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("发送") {
+                            let id = comment.id, body = replyDraft
+                            replyTarget = nil
+                            Task { await model.replyComment(threadID: id, body: body) }
+                        }
+                        .disabled(replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                                  replyDraft.count > 2000 || model.busy || model.offline)
+                        .accessibilityIdentifier("comment.reply.send")
+                    }
+                }
+        }
+        .presentationDetents([.medium])
     }
 }
 

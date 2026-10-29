@@ -702,7 +702,7 @@ final class AppModel {
 
     // MARK: - AI 草案闭环（模型建议 → 人工确认 → 权威提案 → 部分采纳）
 
-    private(set) var lastDraft: AIDraftProposal?
+    var lastDraft: AIDraftProposal?
 
     func requestDraft() async {
         guard !aiSending, let api, let credentials, let chat else { return }
@@ -777,6 +777,32 @@ final class AppModel {
     }
 
     // MARK: - 评论协作（发送回复 / 解决 / 重开）
+
+    // 邀请成员：返回私密链接由邀请者自行分享（服务端不发邮件）；仅 OWNER/ADMIN 可发起。
+    func sendInvitation(email: String, role: String) async -> URL? {
+        guard !busy, let api, let credentials, !offline else { return nil }
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard trimmed.contains("@"), trimmed.count <= 254 else {
+            notice = "请输入有效的邮箱地址。"
+            return nil
+        }
+        guard ["ADMIN", "EDITOR", "REVIEWER", "VIEWER"].contains(role) else { return nil }
+        let generation = epoch
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            let workspaces = try await api.workspaces(token: credentials.token)
+            guard let workspace = workspaces.first(where: { ["OWNER", "ADMIN"].contains($0.role) }) else {
+                notice = "只有工作区所有者或管理员可以邀请成员。"
+                return nil
+            }
+            return try await api.createInvitation(workspaceID: workspace.id, email: trimmed,
+                                                  role: role, projectID: nil, token: credentials.token)
+        } catch {
+            notice = message(error)
+            return nil
+        }
+    }
 
     func replyComment(threadID: String, body: String) async {
         guard !busy, let snapshot, let api, let credentials,

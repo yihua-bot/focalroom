@@ -316,6 +316,13 @@ public struct ProposalCreateCommand: Codable, Sendable, Equatable {
         public let operation_id: String
         public let photo_id: String
         public let to_index: Int?
+
+        public init(op: String, operation_id: String, photo_id: String, to_index: Int?) {
+            self.op = op
+            self.operation_id = operation_id
+            self.photo_id = photo_id
+            self.to_index = to_index
+        }
     }
 
     public struct Payload: Codable, Sendable, Equatable {

@@ -95,6 +95,7 @@ struct FocalAIView: View {
                 .font(.subheadline)
                 .accessibilityIdentifier("ai.resolve")
             }
+            draftSection
             if model.chatMessages.isEmpty {
                 Text("向 Focal AI 提问选片与编排问题。可选择当前项目的照片；每次发送前须确认收件方与预览，不会自动发送照片。")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -127,6 +128,50 @@ struct FocalAIView: View {
         .background(message.role == "user" ? Color.white.opacity(0.12) : Color.white.opacity(0.05),
                     in: RoundedRectangle(cornerRadius: 14))
         .accessibilityIdentifier("ai.message.\(message.id)")
+    }
+
+    // 草案卡：模型建议先展示为可读清单，用户显式确认后才创建权威提案（可部分采纳）。
+    @ViewBuilder
+    private var draftSection: some View {
+        if let draft = model.lastDraft {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("选片草案：\(draft.title)", systemImage: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+                ForEach(draft.operations) { op in
+                    Text("\(opTitle(op.op)) · \(op.photoFilename)\(op.toIndex.map { " · 第 \($0 + 1) 位" } ?? "")")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                HStack(spacing: 12) {
+                    Button("提交为提案") { Task { await model.submitDraftAsProposal() } }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.busy || model.offline)
+                        .accessibilityIdentifier("ai.draft.submit")
+                    Button("放弃草案") { model.lastDraft = nil }
+                        .buttonStyle(.bordered)
+                        .disabled(model.busy)
+                        .accessibilityIdentifier("ai.draft.discard")
+                }
+                Text("提交后进入项目“提案”审阅流，可逐项采纳或驳回。")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+            .padding(12)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityIdentifier("ai.draft.card")
+        } else if model.currentProject != nil, !model.offline {
+            Button("生成选片草案") { Task { await model.requestDraft() } }
+                .font(.subheadline)
+                .disabled(model.aiSending)
+                .accessibilityIdentifier("ai.draft.request")
+        }
+    }
+
+    private func opTitle(_ op: String) -> String {
+        switch op {
+        case "add": return "加入序列"
+        case "remove": return "移出序列"
+        case "move": return "调整顺序"
+        default: return op
+        }
     }
 
     private var tasksSection: some View {

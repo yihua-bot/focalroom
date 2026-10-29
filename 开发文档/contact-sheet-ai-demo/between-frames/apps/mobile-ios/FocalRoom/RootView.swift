@@ -342,6 +342,7 @@ private struct AccountView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmLogout = false
     @State private var revokeTarget: DeviceRecord?
+    @State private var inviteSheet = false
 
     var body: some View {
         NavigationStack {
@@ -355,6 +356,9 @@ private struct AccountView: View {
                 Section("工作空间") {
                     Text(model.address).font(.footnote).textSelection(.enabled)
                     Label(model.offline ? "离线缓存，权限待联网核实" : "在线", systemImage: model.offline ? "wifi.slash" : "checkmark.circle")
+                    Button("邀请成员加入工作区") { inviteSheet = true }
+                        .disabled(model.offline || model.busy)
+                        .accessibilityIdentifier("workspace.invite.entry")
                     Text("已查看的云端预览有受限离线缓存，退出时清理。本机项目保留原片、预览和选片记录，并按账户隔离。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
@@ -432,6 +436,7 @@ private struct AccountView: View {
                     Task { await model.logout() }
                 }
             }
+            .sheet(isPresented: $inviteSheet) { InviteSheet(model: model) }
         }
     }
 }

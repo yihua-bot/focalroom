@@ -52,6 +52,78 @@ final class LiveAPIIntegrationTests: XCTestCase {
     }
     private struct MagicCodeEntry: Decodable { let email: String; let code: String? }
 
+    func testCommentReplyResolveAndViewerBoundary() async throws {
+        guard let base = ProcessInfo.processInfo.environment["FOCALROOM_IOS_TEST_BASE_URL"] else {
+            throw XCTSkip("独立本地后端集成测试需通过 scripts/verify-live.mjs 启动")
+        }
+        let configuration = try APIConfiguration(base, allowLoopbackHTTP: true)
+        let client = APIClient(configuration: configuration)
+        let credentials = try await client.login(email: "iphone@fr.test", password: "iphone-local-test-2026")
+        let projects = try await client.projects(token: credentials.token)
+        let project = try XCTUnwrap(projects.first)
+        var snapshot = try await client.snapshot(projectID: project.id, credentials: credentials)
+        let thread = try XCTUnwrap(snapshot.comments.first?.id, "夹具应预置评论线程")
+        // 回复追加到既有线程；同幂等键重发不重复计。
+        let key = UUID().uuidString
+        try await client.replyComment(projectID: project.id, threadID: thread, body: "iPhone 回复联调", idempotencyKey: key, token: credentials.token)
+        try await client.replyComment(projectID: project.id, threadID: thread, body: "iPhone 回复联调", idempotencyKey: key, token: credentials.token)
+        // 解决评论是受审计的命令但不改作品内容：作品版本保持不变。
+        snapshot = try await client.snapshot(projectID: project.id, credentials: credentials)
+        let before = snapshot.revision
+        let receipt = try await client.resolveComment(projectID: project.id, threadID: thread, resolve: true, snapshot: snapshot, token: credentials.token)
+        XCTAssertTrue(receipt.ok)
+        XCTAssertEqual(receipt.new_revision, before, "评论处理不推进作品版本")
+        let after = try await client.snapshot(projectID: project.id, credentials: credentials)
+        XCTAssertEqual(after.revision, before)
+        // 只读角色不能回复（服务端角色保护，不只靠 UI 隐藏）。
+        let viewer = try await client.login(email: "viewer@fr.test", password: "iphone-local-test-2026")
+        do {
+            try await client.replyComment(projectID: project.id, threadID: thread, body: "只读不应成功",
+                                          idempotencyKey: UUID().uuidString, token: viewer.token)
+            XCTFail("只读角色不得回复评论")
+        } catch let error as APIError {
+            if case .server(let status, let code) = error {
+                XCTAssertEqual(status, 403); XCTAssertEqual(code, "PERMISSION_DENIED")
+            } else { XCTFail("应为服务端 403：\(error)") }
+        }
+    }
+
+    func testConcurrentCanvasMoveConflictAndRefreshRetry() async throws {
+        guard let base = ProcessInfo.processInfo.environment["FOCALROOM_IOS_TEST_BASE_URL"] else {
+            throw XCTSkip("独立本地后端集成测试需通过 scripts/verify-live.mjs 启动")
+        }
+        let configuration = try APIConfiguration(base, allowLoopbackHTTP: true)
+        let client = APIClient(configuration: configuration)
+        let credentials = try await client.login(email: "iphone@fr.test", password: "iphone-local-test-2026")
+        let projectList = try await client.projects(token: credentials.token)
+        let project = try XCTUnwrap(projectList.first)
+        let boardList = try await client.boards(projectID: project.id, token: credentials.token)
+        let board = try XCTUnwrap(boardList.first)
+        let nodes = try await client.nodes(boardID: board.id, token: credentials.token)
+        let node = try XCTUnwrap(nodes.first)
+        // E2E-06 服务端语义：两个客户端基于同一基线先后移动同一节点，
+        // 第二个必须拿到冲突，刷新基线后重试才能成功——不允许双主。
+        let first = try CanvasMoveCommand(board: board, nodeID: node.id, x: 120, y: 90)
+        _ = try await client.submitCanvasCommand(boardID: board.id, command: first, token: credentials.token)
+        let stale = try CanvasMoveCommand(board: board, nodeID: node.id, x: -60, y: 30)
+        do {
+            _ = try await client.submitCanvasCommand(boardID: board.id, command: stale, token: credentials.token)
+            XCTFail("过期基线的移动必须被拒绝")
+        } catch let error as APIError {
+            guard case .server(let status, let code) = error else { return XCTFail("应为服务端冲突：\(error)") }
+            XCTAssertEqual(status, 409, "过期基线应返回冲突")
+            _ = code
+        }
+        // 刷新后的新基线重试成功，最终位置以最后一次为准。
+        let refreshedBoards = try await client.boards(projectID: project.id, token: credentials.token)
+        let refreshed = try XCTUnwrap(refreshedBoards.first { $0.id == board.id })
+        let retry = try CanvasMoveCommand(board: refreshed, nodeID: node.id, x: -60, y: 30)
+        let receipt = try await client.submitCanvasCommand(boardID: board.id, command: retry, token: credentials.token)
+        XCTAssertTrue(receipt.ok)
+        let final = try await client.nodes(boardID: board.id, token: credentials.token)
+        XCTAssertEqual(final.first { $0.id == node.id }?.x, -60, "最终位置以刷新后的重试为准")
+    }
+
     func testRealBackendLoginMediaLostReceiptReplayAndLogout() async throws {
         guard let base = ProcessInfo.processInfo.environment["FOCALROOM_IOS_TEST_BASE_URL"] else {
             throw XCTSkip("独立本地后端集成测试需通过 scripts/verify-live.mjs 启动")

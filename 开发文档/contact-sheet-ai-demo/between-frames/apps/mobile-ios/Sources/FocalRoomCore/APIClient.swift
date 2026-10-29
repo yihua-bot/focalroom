@@ -456,6 +456,21 @@ public struct APIClient: Sendable {
         return values
     }
 
+    // 邀请：创建后返回私密链接，由邀请者自行分享；服务端不发送邮件。
+    public func createInvitation(workspaceID: String, email: String, role: String, projectID: String?, token: String) async throws -> URL {
+        struct Input: Encodable {
+            let email: String
+            let role: String
+            let project_id: String?
+        }
+        struct Result: Decodable { let id: String; let invite_url: String; let expires_in: Int }
+        let result = try await call(Result.self, ["workspaces", workspaceID, "invitations"], token: token,
+                                    body: try JSONEncoder().encode(Input(email: email.lowercased(), role: role, project_id: projectID)))
+        guard URL(string: result.invite_url)?.scheme?.hasPrefix("http") == true,
+              result.expires_in > 0, !result.id.isEmpty else { throw APIError.invalidResponse }
+        return URL(string: result.invite_url)!
+    }
+
     public func registerDevice(key: String, name: String, platform: String, token: String) async throws -> DeviceRegistration {
         struct Input: Encodable { let device_key: String; let name: String; let platform: String }
         guard UUID(uuidString: key) != nil else { throw APIError.invalidResponse }
