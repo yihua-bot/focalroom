@@ -22,7 +22,7 @@ const CATEGORIES = [
 const esc = (s) => String(s ?? "").replace(/'/g, "''").replace(/\\/g, "\\\\");
 
 async function fetchCategoryMembers(category, limit = 50) {
-  const url = `https://en.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(category)}&cmlimit=${limit}&cmtype=subcat|page&format=json`;
+  const url = `https://en.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(category)}&cmlimit=500&cmtype=subcat|page&format=json`;
   const res = await fetch(url, { headers: { "User-Agent": "FocalRoom-K2/1.0" }, signal: AbortSignal.timeout(15000) });
   if (!res.ok) return [];
   const data = await res.json();

@@ -52,13 +52,29 @@ final class LiveAPIIntegrationTests: XCTestCase {
     }
     private struct MagicCodeEntry: Decodable { let email: String; let code: String? }
 
+    /// 跨用例复用登录凭据：服务端按邮箱限流（10 次/分钟），联调用例数增多后必须共享会话。
+    private static var ownerCredentials: Credentials?
+    private static var viewerCredentials: Credentials?
+    private func sharedOwner(_ client: APIClient) async throws -> Credentials {
+        if let cached = Self.ownerCredentials { return cached }
+        let value = try await client.login(email: "iphone@fr.test", password: "iphone-local-test-2026")
+        Self.ownerCredentials = value
+        return value
+    }
+    private func sharedViewer(_ client: APIClient) async throws -> Credentials {
+        if let cached = Self.viewerCredentials { return cached }
+        let value = try await client.login(email: "viewer@fr.test", password: "iphone-local-test-2026")
+        Self.viewerCredentials = value
+        return value
+    }
+
     func testCommentReplyResolveAndViewerBoundary() async throws {
         guard let base = ProcessInfo.processInfo.environment["FOCALROOM_IOS_TEST_BASE_URL"] else {
             throw XCTSkip("独立本地后端集成测试需通过 scripts/verify-live.mjs 启动")
         }
         let configuration = try APIConfiguration(base, allowLoopbackHTTP: true)
         let client = APIClient(configuration: configuration)
-        let credentials = try await client.login(email: "iphone@fr.test", password: "iphone-local-test-2026")
+        let credentials = try await sharedOwner(client)
         let projects = try await client.projects(token: credentials.token)
         let project = try XCTUnwrap(projects.first)
         var snapshot = try await client.snapshot(projectID: project.id, credentials: credentials)
@@ -76,7 +92,7 @@ final class LiveAPIIntegrationTests: XCTestCase {
         let after = try await client.snapshot(projectID: project.id, credentials: credentials)
         XCTAssertEqual(after.revision, before)
         // 只读角色不能回复（服务端角色保护，不只靠 UI 隐藏）。
-        let viewer = try await client.login(email: "viewer@fr.test", password: "iphone-local-test-2026")
+        let viewer = try await sharedViewer(client)
         do {
             try await client.replyComment(projectID: project.id, threadID: thread, body: "只读不应成功",
                                           idempotencyKey: UUID().uuidString, token: viewer.token)
@@ -94,7 +110,7 @@ final class LiveAPIIntegrationTests: XCTestCase {
         }
         let configuration = try APIConfiguration(base, allowLoopbackHTTP: true)
         let client = APIClient(configuration: configuration)
-        let credentials = try await client.login(email: "iphone@fr.test", password: "iphone-local-test-2026")
+        let credentials = try await sharedOwner(client)
         let projectList = try await client.projects(token: credentials.token)
         let project = try XCTUnwrap(projectList.first)
         let boardList = try await client.boards(projectID: project.id, token: credentials.token)

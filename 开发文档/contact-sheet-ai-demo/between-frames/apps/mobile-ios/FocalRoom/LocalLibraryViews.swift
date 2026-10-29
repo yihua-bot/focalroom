@@ -82,6 +82,11 @@ struct LocalProjectView: View {
     @State private var selected: [PhotosPickerItem] = []
     @State private var filter: Selection?
     @State private var confirmMigrate = false
+    // 多选分享：勾选本机照片原图，经系统分享面板发到微信/微博/X 等。
+    @State private var selecting = false
+    @State private var picked: Set<String> = []
+    @State private var shareImages: [UIImage]? = nil
+    @State private var sharing = false
     private var project: LocalProject? { library.projects.first { $0.id == projectID } }
 
     var body: some View {
@@ -126,6 +131,11 @@ struct LocalProjectView: View {
         .sheet(isPresented: Binding(get: { library.exportTarget != nil }, set: { if !$0 { library.cancelExport() } })) {
             FolderPicker { library.pickExportDestination($0) }
         }
+        .sheet(isPresented: Binding(get: { shareImages != nil }, set: { if !$0 { shareImages = nil } })) {
+            if let images = shareImages {
+                ShareSheet(items: images)
+            }
+        }
     }
 
     private var header: some View {
@@ -137,7 +147,53 @@ struct LocalProjectView: View {
                 Text("全部").tag(Optional<Selection>.none)
                 ForEach(Selection.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
             }.pickerStyle(.segmented)
+            if selecting {
+                HStack(spacing: 12) {
+                    Button {
+                        let allSelected = visiblePhotos.allSatisfy { picked.contains($0.id) }
+                        picked = allSelected ? [] : Set(visiblePhotos.map(\.id))
+                    } label: { Text(visiblePhotos.allSatisfy { picked.contains($0.id) } ? "取消全选" : "全选本组") }
+                        .accessibilityIdentifier("local.share.selectall")
+                    Spacer()
+                    if sharing { ProgressView() }
+                    Button {
+                        sharePicked()
+                    } label: {
+                        Label("分享 \(picked.count) 张", systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(picked.isEmpty || sharing)
+                    .accessibilityIdentifier("local.share.submit")
+                }
+                .font(.subheadline)
+            }
         }.padding(.horizontal, 16)
+    }
+
+    private var visiblePhotos: [LocalPhoto] {
+        project?.photos.filter { filter == nil || $0.selection == filter } ?? []
+    }
+
+    private func sharePicked() {
+        guard !sharing, !picked.isEmpty else { return }
+        sharing = true
+        let ids = picked
+        Task {
+            defer { sharing = false }
+            var images: [UIImage] = []
+            do {
+                for photo in visiblePhotos where ids.contains(photo.id) {
+                    let data = try await library.library.originalPhotoData(projectID: projectID, photoID: photo.id)
+                    guard let image = UIImage(data: data) else {
+                        throw LocalLibraryError.corruptLibrary
+                    }
+                    images.append(image)
+                }
+                guard !images.isEmpty else { return }
+                shareImages = images
+            } catch {
+                library.notice = "部分照片读取失败，已停止分享。"
+            }
+        }
     }
 
     private var photoGrid: some View {
@@ -155,14 +211,35 @@ struct LocalProjectView: View {
     }
 
     private func photoCell(_ photo: LocalPhoto) -> some View {
-        NavigationLink { LocalPhotoViewer(library: library, projectID: projectID, photoID: photo.id) } label: {
-            ZStack(alignment: .bottomLeading) {
-                localPreview(photo).frame(height: 210)
-                Text(photo.selection.title).font(.caption2).padding(8)
-                    .background(.black.opacity(0.75), in: Capsule()).padding(8)
-            }.frame(maxWidth: .infinity).clipped().contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityLabel("\(photo.filename)，\(photo.selection.title)")
-            .accessibilityIdentifier("local.photo.\(photo.id)")
+        Group {
+            if selecting {
+                Button {
+                    if picked.contains(photo.id) { picked.remove(photo.id) } else { picked.insert(photo.id) }
+                } label: {
+                    cellContent(photo)
+                        .overlay(alignment: .topTrailing) {
+                            Image(systemName: picked.contains(photo.id) ? "checkmark.circle.fill" : "circle")
+                                .font(.title3).foregroundStyle(.white)
+                                .shadow(radius: 3).padding(10)
+                        }
+                }.buttonStyle(.plain)
+                    .accessibilityLabel("\(photo.filename)，\(picked.contains(photo.id) ? "已勾选" : "未勾选")")
+                    .accessibilityIdentifier("local.photo.\(photo.id)")
+            } else {
+                NavigationLink { LocalPhotoViewer(library: library, projectID: projectID, photoID: photo.id) } label: {
+                    cellContent(photo)
+                }.buttonStyle(.plain).accessibilityLabel("\(photo.filename)，\(photo.selection.title)")
+                    .accessibilityIdentifier("local.photo.\(photo.id)")
+            }
+        }
+    }
+
+    private func cellContent(_ photo: LocalPhoto) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            localPreview(photo).frame(height: 210)
+            Text(photo.selection.title).font(.caption2).padding(8)
+                .background(.black.opacity(0.75), in: Capsule()).padding(8)
+        }.frame(maxWidth: .infinity).clipped().contentShape(Rectangle())
     }
 
     @ToolbarContentBuilder
@@ -184,6 +261,12 @@ struct LocalProjectView: View {
                 }
                 .disabled(library.isExporting || project?.photos.isEmpty != false)
                 .accessibilityIdentifier("local.export")
+                Button(selecting ? "完成选择" : "选择并分享…", systemImage: "checkmark.circle") {
+                    selecting.toggle()
+                    if !selecting { picked = [] }
+                }
+                .disabled(project?.photos.isEmpty != false)
+                .accessibilityIdentifier("local.share.mode")
                 if project?.migration == nil, !library.readOnly {
                     NavigationLink {
                         LocalCanvasView(model: LocalCanvasModel(library: library.library, projectID: projectID),
@@ -366,4 +449,13 @@ private struct LocalPhotoViewer: View {
             }.presentationDetents([.medium, .large])
         }
     }
+}
+
+/// 系统分享面板：把勾选的原图交给微信/微博/X 等系统内安装的应用；分享行为完全由用户在系统面板决定。
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [UIImage]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

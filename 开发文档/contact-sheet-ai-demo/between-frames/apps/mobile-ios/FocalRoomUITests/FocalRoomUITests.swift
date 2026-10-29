@@ -319,9 +319,9 @@ final class FocalRoomUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["已登录设备"].waitForExistence(timeout: 10), "账户页应显示设备管理")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'device.revoke.'")).firstMatch.waitForExistence(timeout: 10),
                       "本机设备应在登录后完成登记")
-        XCTAssertTrue(app.staticTexts["账单目录"].waitForExistence(timeout: 10), "账户页应显示账单目录")
-        // 账单区在长列表底部（快照证据：标题在 y≈798 屏幕边缘），先滚动让方案行进入可视区。
+        // 账单区在长列表底部（含邀请入口后更低），先滚动让账单标题与方案行进入可视区。
         app.swipeUp()
+        XCTAssertTrue(app.staticTexts["账单目录"].waitForExistence(timeout: 10), "账户页应显示账单目录")
         XCTAssertTrue(app.staticTexts["FocalRoom Pro"].waitForExistence(timeout: 10), "账单目录应列出服务方案")
         let deviceScreenshot = XCTAttachment(screenshot: app.screenshot())
         deviceScreenshot.name = "iPhone 账户设备管理"

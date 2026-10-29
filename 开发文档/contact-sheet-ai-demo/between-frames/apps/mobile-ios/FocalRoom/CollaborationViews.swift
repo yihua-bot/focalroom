@@ -95,9 +95,16 @@ struct BoardsView: View {
     var body: some View {
         VStack(spacing: 0) {
             ProjectContext(model: model)
-            if model.selectedLocalProjectID != nil {
-                EmptyWorkspace(title: "本机画布暂不可用", detail: "此项目已选中。本机画布编辑尚未实现；可以打开本机图库，或切换到已有画布的同步项目。", symbol: "rectangle.3.group")
-                    .accessibilityIdentifier("boards.local.project")
+            if let localProjectID = model.selectedLocalProjectID {
+                // 本机项目直接进入本机画布编辑（新建/触控/批注/撤销重做）；标识沿用供界面断言。
+                if let libraryModel = model.localLibrary {
+                    LocalCanvasView(model: LocalCanvasModel(library: libraryModel.library, projectID: localProjectID),
+                                    library: libraryModel)
+                        .accessibilityIdentifier("boards.local.project")
+                } else {
+                    EmptyWorkspace(title: "本机资料未就绪", detail: "请先在本机图库打开一次项目后返回。", symbol: "internaldrive")
+                        .accessibilityIdentifier("boards.local.project")
+                }
             } else if model.selectedProjectID == nil {
                 EmptyWorkspace(title: "选择一个项目", detail: "阅读已同步的项目画布。", symbol: "rectangle.3.group")
             } else if model.offline {

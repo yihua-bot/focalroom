@@ -480,6 +480,15 @@ public actor LocalLibrary {
         throw LocalLibraryError.previewUnshrinkable
     }
 
+    /// 分享用：读取单张原图字节（先按摘要校验，与导出同源同防线）。
+    public func originalPhotoData(projectID: String, photoID: String) throws -> Data {
+        guard let project = try read().projects.first(where: { $0.id == projectID }),
+              let photo = project.photos.first(where: { $0.id == photoID }) else { throw LocalLibraryError.invalidProject }
+        let original = originalURL(photo)
+        try LocalMediaFiles.verify(original, sha: photo.sourceSHA256, limit: LocalMediaFiles.sourceLimit)
+        return try Data(contentsOf: original)
+    }
+
     // 导出暂存：先逐份校验原片摘要，再逐字节复制到新目录；任一步失败即清理整个暂存目录。
     public func stageExport(projectID: String, to base: URL) throws -> (directory: URL, manifest: LocalExportManifest) {
         try Task.checkCancellation()

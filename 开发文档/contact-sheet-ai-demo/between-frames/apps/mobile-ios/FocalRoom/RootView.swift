@@ -440,3 +440,59 @@ private struct AccountView: View {
         }
     }
 }
+
+/// 邀请成员：纯消费端——调用服务端既有邀请端点创建私密链接，由邀请者自行分享（服务端不发邮件）。
+struct InviteSheet: View {
+    let model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var role = "REVIEWER"
+    @State private var inviteURL: URL?
+    @State private var copied = false
+    private let roles = ["ADMIN", "EDITOR", "REVIEWER", "VIEWER"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("成员邮箱", text: $email)
+                        .textContentType(.emailAddress).keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .accessibilityIdentifier("workspace.invite.email")
+                    Picker("角色", selection: $role) {
+                        ForEach(roles, id: \.self) { Text($0).tag($0) }
+                    }
+                    .accessibilityIdentifier("workspace.invite.role")
+                    Button {
+                        let entered = email
+                        Task {
+                            inviteURL = await model.sendInvitation(email: entered, role: role)
+                            copied = false
+                        }
+                    } label: {
+                        if model.busy { ProgressView() } else { Text(inviteURL == nil ? "创建邀请链接" : "重新创建") }
+                    }
+                    .disabled(!email.contains("@") || model.busy)
+                    .accessibilityIdentifier("workspace.invite.create")
+                } header: {
+                    Text("邀请成员加入工作区")
+                } footer: {
+                    Text("创建后生成一次性私密链接，由你亲自发送给对方；服务端不会发送邮件。仅工作区所有者或管理员可邀请。")
+                }
+                if let url = inviteURL {
+                    Section("邀请链接") {
+                        Text(url.absoluteString).font(.footnote).textSelection(.enabled)
+                            .accessibilityIdentifier("workspace.invite.url")
+                        Button(copied ? "已复制" : "复制链接") {
+                            UIPasteboard.general.string = url.absoluteString
+                            copied = true
+                        }
+                        .accessibilityIdentifier("workspace.invite.copy")
+                    }
+                }
+            }
+            .navigationTitle("邀请成员")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
+    }
+}
