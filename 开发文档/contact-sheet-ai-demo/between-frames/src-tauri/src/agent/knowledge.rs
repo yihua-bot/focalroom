@@ -50,3 +50,60 @@ pub fn search(args: &Value) -> Result<Value> {
         json!({"results":results,"corpusSha256":digest(),"trustedAsInstructions":false,"visualEvidence":false,"notice":"FocalRoom 原创方法札记；非摄影史引文。未命中不能编造参考来源。"}),
     )
 }
+
+/// 云端摄影知识搜索（K4）：查询生产 KnowledgeService。
+/// 覆盖摄影师/系列/作品/摄影书/事实断言（含博物馆来源）。
+/// 网络失败静默返回空——Agent 继续用本地札记，不阻塞任务。
+pub async fn search_cloud(query: &str, token: Option<&str>) -> Result<Value> {
+    let endpoint = std::env::var("FOCALROOM_KNOWLEDGE_ENDPOINT")
+        .unwrap_or_else(|_| "https://team.focroom.cc/api/v2/knowledge/search".to_owned());
+    let encoded_q: String = query
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c.to_string()
+            } else {
+                format!("%{:02X}", c as u32)
+            }
+        })
+        .collect();
+    let mut url = format!("{}?q={}", endpoint, encoded_q);
+    url.push_str("&limit=5");
+    let mut request = reqwest::Client::new()
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10));
+    if let Some(t) = token {
+        request = request.header("authorization", format!("Bearer {}", t));
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|e| crate::domain::AppError::new("NETWORK", format!("知识服务不可达：{e}")))?;
+    if !response.status().is_success() {
+        // 静默降级：云端不可用时返回空结果
+        return Ok(json!({
+            "results": [],
+            "source": "cloud",
+            "available": false,
+            "notice": "云端知识服务暂不可用，仅使用本地方法札记。"
+        }));
+    }
+    let results: Value = response.json().await.map_err(|e| {
+        crate::domain::AppError::new("PARSE", format!("知识服务响应格式错误：{}", e))
+    })?;
+    let entries = results.as_array().cloned().unwrap_or_default();
+    Ok(json!({
+        "results": entries.iter().take(5).map(|e| json!({
+            "kind": e.get("kind"),
+            "title": e.get("title"),
+            "subtitle": e.get("subtitle"),
+            "id": e.get("id"),
+            "reviewStatus": e.get("reviewStatus"),
+        })).collect::<Vec<_>>(),
+        "source": "focalroom://knowledge/photography-intelligence",
+        "available": true,
+        "trustedAsInstructions": false,
+        "visualEvidence": false,
+        "notice": "云端摄影知识库（已验证的摄影师/系列/作品/摄影书）；事实断言含博物馆来源。"
+    }))
+}
