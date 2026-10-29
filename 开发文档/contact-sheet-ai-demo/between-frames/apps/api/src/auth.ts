@@ -126,7 +126,7 @@ export class AuthService {
     }
   }
   cookie(token: string, logout = false) {
-    return `fr_session=${token}; Path=/api/v2; HttpOnly; SameSite=Strict; Max-Age=${logout ? 0 : 2_592_000}${this.secure ? "; Secure" : ""}`;
+    return `fr_session=${token}; Path=/api/v2; HttpOnly; SameSite=Strict; Max-Age=${logout ? 0 : 2592000}${this.secure ? "; Secure" : ""}`;
   }
   async authenticate(
     headers: Headers,
@@ -148,30 +148,18 @@ export class AuthService {
     );
     const row = (
       await tx.query(
-        "SELECT s.digest,s.csrf,u.id,u.email,u.display_name,u.avatar_url,u.email_verified_at,s.expires_at FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() AND NOT EXISTS(SELECT 1 FROM fr_account_closures c WHERE c.user_id=u.id) FOR SHARE OF s,u",,
-    );
-    // 滑动续期：剩余 <7 天时延长到 30 天（fire-and-forget，不阻塞认证）
-    if (row?.expires_at) {
-      const remaining = new Date(row.expires_at).getTime() - Date.now();
-      if (remaining < 7 * 24 * 60 * 60 * 1000) {
-        void this.pool.query(
-          "UPDATE fr_sessions SET expires_at=now()+interval '30 days' WHERE digest=$1 AND expires_at>now()",
-          [digest],
-        ).catch(() => {});
-      }
-    }
-    const sessionRows = (await this.pool.query(
+        "SELECT s.digest,s.csrf,u.id,u.email,u.display_name,u.avatar_url,u.email_verified_at,s.expires_at FROM fr_sessions s JOIN fr_users u ON u.id=s.user_id WHERE s.digest=$1 AND s.expires_at>now() AND NOT EXISTS(SELECT 1 FROM fr_account_closures c WHERE c.user_id=u.id) FOR SHARE OF s,u",
         [digest(token)],
       )
     ).rows[0];
     assert(row, 401, "AUTH_REVOKED", "会话已失效，请重新登录");
-    // 滑动续期：活跃会话保持 30 天；剩余超过 29 天不写库，过期会话不复活。
-    await this.pool
-      .query(
-        "UPDATE fr_sessions SET expires_at = now() + interval '30 days' WHERE digest=$1 AND expires_at > now() AND expires_at < now() + interval '29 days'",
-        [row.digest],
-      )
-      .catch(() => {});
+    // 滑动续期：剩余 <7 天时延长到 30 天（fire-and-forget）
+    if (row?.expires_at && new Date(row.expires_at).getTime() - Date.now() < 7 * 86400000) {
+      void this.pool.query(
+        "UPDATE fr_sessions SET expires_at=now()+interval '30 days' WHERE digest=$1 AND expires_at>now()",
+        [digest(token)],
+      ).catch(() => {});
+    }
     if (!bearer && mutation)
       assert(
         headers.origin === this.origin &&
