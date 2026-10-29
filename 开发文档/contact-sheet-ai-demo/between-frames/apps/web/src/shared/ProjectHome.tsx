@@ -64,6 +64,7 @@ export function ProjectHome({
         <div>
           <h1>共享项目</h1>
         </div>
+        <a href="/shared#explore">摄影研究</a>
         <button className="fr-primary" onClick={() => setWizard(!wizard)}>
           导入共享预览包
         </button>
