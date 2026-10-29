@@ -408,6 +408,35 @@ final class ExportTests: XCTestCase {
         XCTAssertTrue(CGImageDestinationFinalize(destination))
         return data as Data
     }
+
+    func testOriginalPhotoDataReturnsVerifiedBytesForSharing() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let source = directory.appendingPathComponent("share.jpg")
+        let bytes = try jpeg(seed: 7)
+        try bytes.write(to: source)
+        let scope = AccountScope(configuration: try APIConfiguration("https://example.com"), userID: "share-user")
+        let library = LocalLibrary(root: directory.appendingPathComponent("library"), scope: scope)
+        let project = try await library.createProject(title: "分享契约")
+        guard case .imported(let photo) = try await library.importFile(source, projectID: project.id) else {
+            return XCTFail("导入应成功")
+        }
+        // 分享读取返回逐字节一致的原图，且经过摘要校验（篡改会被导出同源防线拒绝）。
+        let data = try await library.originalPhotoData(projectID: project.id, photoID: photo.id)
+        XCTAssertEqual(data, bytes)
+        do {
+            _ = try await library.originalPhotoData(projectID: project.id, photoID: UUID().uuidString)
+            XCTFail("不存在的照片必须拒绝")
+        } catch {}
+        let stored = directory.appendingPathComponent("library").appendingPathComponent(scope.key)
+            .appendingPathComponent("media").appendingPathComponent(photo.sourceSHA256 + ".original")
+        try Data("tampered".utf8).write(to: stored)
+        do {
+            _ = try await library.originalPhotoData(projectID: project.id, photoID: photo.id)
+            XCTFail("摘要不符必须拒绝分享读取")
+        } catch {}
+        try? FileManager.default.removeItem(at: directory)
+    }
 }
 
 @MainActor
