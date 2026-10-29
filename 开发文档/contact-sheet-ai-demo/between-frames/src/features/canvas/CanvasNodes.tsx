@@ -18,6 +18,17 @@ export function CanvasNodes({ nodes, selected = new Set(), dragging, editable = 
       {node.locked && <span className="canvas-lock-badge">🔒</span>}
     </div>;
     if (['sticky', 'text', 'shape', 'chapter'].includes(node.nodeType)) return <div key={node.id} data-node-id={node.id} className={`canvas-sticky-node${state}`} style={{ ...style, background: String(content(node.styleJson).color ?? '#ffe082') }} onClick={() => onNodeClick?.(node.id)}>{String(content(node.contentJson).text ?? '')}</div>;
+    if (node.nodeType === 'reference') {
+      const reference = content(node.contentJson);
+      return <div key={node.id} data-node-id={node.id} className={`canvas-reference-node${state}`} style={style} onClick={() => onNodeClick?.(node.id)}>
+        <strong className="canvas-reference-title">{String(reference.title ?? '')}</strong>
+        {reference.kind === 'link' && reference.url ? <a className="canvas-reference-url" href={String(reference.url)} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()}>{String(reference.url)}</a> : null}
+        {reference.content ? <p className="canvas-reference-content">{String(reference.content)}</p> : null}
+        <small className="canvas-reference-meta">
+          {[reference.author, reference.source, reference.license].filter(Boolean).map(String).join(' · ') || '参考'}
+        </small>
+      </div>;
+    }
     if (node.nodeType === 'group') return <div key={node.id} data-node-id={node.id} className={`canvas-group-node${state}`} style={{ ...style, zIndex: -1 }}><span className="canvas-group-label">{String(content(node.contentJson).label ?? '')}</span></div>;
     let path: React.ReactNode;
     if (node.nodeType === 'ink') {

@@ -36,6 +36,7 @@ pub enum CanvasAction {
     PlacePhoto(PlacePhotoNodeCommand),
     MoveNodes(MoveNodesCommand),
     AddText(AddTextNodeCommand),
+    AddReference(crate::canvas::AddReferenceNodeCommand),
     DeleteNode(DeleteNodeCommand),
     AddAnnotation(AddAnnotationCommand),
     ResolveAnnotation(ResolveAnnotationCommand),
@@ -414,6 +415,10 @@ impl CommandHandler<'_> {
             }
             CanvasAction::AddText(cmd) => {
                 serde_json::to_value(self.add_text_node_tx(tx, p, cmd, id).await?)
+                    .map_err(serialization)?
+            }
+            CanvasAction::AddReference(cmd) => {
+                serde_json::to_value(self.add_reference_node_tx(tx, p, cmd, id).await?)
                     .map_err(serialization)?
             }
             CanvasAction::DeleteNode(cmd) => {

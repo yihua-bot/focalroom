@@ -25,7 +25,7 @@ const annotationSchema = z.strictObject({
 const resolveSchema = z.strictObject({ resolved: z.boolean() });
 const presenceSchema = z.strictObject({ selection: z.unknown().optional() });
 
-const nodeTypeSchema = z.enum(['photo', 'text', 'sticky', 'shape', 'arrow', 'ink', 'group', 'chapter']);
+const nodeTypeSchema = z.enum(['photo', 'text', 'sticky', 'shape', 'arrow', 'ink', 'group', 'chapter', 'reference']);
 const extentSchema = z.number().finite().min(1).max(10000);
 const canvasActionSchema = z.discriminatedUnion('type', [
   z.strictObject({

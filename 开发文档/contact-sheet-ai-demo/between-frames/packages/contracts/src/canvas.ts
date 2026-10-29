@@ -22,6 +22,12 @@ export const canvasActionSchema = z.discriminatedUnion('type', [
   action('PlacePhoto', { ...board, assetId: z.string().min(1), ...rectangle }),
   action('MoveNodes', { ...board, nodeIds, dx: coordinate, dy: coordinate }),
   action('AddText', { ...board, nodeType: z.enum(['text', 'sticky', 'shape']), ...rectangle, content: z.string().max(5000), color }),
+  action('AddReference', { ...board, ...rectangle,
+    kind: z.enum(['link', 'note']),
+    title: z.string().trim().min(1).max(200),
+    url: z.string().url().max(2000).optional(),
+    content: z.string().max(5000).optional(),
+    author: z.string().max(200).optional(), source: z.string().max(500).optional(), license: z.string().max(500).optional() }),
   action('DeleteNode', { ...board, nodeId: id }),
   action('AddAnnotation', { ...board, x: coordinate, y: coordinate, body: z.string().trim().min(1).max(2000) }),
   action('ResolveAnnotation', { annotationId: id, resolved: z.boolean() }),
@@ -79,9 +85,9 @@ export function parseCanvasReceipt(request: CanvasCommandRequest, value: unknown
         if (!receipt.changed || board.id !== request.boardId || board.project_id !== request.projectId || board.revision !== receipt.revision) invalid();
         break;
       }
-      case 'PlacePhoto': case 'AddText': case 'AddArrow': case 'AddInk': case 'GroupNodes': {
+      case 'PlacePhoto': case 'AddText': case 'AddReference': case 'AddArrow': case 'AddInk': case 'GroupNodes': {
         const node = canvasNodeRecordSchema.parse(result);
-        const type = op.action.type === 'AddText' ? op.action.data.nodeType : { PlacePhoto: 'photo', AddArrow: 'arrow', AddInk: 'ink', GroupNodes: 'group' }[op.action.type];
+        const type = op.action.type === 'AddText' ? op.action.data.nodeType : op.action.type === 'AddReference' ? 'reference' : { PlacePhoto: 'photo', AddArrow: 'arrow', AddInk: 'ink', GroupNodes: 'group' }[op.action.type];
         if (!receipt.changed || node.id !== op.opId || node.boardId !== request.boardId || node.nodeType !== type || !node.visible) invalid();
         break;
       }

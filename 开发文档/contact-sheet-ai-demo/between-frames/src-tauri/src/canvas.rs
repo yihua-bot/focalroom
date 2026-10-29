@@ -716,6 +716,72 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reference_nodes_carry_metadata_and_never_enter_photo_sources() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Store::open(&temp.path().join("g-i1-ref.sqlite"))
+            .await
+            .unwrap();
+        let project = db.create("i1-ref", "test").await.unwrap();
+        let board = db.create_board(&project.id, "研究板").await.unwrap();
+        let board_id = board.id;
+
+        // 链接参考：完整元数据落 content_json，节点类型为 reference。
+        let link = db
+            .add_reference_node(
+                &project.id,
+                &AddReferenceNodeCommand {
+                    board_id: board_id.clone(),
+                    x: 10.0, y: 20.0, width: 240.0, height: 120.0,
+                    kind: "link".into(),
+                    title: "寇德卡画册编排笔记".into(),
+                    url: Some("https://example.com/koudelka".into()),
+                    content: None,
+                    author: Some("内部整理".into()),
+                    source: Some("画册《Exiles》".into()),
+                    license: Some("内部参考".into()),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(link.node_type, "reference");
+        let stored: serde_json::Value =
+            serde_json::from_str(&link.content_json.clone().unwrap_or_default()).unwrap();
+        assert_eq!(stored["title"], "寇德卡画册编排笔记");
+        assert_eq!(stored["kind"], "link");
+
+        // 笔记参考 + 校验边界：http URL 拒绝、空标题拒绝、非法 kind 拒绝。
+        assert!(db
+            .add_reference_node(&project.id, &AddReferenceNodeCommand {
+                board_id: board_id.clone(), x: 0.0, y: 0.0, width: 200.0, height: 100.0,
+                kind: "note".into(), title: "展览记录".into(),
+                url: None, content: Some("周日看展".into()),
+                author: None, source: None, license: None,
+            })
+            .await
+            .is_ok());
+        for invalid in [
+            AddReferenceNodeCommand { board_id: board_id.clone(), x: 0.0, y: 0.0, width: 200.0, height: 100.0,
+                kind: "link".into(), title: "t".into(), url: Some("http://insecure.example".into()),
+                content: None, author: None, source: None, license: None },
+            AddReferenceNodeCommand { board_id: board_id.clone(), x: 0.0, y: 0.0, width: 200.0, height: 100.0,
+                kind: "link".into(), title: "  ".into(), url: Some("https://ok.example".into()),
+                content: None, author: None, source: None, license: None },
+            AddReferenceNodeCommand { board_id: board_id.clone(), x: 0.0, y: 0.0, width: 200.0, height: 100.0,
+                kind: "image".into(), title: "t".into(), url: None,
+                content: None, author: None, source: None, license: None },
+        ] {
+            assert!(db.add_reference_node(&project.id, &invalid).await.is_err());
+        }
+
+        // I1 决策边界：reference 节点不计入选片——照片来源查询只含 photo。
+        let sources = db.board_photo_sources(&board_id).await.unwrap();
+        assert!(sources.is_empty(), "reference 节点不得进入照片资产来源");
+        let nodes = db.get_board_nodes(&board_id).await.unwrap();
+        assert_eq!(nodes.iter().filter(|n| n.node_type == "reference").count(), 2);
+        assert_eq!(nodes.iter().filter(|n| n.node_type == "photo").count(), 0);
+    }
+
+    #[tokio::test]
     async fn foreign_assets_and_invalid_photo_geometry_are_rejected_atomically() {
         let temp = tempfile::tempdir().unwrap();
         let db = Store::open(&temp.path().join("node-scopes.sqlite"))
@@ -770,6 +836,30 @@ pub struct AddTextNodeCommand {
     pub color: Option<String>,
 }
 
+/// I1 研究参考节点：链接/笔记随作者/来源/许可元数据放置在画布上，
+/// node_type='reference' 独立于 photo——不计入选片，也不进照片资产来源。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AddReferenceNodeCommand {
+    pub board_id: String,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub kind: String, // "link" | "note"
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeleteNodeCommand {
@@ -788,6 +878,79 @@ impl CommandHandler<'_> {
         let result = self.add_text_node_tx(&mut tx, project, cmd, None).await?;
         tx.commit().await?;
         Ok(result)
+    }
+
+    pub async fn add_reference_node(
+        &self,
+        project: &str,
+        cmd: &AddReferenceNodeCommand,
+    ) -> Result<CanvasNode> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let result = self.add_reference_node_tx(&mut tx, project, cmd, None).await?;
+        tx.commit().await?;
+        Ok(result)
+    }
+
+    pub(crate) async fn add_reference_node_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &AddReferenceNodeCommand,
+        new_id: Option<&str>,
+    ) -> Result<CanvasNode> {
+        if !matches!(cmd.kind.as_str(), "link" | "note") {
+            return Err(AppError::new("VALIDATION_ERROR", "参考类型须为 link/note"));
+        }
+        if cmd.kind == "link" {
+            let url = cmd.url.as_deref().unwrap_or("");
+            if url.is_empty() || url.len() > 2000 || !url.starts_with("https://") {
+                return Err(AppError::new("VALIDATION_ERROR", "链接参考必须携带 https URL"));
+            }
+        }
+        if cmd.title.trim().is_empty() || cmd.title.chars().count() > 200 {
+            return Err(AppError::new("VALIDATION_ERROR", "参考标题 1-200 字符"));
+        }
+        validate_rectangle(cmd.x, cmd.y, cmd.width, cmd.height)?;
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
+        let board: Option<String> =
+            sqlx::query_scalar("SELECT id FROM boards WHERE id=? AND project_id=?")
+                .bind(&cmd.board_id)
+                .bind(project)
+                .fetch_optional(&mut **tx)
+                .await?;
+        if board.is_none() {
+            return Err(AppError::new("NOT_FOUND", "画布不存在"));
+        }
+        let id = new_id.map(str::to_owned).unwrap_or_else(domain::id);
+        let now = domain::timestamp();
+        let z: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(z_order),0)+1 FROM canvas_nodes WHERE board_id=?",
+        )
+        .bind(&cmd.board_id)
+        .fetch_one(&mut **tx)
+        .await?;
+        let content_json = serde_json::to_string(&serde_json::json!({
+            "kind": cmd.kind, "title": cmd.title,
+            "url": cmd.url, "content": cmd.content,
+            "author": cmd.author, "source": cmd.source, "license": cmd.license,
+        }))
+        .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+        sqlx::query(
+            "INSERT INTO canvas_nodes(id,board_id,node_type,x,y,width,height,rotation,z_order,content_json,created_at,updated_at) VALUES(?,?, 'reference',?,?,?,?,0,?,?,?,?)",
+        )
+        .bind(&id).bind(&cmd.board_id)
+        .bind(cmd.x).bind(cmd.y).bind(cmd.width).bind(cmd.height)
+        .bind(z).bind(&content_json)
+        .bind(&now).bind(&now)
+        .execute(&mut **tx)
+        .await?;
+        let node: CanvasNode = sqlx::query_as(
+            "SELECT id,board_id,node_type,x,y,width,height,rotation,z_order,asset_id,rendition_ref,content_json,style_json,children_json,locked,visible,created_at,updated_at FROM canvas_nodes WHERE id=?",
+        )
+        .bind(&id)
+        .fetch_one(&mut **tx)
+        .await?;
+        Ok(node)
     }
 
     pub(crate) async fn add_text_node_tx(
@@ -910,6 +1073,14 @@ impl CommandHandler<'_> {
 }
 
 impl Store {
+    pub async fn add_reference_node(
+        &self,
+        project: &str,
+        cmd: &AddReferenceNodeCommand,
+    ) -> Result<CanvasNode> {
+        CommandHandler::new(self).add_reference_node(project, cmd).await
+    }
+
     pub async fn add_text_node(
         &self,
         project: &str,
