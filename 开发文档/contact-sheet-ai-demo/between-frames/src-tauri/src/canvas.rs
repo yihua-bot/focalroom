@@ -81,6 +81,15 @@ pub struct CanvasPhotoSource {
     pub thumbnail_path: String,
 }
 
+/// G2-② 画布瓦片：内容寻址缓存文件路径 + 瓦片像素尺寸（前端按尺寸布局）。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CanvasTile {
+    pub path: std::path::PathBuf,
+    pub width: u32,
+    pub height: u32,
+}
+
 pub(crate) fn validate_rectangle(x: f64, y: f64, width: f64, height: f64) -> Result<()> {
     if ![x, y, width, height]
         .iter()
@@ -109,6 +118,69 @@ impl Store {
                 thumbnail_path,
             })
             .collect())
+    }
+
+    /// G2-②：画布瓦片按 (源SHA, 算法版本, 层级, x, y) 内容寻址缓存于预览目录；
+    /// 首次请求解码原图构建金字塔（总内存 ≤ 原图 × 4/3），此后命中缓存文件。
+    pub async fn canvas_photo_tile(
+        &self,
+        project_id: &str,
+        asset_id: &str,
+        level: u8,
+        x: u32,
+        y: u32,
+    ) -> Result<CanvasTile> {
+        let source: Option<(String, String, String)> = sqlx::query_as(
+            "SELECT p.original_path, p.preview_path, p.content_sha256
+             FROM source_assets a
+             JOIN asset_aliases al ON al.asset_id = a.id
+             JOIN photos p ON p.id = al.photo_id AND p.project_id = a.project_id
+             WHERE a.id = ? AND a.project_id = ?",
+        )
+        .bind(asset_id)
+        .bind(project_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some((original_path, preview_path, sha)) = source else {
+            return Err(AppError::new("NOT_FOUND", "画布资产不属于此项目"));
+        };
+        let key = crate::image_pipeline::tile_pyramid::TileKey {
+            source_sha256: sha,
+            level,
+            x,
+            y,
+        };
+        let target = std::path::Path::new(&preview_path)
+            .parent()
+            .ok_or_else(|| AppError::new("DECODE", "预览缓存目录缺失"))?
+            .join(format!("{}.jpg", key.cache_string()));
+        if !target.is_file() {
+            let original = std::path::PathBuf::from(original_path);
+            let build_target = target.clone();
+            let (tile_w, tile_h) = tokio::task::spawn_blocking(move || {
+                crate::image_pipeline::tile_pyramid::write_tile_jpeg(
+                    &original,
+                    level,
+                    x,
+                    y,
+                    &build_target,
+                )
+            })
+            .await
+            .map_err(|error| AppError::new("BACKGROUND", error.to_string()))??;
+            return Ok(CanvasTile {
+                path: target,
+                width: tile_w,
+                height: tile_h,
+            });
+        }
+        let (width, height) = image::image_dimensions(&target)
+            .map_err(|error| AppError::new("DECODE", error.to_string()))?;
+        Ok(CanvasTile {
+            path: target,
+            width,
+            height,
+        })
     }
 }
 
@@ -379,6 +451,53 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn canvas_photo_tiles_are_project_scoped_and_cached() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Store::open(temp.path().join("g2-tiles.sqlite").as_path())
+            .await
+            .unwrap();
+        let project = db.create("g2-tiles", "test").await.unwrap();
+        let img_path = temp.path().join("big.png");
+        image::RgbImage::from_pixel(1200, 800, image::Rgb([90, 120, 150]))
+            .save(&img_path)
+            .unwrap();
+        let prepared =
+            crate::image_pipeline::prepare(&img_path, &temp.path().join("cache")).unwrap();
+        assert!(db.insert_photo(&project.id, &prepared).await.unwrap());
+        let asset: String = sqlx::query_scalar("SELECT id FROM source_assets LIMIT 1")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+
+        // 1200×800 → level 1 瓦片 (2,1) = 88×144；首次构建生成缓存文件，重取命中同一路径。
+        let tile = db
+            .canvas_photo_tile(&project.id, &asset, 1, 2, 1)
+            .await
+            .unwrap();
+        assert_eq!((tile.width, tile.height), (88, 144));
+        assert!(tile.path.is_file());
+        let cached = db
+            .canvas_photo_tile(&project.id, &asset, 1, 2, 1)
+            .await
+            .unwrap();
+        assert_eq!(cached.path, tile.path);
+
+        // 外来资产与越界层级拒绝。
+        assert_eq!(
+            db.canvas_photo_tile(&project.id, "foreign", 0, 0, 0)
+                .await
+                .unwrap_err()
+                .code,
+            "NOT_FOUND"
+        );
+        assert!(
+            db.canvas_photo_tile(&project.id, &asset, 9, 0, 0)
+                .await
+                .is_err()
+        );
+    }
 
     #[tokio::test]
     async fn board_create_place_move_and_query() {

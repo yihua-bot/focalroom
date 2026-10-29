@@ -160,6 +160,7 @@ pub fn run() {
             set_native_menu_locale,
             product_links::open_product_link,
             commands::agent_request,
+            commands::canvas_photo_tile,
             commands::query_vision_result,
             commands::get_agent_projection,
             commands::get_ai_config,

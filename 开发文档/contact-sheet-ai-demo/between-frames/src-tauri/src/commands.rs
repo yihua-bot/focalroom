@@ -68,6 +68,27 @@ pub async fn get_original_photo(
     }
     Ok(source)
 }
+
+#[tauri::command]
+pub async fn canvas_photo_tile(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    asset_id: String,
+    level: u8,
+    x: u32,
+    y: u32,
+) -> Result<crate::canvas::CanvasTile> {
+    // G2-②：大图画布节点按 (源SHA, 版本, 层级, x, y) 内容寻址瓦片；只暴露缓存 JPEG，不开放原图任意读取。
+    let tile = state
+        .store
+        .canvas_photo_tile(&project_id, &asset_id, level, x, y)
+        .await?;
+    app.asset_protocol_scope()
+        .allow_file(&tile.path)
+        .map_err(|error| AppError::new("ASSET_SCOPE", error.to_string()))?;
+    Ok(tile)
+}
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiReply {

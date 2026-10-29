@@ -506,10 +506,62 @@ pub mod tile_pyramid {
         Ok(levels)
     }
 
+    /// 解码原图、构建金字塔并提取 (level, x, y) 瓦片，编码为 JPEG 写入 target（tmp+rename 原子写）。
+    /// 返回瓦片像素尺寸；金字塔总内存 ≤ 原图 × 4/3，瓦片文件本身即持久缓存。
+    pub fn write_tile_jpeg(
+        original: &std::path::Path,
+        level: u8,
+        x: u32,
+        y: u32,
+        target: &std::path::Path,
+    ) -> Result<(u32, u32)> {
+        let bitmap = image::open(original).map_err(|e| AppError::new("DECODE", e.to_string()))?;
+        let rgba = bitmap.to_rgba8();
+        let (width, height) = rgba.dimensions();
+        let levels = build_levels(width, height, rgba.as_raw())?;
+        let Some((level_w, level_h, pixels)) = levels.get(level as usize) else {
+            return Err(AppError::new(
+                "VALIDATION_ERROR",
+                format!("层级 {level} 超出金字塔"),
+            ));
+        };
+        let (tile_w, tile_h, tile) = tile_pixels(pixels, *level_w, *level_h, x, y)?;
+        let buffer = image::RgbaImage::from_raw(tile_w, tile_h, tile)
+            .ok_or_else(|| AppError::new("DECODE", "瓦片缓冲尺寸不匹配"))?;
+        let rgb = image::DynamicImage::ImageRgba8(buffer).to_rgb8();
+        let temporary = target.with_extension(format!("{}.tmp", crate::domain::id()));
+        let file = std::fs::File::create(&temporary)?;
+        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, 90);
+        rgb.write_with_encoder(encoder)
+            .map_err(|e| AppError::new("CACHE_WRITE", e.to_string()))?;
+        std::fs::rename(&temporary, target)?;
+        Ok((tile_w, tile_h))
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
         use std::collections::HashSet;
+
+        #[test]
+        fn write_tile_jpeg_produces_cacheable_files() {
+            let dir = tempfile::tempdir().unwrap();
+            let original = dir.path().join("src.png");
+            image::RgbImage::from_pixel(1200, 800, image::Rgb([120, 140, 160]))
+                .save_with_format(&original, image::ImageFormat::Png)
+                .unwrap();
+            let target = dir.path().join("tile.jpg");
+            // 1200×800 → level 1 = 600×400；瓦片 (2,1) 起点 (512,256)，尺寸 88×144。
+            let (w, h) = write_tile_jpeg(&original, 1, 2, 1, &target).unwrap();
+            assert_eq!((w, h), (88, 144));
+            let decoded = image::open(&target).unwrap();
+            assert_eq!((decoded.width(), decoded.height()), (88, 144));
+            // 幂等：同目标重复写入成功。
+            write_tile_jpeg(&original, 1, 2, 1, &target).unwrap();
+            // 层级与坐标越界拒绝。
+            assert!(write_tile_jpeg(&original, 9, 0, 0, &dir.path().join("a.jpg")).is_err());
+            assert!(write_tile_jpeg(&original, 1, 99, 0, &dir.path().join("b.jpg")).is_err());
+        }
 
         fn solid(width: u32, height: u32, pixel: [u8; 4]) -> Vec<u8> {
             pixel
