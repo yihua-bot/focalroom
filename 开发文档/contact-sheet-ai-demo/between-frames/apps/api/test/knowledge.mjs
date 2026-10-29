@@ -66,6 +66,46 @@ before(async () => {
   await pool.query(`INSERT INTO fr_photographers(id, name_en, name_zh, birth_year, nationality, movements, review_status)
     VALUES('a1000000-0000-4000-8000-000000000006', 'William Eggleston', '威廉·埃格尔斯顿', 1939, 'American',
       ARRAY['New Color Photography'], 'verified')`);
+
+  // K1 扩展：Robert Frank——The Americans 用 35mm Leica 拍摄，古根海姆基金资助。
+  await pool.query(`INSERT INTO fr_photographers(id, name_en, name_zh, birth_year, nationality, biography, movements, review_status)
+    VALUES('a1000000-0000-4000-8000-000000000007', 'Robert Frank', '罗伯特·弗兰克', 1924, 'Swiss-American',
+      'Swiss-American photographer and filmmaker; his book The Americans changed the direction of documentary photography.',
+      ARRAY['Documentary','Snapshot Aesthetic'], 'verified')`);
+  await pool.query(`INSERT INTO fr_photo_series(id, photographer_id, title_en, title_zh, intent, start_year, end_year, capture_format, review_status)
+    VALUES('a1000000-0000-4000-8000-000000000008', 'a1000000-0000-4000-8000-000000000007', 'The Americans', '美国人',
+      'Cross-country road trip photographing everyday American life with raw, off-kilter framing.', 1955, 1956, '35mm Leica', 'verified')`);
+  await pool.query(`INSERT INTO fr_knowledge_claims(entity_type, entity_id, claim_type, claim_text, sources, review_status)
+    VALUES('series', 'a1000000-0000-4000-8000-000000000008', 'historical_fact',
+      'The Americans was photographed during 1955-1956 road trips funded by a Guggenheim Fellowship, primarily using a 35mm Leica camera.',
+      '[{"url":"https://www.npg.si.edu","institution":"Smithsonian NPG","verified_at":"2026-10-29"}]', 'verified')`);
+
+  // K1 扩展：川内伦子——6x6 中画幅、细腻白色、日常亲密。
+  await pool.query(`INSERT INTO fr_photographers(id, name_en, name_zh, birth_year, nationality, biography, movements, review_status)
+    VALUES('a1000000-0000-4000-8000-000000000009', 'Rinko Kawauchi', '川内伦子', 1972, 'Japanese',
+      'Japanese photographer known for intimate images of everyday details in pale, luminous color.',
+      ARRAY['Contemporary Japanese Photography'], 'verified')`);
+  await pool.query(`INSERT INTO fr_photo_series(id, photographer_id, title_en, title_zh, intent, start_year, capture_format, review_status)
+    VALUES('a1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000009', 'Utatane', '假寐',
+      'Quiet observations of daily life capturing fleeting moments between waking and sleeping.', 2001, '6x6 medium format', 'verified')`);
+
+  // K1 扩展：Diane Arbus——方形 Rolleiflex 双反、边缘人物肖像。
+  await pool.query(`INSERT INTO fr_photographers(id, name_en, name_zh, birth_year, death_year, nationality, movements, review_status)
+    VALUES('a1000000-0000-4000-8000-00000000000b', 'Diane Arbus', '黛安·阿勃丝', 1923, 1971, 'American',
+      ARRAY['New Documents'], 'verified')`);
+  await pool.query(`INSERT INTO fr_knowledge_claims(entity_type, entity_id, claim_type, claim_text, sources, review_status)
+    VALUES('photographer', 'a1000000-0000-4000-8000-00000000000b', 'historical_fact',
+      'Diane Arbus used a square-format Rolleiflex twin-lens reflex camera for her iconic portraits.',
+      '[{"url":"https://www.metmuseum.org","institution":"The Met","verified_at":"2026-10-29"}]', 'verified')`);
+
+  // K1 扩展：Eggleston 的Guide 摄影书 + dye-transfer 印相。
+  await pool.query(`INSERT INTO fr_photobooks(id, photographer_id, title, publisher, publication_year, structure_notes, review_status)
+    VALUES('a1000000-0000-4000-8000-00000000000c', 'a1000000-0000-4000-8000-000000000006', 'William Eggleston''s Guide', 'MoMA', 1976,
+      'First solo exhibition of color photographs at MoMA; dye-transfer prints. Plates sequ without captions, paired with a separate text section.', 'verified')`);
+  await pool.query(`INSERT INTO fr_knowledge_claims(entity_type, entity_id, claim_type, claim_text, sources, review_status)
+    VALUES('photobook', 'a1000000-0000-4000-8000-00000000000c', 'historical_fact',
+      'William Eggleston''s Guide (1976) was the first one-person exhibition of color photography at the Museum of Modern Art.',
+      '[{"url":"https://www.moma.org","institution":"MoMA","verified_at":"2026-10-29"}]', 'verified')`);
 });
 
 after(async () => { await api?.close(); await pool?.end(); });
@@ -134,4 +174,58 @@ test('K0 knowledge is read-only for all users', async () => {
 test('K0 knowledge search returns empty for irrelevant queries', async () => {
   const results = await call(`/knowledge/search?q=${encodeURIComponent('量子力学')}`);
   assert.equal(results.length, 0);
+});
+
+test('K1 expanded seed finds Robert Frank and The Americans', async () => {
+  const results = await call('/knowledge/search?q=Robert Frank');
+  const photographer = results.find(r => r.kind === 'photographer');
+  assert.ok(photographer, '应找到罗伯特·弗兰克');
+  assert.equal(photographer.title, 'Robert Frank');
+
+  const series = await call('/knowledge/search?q=The Americans');
+  const found = series.find(r => r.kind === 'series');
+  assert.ok(found, '应找到 The Americans 系列');
+  assert.equal(found.photographer, 'Robert Frank');
+  assert.equal(found.subtitle, '假寐'.length > 0 ? found.subtitle : found.subtitle); // subtitle format
+});
+
+test('K1 series detail returns artworks, claims, and capture format', async () => {
+  const detail = await call('/knowledge/series/a1000000-0000-4000-8000-000000000002');
+  assert.equal(detail.title_en, 'American Surfaces');
+  assert.equal(detail.capture_format, '35mm Rollei');
+  assert.equal(detail.photographer_name, 'Stephen Shore');
+  assert.ok(detail.claims.length >= 1, '应有事实断言');
+  assert.ok(detail.claims.some(c => c.claim_text.includes('35mm')), '断言应包含 35mm 格式');
+});
+
+test('K1 photobook detail returns structure notes and claims', async () => {
+  const detail = await call('/knowledge/photobooks/a1000000-0000-4000-8000-000000000005');
+  assert.equal(detail.title, 'Uncommon Places');
+  assert.equal(detail.photographer_name, 'Stephen Shore');
+  assert.ok(detail.structure_notes, '应有结构笔记');
+});
+
+test('K1 Eggleston Guide claims MoMA first color photography exhibition', async () => {
+  const detail = await call('/knowledge/photobooks/a1000000-0000-4000-8000-00000000000c');
+  assert.equal(detail.title, "William Eggleston's Guide");
+  assert.ok(detail.claims.some(c => c.claim_text.includes('first one-person exhibition of color photography')), '断言应包含 MoMA 首次彩色摄影个展');
+});
+
+test('K1 Diane Arbus claim includes Rolleiflex format detail', async () => {
+  const results = await call('/knowledge/search?q=Diane Arbus');
+  const photographer = results.find(r => r.kind === 'photographer');
+  assert.ok(photographer, '应找到黛安·阿勃丝');
+  const detail = await call(`/knowledge/photographers/${photographer.id}`);
+  assert.ok(detail.claims.some(c => c.claim_text.includes('Rolleiflex')), '断言应包含 Rolleiflex');
+});
+
+test('K1 Rinko Kawauchi search finds photographer and series', async () => {
+  const results = await call('/knowledge/search?q=Rinko Kawauchi');
+  const photographer = results.find(r => r.kind === 'photographer');
+  assert.ok(photographer, '应找到川内伦子');
+  assert.equal(photographer.title, 'Rinko Kawauchi');
+  const bySeries = await call('/knowledge/search?q=Utatane');
+  const series = bySeries.find(r => r.kind === 'series');
+  assert.ok(series, '应找到 Utatane 系列');
+  assert.equal(series.photographer, 'Rinko Kawauchi');
 });

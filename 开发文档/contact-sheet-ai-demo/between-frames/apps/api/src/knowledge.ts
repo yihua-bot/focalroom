@@ -130,6 +130,48 @@ export class KnowledgeService {
     return { ...photographer, series, claims, sources, relations };
   }
 
+  /** 系列详情：系列信息 + 作品列表 + 事实断言 + 来源。 */
+  async series(headers: Headers, id: unknown) {
+    await this.auth.authenticate(headers, false);
+    const seriesId = z.uuid().parse(id);
+    const series = (await this.pool.query(
+      `SELECT s.*, p.name_en AS photographer_name, p.name_zh AS photographer_name_zh
+       FROM fr_photo_series s JOIN fr_photographers p ON p.id = s.photographer_id
+       WHERE s.id = $1`, [seriesId],
+    )).rows[0];
+    assert(series, 404, 'NOT_FOUND', '系列不存在');
+    const artworks = (await this.pool.query(
+      `SELECT id, title_en, title_zh, capture_date, capture_format, subjects, visual_concepts, review_status
+       FROM fr_artworks WHERE series_id = $1 ORDER BY coalesce(capture_date, 'zzzz')`, [seriesId],
+    )).rows;
+    const claims = (await this.pool.query(
+      `SELECT * FROM fr_knowledge_claims WHERE entity_type = 'series' AND entity_id = $1 ORDER BY created_at`, [seriesId],
+    )).rows;
+    const sources = (await this.pool.query(
+      `SELECT * FROM fr_knowledge_sources WHERE entity_type = 'series' AND entity_id = $1`, [seriesId],
+    )).rows;
+    return { ...series, artworks, claims, sources };
+  }
+
+  /** 摄影书详情：出版信息 + 结构笔记 + 断言 + 来源。 */
+  async photobook(headers: Headers, id: unknown) {
+    await this.auth.authenticate(headers, false);
+    const bookId = z.uuid().parse(id);
+    const book = (await this.pool.query(
+      `SELECT b.*, p.name_en AS photographer_name
+       FROM fr_photobooks b LEFT JOIN fr_photographers p ON p.id = b.photographer_id
+       WHERE b.id = $1`, [bookId],
+    )).rows[0];
+    assert(book, 404, 'NOT_FOUND', '摄影书不存在');
+    const claims = (await this.pool.query(
+      `SELECT * FROM fr_knowledge_claims WHERE entity_type = 'photobook' AND entity_id = $1 ORDER BY created_at`, [bookId],
+    )).rows;
+    const sources = (await this.pool.query(
+      `SELECT * FROM fr_knowledge_sources WHERE entity_type = 'photobook' AND entity_id = $1`, [bookId],
+    )).rows;
+    return { ...book, claims, sources };
+  }
+
   /** 作品详情 + 事实断言 + 来源。 */
   async artwork(headers: Headers, id: unknown) {
     await this.auth.authenticate(headers, false);

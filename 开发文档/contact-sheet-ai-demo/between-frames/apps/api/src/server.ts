@@ -90,6 +90,12 @@ class ApiController {
     const knowledgePhotographer = path.match(/^\/knowledge\/photographers\/([^/]+)$/);
     if (knowledgePhotographer && req.method === 'GET')
       return s.knowledge.photographer(headers, knowledgePhotographer[1]);
+    const knowledgeSeries = path.match(/^\/knowledge\/series\/([^/]+)$/);
+    if (knowledgeSeries && req.method === 'GET')
+      return s.knowledge.series(headers, knowledgeSeries[1]);
+    const knowledgePhotobook = path.match(/^\/knowledge\/photobooks\/([^/]+)$/);
+    if (knowledgePhotobook && req.method === 'GET')
+      return s.knowledge.photobook(headers, knowledgePhotobook[1]);
     const knowledgeArtwork = path.match(/^\/knowledge\/artworks\/([^/]+)$/);
     if (knowledgeArtwork && req.method === 'GET')
       return s.knowledge.artwork(headers, knowledgeArtwork[1]);
