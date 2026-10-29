@@ -8,7 +8,7 @@ import { createApi } from '../src/server.ts';
 import { migrate } from '../src/database.ts';
 import { LocalPreviewStore } from '../src/storage.ts';
 
-let pool, api, base, owner, viewer;
+let pool, api, base, owner;
 
 async function call(path, method = 'GET', account = owner, body, status = 200) {
   const response = await fetch(base + '/api/v2' + path, {
@@ -31,7 +31,6 @@ before(async () => {
   base = await api.app.getUrl();
   const register = email => call('/auth/register', 'POST', null, { email, password: 'knowledge-test-password-123', display_name: email });
   owner = await register('knowledge-owner@fr.test');
-  viewer = await register('knowledge-viewer@fr.test');
 
   // K1 种子数据：斯蒂芬·肖尔——验证 35mm Rollei 与大画幅的正确区分。
   // 来源：MoMA 资料对 American Surfaces（35mm Rollei）与 Uncommon Places（大画幅）有明确区分。
