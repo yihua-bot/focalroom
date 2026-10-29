@@ -731,7 +731,10 @@ mod tests {
                 &project.id,
                 &AddReferenceNodeCommand {
                     board_id: board_id.clone(),
-                    x: 10.0, y: 20.0, width: 240.0, height: 120.0,
+                    x: 10.0,
+                    y: 20.0,
+                    width: 240.0,
+                    height: 120.0,
                     kind: "link".into(),
                     title: "寇德卡画册编排笔记".into(),
                     url: Some("https://example.com/koudelka".into()),
@@ -750,25 +753,70 @@ mod tests {
         assert_eq!(stored["kind"], "link");
 
         // 笔记参考 + 校验边界：http URL 拒绝、空标题拒绝、非法 kind 拒绝。
-        assert!(db
-            .add_reference_node(&project.id, &AddReferenceNodeCommand {
-                board_id: board_id.clone(), x: 0.0, y: 0.0, width: 200.0, height: 100.0,
-                kind: "note".into(), title: "展览记录".into(),
-                url: None, content: Some("周日看展".into()),
-                author: None, source: None, license: None,
-            })
+        assert!(
+            db.add_reference_node(
+                &project.id,
+                &AddReferenceNodeCommand {
+                    board_id: board_id.clone(),
+                    x: 0.0,
+                    y: 0.0,
+                    width: 200.0,
+                    height: 100.0,
+                    kind: "note".into(),
+                    title: "展览记录".into(),
+                    url: None,
+                    content: Some("周日看展".into()),
+                    author: None,
+                    source: None,
+                    license: None,
+                }
+            )
             .await
-            .is_ok());
+            .is_ok()
+        );
         for invalid in [
-            AddReferenceNodeCommand { board_id: board_id.clone(), x: 0.0, y: 0.0, width: 200.0, height: 100.0,
-                kind: "link".into(), title: "t".into(), url: Some("http://insecure.example".into()),
-                content: None, author: None, source: None, license: None },
-            AddReferenceNodeCommand { board_id: board_id.clone(), x: 0.0, y: 0.0, width: 200.0, height: 100.0,
-                kind: "link".into(), title: "  ".into(), url: Some("https://ok.example".into()),
-                content: None, author: None, source: None, license: None },
-            AddReferenceNodeCommand { board_id: board_id.clone(), x: 0.0, y: 0.0, width: 200.0, height: 100.0,
-                kind: "image".into(), title: "t".into(), url: None,
-                content: None, author: None, source: None, license: None },
+            AddReferenceNodeCommand {
+                board_id: board_id.clone(),
+                x: 0.0,
+                y: 0.0,
+                width: 200.0,
+                height: 100.0,
+                kind: "link".into(),
+                title: "t".into(),
+                url: Some("http://insecure.example".into()),
+                content: None,
+                author: None,
+                source: None,
+                license: None,
+            },
+            AddReferenceNodeCommand {
+                board_id: board_id.clone(),
+                x: 0.0,
+                y: 0.0,
+                width: 200.0,
+                height: 100.0,
+                kind: "link".into(),
+                title: "  ".into(),
+                url: Some("https://ok.example".into()),
+                content: None,
+                author: None,
+                source: None,
+                license: None,
+            },
+            AddReferenceNodeCommand {
+                board_id: board_id.clone(),
+                x: 0.0,
+                y: 0.0,
+                width: 200.0,
+                height: 100.0,
+                kind: "image".into(),
+                title: "t".into(),
+                url: None,
+                content: None,
+                author: None,
+                source: None,
+                license: None,
+            },
         ] {
             assert!(db.add_reference_node(&project.id, &invalid).await.is_err());
         }
@@ -777,7 +825,10 @@ mod tests {
         let sources = db.board_photo_sources(&board_id).await.unwrap();
         assert!(sources.is_empty(), "reference 节点不得进入照片资产来源");
         let nodes = db.get_board_nodes(&board_id).await.unwrap();
-        assert_eq!(nodes.iter().filter(|n| n.node_type == "reference").count(), 2);
+        assert_eq!(
+            nodes.iter().filter(|n| n.node_type == "reference").count(),
+            2
+        );
         assert_eq!(nodes.iter().filter(|n| n.node_type == "photo").count(), 0);
     }
 
@@ -886,7 +937,9 @@ impl CommandHandler<'_> {
         cmd: &AddReferenceNodeCommand,
     ) -> Result<CanvasNode> {
         let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
-        let result = self.add_reference_node_tx(&mut tx, project, cmd, None).await?;
+        let result = self
+            .add_reference_node_tx(&mut tx, project, cmd, None)
+            .await?;
         tx.commit().await?;
         Ok(result)
     }
@@ -904,7 +957,10 @@ impl CommandHandler<'_> {
         if cmd.kind == "link" {
             let url = cmd.url.as_deref().unwrap_or("");
             if url.is_empty() || url.len() > 2000 || !url.starts_with("https://") {
-                return Err(AppError::new("VALIDATION_ERROR", "链接参考必须携带 https URL"));
+                return Err(AppError::new(
+                    "VALIDATION_ERROR",
+                    "链接参考必须携带 https URL",
+                ));
             }
         }
         if cmd.title.trim().is_empty() || cmd.title.chars().count() > 200 {
@@ -1078,7 +1134,9 @@ impl Store {
         project: &str,
         cmd: &AddReferenceNodeCommand,
     ) -> Result<CanvasNode> {
-        CommandHandler::new(self).add_reference_node(project, cmd).await
+        CommandHandler::new(self)
+            .add_reference_node(project, cmd)
+            .await
     }
 
     pub async fn add_text_node(
