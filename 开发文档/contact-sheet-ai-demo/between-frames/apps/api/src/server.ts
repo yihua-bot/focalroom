@@ -84,6 +84,15 @@ class ApiController {
     }
 
     if (path === '/billing/catalog' && req.method === 'GET') return s.billing.catalog();
+    // K0 摄影知识公共检索：跨实体搜索 + 实体详情。
+    if (path === '/knowledge/search' && req.method === 'GET')
+      return s.knowledge.search(headers, req.query.q, req.query.kind, req.query.movement);
+    const knowledgePhotographer = path.match(/^\/knowledge\/photographers\/([^/]+)$/);
+    if (knowledgePhotographer && req.method === 'GET')
+      return s.knowledge.photographer(headers, knowledgePhotographer[1]);
+    const knowledgeArtwork = path.match(/^\/knowledge\/artworks\/([^/]+)$/);
+    if (knowledgeArtwork && req.method === 'GET')
+      return s.knowledge.artwork(headers, knowledgeArtwork[1]);
     if (path === '/billing/overview' && req.method === 'GET') return s.billing.overview(headers);
     if (path === '/billing/checkout' && req.method === 'POST') return s.billing.checkout(headers,req.body);
     if (path === '/billing/manage' && req.method === 'POST') return s.billing.manage(headers);
