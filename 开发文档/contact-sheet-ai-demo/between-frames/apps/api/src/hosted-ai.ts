@@ -37,7 +37,7 @@ const productionTransport: HostedAiTransport = (body, key) => fetch("https://api
 export function hostedAiConfig(): HostedAiConfig | undefined {
   const key = process.env.FOCALROOM_DEEPSEEK_API_KEY?.trim();
   if (!key) return undefined;
-  const initialTokens = Number(process.env.FOCALROOM_AI_INITIAL_TOKENS ?? 0);
+  const initialTokens = Number(process.env.FOCALROOM_AI_INITIAL_TOKENS ?? 1000000);
   assert(Number.isSafeInteger(initialTokens) && initialTokens >= 0 && initialTokens <= 1000000,
     500, "AI_CONFIG_INVALID", "初始 AI 额度配置不合法");
   return { key, initialTokens, queue: queueConfigFromEnv() };

@@ -20,7 +20,7 @@ export class BillingService {
   }
   catalog() {
     return {salesAvailable:!!this.gateway && this.salesEnabled,plans:UNAVAILABLE_SUBSCRIPTION_CATALOG.plans.map(plan=>({
-      ...plan,prices:plan.id==='pro'?(this.config?.prices??[]).map(({includedTokens,...price})=>({...price,includedCredits:includedTokens/1000})):[],
+      ...plan,prices:plan.id!=='free'?(this.config?.prices??[]).map(({includedTokens,...price})=>({...price,includedCredits:includedTokens/1000})):[],
     }))};
   }
   async overview(headers: Headers) {
@@ -32,7 +32,8 @@ export class BillingService {
     const invoices=(await this.pool.query('SELECT id,amount,currency,status,issued_at FROM fr_billing_invoices WHERE user_id=$1 ORDER BY issued_at DESC LIMIT 30',[user.id])).rows;
     const customer=(await this.pool.query('SELECT customer_id FROM fr_billing_customers WHERE user_id=$1',[user.id])).rows[0];
     const pending=await this.pool.query("SELECT 1 FROM fr_billing_checkouts WHERE user_id=$1 AND state IN ('PENDING','READY') AND (expires_at IS NULL OR expires_at>now()) LIMIT 1",[user.id]);
-    return {planId:paid?'pro':'free',planName:paid?'FocalRoom Pro':'基础版',status:paid?sub.status:sub?.status==='canceled'?'canceled':'free',
+    return {planId:paid?sub.price_id.startsWith('studio')?'studio':'pro':'free',
+      planName:paid?(sub.price_id.startsWith('studio')?'FocalRoom Studio':sub.price_id.startsWith('pro')?'FocalRoom Pro':'FocalRoom'):'基础版',status:paid?sub.status:sub?.status==='canceled'?'canceled':'free',
       currentPeriodEnd:paid || sub?.status==='canceled' ? sub.current_period_end : null,cancelAtPeriodEnd:paid ? sub.cancel_at_period_end : sub?.status==='canceled',
       usage:{remainingPercent:granted?Math.min(100,Math.floor(available/granted*100)):null,hasAllowance:available>0,availableCredits:available/1000,totalCredits:granted/1000},
       invoices:invoices.map(row=>({id:row.id,date:row.issued_at,amount:Number(row.amount),currency:row.currency,status:row.status,url:null})),manageAvailable:!!customer && !!this.gateway,pendingCheckout:!!pending.rowCount};
