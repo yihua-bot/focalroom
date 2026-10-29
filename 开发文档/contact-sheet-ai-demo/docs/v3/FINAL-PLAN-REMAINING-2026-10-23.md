@@ -13,6 +13,10 @@
 
 基线自 e3fcdaa 恢复 CI 后连落 24 个绿切片至 5704e2a（最新 run 40571333049；权威快照 current-state-v3.json）。服务端（apps/api）新增：G6 正式共编四批——命令通道/修订/幂等回执（0025，5099e67）、事件日志与游标（0026，f41e0ce）、生命周期状态转换（5a04522，合并并行会话的资产双写 UUID 修复）、Board Presence 心跳（0027，11d020b，30 秒失活+惰性回收）；J5 团队席位（0028，74e3dc3，管理员门控+订阅档位配额）；J3 退款/争议额度比例撤回与缺口记账（0024，a368629）；I3 作者记忆 API 与桌面消费（0023，8bb2ae1/d4d3e70）。原型：FR3-014 三精度（RGB8/RGB16/float，d87b3a6/2018c17/4371242）与显示器 ICC 采集（8810482）；FR3-015 瓦片金字塔/取消/局部解码（7f8363c/30564b1/4930f0e）及 25MP 对照（086d8f6：缩放 270ms/7.8MB 对全量 2324ms/100MB）。隔离 PG 全套 121/121、typecheck/lint 干净；CI foundation 超时 45→60→90 分钟（0758449/c70715b）。消费端（桌面命令/事件接入）与真实设备验收仍开，见下文各项更新。
 
+## 2026-10-29 K 摄影知识智能增量（Focal Photography Intelligence）
+
+K0+K1 知识本体与服务（`bdcb0523`/`178a0eb7`/`fd5e1a3c`：0034 PG 迁移八类实体表——摄影师/系列/作品/摄影书/事实断言/知识关系/来源；KnowledgeService 跨实体搜索 `/knowledge/search` + movement/kind 过滤 + 摄影师/系列/摄影书/作品四类详情含断言与来源；种子验证肖尔 American Surfaces 35mm Rollei vs Uncommon Places 8x10 大画幅区分；14/14 测试）。K2 Met 馆藏接入器（`4d0f17b4`：`apps/api/tools/met-ingest.ts` 摄影部门搜索 + 实体映射 + 幂等 SQL 生成 + 公共领域权限标记；Met API 当前返回 410 端点迁移，上线更新 URL 即可）。K4 Web Explore UI（`9947e358`/`4cf38285`：`#explore` 路由 + KnowledgeSearch 组件——跨实体搜索/类型过滤/四色徽标/详情面板断言来源链接，事件驱动取数无副作用级联；项目首页「摄影研究」导航入口；4/4 测试）。K5 生产种子（`88bc977b`：`apps/api/seeds/photography-knowledge.sql` 五位已验证摄影师幂等种子（肖尔/Frank/川内伦子/Arbus/Eggleston，UPSERT+NOT EXISTS 可重复执行）+ 4/4 种子验证测试——计数/幂等/格式区分可检索/断言含博物馆来源）。生产种子 psql 执行、K3 语义检索（pgvector）、桌面 Agent 知识工具接线仍开。
+
 ## 一、不能再列为“从未实现”的项目
 
 - 统一 Focal AI 会话与工具循环；按范围读取画布、作品版本、调色版本及出版布局。
@@ -93,7 +97,7 @@
 ### I. 研究与知识记忆（用户追加方向 / G1、G3、G4）
 
 - [ ] I1 研究笔记/链接服务端已落地（0029）；**canvas reference 节点已落地**（`0262c914`：0034 桌面迁移 SQLite CHECK 重建 + AddReference 契约/Rust 命令/前端虚线卡片渲染——reference 独立类型自动排除于 photoSources/选片）；**I2 搜索 API 已落地**（`333503bb`：GET /projects/:id/research?q=&kind=——标题/正文/URL/作者/来源/许可 ILIKE 全字段 + kind 过滤 + 组合查询）；Agent 检索工具接线与创作循环关联仍开。
-- [ ] I2 授权研究内容的版本化 Agent 检索及完整创作循环关联；现有 8 篇原创方法札记不是完整摄影文献资料库。
+- [ ] I2 授权研究内容的版本化 Agent 检索及完整创作循环关联；**公共摄影知识库已落地**（2026-10-29 K 增量：0034 八类实体本体 + KnowledgeService 检索/详情 API + Web `#explore` 摄影研究界面 + 五位摄影师幂等生产种子，见顶部 K 增量段）；Agent 工具接线与更大规模策展内容扩充仍开，现有 8 篇原创方法札记不是完整摄影文献资料库。
 - [ ] I3 云端作者长期记忆与 Creator 隔离：实际 schema（0023）、路由接入与 Creator 隔离已落地（8bb2ae1），桌面消费（shared_cloud 拉取 + cloud_author_memories IPC + 记忆面板共享分区）已接（d4d3e70）；检索与撤权的完整回归仍开，不能以 API 存在推定全链路可用。
 - [ ] I4 明确区分项目记忆、个人长期偏好与一次性理由；本地确认/纠正/删除已有实现，新增跨项目或云授权不得自动扩大。
 
