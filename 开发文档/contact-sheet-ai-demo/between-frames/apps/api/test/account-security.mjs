@@ -55,7 +55,7 @@ after(async () => { await api?.close(); await second?.end(); await pool?.end(); 
 
 test('M4 explicit migrations create account/limiter tables and remain idempotent', async () => {
   await migrate(pool); await assertSchema(pool);
-  assert.deepEqual((await pool.query('SELECT version FROM fr_migrations ORDER BY version')).rows.map(r => r.version), ['0001', '0002', '0006', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015', '0017', '0018', '0019', '0020', '0021', '0022', '0023', '0024', '0025', '0026', '0027', '0028', '0029', '0030', '0031', '0032', '0033']);
+  assert.deepEqual((await pool.query('SELECT version FROM fr_migrations ORDER BY version')).rows.map(r => r.version), ['0001', '0002', '0006', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015', '0017', '0018', '0019', '0020', '0021', '0022', '0023', '0024', '0025', '0026', '0027', '0028', '0029', '0030', '0031', '0032', '0033', '0034']);
   assert.deepEqual((await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='fr_ai_requests' AND column_name IN ('result_json','error_code') ORDER BY column_name")).rows.map(r => r.column_name), ['error_code', 'result_json']);
   for (const table of ['fr_source_assets', 'fr_asset_aliases', 'fr_edit_variants', 'fr_renditions', 'fr_boards', 'fr_canvas_nodes', 'fr_board_annotations', 'fr_author_hypotheses', 'fr_billing_refunds', 'fr_canvas_commands', 'fr_canvas_events']) {
     assert.equal((await pool.query('SELECT to_regclass($1) AS name', [table])).rows[0].name, table);
@@ -163,4 +163,23 @@ test('M4 quota cleanup removes expired rows without erasing longer live windows'
   assert.equal((await checkRateLimit(pool, key, 3, 86_400_000)).allowed, false);
   assert.equal((await pool.query('SELECT count(*) FROM fr_rate_limits WHERE key=$1', [`expired:${key}`])).rows[0].count, '0');
   assert.equal((await checkRateLimit(second, key, 3, 86_400_000)).allowed, false);
+});
+
+test('active sessions slide to 30 days; expired sessions never resurrect', async () => {
+  const account = await register();
+  const session = (await pool.query('SELECT digest FROM fr_sessions WHERE user_id=$1', [account.user.id])).rows[0];
+  // 临近过期的活跃会话：认证一次应被续到约 30 天。
+  await pool.query("UPDATE fr_sessions SET expires_at = now() + interval '2 days' WHERE digest=$1", [session.digest]);
+  await call('/auth/me', undefined, account);
+  const renewed = (await pool.query('SELECT expires_at FROM fr_sessions WHERE digest=$1', [session.digest])).rows[0].expires_at;
+  assert.ok(renewed > new Date(Date.now() + 29 * 86_400_000), '临近过期的活跃会话应滑动到约 30 天');
+  // 剩余充足时不再重复写库。
+  await call('/auth/me', undefined, account);
+  const unchanged = (await pool.query('SELECT expires_at FROM fr_sessions WHERE digest=$1', [session.digest])).rows[0].expires_at;
+  assert.equal(unchanged.getTime(), renewed.getTime(), '剩余超过 29 天时续期不应再写库');
+  // 过期会话必须 401，且不得被续期复活。
+  await pool.query("UPDATE fr_sessions SET expires_at = now() - interval '1 hour' WHERE digest=$1", [session.digest]);
+  await call('/auth/me', undefined, account, 401);
+  const dead = (await pool.query('SELECT expires_at FROM fr_sessions WHERE digest=$1', [session.digest])).rows[0].expires_at;
+  assert.ok(dead < new Date(), '过期会话不得被续期复活');
 });
