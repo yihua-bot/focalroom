@@ -36,6 +36,48 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const [creating, setCreating] = useState(false);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
+  const [tileLayers, setTileLayers] = useState<Record<string, Array<{ url: string; left: number; top: number; width: number; height: number }>>>({});
+  const tileCache = useRef(new Map<string, Array<{ url: string; left: number; top: number; width: number; height: number }>>());
+  // G2-②：缩放超过 1.25× 后缩略图（320px）明显像素化——按显示需求选最粗满足级
+  // 请求瓦片（单节点 ≤9 张，过多自动粗化），结果按 assetId:层级 缓存。
+  useEffect(() => {
+    if (!repository?.photoTile || zoom <= 1.25) return;
+    let cancelled = false;
+    void (async () => {
+      const results: Record<string, Array<{ url: string; left: number; top: number; width: number; height: number }>> = {};
+      const tasks: Array<Promise<void>> = [];
+      for (const node of nodes) {
+        if (node.nodeType !== 'photo' || !node.assetId || !node.sourceWidth || !node.sourceHeight || node.visible === false) continue;
+        const need = Math.max(node.width, node.height) * zoom;
+        let level = 0;
+        let levelW = node.sourceWidth;
+        let levelH = node.sourceHeight;
+        while (Math.ceil(Math.max(levelW, levelH) / 2) >= need && Math.ceil(Math.max(levelW, levelH) / 2) >= 256) { level += 1; levelW = Math.ceil(levelW / 2); levelH = Math.ceil(levelH / 2); }
+        while (Math.ceil(levelW / 256) * Math.ceil(levelH / 256) > 9 && Math.ceil(Math.max(levelW, levelH) / 2) >= 256) { level += 1; levelW = Math.ceil(levelW / 2); levelH = Math.ceil(levelH / 2); }
+        if (Math.ceil(levelW / 256) * Math.ceil(levelH / 256) > 9) continue;
+        const key = `${node.assetId}:${level}`;
+        const cached = tileCache.current.get(key);
+        if (cached) { results[node.id] = cached; continue; }
+        const assetId = node.assetId;
+        const cols = Math.ceil(levelW / 256);
+        const rows = Math.ceil(levelH / 256);
+        tasks.push((async () => {
+          const tiles: Array<{ url: string; left: number; top: number; width: number; height: number }> = [];
+          for (let ty = 0; ty < rows; ty += 1) {
+            for (let tx = 0; tx < cols; tx += 1) {
+              const tile = await repository.photoTile!(projectId, assetId, level, tx, ty);
+              tiles.push({ url: tile.url, left: (node.width * tx * 256) / levelW, top: (node.height * ty * 256) / levelH, width: (node.width * tile.width) / levelW, height: (node.height * tile.height) / levelH });
+            }
+          }
+          tileCache.current.set(key, tiles);
+          results[node.id] = tiles;
+        })());
+      }
+      await Promise.all(tasks).catch(() => { /* 瓦片失败保持缩略图，不阻塞画布 */ });
+      if (!cancelled) setTileLayers(results);
+    })();
+    return () => { cancelled = true; };
+  }, [zoom, nodes, repository, projectId]);
   const [dragging, setDragging] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [marquee, setMarquee] = useState<{x0:number;y0:number;x1:number;y1:number} | null>(null);
@@ -521,6 +563,15 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
                 event.currentTarget.setPointerCapture(event.pointerId);
               }
             }} />
+          {zoom > 1.25 && Object.entries(tileLayers).map(([nodeId, tiles]) => {
+            const node = nodes.find(item => item.id === nodeId);
+            if (!node || node.visible === false) return null;
+            return <div key={'tiles-' + nodeId} className="canvas-tile-layer" aria-hidden="true"
+              style={{ left: node.x, top: node.y, width: node.width, height: node.height, zIndex: node.zOrder }}>
+              {tiles.map((tile, index) => <img key={index} src={tile.url} alt="" draggable={false}
+                style={{ position: 'absolute', left: tile.left, top: tile.top, width: tile.width, height: tile.height }} />)}
+            </div>;
+          })}
           {marquee && (() => {
             const x = Math.min(marquee.x0, marquee.x1);
             const y = Math.min(marquee.y0, marquee.y1);

@@ -79,6 +79,9 @@ pub struct MoveNodesCommand {
 pub struct CanvasPhotoSource {
     pub asset_id: String,
     pub thumbnail_path: String,
+    /// G2-②：源图像素尺寸（前端按缩放选择瓦片层级）。
+    pub width: i64,
+    pub height: i64,
 }
 
 /// G2-② 画布瓦片：内容寻址缓存文件路径 + 瓦片像素尺寸（前端按尺寸布局）。
@@ -108,16 +111,10 @@ pub(crate) fn validate_rectangle(x: f64, y: f64, width: f64, height: f64) -> Res
 impl Store {
     /// 只提供画布所属项目中已关联照片的缓存路径，不暴露任意文件读取入口。
     pub async fn board_photo_sources(&self, board_id: &str) -> Result<Vec<CanvasPhotoSource>> {
-        let rows: Vec<(String, String)> = sqlx::query_as(
-            "SELECT a.id, MIN(p.thumbnail_path) FROM boards b JOIN canvas_nodes n ON n.board_id=b.id JOIN source_assets a ON a.id=n.asset_id AND a.project_id=b.project_id JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=b.project_id WHERE b.id=? AND n.node_type='photo' AND n.visible=1 GROUP BY a.id",
+        let rows: Vec<CanvasPhotoSource> = sqlx::query_as(
+            "SELECT a.id AS asset_id, MIN(p.thumbnail_path) AS thumbnail_path, MIN(p.width) AS width, MIN(p.height) AS height FROM boards b JOIN canvas_nodes n ON n.board_id=b.id JOIN source_assets a ON a.id=n.asset_id AND a.project_id=b.project_id JOIN asset_aliases alias ON alias.asset_id=a.id JOIN photos p ON p.id=alias.photo_id AND p.project_id=b.project_id WHERE b.id=? AND n.node_type='photo' AND n.visible=1 GROUP BY a.id",
         ).bind(board_id).fetch_all(&self.pool).await?;
-        Ok(rows
-            .into_iter()
-            .map(|(asset_id, thumbnail_path)| CanvasPhotoSource {
-                asset_id,
-                thumbnail_path,
-            })
-            .collect())
+        Ok(rows)
     }
 
     /// G2-②：画布瓦片按 (源SHA, 算法版本, 层级, x, y) 内容寻址缓存于预览目录；

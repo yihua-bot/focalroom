@@ -38,7 +38,7 @@ it('画布照片通过资产别名取得授权缓存路径，过滤隐藏节点'
   const board = { id: 'board', project_id: 'project', title: '叙事', state: 'draft', owning_task_id: null, revision: 1 };
   ipc.mockImplementation(async (name: string) => name === 'canvas_list_boards' ? [board] : {
     board, nodes: [node, { ...node, id: 'hidden', visible: false }], annotations: [],
-    photoSources: [{ assetId: 'asset-not-photo-id', thumbnailPath: '/authorized/cache.jpg' }],
+    photoSources: [{ assetId: 'asset-not-photo-id', thumbnailPath: '/authorized/cache.jpg', width: 100, height: 80 }],
   });
   const repository = new TauriCanvasRepository();
   await repository.listBoards('project');

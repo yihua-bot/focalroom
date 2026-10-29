@@ -8,6 +8,8 @@ export interface CanvasNodeInfo {
 }
 export interface CanvasPhoto extends CanvasNodeInfo {
   thumbnailPath?: string;
+  sourceWidth?: number;
+  sourceHeight?: number;
   contentJson?: string | null;
   styleJson?: string | null;
   childrenJson?: string | null;
@@ -79,6 +81,7 @@ export interface CanvasRepository {
   applyMerge?(projectId: string, selection: EditorialSelection, simulationId: string): Promise<void>;
   recordDecision?(projectId: string, selection: EditorialSelection, decision: 'pending'|'rejected'|'deferred'): Promise<void>;
   getSnapshot?(boardId: string): Promise<{ board: BoardInfo; nodes: CanvasPhoto[]; annotations: AnnotationInfo[] }>;
+  photoTile?(projectId: string, assetId: string, level: number, x: number, y: number): Promise<{ url: string; width: number; height: number }>;
   pendingCommands?(projectId: string): Array<{ boardId: string }>;
   retryPending?(projectId: string, boardId: string): Promise<void>;
   placePhotos?(projectId: string, boardId: string, photos: Array<{ assetId: string; x: number; y: number; width: number; height: number }>): Promise<void>;

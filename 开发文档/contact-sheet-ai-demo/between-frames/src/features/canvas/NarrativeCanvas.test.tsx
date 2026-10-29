@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { NarrativeCanvas } from './NarrativeCanvas';
@@ -156,4 +156,35 @@ it('快捷键仅作用于当前画布，文本输入保留自己的撤销行为'
   await user.click(screen.getByRole('textbox', { name: '便签内容' }));
   await user.keyboard('{Control>}z{/Control}');
   expect(repo.undo).toHaveBeenCalledTimes(1);
+});
+
+it('缩放超过 1.25× 后按最粗满足级请求瓦片并叠加图层，回落即清除', async () => {
+  const repo = repository();
+  vi.mocked(repo.listBoards).mockResolvedValue([{ id: 'board-1', projectId: 'project', title: '第一章', state: 'draft', owningTaskId: null, revision: 1 }]);
+  // 1600×1600 源、400×400 节点：zoom≈1.33 → need≈532 → 最粗满足级 level 1（800px）；
+  // 但 level 1 瓦片 4×4=16 超上限 9 → 自动粗化到 level 2（400px、2×2=4 张）。
+  vi.mocked(repo.getNodes).mockResolvedValue([{ ...node('n1', 'board-1'), width: 400, height: 400, sourceWidth: 1600, sourceHeight: 1600 }]);
+  repo.photoTile = vi.fn().mockResolvedValue({ url: 'asset://tile.jpg', width: 256, height: 256 });
+  render(<NarrativeCanvas repository={repo} projectId="project" selectedPhotoIds={[]} />);
+  const surface = await screen.findByLabelText('叙事画布');
+  await waitFor(() => expect(screen.getByText('100%')).toBeInTheDocument());
+  expect(repo.photoTile).not.toHaveBeenCalled();
+  // 三次滚轮放大：1.0 → 1.331 越过 1.25 阈值。
+  fireEvent.wheel(surface, { deltaY: -100 });
+  fireEvent.wheel(surface, { deltaY: -100 });
+  fireEvent.wheel(surface, { deltaY: -100 });
+  await waitFor(() => expect(screen.getByText('133%')).toBeInTheDocument());
+  await waitFor(() => expect(repo.photoTile).toHaveBeenCalledTimes(4));
+  expect((repo.photoTile as ReturnType<typeof vi.fn>).mock.calls.every(call => call[2] === 2)).toBe(true);
+  const layer = await waitFor(() => {
+    const el = document.querySelector('.canvas-tile-layer');
+    expect(el).toBeTruthy();
+    return el as HTMLElement;
+  });
+  expect(layer.querySelectorAll('img')).toHaveLength(4);
+  // 三次滚轮回落后瓦片图层清除（缩略图恢复）。
+  fireEvent.wheel(surface, { deltaY: 100 });
+  fireEvent.wheel(surface, { deltaY: 100 });
+  fireEvent.wheel(surface, { deltaY: 100 });
+  await waitFor(() => expect(document.querySelector('.canvas-tile-layer')).toBeNull());
 });

@@ -8,7 +8,7 @@ import { CanvasCommandClient } from './CanvasCommandClient';
 import { editorialField, canvasBoardRecordSchema, canvasNodeRecordSchema as nodeSchema, canvasAnnotationRecordSchema as annotationSchema } from '@betweenframes/contracts';
 
 const boardSchema = canvasBoardRecordSchema.transform(value => ({ id: value.id, projectId: value.project_id, title: value.title, state: value.state, owningTaskId: value.owning_task_id, revision: value.revision }));
-const photoSourceSchema = z.object({ assetId: z.string(), thumbnailPath: z.string() });
+const photoSourceSchema = z.object({ assetId: z.string(), thumbnailPath: z.string(), width: z.number().int().nonnegative(), height: z.number().int().nonnegative() });
 const discussionSchema = z.object({ draftId: z.string(), draftRevision: z.number().int().positive(), cursor: z.number().int().nonnegative(), eventCount: z.number().int().nonnegative(), totalMessages: z.number().int().nonnegative(), nextOffset: z.number().int().nonnegative().nullable(), messages: z.array(z.object({ id: z.string(), threadId: z.string(), changeId: z.string().nullable(), body: z.string(), rootBody: z.string(), createdAt: z.string(), resolved: z.boolean(), isReply: z.boolean() })) });
 const structuralConflictSchema = z.object({changeId:z.string(),nodeId:z.string(),kind:z.enum(['current_removed','remove_changed']),currentModified:z.boolean(),relatedNodes:z.array(z.object({nodeId:z.string(),nodeType:z.string(),effect:z.enum(['detach','remove'])})).max(5000),preservedCommentCount:z.number().int().nonnegative().max(1000),resolved:z.boolean()});
 
@@ -35,14 +35,21 @@ export class TauriCanvasRepository implements CanvasRepository {
     this.remember(await this.commands.execute(projectId, draftId, revision, [{ type: 'ResolveEditorialThread', data: { draftId, draftRevision: revision, threadId, resolved } }]));
   }
   private photoPaths = new Map<string, string>();
+  private photoDims = new Map<string, { width: number; height: number }>();
   private photos<T extends { assetId: string | null }>(nodes: T[]) {
-    return nodes.map(node => ({ ...node, thumbnailPath: node.assetId ? this.photoPaths.get(node.assetId) : undefined }));
+    return nodes.map(node => ({ ...node, thumbnailPath: node.assetId ? this.photoPaths.get(node.assetId) : undefined, sourceWidth: node.assetId ? this.photoDims.get(node.assetId)?.width : undefined, sourceHeight: node.assetId ? this.photoDims.get(node.assetId)?.height : undefined }));
+  }
+  /** G2-②：请求 (level, x, y) 瓦片，返回 asset 协议 URL 与瓦片像素尺寸。 */
+  async photoTile(projectId: string, assetId: string, level: number, x: number, y: number) {
+    const tile = z.object({ path: z.string(), width: z.number().int().positive(), height: z.number().int().positive() }).parse(
+      await invoke('canvas_photo_tile', { projectId, assetId, level, x, y }));
+    return { url: convertFileSrc(tile.path), width: tile.width, height: tile.height };
   }
   async compareDraft(projectId: string, boardId: string) {
     const comparison = z.object({ draft: boardSchema, sourceBoardId: z.string().nullable(), sourceRevision: z.number().nullable(), currentSourceRevision: z.number().nullable(), sourceChanged: z.boolean(), baselineNodes: z.array(nodeSchema), draftNodes: z.array(nodeSchema), currentSourceNodes: z.array(nodeSchema),
       changes: z.array(z.object({ id: z.string(), nodeId: z.string(), sourceNodeId: z.string().nullable(), kind: z.enum(['add', 'change', 'remove']), nodeType: z.string(), before: nodeSchema.nullable(), after: nodeSchema.nullable(), kinds: z.array(z.string()), requiredDependencies: z.array(z.string()), decision: z.enum(['pending','accepted','rejected','deferred','partial']), fields: z.array(editorialField), acceptedFields: z.array(editorialField), fieldDecisions: z.record(z.string(), z.enum(['pending','accepted','rejected','deferred'])) })), photoSources: z.array(photoSourceSchema) }).parse(await invoke('canvas_comparison', { projectId, boardId }));
     if (comparison.draft.id !== boardId || comparison.draft.projectId !== projectId) throw new Error('无法读取这份画布方案。');
-    for (const photo of comparison.photoSources) this.photoPaths.set(photo.assetId, convertFileSrc(photo.thumbnailPath));
+    for (const photo of comparison.photoSources) { this.photoPaths.set(photo.assetId, convertFileSrc(photo.thumbnailPath)); this.photoDims.set(photo.assetId, { width: photo.width, height: photo.height }); }
     return { ...comparison, draftRevision: comparison.draft.revision, baselineNodes: this.photos(comparison.baselineNodes), currentSourceNodes: this.photos(comparison.currentSourceNodes), draftNodes: this.photos(comparison.draftNodes), changes: comparison.changes.map(change => ({ ...change, before: change.before ? this.photos([change.before])[0] : null, after: change.after ? this.photos([change.after])[0] : null })) };
   }
   async simulateMerge(projectId: string, selection: EditorialSelection) {
@@ -63,7 +70,7 @@ export class TauriCanvasRepository implements CanvasRepository {
   async simulateRevert(projectId: string, boardId: string, commandId: string) {
     const result = z.object({ mergeCommandId: z.string(), targetRevision: z.number().int().positive(), simulationId: z.string(), currentNodes: z.array(nodeSchema), mergedNodes: z.array(nodeSchema), conflicts: z.array(z.string()), canApply: z.boolean(), photoSources: z.array(photoSourceSchema),restoredCommentCount:z.number().int().nonnegative().max(1000).optional().default(0) }).parse(await invoke('canvas_simulate_revert', { projectId, boardId, commandId }));
     if (result.mergeCommandId !== commandId || [...result.currentNodes, ...result.mergedNodes].some(n => n.boardId !== boardId)) throw new Error('撤回内容已变化，请重新打开画布。');
-    for (const photo of result.photoSources) this.photoPaths.set(photo.assetId, convertFileSrc(photo.thumbnailPath));
+    for (const photo of result.photoSources) { this.photoPaths.set(photo.assetId, convertFileSrc(photo.thumbnailPath)); this.photoDims.set(photo.assetId, { width: photo.width, height: photo.height }); }
     return { ...result, currentNodes: this.photos(result.currentNodes), mergedNodes: this.photos(result.mergedNodes) };
   }
   async revertMerge(projectId: string, boardId: string, simulation: RevertSimulation) {
@@ -107,9 +114,9 @@ export class TauriCanvasRepository implements CanvasRepository {
       await invoke('canvas_snapshot', { projectId: version.projectId, boardId }));
     if (snapshot.board.id !== boardId || snapshot.board.projectId !== version.projectId || snapshot.board.revision < version.revision) throw new Error('画布已更新，请重新打开后继续。');
     this.versions.set(boardId, { projectId: version.projectId, revision: snapshot.board.revision });
-    const sources = new Map(snapshot.photoSources.map(p => [p.assetId, convertFileSrc(p.thumbnailPath)]));
+    for (const photo of snapshot.photoSources) { this.photoPaths.set(photo.assetId, convertFileSrc(photo.thumbnailPath)); this.photoDims.set(photo.assetId, { width: photo.width, height: photo.height }); }
     for (const annotation of snapshot.annotations) this.annotationBoards.set(annotation.id, boardId);
-    return { board: snapshot.board, annotations: snapshot.annotations, nodes: snapshot.nodes.filter(n => n.visible).map(n => ({ ...n, thumbnailPath: n.assetId ? sources.get(n.assetId) : undefined })) };
+    return { board: snapshot.board, annotations: snapshot.annotations, nodes: this.photos(snapshot.nodes.filter(n => n.visible)) };
   }
   async getNodes(boardId: string) { return (await this.getSnapshot(boardId)).nodes; }
   async placePhoto(projectId: string, boardId: string, assetId: string, x: number, y: number, width: number, height: number) {
