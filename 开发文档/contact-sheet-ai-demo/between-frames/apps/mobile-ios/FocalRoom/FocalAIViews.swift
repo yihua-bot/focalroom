@@ -35,11 +35,13 @@ struct FocalAIView: View {
         .navigationTitle("Focal AI").navigationBarTitleDisplayMode(.inline)
         .task(id: model.credentials?.user.id) {
             await model.loadAIAccount()
+        }
+        .task(id: model.currentProject) {
             await model.loadChat()
             await model.aiResolvePending()
+            await loadTasks()
         }
-        .task(id: model.selectedProjectID) { await loadTasks() }
-        .onChange(of: model.selectedProjectID) { _, _ in clearPhotos() }
+        .onChange(of: model.currentProject) { _, _ in clearPhotos() }
         .onChange(of: model.credentials?.user.id) { _, _ in clearPhotos() }
         .sheet(isPresented: $choosingPhotos) { photoPicker }
         .sheet(item: $vision, onDismiss: { model.cancelVision() }) { prepared in
@@ -129,7 +131,10 @@ struct FocalAIView: View {
 
     private var tasksSection: some View {
         Section("项目分析任务") {
-            if let tasksError {
+            if model.selectedLocalProjectID != nil {
+                Text("可直接选择本机照片向 AI 提问，无需迁云。云端项目分析任务不会出现在本机项目中。")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else if let tasksError {
                 Text(tasksError).font(.footnote).foregroundStyle(.secondary)
             } else if jobs.isEmpty && results.isEmpty {
                 Text("暂无任务。项目内已有的分析任务与评论汇总会显示在这里。")
@@ -163,7 +168,7 @@ struct FocalAIView: View {
         HStack(spacing: 10) {
             Button { choosingPhotos = true } label: {
                 Label(selectedPhotos.isEmpty ? "照片" : "\(selectedPhotos.count)", systemImage: "photo.badge.plus")
-            }.disabled(model.snapshot == nil || !model.canSendAI || model.aiSending || preparingVision)
+            }.disabled(model.observationPhotos.isEmpty || !model.canSendAI || model.aiSending || preparingVision)
                 .accessibilityIdentifier("ai.attach")
             TextField("输入消息", text: $draft)
                 .textFieldStyle(.roundedBorder)
@@ -204,9 +209,9 @@ struct FocalAIView: View {
     private var photoPicker: some View {
         NavigationStack {
             List {
-                Text("选择当前云端项目的照片，最多 4 张。发送前还会核实权限，并逐次确认。")
+                Text("选择当前项目的照片，最多 4 张。发送前还会核实照片身份，并逐次确认。")
                     .font(.footnote).foregroundStyle(.secondary)
-                ForEach(model.snapshot?.snapshot.photos ?? []) { photo in
+                ForEach(model.observationPhotos) { photo in
                     Button {
                         if selectedPhotos.contains(photo.id) { selectedPhotos.remove(photo.id) }
                         else if selectedPhotos.count < 4 { selectedPhotos.insert(photo.id) }

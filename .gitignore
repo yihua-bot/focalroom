@@ -36,3 +36,6 @@ apps/mobile-ios/build/
 *.dSYM.zip
 .swift-build/
 *.xcresult
+.module-cache/
+.dd-verify/
+*.pcm

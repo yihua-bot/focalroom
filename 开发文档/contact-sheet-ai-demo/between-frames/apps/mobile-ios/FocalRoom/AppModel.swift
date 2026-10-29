@@ -494,26 +494,42 @@ final class AppModel {
 
     func loadChat() async {
         guard let chat else { return }
-        chatMessages = (try? await chat.messages()) ?? []
+        let generation = epoch, project = currentProject
+        let messages = (try? await chat.messages(localProjectID: selectedLocalProjectID)) ?? []
+        guard generation == epoch, project == currentProject else { return }
+        chatMessages = messages
     }
 
     func prepareVision(text: String, photoIDs: Set<String>) async throws -> PreparedVision {
-        guard let api, let credentials, let id = selectedProjectID, !offline, !aiSending,
+        guard let api, let credentials, let project = currentProject, !offline, !aiSending,
               !photoIDs.isEmpty, photoIDs.count <= 4 else { throw APIError.permissionDenied }
         let generation = epoch
         visionDraftID = nil
-        let snapshot = try await projectRead(id) { try await api.snapshot(projectID: id, credentials: credentials) }
         var photos: [PreparedVision.Photo] = []
-        for photoID in photoIDs.sorted() {
-            guard let photo = snapshot.snapshot.photos.first(where: { $0.id == photoID }),
-                  let descriptor = snapshot.previews.first(where: { $0.photo_id == photoID }) else { throw APIError.permissionDenied }
-            let bytes = try await api.preview(projectID: id, descriptor: descriptor, token: credentials.token)
-            let preview = try await Task.detached(priority: .userInitiated) { try VisionPreview.make(jpeg: bytes) }.value
-            guard generation == epoch, id == selectedProjectID else { throw CancellationError() }
-            photos.append(.init(descriptor: descriptor, filename: photo.filename, preview: preview))
+        switch project {
+        case .local(let id):
+            guard let library = localLibrary?.library,
+                  let local = try await library.projects().first(where: { $0.id == id }) else { throw APIError.permissionDenied }
+            for photoID in photoIDs.sorted() {
+                guard let photo = local.photos.first(where: { $0.id == photoID }) else { throw APIError.permissionDenied }
+                let bytes = try await library.preview(projectID: id, photoID: photoID)
+                let preview = try await Task.detached(priority: .userInitiated) { try VisionPreview.make(jpeg: bytes) }.value
+                guard generation == epoch, project == currentProject else { throw CancellationError() }
+                photos.append(.init(photoID: photoID, contentSHA: photo.previewSHA256, filename: photo.filename, preview: preview))
+            }
+        case .cloud(let id):
+            let snapshot = try await projectRead(id) { try await api.snapshot(projectID: id, credentials: credentials) }
+            for photoID in photoIDs.sorted() {
+                guard let photo = snapshot.snapshot.photos.first(where: { $0.id == photoID }),
+                      let descriptor = snapshot.previews.first(where: { $0.photo_id == photoID }) else { throw APIError.permissionDenied }
+                let bytes = try await api.preview(projectID: id, descriptor: descriptor, token: credentials.token)
+                let preview = try await Task.detached(priority: .userInitiated) { try VisionPreview.make(jpeg: bytes) }.value
+                guard generation == epoch, project == currentProject else { throw CancellationError() }
+                photos.append(.init(photoID: photoID, contentSHA: descriptor.content_sha256, filename: photo.filename, preview: preview))
+            }
         }
         let draft = PreparedVision(id: UUID(), generation: generation, accountID: credentials.user.id,
-                                   projectID: id, text: text, createdAt: Date(), photos: photos)
+                                   project: project, text: text, createdAt: Date(), photos: photos)
         visionDraftID = draft.id
         return draft
     }
@@ -527,6 +543,8 @@ final class AppModel {
             return
         }
         let generation = epoch
+        let project = currentProject
+        let localProjectID = selectedLocalProjectID
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 8000 else {
             notice = trimmed.isEmpty ? "请输入消息内容。" : "消息过长，请分段发送。"
@@ -536,7 +554,7 @@ final class AppModel {
         defer { if generation == epoch { aiSending = false } }
         if let vision {
             guard vision.id == visionDraftID, vision.generation == generation,
-                  vision.accountID == credentials.user.id, vision.projectID == selectedProjectID,
+                  vision.accountID == credentials.user.id, vision.project == project,
                   vision.text == text, Date().timeIntervalSince(vision.createdAt) < 300 else {
                 notice = "照片授权已失效，请重新选择照片并确认。"; return
             }
@@ -544,22 +562,31 @@ final class AppModel {
             visionDraftID = nil
             onVisionConsumed()
             do {
-                let current = try await projectRead(vision.projectID) {
-                    try await api.snapshot(projectID: vision.projectID, credentials: credentials)
+                switch vision.project {
+                case .local(let id):
+                    guard let library = localLibrary?.library,
+                          let current = try await library.projects().first(where: { $0.id == id }),
+                          vision.photos.allSatisfy({ photo in
+                              current.photos.contains { $0.id == photo.photoID && $0.previewSHA256 == photo.contentSHA }
+                          }) else { throw APIError.permissionDenied }
+                    for photo in vision.photos { _ = try await library.preview(projectID: id, photoID: photo.photoID) }
+                case .cloud(let id):
+                    let current = try await projectRead(id) { try await api.snapshot(projectID: id, credentials: credentials) }
+                    guard vision.photos.allSatisfy({ photo in
+                        current.previews.contains { $0.photo_id == photo.photoID && $0.content_sha256 == photo.contentSHA }
+                    }) else { throw APIError.permissionDenied }
                 }
-                guard vision.photos.allSatisfy({ photo in
-                    current.previews.contains { $0.photo_id == photo.descriptor.photo_id && $0.content_sha256 == photo.descriptor.content_sha256 }
-                }) else { throw APIError.permissionDenied }
             } catch { if generation == epoch { notice = message(error) }; return }
         }
+        guard generation == epoch, project == currentProject else { return }
         let requestID = UUID().uuidString.lowercased()
         // 先按待确认持久化：响应丢失时凭原编号查询回执，不重复发送、不重复计费。
         let storedText = trimmed + (vision.map { "\n（本次授权观察：" + $0.photos.map(\.filename).joined(separator: "、") + "）" } ?? "")
         let userMessage = AIChatMessage(id: UUID().uuidString.lowercased(), role: "user", text: storedText,
-                                        requestID: requestID, state: .unknown)
+                                        requestID: requestID, state: .unknown, localProjectID: localProjectID)
         do { try await chat.append(userMessage) }
         catch { notice = "无法保存消息，请重试。"; return }
-        guard generation == epoch, vision == nil || vision?.projectID == selectedProjectID else { return }
+        guard generation == epoch, project == currentProject else { return }
         chatMessages.append(userMessage)
         let history = chatMessages.filter { $0.state == .sent || $0.id == userMessage.id }.suffix(20).map { ($0.role, $0.text) }
         do {
@@ -569,22 +596,19 @@ final class AppModel {
             let job = try await pollAIJob(requestID: requestID, api: api, token: credentials.token, generation: generation)
             guard generation == epoch else { return }
             if job.state == "COMPLETED", let result = job.result {
-                try? await replaceMessage(userMessage, state: .sent, failure: nil)
-                try? await chat.append(AIChatMessage(id: UUID().uuidString.lowercased(), role: "assistant",
-                                                     text: result.text.isEmpty ? "（模型未返回文本）" : result.text,
-                                                     requestID: requestID, state: .sent))
-                chatMessages = (try? await chat.messages()) ?? chatMessages
+                try? await chat.complete(userMessage, text: result.text.isEmpty ? "（模型未返回文本）" : result.text)
+                await loadChat()
             } else if job.state == "REJECTED" {
-                try? await replaceMessage(userMessage, state: .failed, failure: "模型服务拒绝了请求，额度已释放。")
-                chatMessages = (try? await chat.messages()) ?? chatMessages
-                notice = "模型服务拒绝了请求，额度已释放。"
+                try? await replaceMessage(userMessage, state: .failed, failure: "模型服务拒绝了请求，额度已释放。", in: chat)
+                await loadChat()
+                if project == currentProject { notice = "模型服务拒绝了请求，额度已释放。" }
             } else {
-                notice = "结果尚未确认；可稍后用“查询待确认结果”核对，不会重复计费。"
+                if project == currentProject { notice = "结果尚未确认；可稍后用“查询待确认结果”核对，不会重复计费。" }
             }
             await loadAIAccount()
         } catch {
             // 网络中断等：消息保留待确认状态，凭原编号可恢复。
-            if generation == epoch { notice = message(error) }
+            if generation == epoch, project == currentProject { notice = message(error) }
         }
     }
 
@@ -598,18 +622,16 @@ final class AppModel {
                 let job = try await api.aiJob(requestID: requestID, token: credentials.token)
                 guard generation == epoch else { return }
                 if job.state == "COMPLETED", let result = job.result {
-                    try? await replaceMessage(message, state: .sent, failure: nil)
-                    try? await chat.append(AIChatMessage(id: UUID().uuidString.lowercased(), role: "assistant",
-                                                         text: result.text, requestID: requestID, state: .sent))
+                    try? await chat.complete(message, text: result.text.isEmpty ? "（模型未返回文本）" : result.text)
                     changed = true
                 } else if job.state == "REJECTED" {
-                    try? await replaceMessage(message, state: .failed, failure: "模型服务拒绝了请求，额度已释放。")
+                    try? await replaceMessage(message, state: .failed, failure: "模型服务拒绝了请求，额度已释放。", in: chat)
                     changed = true
                 }
             } catch { break }
         }
         if changed, generation == epoch {
-            chatMessages = (try? await chat.messages()) ?? chatMessages
+            await loadChat()
             await loadAIAccount()
         }
     }
@@ -671,8 +693,7 @@ final class AppModel {
         return job
     }
 
-    private func replaceMessage(_ original: AIChatMessage, state: AIChatMessage.State, failure: String?) async throws {
-        guard let chat else { return }
+    private func replaceMessage(_ original: AIChatMessage, state: AIChatMessage.State, failure: String?, in chat: AIChatStore) async throws {
         var updated = original
         updated.state = state
         updated.failure = failure

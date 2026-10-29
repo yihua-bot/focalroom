@@ -7,7 +7,10 @@ final class FocalRoomUITests: XCTestCase {
         let environment = ProcessInfo.processInfo.environment
         guard let base = environment["FOCALROOM_IOS_TEST_BASE_URL"],
               let firstID = environment["FOCALROOM_IOS_PICKER_FIRST_ID"],
-              let secondID = environment["FOCALROOM_IOS_PICKER_SECOND_ID"] else {
+              let secondID = environment["FOCALROOM_IOS_PICKER_SECOND_ID"],
+              let localFirstID = environment["FOCALROOM_IOS_PICKER_LOCAL_FIRST_ID"],
+              let localSecondID = environment["FOCALROOM_IOS_PICKER_LOCAL_SECOND_ID"],
+              let localPhotoID = environment["FOCALROOM_IOS_PICKER_LOCAL_PHOTO_ID"] else {
             throw XCTSkip("项目切换验证仅使用独立的本地后端夹具")
         }
         let app = XCUIApplication()
@@ -24,13 +27,16 @@ final class FocalRoomUITests: XCTestCase {
         app.buttons["local.create"].tap()
         app.textFields["local.title"].tap()
         app.textFields["local.title"].typeText("选择器本机项目")
+        dismissKeyboardTutorial(app)
         app.buttons["local.create.confirm"].tap()
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'local.project.'")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["local.create.confirm"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'local.project.' AND label CONTAINS '选择器本机项目'")).firstMatch.waitForExistence(timeout: 5))
 
         for tab in ["Focal AI", "画布", "消息"] {
             app.tabBars.buttons[tab].tap()
             let context = app.buttons["project.context"]
             XCTAssertTrue(context.waitForExistence(timeout: 5))
+            if tab != "Focal AI" { XCTAssertEqual(context.value as? String, "选择器本机项目", "跨 Tab 须保持选中的本机项目") }
             for (projectID, title, marker) in [(secondID, "切换项目乙", "乙项目内容"), (firstID, "切换项目甲", "甲项目内容")] {
                 context.tap()
                 let option = app.buttons["project.choose.\(projectID)"]
@@ -46,11 +52,20 @@ final class FocalRoomUITests: XCTestCase {
                 }
             }
             context.tap()
-            let local = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'project.choose.local.'")).firstMatch
+            let local = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'project.choose.local.' AND label CONTAINS '选择器本机项目'")).firstMatch
             XCTAssertTrue(local.waitForExistence(timeout: 5), "三个 Tab 均应显示本机项目")
             local.tap()
+            XCTAssertTrue(app.buttons["project.context.local.library"].waitForExistence(timeout: 5))
+            XCTAssertEqual(context.value as? String, "选择器本机项目", "点击本机项目应真正选中，而非仅导航到图库")
+            XCTAssertFalse(app.buttons["project.choose.done"].exists)
+            if tab == "画布" { XCTAssertTrue(app.otherElements["boards.local.project"].exists || app.staticTexts["本机画布暂不可用"].exists) }
+            if tab == "消息" { XCTAssertTrue(app.staticTexts["本机项目暂无协作消息"].exists) }
+            XCTAssertFalse(app.staticTexts["甲项目内容"].exists)
+            app.buttons["project.context.local.library"].tap()
             XCTAssertTrue(app.navigationBars["本机图库"].waitForExistence(timeout: 5))
             app.navigationBars.buttons.element(boundBy: 0).tap()
+            XCTAssertEqual(context.value as? String, "选择器本机项目")
+            context.tap()
             XCTAssertTrue(app.buttons["project.choose.done"].waitForExistence(timeout: 5))
             if tab == "消息" {
                 let search = app.searchFields.firstMatch
@@ -69,8 +84,71 @@ final class FocalRoomUITests: XCTestCase {
             screenshot.lifetime = .keepAlways
             add(screenshot)
             app.buttons["project.choose.done"].tap()
-            XCTAssertEqual(context.value as? String, "尚未选择", "进入本机项目须清除旧云端上下文")
+            XCTAssertEqual(context.value as? String, "选择器本机项目", "关闭选择器后仍保留本机项目上下文")
         }
+        app.tabBars.buttons["Focal AI"].tap()
+        selectLocalProject(app, id: localFirstID, title: "本机项目甲")
+        app.buttons["ai.attach"].tap()
+        let localPhoto = app.buttons["ai.attach.photo.\(localPhotoID)"]
+        XCTAssertTrue(localPhoto.waitForExistence(timeout: 5), "应直接读取选中本机项目的照片")
+        localPhoto.tap()
+        app.buttons["完成"].firstMatch.tap()
+        app.textFields["ai.input"].tap()
+        app.textFields["ai.input"].typeText("本机甲问题")
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.buttons["ai.vision.confirm"].waitForExistence(timeout: 10))
+        app.buttons["取消"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["ai.send"].waitForExistence(timeout: 5))
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.buttons["ai.vision.confirm"].waitForExistence(timeout: 10))
+        app.buttons["ai.vision.confirm"].tap()
+        selectLocalProject(app, id: localSecondID, title: "本机项目乙")
+        XCTAssertFalse(app.staticTexts["本机回复：本机甲问题"].exists, "甲的迟到结果不得进入乙的对话")
+        let canSend = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: app.textFields["ai.input"])
+        XCTAssertEqual(XCTWaiter.wait(for: [canSend], timeout: 15), .completed)
+        app.textFields["ai.input"].tap()
+        app.textFields["ai.input"].typeText("本机乙问题")
+        let sendReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: app.buttons["ai.send"])
+        XCTAssertEqual(XCTWaiter.wait(for: [sendReady], timeout: 15), .completed)
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.staticTexts["本机回复：本机乙问题"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.staticTexts["本机回复：本机甲问题"].exists)
+        selectLocalProject(app, id: localFirstID, title: "本机项目甲")
+        XCTAssertTrue(app.staticTexts["本机回复：本机甲问题"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == '本机回复：本机甲问题'")).count, 1)
+        XCTAssertFalse(app.staticTexts["本机回复：本机乙问题"].exists)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Focal AI"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Focal AI"].tap()
+        selectLocalProject(app, id: localFirstID, title: "本机项目甲")
+        XCTAssertTrue(app.staticTexts["本机回复：本机甲问题"].waitForExistence(timeout: 10), "重启后本机项目对话须能恢复")
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == '本机回复：本机甲问题'")).count, 1)
+        XCTAssertFalse(app.staticTexts["本机回复：本机乙问题"].exists)
+    }
+
+    @MainActor
+    private func dismissKeyboardTutorial(_ app: XCUIApplication) {
+        let tutorial = app.staticTexts["Speed up your typing by sliding your finger across the letters to compose a word."]
+        if tutorial.waitForExistence(timeout: 1) {
+            let proceed = app.buttons["Continue"]
+            XCTAssertTrue(proceed.exists)
+            proceed.tap()
+            XCTAssertTrue(proceed.waitForNonExistence(timeout: 5))
+        }
+    }
+
+    @MainActor
+    private func selectLocalProject(_ app: XCUIApplication, id: String, title: String) {
+        let context = app.buttons["project.context"]
+        XCTAssertTrue(context.waitForExistence(timeout: 5))
+        context.tap()
+        let option = app.buttons["project.choose.local.\(id)"]
+        XCTAssertTrue(option.waitForExistence(timeout: 10))
+        option.tap()
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", title), object: context)
+        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 10), .completed)
+        XCTAssertFalse(app.buttons["project.choose.done"].exists)
     }
 
     @MainActor

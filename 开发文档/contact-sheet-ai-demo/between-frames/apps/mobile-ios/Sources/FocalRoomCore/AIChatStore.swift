@@ -72,6 +72,25 @@ public actor AIChatStore {
         try write(document)
     }
 
+    // 发送轮询与切换项目后的恢复可能同时取得同一回执；一次落盘，回复不重复追加。
+    public func complete(_ original: AIChatMessage, text: String) throws {
+        var document = try read()
+        guard original.role == "user", let requestID = original.requestID, !text.isEmpty,
+              let index = document.messages.firstIndex(where: { $0.id == original.id }),
+              document.messages[index].requestID == requestID,
+              document.messages[index].localProjectID == original.localProjectID else { throw APIError.unconfirmedCommand }
+        document.messages[index].state = .sent
+        document.messages[index].failure = nil
+        if !document.messages.contains(where: { $0.role == "assistant" && $0.requestID == requestID }) {
+            document.messages.append(.init(id: UUID().uuidString.lowercased(), role: "assistant", text: text,
+                                            requestID: requestID, localProjectID: original.localProjectID))
+        }
+        if document.messages.count > Self.messageLimit {
+            document.messages.removeFirst(document.messages.count - Self.messageLimit)
+        }
+        try write(document)
+    }
+
     public func clear() throws {
         if FileManager.default.fileExists(atPath: file.path) {
             try FileManager.default.removeItem(at: file)

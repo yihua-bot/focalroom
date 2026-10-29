@@ -207,14 +207,16 @@ struct ProjectContext: View {
     @State private var choosingProject = false
 
     var body: some View {
+        VStack(spacing: 0) {
         Button { choosingProject = true } label: {
             HStack(spacing: 8) {
                 Image(systemName: "folder")
-                Text(model.projects.first { $0.id == model.selectedProjectID }?.title ?? "选择项目").lineLimit(1)
+                Text(model.currentProjectTitle ?? "选择项目").lineLimit(1)
                 Image(systemName: "chevron.down").font(.caption)
                 Spacer()
                 if model.loadingProject { ProgressView() }
-                if model.offline { Label("离线缓存", systemImage: "wifi.slash").font(.caption) }
+                if model.selectedLocalProjectID != nil { Label("本机", systemImage: "iphone").font(.caption) }
+                else if model.offline { Label("离线缓存", systemImage: "wifi.slash").font(.caption) }
             }
             .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
             .contentShape(Rectangle())
@@ -223,9 +225,19 @@ struct ProjectContext: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("project.context")
         .accessibilityLabel("选择项目")
-        .accessibilityValue(model.projects.first { $0.id == model.selectedProjectID }?.title ?? "尚未选择")
+        .accessibilityValue(model.currentProjectTitle ?? "尚未选择")
         .disabled(model.busy)
         .sheet(isPresented: $choosingProject) { ProjectChooser(model: model) }
+        if let project = model.selectedLocalProject, let library = model.localLibrary {
+            HStack {
+                Text("\(project.photos.count) 张本机照片").foregroundStyle(.secondary)
+                Spacer()
+                NavigationLink("打开本机图库") {
+                    LocalProjectView(library: library, migration: model.migration, model: model, projectID: project.id)
+                }.accessibilityIdentifier("project.context.local.library")
+            }.font(.caption).padding(.horizontal).padding(.bottom, 10)
+        }
+        }
     }
 }
 
@@ -273,7 +285,7 @@ private struct ProjectChooser: View {
                         .accessibilityIdentifier("project.choose.\(project.id)")
                     }
                     if cloudProjects.isEmpty {
-                        Text(query.isEmpty ? "还没有已同步项目。请在本机项目中迁云，或通过已有邀请加入项目。" : "未找到匹配的已同步项目")
+                        Text(query.isEmpty ? "还没有已同步项目。可直接选择本机项目，或在项目页新建。" : "未找到匹配的已同步项目")
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("project.choose.empty")
                     }
@@ -283,18 +295,21 @@ private struct ProjectChooser: View {
                     if !localProjects.isEmpty {
                         Section {
                             ForEach(localProjects) { project in
-                                NavigationLink {
-                                    LocalProjectView(library: library, migration: model.migration, model: model, projectID: project.id)
-                                        .onAppear { model.openLocalContext() }
+                                Button {
+                                    model.openLocalContext(project.id)
+                                    if model.selectedLocalProjectID == project.id { dismiss() }
                                 } label: {
-                                    Label(project.title, systemImage: "iphone")
-                                        .frame(minHeight: 44)
+                                    HStack {
+                                        Label(project.title, systemImage: "iphone").foregroundStyle(.primary)
+                                        Spacer()
+                                        if model.selectedLocalProjectID == project.id { Image(systemName: "checkmark") }
+                                    }.frame(minHeight: 44).contentShape(Rectangle())
                                 }
                                 .disabled(opening != nil || model.busy)
                                 .accessibilityIdentifier("project.choose.local.\(project.id)")
                             }
                         } header: { Text("本机项目") } footer: {
-                            Text("本机项目可在这里查看与迁云。项目画布、消息与照片分析使用已同步的云端项目；不会自动上传照片。")
+                            Text("直接选中本机项目，不会迁云。AI 照片观察每次单独确认后仅发送所选预览，原片保留本机。")
                         }
                     }
                 }
@@ -336,8 +351,6 @@ private struct AccountView: View {
                     Text(model.credentials?.user.email ?? "").foregroundStyle(.secondary)
                     NavigationLink("隐私与数据") { AccountDataView(model: model) }
                         .accessibilityIdentifier("account.data.entry")
-                    NavigationLink("设置密码") { SetPasswordView(model: model) }
-                        .accessibilityIdentifier("account.password.entry")
                 }
                 Section("工作空间") {
                     Text(model.address).font(.footnote).textSelection(.enabled)
@@ -420,56 +433,5 @@ private struct AccountView: View {
                 }
             }
         }
-    }
-}
-
-/// 登录态设置或修改密码；验证码登录的新账号可不填当前密码。
-private struct SetPasswordView: View {
-    let model: AppModel
-    @State private var current = ""
-    @State private var next = ""
-    @State private var confirm = ""
-    @State private var saved = false
-
-    private var valid: Bool {
-        next.count >= 8 && next == confirm && !model.busy
-    }
-
-    var body: some View {
-        Form {
-            Section {
-                SecureField("当前密码（验证码登录的新账号可不填）", text: $current)
-                    .textContentType(.password)
-                    .accessibilityIdentifier("password.current")
-                SecureField("新密码（至少 8 位）", text: $next)
-                    .textContentType(.newPassword)
-                    .accessibilityIdentifier("password.new")
-                SecureField("再次输入新密码", text: $confirm)
-                    .textContentType(.newPassword)
-                    .accessibilityIdentifier("password.confirm")
-            } footer: {
-                Text("设置密码后，可在登录页使用「密码登录」；验证码登录继续可用。")
-            }
-            Section {
-                Button {
-                    let entered = next, enteredCurrent = current.isEmpty ? nil : current
-                    current = ""; next = ""; confirm = ""
-                    Task {
-                        await model.setPassword(entered, current: enteredCurrent)
-                        saved = true
-                    }
-                } label: {
-                    if model.busy { ProgressView() } else { Text("保存新密码") }
-                }
-                .disabled(!valid)
-                .accessibilityIdentifier("password.save")
-                if saved, model.notice?.contains("已更新") == true {
-                    Label("已保存", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .accessibilityIdentifier("password.saved")
-                }
-            }
-        }
-        .navigationTitle("设置密码")
     }
 }

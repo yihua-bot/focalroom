@@ -7,7 +7,10 @@ struct CommentsView: View {
     var body: some View {
         VStack(spacing: 0) {
             ProjectContext(model: model)
-            if model.snapshot == nil {
+            if model.selectedLocalProjectID != nil {
+                EmptyWorkspace(title: "本机项目暂无协作消息", detail: "此项目已选中，仅保存在这台 iPhone。云端评论和回复需在同步项目中查看。", symbol: "bubble.left")
+                    .accessibilityIdentifier("messages.local.project")
+            } else if model.snapshot == nil {
                 EmptyWorkspace(title: "选择一个项目", detail: "查看项目中的评论与回复。", symbol: "bubble.left.and.bubble.right")
             } else if model.snapshot?.comments.isEmpty == true {
                 EmptyWorkspace(title: "还没有评论", detail: "这里会显示当前项目已同步的评论。", symbol: "bubble.left")
@@ -44,7 +47,10 @@ struct BoardsView: View {
     var body: some View {
         VStack(spacing: 0) {
             ProjectContext(model: model)
-            if model.selectedProjectID == nil {
+            if model.selectedLocalProjectID != nil {
+                EmptyWorkspace(title: "本机画布暂不可用", detail: "此项目已选中。本机画布编辑尚未实现；可以打开本机图库，或切换到已有画布的同步项目。", symbol: "rectangle.3.group")
+                    .accessibilityIdentifier("boards.local.project")
+            } else if model.selectedProjectID == nil {
                 EmptyWorkspace(title: "选择一个项目", detail: "阅读已同步的项目画布。", symbol: "rectangle.3.group")
             } else if model.offline {
                 EmptyWorkspace(title: "画布需要联网读取", detail: "当前可在项目中查看已缓存的图库资料。", symbol: "wifi.slash")
@@ -71,7 +77,7 @@ struct BoardsView: View {
             }
         }
         .navigationTitle("画布").navigationBarTitleDisplayMode(.inline)
-        .task(id: model.selectedProjectID) { await load() }
+        .task(id: model.currentProject) { await load() }
     }
 
     private func load() async {

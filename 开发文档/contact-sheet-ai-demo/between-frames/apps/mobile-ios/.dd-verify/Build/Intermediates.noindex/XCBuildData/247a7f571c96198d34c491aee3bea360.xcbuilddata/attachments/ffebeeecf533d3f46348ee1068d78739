@@ -1,4 +1,0 @@
-module FocalRoomCore {
-header "FocalRoomCore-Swift.h"
-export *
-}

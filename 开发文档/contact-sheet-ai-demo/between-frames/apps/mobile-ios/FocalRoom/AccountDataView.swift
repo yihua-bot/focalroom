@@ -26,6 +26,10 @@ struct AccountDataView: View {
                 Link("查看完整隐私政策", destination: AppLinks.privacyPolicy)
                     .accessibilityIdentifier("account.privacy.policy")
             }
+            Section("账号安全") {
+                NavigationLink("设置密码") { SetPasswordView(model: model) }
+                    .accessibilityIdentifier("account.password.entry")
+            }
             Section("取回账号资料") {
                 Text("导出个人资料、设备、所属工作区、拥有的项目、本人评论/研究/提案和计量记录，不含密码或会话凭据。原片请另用本机项目导出取回。")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -75,5 +79,56 @@ struct AccountDataView: View {
                 }
             }
         } message: { Text("账号将无法恢复。本机原片保留，共享协作与财务审计按上述说明保留。") }
+    }
+}
+
+/// 登录态设置或修改密码；验证码登录的新账号可不填当前密码。
+struct SetPasswordView: View {
+    let model: AppModel
+    @State private var current = ""
+    @State private var next = ""
+    @State private var confirm = ""
+    @State private var saved = false
+
+    private var valid: Bool {
+        next.count >= 8 && next == confirm && !model.busy
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                SecureField("当前密码（验证码登录的新账号可不填）", text: $current)
+                    .textContentType(.password)
+                    .accessibilityIdentifier("password.current")
+                SecureField("新密码（至少 8 位）", text: $next)
+                    .textContentType(.newPassword)
+                    .accessibilityIdentifier("password.new")
+                SecureField("再次输入新密码", text: $confirm)
+                    .textContentType(.newPassword)
+                    .accessibilityIdentifier("password.confirm")
+            } footer: {
+                Text("设置密码后，可在登录页使用「密码登录」；验证码登录继续可用。")
+            }
+            Section {
+                Button {
+                    let entered = next, enteredCurrent = current.isEmpty ? nil : current
+                    current = ""; next = ""; confirm = ""
+                    Task {
+                        await model.setPassword(entered, current: enteredCurrent)
+                        saved = true
+                    }
+                } label: {
+                    if model.busy { ProgressView() } else { Text("保存新密码") }
+                }
+                .disabled(!valid)
+                .accessibilityIdentifier("password.save")
+                if saved, model.notice?.contains("已更新") == true {
+                    Label("已保存", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .accessibilityIdentifier("password.saved")
+                }
+            }
+        }
+        .navigationTitle("设置密码")
     }
 }

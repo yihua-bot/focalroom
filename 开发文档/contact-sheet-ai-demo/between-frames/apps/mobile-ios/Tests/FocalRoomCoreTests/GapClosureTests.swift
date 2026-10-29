@@ -6,6 +6,45 @@ import UniformTypeIdentifiers
 @testable import FocalRoomCore
 
 final class GapClosureTests: XCTestCase {
+    func testLocalProjectChatsStayIsolatedAndLateReceiptsAreIdempotent() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let scope = AccountScope(server: "https://example.com", userID: "one")
+        let store = AIChatStore(root: root, scope: scope)
+        let firstID = UUID().uuidString, secondID = UUID().uuidString
+        let legacy = try JSONDecoder().decode(AIChatMessage.self, from: Data("""
+        {"id":"old","role":"user","text":"旧账户消息","createdAt":0,"state":"sent"}
+        """.utf8))
+        XCTAssertNil(legacy.localProjectID)
+        try await store.append(legacy)
+        let first = AIChatMessage(id: "first", role: "user", text: "本机甲", requestID: UUID().uuidString,
+                                  state: .unknown, localProjectID: firstID)
+        let second = AIChatMessage(id: "second", role: "user", text: "本机乙", requestID: UUID().uuidString,
+                                   state: .unknown, localProjectID: secondID)
+        try await store.append(first)
+        try await store.append(second)
+        try await store.complete(first, text: "甲的迟到回复")
+        try await store.complete(first, text: "甲的迟到回复")
+        let reopened = AIChatStore(root: root, scope: scope)
+        let firstMessages = try await reopened.messages(localProjectID: firstID)
+        let secondMessages = try await reopened.messages(localProjectID: secondID)
+        let legacyMessages = try await reopened.messages(localProjectID: nil)
+        XCTAssertEqual(firstMessages.map(\.text), ["本机甲", "甲的迟到回复"])
+        XCTAssertEqual(firstMessages.first?.state, .sent)
+        XCTAssertEqual(secondMessages.map(\.text), ["本机乙"])
+        XCTAssertEqual(secondMessages.first?.state, .unknown)
+        XCTAssertEqual(legacyMessages.map(\.id), ["old"])
+        let forged = AIChatMessage(id: first.id, role: "user", text: first.text, requestID: first.requestID, localProjectID: secondID)
+        do { try await reopened.complete(forged, text: "串项目回复"); XCTFail("回执不能改换消息的本机项目归属") }
+        catch APIError.unconfirmedCommand { }
+        let other = AIChatStore(root: root, scope: AccountScope(server: scope.server, userID: "two"))
+        let otherMessages = try await other.messages(localProjectID: firstID)
+        XCTAssertTrue(otherMessages.isEmpty)
+        let outbound = AIConversationInput(history: firstMessages.map { ($0.role, $0.text) })
+        let json = String(decoding: try JSONEncoder().encode(outbound), as: UTF8.self)
+        XCTAssertFalse(json.contains("本机乙"))
+        XCTAssertFalse(json.contains("旧账户消息"))
+    }
+
     func testSyncModeIsExplicitAndUnknownModesAreRejected() throws {
         let state = try JSONDecoder().decode(ProjectSyncState.self, from: Data("""
         {"project_id":"project","mode":"PRIVATE_SYNCED","version":2,"authority":"cloud"}
