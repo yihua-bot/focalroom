@@ -211,27 +211,30 @@ struct LocalProjectView: View {
     }
 
     private func photoCell(_ photo: LocalPhoto) -> some View {
-        Group {
+        NavigationLink { LocalPhotoViewer(library: library, projectID: projectID, photoID: photo.id) } label: {
+            cellContent(photo)
+        }
+        .buttonStyle(.plain)
+        .disabled(selecting)
+        .overlay {
+            // 仅多选模式存在的勾选层：普通模式下完全不存在，不干扰 NavigationLink 的点击。
             if selecting {
-                Button {
-                    if picked.contains(photo.id) { picked.remove(photo.id) } else { picked.insert(photo.id) }
-                } label: {
-                    cellContent(photo)
-                        .overlay(alignment: .topTrailing) {
-                            Image(systemName: picked.contains(photo.id) ? "checkmark.circle.fill" : "circle")
-                                .font(.title3).foregroundStyle(.white)
-                                .shadow(radius: 3).padding(10)
-                        }
-                }.buttonStyle(.plain)
-                    .accessibilityLabel("\(photo.filename)，\(picked.contains(photo.id) ? "已勾选" : "未勾选")")
-                    .accessibilityIdentifier("local.photo.\(photo.id)")
-            } else {
-                NavigationLink { LocalPhotoViewer(library: library, projectID: projectID, photoID: photo.id) } label: {
-                    cellContent(photo)
-                }.buttonStyle(.plain).accessibilityLabel("\(photo.filename)，\(photo.selection.title)")
-                    .accessibilityIdentifier("local.photo.\(photo.id)")
+                Color.clear
+                    .contentShape(Rectangle())
+                    .overlay(alignment: .topTrailing) {
+                        Image(systemName: picked.contains(photo.id) ? "checkmark.circle.fill" : "circle")
+                            .font(.title3).foregroundStyle(.white)
+                            .shadow(radius: 3).padding(10)
+                    }
+                    .onTapGesture {
+                        if picked.contains(photo.id) { picked.remove(photo.id) } else { picked.insert(photo.id) }
+                    }
             }
         }
+        .accessibilityLabel(selecting
+            ? "\(photo.filename)，\(picked.contains(photo.id) ? "已勾选" : "未勾选")"
+            : "\(photo.filename)，\(photo.selection.title)")
+        .accessibilityIdentifier("local.photo.\(photo.id)")
     }
 
     private func cellContent(_ photo: LocalPhoto) -> some View {
@@ -338,7 +341,11 @@ struct MigrationCard: View {
                         .font(.caption).foregroundStyle(.secondary)
                     HStack(spacing: 12) {
                         Button("继续迁云") { migration.migrate(projectID: project.id) }
-                            .buttonStyle(.borderedProminent).accessibilityIdentifier("local.migrate.continue")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.black)
+                            .background(Color.white, in: Capsule())
+                            .padding(.vertical, 7).padding(.horizontal, 14)
+                            .accessibilityIdentifier("local.migrate.continue")
                         Button("放弃迁云", role: .destructive) { confirmAbandon = true }
                             .buttonStyle(.bordered).accessibilityIdentifier("local.migrate.abandon")
                     }

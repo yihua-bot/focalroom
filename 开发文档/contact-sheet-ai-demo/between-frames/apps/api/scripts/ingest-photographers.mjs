@@ -21,7 +21,7 @@ const CATEGORIES = [
 
 const esc = (s) => String(s ?? "").replace(/'/g, "''").replace(/\\/g, "\\\\");
 
-async function fetchCategoryMembers(category, limit = 50) {
+async function fetchCategoryMembers(category) {
   const url = `https://en.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(category)}&cmlimit=500&cmtype=subcat|page&format=json`;
   const res = await fetch(url, { headers: { "User-Agent": "FocalRoom-K2/1.0" }, signal: AbortSignal.timeout(15000) });
   if (!res.ok) return [];
@@ -46,7 +46,6 @@ async function fetchSummary(title, retries = 2) {
 
 async function main() {
   const seen = new Set();
-  const allPhotographers = [];
 
   // 并发拉取所有分类
   console.error("📥 拉取 Wikipedia 摄影师分类…");

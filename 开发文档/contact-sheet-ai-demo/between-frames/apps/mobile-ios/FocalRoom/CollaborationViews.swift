@@ -238,6 +238,19 @@ private struct BoardReader: View {
         Group {
             if let photoID = node.photo_id {
                 PhotoPreview(model: model, photoID: photoID, fit: true)
+            } else if let text = node.content_json?.text, ["text", "sticky", "shape", "chapter"].contains(node.node_type) {
+                // 文字类复杂节点渲染真实内容与样式底色（与服务端 content_json/style_json 及 Web 端一致）。
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(hex: node.style_json?.color) ?? Color.yellow.opacity(0.45))
+                    .overlay(alignment: .topLeading) {
+                        Text(text)
+                            .font(.caption)
+                            .foregroundStyle(.primary)
+                            .lineLimit(nil)
+                            .multilineTextAlignment(.leading)
+                            .padding(8)
+                            .frame(maxWidth: node.width * scale, alignment: .topLeading)
+                    }
             } else {
                 RoundedRectangle(cornerRadius: 3).fill(.white.opacity(0.09))
                     .overlay { Text(node.node_type).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
@@ -300,5 +313,16 @@ private struct BoardReader: View {
             self.error = error.localizedDescription
             loading = false
         }
+    }
+}
+
+/// 画布节点样式底色：解析 "#rrggbb" 十六进制（与服务端/Web 端样式形状一致）；非法值回退默认色。
+private extension Color {
+    init?(hex: String?) {
+        guard let hex, hex.hasPrefix("#"), hex.count == 7,
+              let value = UInt64(hex.dropFirst(), radix: 16) else { return nil }
+        self.init(red: Double((value >> 16) & 0xFF) / 255,
+                  green: Double((value >> 8) & 0xFF) / 255,
+                  blue: Double(value & 0xFF) / 255)
     }
 }

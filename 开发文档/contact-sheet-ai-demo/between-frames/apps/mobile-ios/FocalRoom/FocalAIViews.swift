@@ -143,8 +143,12 @@ struct FocalAIView: View {
                 }
                 HStack(spacing: 12) {
                     Button("提交为提案") { Task { await model.submitDraftAsProposal() } }
-                        .buttonStyle(.borderedProminent)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.black)
+                        .background(Color.white, in: Capsule())
+                        .padding(.vertical, 7).padding(.horizontal, 14)
                         .disabled(model.busy || model.offline)
+                        .opacity(model.busy || model.offline ? 0.4 : 1)
                         .accessibilityIdentifier("ai.draft.submit")
                     Button("放弃草案") { model.lastDraft = nil }
                         .buttonStyle(.bordered)
@@ -221,12 +225,19 @@ struct FocalAIView: View {
                 .accessibilityIdentifier("ai.input")
                 .onSubmit { send() }
             Button(model.aiSending ? "发送中…" : "发送") { send() }
-                .buttonStyle(.borderedProminent)
-                .disabled(!model.canSendAI || model.aiSending || preparingVision || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.black)
+                .background(canSendNow ? Color.white : Color.white.opacity(0.35), in: Capsule())
+                .padding(.vertical, 7).padding(.horizontal, 14)
+                .disabled(!canSendNow)
                 .accessibilityIdentifier("ai.send")
         }
         .padding(12)
         .background(.bar)
+    }
+
+    private var canSendNow: Bool {
+        model.canSendAI && !model.aiSending && !preparingVision && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func send() {

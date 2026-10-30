@@ -306,6 +306,27 @@ final class FocalRoomUITests: XCTestCase {
         app.buttons["local.selection.KEEP"].tap()
         let localSelected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '已选' AND enabled == true"), object: app.buttons["local.selection.KEEP"])
         XCTAssertEqual(XCTWaiter.wait(for: [localSelected], timeout: 10), .completed)
+        // 多选分享：验证 App 自有的选择交互（勾选计数/按钮状态）；系统分享面板由独立进程
+        // 渲染且模拟器活动服务不稳定，其出现与各 App 接收留待真机验收（与密码弹窗同纪律）。
+        popBack(app)
+        app.buttons["local.import"].tap()
+        app.buttons["local.share.mode"].tap()
+        let submit = app.buttons["local.share.submit"]
+        XCTAssertTrue(submit.waitForExistence(timeout: 5), "选择模式应显示分享入口")
+        XCTAssertFalse(submit.isEnabled, "未勾选时分享不可用")
+        app.buttons["local.share.selectall"].tap()
+        let counted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '张'"), object: submit)
+        XCTAssertEqual(XCTWaiter.wait(for: [counted], timeout: 5), .completed, "全选后分享按钮应显示计数")
+        XCTAssertTrue(submit.isEnabled)
+        submit.tap()
+        XCTAssertEqual(app.state, .runningForeground, "发起分享不得崩溃")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(project.waitForExistence(timeout: 15), "重启后应回到项目层")
+        XCTAssertTrue(localProject.waitForExistence(timeout: 10), "本机项目应保留")
+        localProject.tap()
+        XCTAssertTrue(localPhotos.firstMatch.waitForExistence(timeout: 10), "重新进入图库")
+        localPhotos.element(boundBy: 0).tap()
         app.buttons["local.compare"].tap()
         verifyComparison(app)
         migrateToCloud(app)
@@ -582,13 +603,11 @@ final class FocalRoomUITests: XCTestCase {
             app.buttons["project.\(projectID)"].tap()
             XCTAssertTrue(app.buttons["research.entry"].firstMatch.waitForExistence(timeout: 10), "应进入图库层")
         case .viewer:
-            // 表单收起动画期间导航栏可能整体不在 AX 树；用左缘右滑触发系统返回手势。
+            // 表单收起动画期间导航栏可能短暂缺失；popBack 优先点导航栏返回，必要时再试一次。
             Thread.sleep(forTimeInterval: 2)
-            let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
-            let target = app.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
-            edge.press(forDuration: 0.05, thenDragTo: target)
+            popBack(app)
             if !app.buttons["research.entry"].firstMatch.waitForExistence(timeout: 10) {
-                edge.press(forDuration: 0.05, thenDragTo: target)
+                popBack(app)
             }
             XCTAssertTrue(app.buttons["research.entry"].firstMatch.waitForExistence(timeout: 10), "应退回图库层")
         case .unknown:

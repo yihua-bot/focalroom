@@ -125,6 +125,27 @@ class ApiController {
     if (path.startsWith("/ai/deepseek-flash-v1/responses/async/") && req.method === "GET") {
       return s.ai.job(headers, path.slice("/ai/deepseek-flash-v1/responses/async/".length));
     }
+    // 流式提交：鉴权/额度/幂等与 async 完全一致，增量经 SSE 转发；完成后回执与轮询兼容。
+    if (path === "/ai/deepseek-flash-v1/responses/stream" && req.method === "POST") {
+      const { requestId, events } = await s.ai.submitStream(headers, req.body);
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      });
+      res.write(`data: ${JSON.stringify({ type: "start", request_id: requestId })}\n\n`);
+      let clientGone = false;
+      res.on("close", () => { clientGone = true; });
+      try {
+        for await (const event of events) {
+          // 客户端断开后继续读完上游：丢弃转发但保留计量与回执结算。
+          if (!clientGone) res.write(`data: ${JSON.stringify(event)}\n\n`);
+        }
+      } catch { /* 生成器内部已完成结算；此处不再追加错误帧 */ }
+      if (!clientGone) res.end();
+      return null;
+    }
     if (req.method === "POST" && path === "/auth/desktop/start")
       return s.desktop.begin(req.body, req.socket.remoteAddress ?? "unknown");
     if (req.method === "POST" && path === "/auth/desktop/authorize")

@@ -137,3 +137,23 @@ private actor GapRecordingTransport: HTTPTransport {
         throw URLError(.notConnectedToInternet)
     }
 }
+
+// 画布复杂节点内容解码：文字类节点的文本与样式底色形状（与服务端 content_json/style_json 对齐）。
+final class BoardNodeContentDecodingTests: XCTestCase {
+    func testDecodesTextContentAndStyleColor() throws {
+        let json = Data("""
+        {"id":"n1","board_id":"b1","node_type":"sticky","x":0,"y":0,"width":200,"height":120,
+         "rotation":0,"z_order":1,"photo_id":null,"visible":true,
+         "content_json":{"text":"节奏"},"style_json":{"color":"#ffe082"}}
+        """.utf8)
+        let node = try JSONDecoder().decode(BoardNode.self, from: json)
+        XCTAssertEqual(node.content_json?.text, "节奏")
+        XCTAssertEqual(node.style_json?.color, "#ffe082")
+        let bare = try JSONDecoder().decode(BoardNode.self, from: Data("""
+        {"id":"n2","board_id":"b1","node_type":"photo","x":0,"y":0,"width":100,"height":80,
+         "rotation":0,"z_order":0,"photo_id":"p1","visible":true}
+        """.utf8))
+        XCTAssertNil(bare.content_json)
+        XCTAssertNil(bare.style_json)
+    }
+}

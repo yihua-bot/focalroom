@@ -15,7 +15,7 @@ SELECT ?p ?label ?birth ?death ?nationality ?sitelinks WHERE {
   OPTIONAL { ?p wdt:P27 ?nc. ?nc rdfs:label ?nationality. FILTER(LANG(?nationality) = "en") }
 } ORDER BY DESC(?sitelinks) LIMIT 300`;
 
-const esc = (s) => String(s ?? "").replace(/'/g, "''").replace(/\\/g, "\\\\");
+const esc = (s) => String(s ?? "").replace(/'/g, "''").replace(/\\/g, "\\\\"); 
 
 async function fetchWikidata() {
   const url = "https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(SPARQL);
@@ -89,7 +89,7 @@ async function main() {
     console.log(output.slice(0, 3000));
     console.error(`（dry-run 模式，完整 SQL ${output.length} 字节）`);
   } else {
-    await Deno.writeFile ? console.log(output) : process.stdout.write(output);
+    process.stdout.write(output);
   }
 }
 

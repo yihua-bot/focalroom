@@ -467,6 +467,20 @@ public struct BoardNode: Decodable, Sendable, Identifiable, Equatable {
     public let z_order: Int
     public let photo_id: String?
     public let visible: Bool
+    // 复杂节点内容与样式（text/sticky/shape/chapter 等）：与服务端 content_json/style_json 对齐。
+    public let content_json: NodeContent?
+    public let style_json: NodeStyle?
+}
+
+/// 画布复杂节点内容：text 为主要文本（与服务端及 Web 端 {"text": …} 形状一致）。
+public struct NodeContent: Decodable, Sendable, Equatable {
+    public let text: String?
+    public init(text: String? = nil) { self.text = text }
+}
+
+/// 画布节点样式：color 为背景色（Web 端 sticky 默认 #ffe082）。
+public struct NodeStyle: Decodable, Sendable, Equatable {
+    public let color: String?
 }
 
 public struct AgentResult: Decodable, Sendable, Identifiable {

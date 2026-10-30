@@ -243,6 +243,78 @@ export class HostedAiService {
     }
     return this.job(headers, request.requestId);
   }
+
+  /// 流式提交：鉴权/校验/预留/幂等与 submit 完全一致；上游 stream:true 的增量逐段转发，
+  /// 完成后按同一计量纪律结算并落回执（轮询/恢复路径保持兼容）。客户端断开不中断消费，
+  /// 服务端继续读完上游以保证计量与回执完整。
+  async submitStream(headers: Headers, input: unknown): Promise<{ requestId: string; events: AsyncIterable<{ type: "delta"; text: string } | { type: "done"; reply: unknown } | { type: "error"; code: string; message: string }> }> {
+    assert(this.config, 503, "AI_SERVICE_UNAVAILABLE", "AI 服务暂未开放");
+    const request = await this.prepare(headers, input);
+    if (!(await this.reserve(request, true))) {
+      // 幂等重放：无法回放流（内容早已产生），退回轮询语义。
+      throw new ApiError(409, "AI_REQUEST_REPLAY", "此请求已有结果或正在处理，请稍后查询回执");
+    }
+    const { userId, requestId, body, images, reservation } = request;
+    const settle = async (state: string, charged: number | null, result: unknown = null, error: string | null = null) => transaction(this.pool, async tx => {
+      await tx.query("SELECT user_id FROM fr_ai_accounts WHERE user_id=$1 FOR UPDATE", [userId]);
+      const changed = await tx.query("UPDATE fr_ai_requests SET state=$3,charged=$4,result_json=$5,error_code=$6,finished_at=now() WHERE user_id=$1 AND request_id=$2 AND state IN ('PENDING','UNKNOWN') AND charged IS NULL RETURNING reserved", [userId, requestId, state, charged, result !== null ? JSON.stringify(result) : null, error]);
+      if (changed.rowCount && charged !== null) await tx.query("UPDATE fr_ai_accounts SET reserved=reserved-$2,spent=spent+$3 WHERE user_id=$1", [userId, reservation, charged]);
+      return changed.rowCount;
+    });
+    const upstream = images ? { ...body, reasoning: { effort: "none" } } : body;
+    const response = await this.transport({ ...upstream, stream: true }, this.config.key);
+    if (!response.ok || !response.body) {
+      await response.body?.cancel().catch(() => {});
+      if ([400, 401, 403, 404, 422].includes(response.status)) {
+        await settle("REJECTED", 0, null, "AI_PROVIDER_REJECTED");
+        throw new ApiError(502, "AI_PROVIDER_REJECTED", "模型服务拒绝了请求，额度已释放");
+      }
+      await settle("UNKNOWN", null, null, "AI_RESULT_UNKNOWN");
+      throw new ApiError(502, "AI_RESULT_UNKNOWN", "模型结果无法确认，请勿重复提交");
+    }
+    const decoder = new TextDecoder();
+    let buffer = "";
+    // 单消费者：路由层 for await 转发；客户端断开时由路由层继续读完（丢弃转发、保计量与回执）。
+    async function* events(): AsyncIterable<{ type: "delta"; text: string } | { type: "done"; reply: unknown } | { type: "error"; code: string; message: string }> {
+      let emitted = 0;
+      try {
+        for await (const chunk of response.body!) {
+          buffer += decoder.decode(chunk, { stream: true });
+          let newline: number;
+          while ((newline = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, newline).trim(); buffer = buffer.slice(newline + 1);
+            if (!line.startsWith("data:")) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === "[DONE]") continue;
+            let event: any; try { event = JSON.parse(payload); } catch { continue; }
+            const type = event.type as string | undefined;
+            if (type === "response.output_text.delta" && typeof event.delta === "string") {
+              emitted += event.delta.length;
+              if (emitted <= MAX_REPLY) yield { type: "delta", text: event.delta };
+            } else if (type === "response.completed" && event.response) {
+              const result = event.response;
+              const usage = z.object({ input_tokens: z.number().int().nonnegative(), output_tokens: z.number().int().nonnegative(), total_tokens: z.number().int().nonnegative() }).safeParse(result.usage);
+              const valid = usage.success && usage.data.total_tokens === usage.data.input_tokens + usage.data.output_tokens
+                && usage.data.total_tokens <= reservation && usage.data.output_tokens <= body.max_output_tokens
+                && result.status === "completed" && !result.error && Array.isArray(result.output);
+              if (!valid) { await settle("UNKNOWN", null, null, "AI_RESULT_UNKNOWN"); yield { type: "error", code: "AI_RESULT_UNKNOWN", message: "模型结果或计量无法确认，请勿重复提交" }; return; }
+              const reply = { id: typeof result.id === "string" ? result.id : randomUUID(), object: "response", status: "completed", model: HOSTED_AI_MODEL, output: result.output, usage: usage.data };
+              await settle("COMPLETED", usage.data.total_tokens, reply);
+              yield { type: "done", reply };
+              return;
+            }
+          }
+        }
+        // 流结束但没有 completed 事件：结果不明，按既有纪律不退款。
+        await settle("UNKNOWN", null, null, "AI_RESULT_UNKNOWN");
+        yield { type: "error", code: "AI_RESULT_UNKNOWN", message: "模型结果无法确认，请稍后查询回执" };
+      } catch (error) {
+        await settle("UNKNOWN", null, null, "AI_RESULT_UNKNOWN").catch(() => {});
+        yield { type: "error", code: "AI_RESULT_UNKNOWN", message: error instanceof ApiError ? error.message : "模型结果无法确认，请稍后查询回执" };
+      }
+    }
+    return { requestId, events: events() };
+  }
   async drain() {
     this.queueStopped=true;
     if(this.queueTimer)clearInterval(this.queueTimer);
