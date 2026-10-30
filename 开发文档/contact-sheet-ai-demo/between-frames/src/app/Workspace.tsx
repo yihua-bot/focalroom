@@ -84,7 +84,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
       </div>
         : <EmptyState title={project.photos.length ? zh.emptyFilter : zh.emptyTitle} hint={project.photos.length ? '更改筛选条件。' : local ? '导入照片或文件夹。' : zh.emptyHint}
           action={<Button onClick={project.photos.length ? () => { ui.setFilter('all'); ui.setSearch(''); } : onImport}>{project.photos.length ? zh.allPhotos : local ? zh.import : `${zh.import} · 桌面版`}</Button>} />)
-        : ui.view === 'sequence' ? (kept.length ? <SequenceBoard photos={kept} activeId={active?.id ?? null} busy={busy} onSelect={ui.select} onReorder={onReorder} />
+        : ui.view === 'sequence' ? (kept.length ? <SequenceBoard photos={kept} activeId={active?.id ?? null} busy={busy} onSelect={ui.select} onOpen={onEnlarge} onReorder={onReorder} />
           : <EmptyState title={zh.emptySequence} hint={zh.sequenceHint} action={<Button onClick={() => ui.setFilter('all')}>{zh.toWorkspace}</Button>} />) : null}
     </div>{ui.filmstripOpen && <SelectionDock photos={kept} onSelect={id => { ui.setFilter('all'); ui.setSearch(''); ui.select(id); }} onSequence={() => ui.setView('sequence')} />}</div>
   </>;
