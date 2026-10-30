@@ -474,11 +474,9 @@ public struct APIClient: Sendable {
     public func agentJobs(projectID: String, token: String) async throws -> [AgentJob] {
         struct Envelope: Decodable { let jobs: [AgentJob] }
         let envelope = try await call(Envelope.self, ["projects", projectID, "agent-jobs"], token: token)
-        guard Set(envelope.jobs.map(\.id)).count == envelope.jobs.count,
-              envelope.jobs.allSatisfy({ !$0.kind.isEmpty && !$0.status.isEmpty })
-        else { throw APIError.invalidResponse }
         return envelope.jobs
     }
+
 
     public func projectHistory(projectID: String, token: String) async throws -> [VersionSummary] {
         let values = try await call([VersionSummary].self, ["projects", projectID, "history"], token: token)
