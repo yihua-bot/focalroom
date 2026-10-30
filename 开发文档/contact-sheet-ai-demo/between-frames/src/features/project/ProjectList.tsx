@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { Project } from '../../domain/models';
 import { zh } from '../../app/copy';
 import { Button } from '../../components/shared/Button';
+import { AdminStats } from '../../components/shared/AdminStats';
 import { EmptyState } from '../../components/shared/EmptyState';
 
 export function ProjectList({ projects, onOpen, onCreate, onQuickStart, local = false, archived = false, onArchive, onRestore, onToggleArchive }: {
@@ -23,7 +24,7 @@ export function ProjectList({ projects, onOpen, onCreate, onQuickStart, local = 
         <p>{project.photos.length} 张照片 · {project.sequence.length} 张入选</p>
         {(project.tags?.length ?? 0) > 0 && <p className="tag-chips">{project.tags!.map(tag => <span key={tag}>{tag}</span>)}</p>}{project.updatedAt && <p>最近修改 {new Date(project.updatedAt).toLocaleString('zh-CN')}</p>}</div></button>
       {local && <div className="project-card-actions"><Button size="small" onClick={() => { if (archived) onRestore?.(project); else onArchive?.(project); }}>{archived ? '恢复项目' : '归档项目'}</Button></div>}
-    </article>)}</div>
+    </article>)}<AdminStats /></div>
       : visible.length === 0 && filterTag ? <EmptyState title="此标签下没有项目" hint="换一个标签，或清除筛选。" action={<Button onClick={() => setFilterTag(null)}>查看全部</Button>} /> : <EmptyState title="还没有项目" hint={zh.projectListHint} action={<Button onClick={onCreate}>{zh.newProject}</Button>} />}
   </section>;
 }

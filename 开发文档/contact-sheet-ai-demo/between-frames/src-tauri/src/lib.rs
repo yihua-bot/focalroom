@@ -204,6 +204,7 @@ pub fn run() {
             commands::billing_cancel_checkout,
             commands::share_project,
             commands::get_color_managed_preview,
+            commands::cloud_session_token,
             commands::canvas_execute,
             commands::canvas_snapshot,
             commands::canvas_comparison,

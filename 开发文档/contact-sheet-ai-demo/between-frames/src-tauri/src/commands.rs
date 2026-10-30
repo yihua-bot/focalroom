@@ -1149,3 +1149,19 @@ fn base64_encode(data: &[u8]) -> String {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.encode(data)
 }
+
+#[tauri::command]
+pub async fn cloud_session_token() -> Result<Option<String>> {
+    use crate::cloud_credentials::{CredentialStore, SystemCredentials};
+    let raw = match SystemCredentials.read("studio.betweenframes.app") {
+        Ok(Some(v)) => v,
+        _ => return Ok(None),
+    };
+    match serde_json::from_str::<serde_json::Value>(&raw) {
+        Ok(v) => Ok(v
+            .get("token")
+            .and_then(|t| t.as_str())
+            .map(|s| s.to_owned())),
+        Err(_) => Ok(Some(raw)),
+    }
+}
