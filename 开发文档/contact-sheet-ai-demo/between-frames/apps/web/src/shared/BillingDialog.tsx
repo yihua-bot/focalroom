@@ -10,9 +10,16 @@ import './billing.css';
 // 支付页只接受服务端返回的受信任地址；页面返回参数不代表付款成功。
 export function paymentUrl(value: unknown, kind: 'checkout' | 'manage') {
   const url = new URL(z.object({ url: z.string().url() }).parse(value).url);
-  const host = kind === 'checkout' ? 'checkout.stripe.com' : 'billing.stripe.com';
-  const prefix = kind === 'checkout' ? '/c/' : '/p/';
-  if (url.protocol !== 'https:' || url.hostname !== host || url.port || url.username || url.password || !url.pathname.startsWith(prefix)) throw new Error('无法打开付款页面，请重试。');
+  // 支持两个支付网关：Stripe（checkout.stripe.com/c/）和 Polar（polar.sh/checkout/）
+  const stripeHost = kind === 'checkout' ? 'checkout.stripe.com' : 'billing.stripe.com';
+  const stripePrefix = kind === 'checkout' ? '/c/' : '/p/';
+  const polarHost = kind === 'checkout' ? 'polar.sh' : 'polar.sh';
+  const polarManagePattern = /^\/[^/]+\/portal(?:\/.*)?$/;
+  const isStripe = url.hostname === stripeHost && url.pathname.startsWith(stripePrefix);
+  const isPolarCheckout = url.hostname === polarHost && url.pathname.startsWith('/checkout/');
+  const isPolarManage = url.hostname === polarHost && polarManagePattern.test(url.pathname);
+  const valid = isStripe || (kind === 'checkout' ? isPolarCheckout : isPolarManage);
+  if (url.protocol !== 'https:' || url.port || url.username || url.password || !valid) throw new Error('无法打开付款页面，请重试。');
   return url.href;
 }
 
