@@ -389,16 +389,44 @@ private struct LocalPhotoViewer: View {
     let library: LocalLibraryModel
     let projectID: String
     let photoID: String
+    @State private var currentID: String
     @State private var transform = PhotoTransform()
     @State private var info = false
     @State private var compare = false
     private var project: LocalProject? { library.projects.first { $0.id == projectID } }
-    private var photo: LocalPhoto? { project?.photos.first { $0.id == photoID } }
+    private var photo: LocalPhoto? { project?.photos.first { $0.id == currentID } }
+    private var photos: [LocalPhoto] { project?.photos ?? [] }
+    private var currentIndex: Int { photos.firstIndex(where: { $0.id == currentID }) ?? 0 }
+
+    init(library: LocalLibraryModel, projectID: String, photoID: String) {
+        self.library = library
+        self.projectID = projectID
+        self.photoID = photoID
+        _currentID = State(initialValue: photoID)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             PhotoViewport(transform: $transform) {
-                AsyncPhotoPreview(photoID: photoID, identity: photoID, fit: true) { try await library.image(projectID: projectID, photoID: photoID) }
+                AsyncPhotoPreview(photoID: currentID, identity: currentID, fit: true) { try await library.image(projectID: projectID, photoID: currentID) }
+            }
+            // 左右滑动翻到上一张/下一张。并行手势：视口内部平移/缩放照常；原大小时水平滑动翻页。
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 40).onEnded { value in
+                    let dx = value.translation.width, dy = value.translation.height
+                    guard abs(dx) > max(60, abs(dy)), transform.zoom <= 1.001 else { return }
+                    let step = dx < 0 ? 1 : -1
+                    let target = currentIndex + step
+                    guard photos.indices.contains(target) else { return }
+                    currentID = photos[target].id
+                    transform = PhotoTransform()
+                }
+            )
+            .overlay(alignment: .leading) {
+                if currentIndex > 0 { Image(systemName: "chevron.left").font(.title2).foregroundStyle(.white.opacity(0.55)).padding(12) }
+            }
+            .overlay(alignment: .trailing) {
+                if currentIndex + 1 < photos.count { Image(systemName: "chevron.right").font(.title2).foregroundStyle(.white.opacity(0.55)).padding(12) }
             }
             VStack(spacing: 12) {
                 HStack {
@@ -408,7 +436,7 @@ private struct LocalPhotoViewer: View {
                 }
                 HStack {
                     ForEach(Selection.allCases, id: \.self) { selection in
-                        Button(selection.title) { Task { await library.select(projectID: projectID, photoID: photoID, selection: selection) } }
+                        Button(selection.title) { Task { await library.select(projectID: projectID, photoID: currentID, selection: selection) } }
                             .frame(maxWidth: .infinity, minHeight: 48)
                             .background(photo?.selection == selection ? .white.opacity(0.2) : .white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
                             .disabled(library.isSaving || project?.migration != nil || library.readOnly).accessibilityIdentifier("local.selection.\(selection.rawValue)")
@@ -434,7 +462,7 @@ private struct LocalPhotoViewer: View {
         }
         .sheet(isPresented: $compare) {
             PhotoComparisonView(photos: project?.photos.map { ComparisonPhoto(id: $0.id, filename: $0.filename) } ?? [],
-                                initialPhotoID: photoID, sourceLabel: "本机 sRGB 派生预览 · 原片未改动") {
+                                initialPhotoID: currentID, sourceLabel: "本机 sRGB 派生预览 · 原片未改动") {
                 try await library.image(projectID: projectID, photoID: $0)
             }
         }

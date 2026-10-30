@@ -75,7 +75,8 @@ final class LocalLibraryModel {
     }
 
     func importFiles(_ urls: [URL], projectID: String) {
-        startImport(projectID: projectID, count: urls.count) { (urls[$0], false) }
+        // 文件导入无系统相册身份；「保留」收藏同步对其自动跳过。
+        startImport(projectID: projectID, count: urls.count) { (urls[$0], false, nil) }
     }
 
     func importPhotos(_ items: [PhotosPickerItem], projectID: String) {
@@ -83,11 +84,12 @@ final class LocalLibraryModel {
             guard let file = try await items[index].loadTransferable(type: PickedPhotoFile.self) else {
                 throw LocalLibraryError.invalidFile
             }
-            return (file.url, true)
+            // 相册导入记录 PHAsset 身份，供「保留」同步系统相册收藏。
+            return (file.url, true, items[index].itemIdentifier)
         }
     }
 
-    private func startImport(projectID: String, count: Int, source: @escaping (Int) async throws -> (URL, Bool)) {
+    private func startImport(projectID: String, count: Int, source: @escaping (Int) async throws -> (URL, Bool, String?)) {
         guard active, !isImporting, count > 0, !readOnly else {
             if readOnly { notice = "离线只读模式不能导入照片；请登录后操作。" }
             return
@@ -101,11 +103,11 @@ final class LocalLibraryModel {
             for index in 0..<count {
                 do {
                     try Task.checkCancellation()
-                    let (url, staged) = try await source(index)
+                    let (url, staged, assetID) = try await source(index)
                     defer { if staged { ImportStaging.removeCopy(url) } }
                     let scoped = url.startAccessingSecurityScopedResource()
                     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                    let outcome = try await library.importFile(url, projectID: projectID)
+                    let outcome = try await library.importFile(url, projectID: projectID, phAssetID: assetID)
                     guard active else { return }
                     switch outcome {
                     case .imported: imported += 1
@@ -200,7 +202,11 @@ final class LocalLibraryModel {
         isSaving = true
         defer { isSaving = false }
         do {
+            // 先取照片身份（相册导入的带 PHAsset 标识）供收藏同步。
+            let photo = projects.first(where: { $0.id == projectID })?.photos.first(where: { $0.id == photoID })
             try await library.select(projectID: projectID, photoID: photoID, selection: selection)
+            // 「保留」同步系统相册收藏（仅相册导入的照片；未授权/失败静默不阻塞选片）。
+            if let photo { await PhotoFavorites.sync(photos: [photo], to: selection) }
             if active { await reload() }
         } catch { if active { notice = message(error) } }
     }

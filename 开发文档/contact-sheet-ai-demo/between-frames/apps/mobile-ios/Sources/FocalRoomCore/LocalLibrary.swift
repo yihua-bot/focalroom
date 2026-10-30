@@ -35,6 +35,8 @@ public struct LocalPhoto: Codable, Sendable, Identifiable, Equatable {
     public let previewWidth: Int
     public let previewHeight: Int
     public fileprivate(set) var selection: Selection
+    /// 从系统相册导入时的 PHAsset 标识；文件导入为 nil。用于「保留」同步系统相册收藏。
+    public let phAssetID: String?
 }
 
 // 迁云记录：enrolling 尚无服务端确认；uploading 已绑定云端项目；migrated 为终态。
@@ -211,7 +213,7 @@ public actor LocalLibrary {
         return project
     }
 
-    public func importFile(_ url: URL, projectID: String) throws -> LocalImportResult {
+    public func importFile(_ url: URL, projectID: String, phAssetID: String? = nil) throws -> LocalImportResult {
         try Task.checkCancellation()
         var document = try read()
         guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else { throw LocalLibraryError.invalidProject }
@@ -226,7 +228,7 @@ public actor LocalLibrary {
             try LocalMediaFiles.verify(previewURL(duplicate), sha: duplicate.previewSHA256, limit: LocalMediaFiles.previewLimit)
             return .duplicate(duplicate)
         }
-        let rendered = try render(stage, filename: url.lastPathComponent, sourceSHA: copied.sha, byteCount: copied.size)
+        let rendered = try render(stage, filename: url.lastPathComponent, sourceSHA: copied.sha, byteCount: copied.size, phAssetID: phAssetID)
         try Task.checkCancellation()
         let original = originalURL(rendered.photo)
         if FileManager.default.fileExists(atPath: original.path) {
@@ -604,7 +606,7 @@ public actor LocalLibrary {
         try LocalMediaFiles.write(data, to: manifest)
     }
 
-    private func render(_ url: URL, filename: String, sourceSHA: String, byteCount: Int) throws -> (photo: LocalPhoto, data: Data) {
+    private func render(_ url: URL, filename: String, sourceSHA: String, byteCount: Int, phAssetID: String? = nil) throws -> (photo: LocalPhoto, data: Data) {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
               CGImageSourceGetCount(source) == 1, let typeID = CGImageSourceGetType(source) as String?,
               let type = UTType(typeID), [UTType.jpeg, .png, .heic, .tiff].contains(where: { type.conforms(to: $0) }),
@@ -643,7 +645,7 @@ public actor LocalLibrary {
                                sourceSHA256: sourceSHA, previewSHA256: LocalMediaFiles.digest(data), byteCount: byteCount,
                                width: width, height: height, orientation: orientation, format: type.preferredFilenameExtension ?? typeID,
                                profileName: (properties[kCGImagePropertyProfileName] as? String).map { String($0.prefix(200)) },
-                               previewWidth: image.width, previewHeight: image.height, selection: .UNDECIDED)
+                               previewWidth: image.width, previewHeight: image.height, selection: .UNDECIDED, phAssetID: phAssetID)
         return (photo, data)
     }
 }

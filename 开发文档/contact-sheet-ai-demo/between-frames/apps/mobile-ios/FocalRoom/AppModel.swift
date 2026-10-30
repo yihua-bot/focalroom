@@ -123,8 +123,13 @@ final class AppModel {
             #endif
             address = saved.address
             activate(saved.credentials, configuration: configuration)
+            // 缓存优先：先渲染上次的项目列表秒开界面，网络刷新随后替换权威数据。
+            if let store, let cached = try? await store.projects() {
+                projects = cached.projects
+            }
             await reloadProjects()
-            await registerCurrentDevice()
+            // 设备登记与绑定不阻塞启动：后台静默完成，失败下次前台重试。
+            Task { await registerCurrentDevice() }
         } catch { notice = message(error) }
     }
 
@@ -217,10 +222,13 @@ final class AppModel {
 
     func refreshOnResume() async {
         guard !starting, !busy, !loadingProject, credentials != nil else { return }
-        await reloadProjects()
+        // 回前台：项目与本机库刷新并行；设备登记后台静默，不互相等待。
+        async let projects: Void = reloadProjects()
+        async let library: Void = localLibrary?.reload() ?? ()
+        await projects
+        await library
         if selectedProjectID != nil { await syncSelectedProject() }
-        await localLibrary?.reload()
-        await registerCurrentDevice()
+        Task { await registerCurrentDevice() }
     }
 
     // 登录/恢复后登记本机设备并绑定当前会话；失败不阻断主流程，下次前台重试。

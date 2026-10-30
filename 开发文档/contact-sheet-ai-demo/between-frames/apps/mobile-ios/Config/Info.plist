@@ -18,6 +18,7 @@
     <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
     <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
     <key>NSMicrophoneUsageDescription</key><string>口述研究笔记时使用麦克风。语音转写在本机完成，音频不会上传。</string>
+    <key>NSPhotoLibraryUsageDescription</key><string>把你在本 App 标记「保留」的照片同步为系统相册收藏（星标），便于在相册快速找到精选；不读取或修改照片内容。</string>
     <key>NSSpeechRecognitionUsageDescription</key><string>在本机将口述转为文字。音频不会上传；确认保存后，笔记文字会同步到你的工作区。</string>
     <key>ITSAppUsesNonExemptEncryption</key><false/>
 </dict></plist>

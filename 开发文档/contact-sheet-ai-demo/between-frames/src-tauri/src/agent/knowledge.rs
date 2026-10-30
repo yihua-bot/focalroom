@@ -230,3 +230,8 @@ pub async fn compare_series(series_a: &str, series_b: &str) -> Result<Value> {
         "trustedAsInstructions": false,
     }))
 }
+
+/// IPC 版本：给前端 AdminStats 组件用（token 不进日志）。
+pub fn cloud_session_token_pub() -> Option<String> {
+    cloud_session_token()
+}
