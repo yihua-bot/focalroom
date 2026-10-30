@@ -51,28 +51,50 @@ pub fn search(args: &Value) -> Result<Value> {
     )
 }
 
+/// 从系统 Keychain 读取 FocalRoom 云端会话 token（Agent 知识工具用）。
+/// token 不暴露给模型/提示词/日志——仅作为 HTTP Authorization 头。
+fn cloud_session_token() -> Option<String> {
+    use crate::cloud_credentials::{CredentialStore, SystemCredentials};
+    let store = SystemCredentials;
+    let raw = store.read("studio.betweenframes.app").ok()??;
+    // JSON 格式 {"token":"..."} 或纯 token
+    let parsed = serde_json::from_str::<serde_json::Value>(&raw);
+    match parsed {
+        Ok(v) => v
+            .get("token")
+            .and_then(|t| t.as_str())
+            .map(|s| s.to_owned()),
+        Err(_) => Some(raw),
+    }
+}
+
+/// 修复 Unicode 百分号编码：按 UTF-8 字节编码（非码点）。
+fn utf8_percent_encode(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() * 3);
+    for byte in text.as_bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            out.push(*byte as char);
+        } else {
+            out.push_str(&format!("%{:02X}", byte));
+        }
+    }
+    out
+}
+
 /// 云端摄影知识搜索（K4）：查询生产 KnowledgeService。
 /// 覆盖摄影师/系列/作品/摄影书/事实断言（含博物馆来源）。
 /// 网络失败静默返回空——Agent 继续用本地札记，不阻塞任务。
 pub async fn search_cloud(query: &str, token: Option<&str>) -> Result<Value> {
     let endpoint = std::env::var("FOCALROOM_KNOWLEDGE_ENDPOINT")
         .unwrap_or_else(|_| "https://team.focroom.cc/api/v2/knowledge/search".to_owned());
-    let encoded_q: String = query
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c.to_string()
-            } else {
-                format!("%{:02X}", c as u32)
-            }
-        })
-        .collect();
+    let encoded_q = utf8_percent_encode(query);
     let mut url = format!("{}?q={}", endpoint, encoded_q);
     url.push_str("&limit=5");
+    let keychain_token = token.map(|s| s.to_owned()).or_else(cloud_session_token);
     let mut request = reqwest::Client::new()
         .get(&url)
         .timeout(std::time::Duration::from_secs(10));
-    if let Some(t) = token {
+    if let Some(ref t) = keychain_token {
         request = request.header("authorization", format!("Bearer {}", t));
     }
     let response = request
