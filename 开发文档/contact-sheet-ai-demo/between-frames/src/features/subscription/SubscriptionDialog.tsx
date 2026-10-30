@@ -88,7 +88,8 @@ export function SubscriptionDialog({ repository, account, initialPage = 'plans',
         </>}
         {error && <p role="alert">{error}</p>}
         {notice && <p role="status" className="subscription-fineprint">{notice}</p>}
-        {(data?.pendingCheckout || (checkoutOpened && data?.planId !== 'pro')) && <Button disabled={busy} onClick={() => {
+        {data?.pendingCheckout && data.canCancelCheckout === false && <p role="status" className="subscription-fineprint">{copy.pendingExpiry}</p>}
+        {(data?.pendingCheckout || (checkoutOpened && data?.planId !== 'pro')) && data?.canCancelCheckout !== false && <Button disabled={busy} onClick={() => {
           setBusy(true); setError('');
           void repository!.cancelCheckout().then(() => { pending.current = null; setCheckoutOpened(false); setNotice(copy.paymentCanceled); })
             .catch(cause => setError(userFacingError(cause, copy.noAccess))).finally(() => { setBusy(false); refresh(); });

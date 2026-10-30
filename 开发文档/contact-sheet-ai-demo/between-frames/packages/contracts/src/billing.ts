@@ -14,6 +14,7 @@ export const billingOverviewSchema = z.object({
   usage: z.object({ remainingPercent: z.number().int().min(0).max(100).nullable(), hasAllowance: z.boolean(), availableCredits: z.number().nonnegative(), totalCredits: z.number().nonnegative() }),
   invoices: z.array(z.object({ id: z.string(), date: z.iso.datetime(), amount: z.number().int().nonnegative(), currency, status: z.enum(['paid','open','void']), url: z.string().url().nullable() })),
   manageAvailable: z.boolean(), pendingCheckout: z.boolean().default(false),
+  canCancelCheckout: z.boolean().default(true),
 });
 export type SubscriptionPrice = z.infer<typeof subscriptionPriceSchema>;
 export type SubscriptionPlan = z.infer<typeof subscriptionCatalogSchema>['plans'][number];

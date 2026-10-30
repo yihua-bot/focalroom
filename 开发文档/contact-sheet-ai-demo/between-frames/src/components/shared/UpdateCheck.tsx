@@ -3,8 +3,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 
 type Phase = 'idle' | 'downloading' | 'ready' | 'error';
+
+/** 桌面端经系统浏览器打开官网；裸 target=_blank 在 Tauri WebView 中无响应。 */
+function WebsiteLink({ children }: { children: React.ReactNode }) {
+  const [failed, setFailed] = useState(false);
+  return <>
+    <a href="https://focroom.cc/" target="_blank" rel="noopener" onClick={event => {
+      if (!isTauri()) return;
+      event.preventDefault();
+      setFailed(false);
+      void invoke('open_product_link', { link: 'website' }).catch(() => setFailed(true));
+    }}>{children}</a>
+    {failed && <span> 无法打开系统浏览器，请复制 focroom.cc 到浏览器访问</span>}
+  </>;
+}
 
 /** 启动时自动检查更新；有新版时显示顶部浮窗。 */
 export function AutoUpdateBanner() {
@@ -84,7 +99,7 @@ export function AutoUpdateBanner() {
         <button className="update-btn-later" onClick={() => setDismissed(true)}>稍后</button>
       </div>
     </div>
-    {phase === 'error' && <p className="update-banner-error">更新失败：{error} · <a href="https://focroom.cc/" target="_blank" rel="noopener">去官网下载</a></p>}
+    {phase === 'error' && <p className="update-banner-error">更新失败：{error} · <WebsiteLink>去官网下载</WebsiteLink></p>}
   </div>;
 }
 
@@ -161,7 +176,7 @@ export function UpdateCheck() {
   return (
     <div className="update-error-inline" role="alert">
       <span>检查更新失败：{error || '网络问题'}</span>
-      <a href="https://focroom.cc/" target="_blank" rel="noopener">去官网下载</a>
+      <WebsiteLink>去官网下载</WebsiteLink>
     </div>
   );
 }

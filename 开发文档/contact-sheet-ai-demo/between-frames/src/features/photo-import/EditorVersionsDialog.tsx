@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import type { EditorVersion, EditorVersionsRepository } from '../../domain/editorVersions';
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
@@ -14,6 +15,7 @@ export function EditorVersionsDialog({ repository, projectId, readOnly = false, 
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [active, setActive] = useState<EditorVersion | null>(null);
+  const [linkFailed, setLinkFailed] = useState(false);
   useEffect(() => {
     let stopped = false;
     repository.list(projectId).then(data => { if (!stopped) setVersions(data); })
@@ -34,7 +36,13 @@ export function EditorVersionsDialog({ repository, projectId, readOnly = false, 
   };
   return <Modal title={t('editor.title', '调色版本')} wide onClose={() => { if (!busy) onClose(); }}
     description={t('editor.description', '查看 Lightroom Classic 或 Capture One 导出的调色结果。原照片与正式作品序列保持不变。')}>
-    <div className="dialog-actions"><a href="https://focroom.cc/plugins/" target="_blank" rel="noreferrer">{t('editor.guide', '插件下载与安装说明')} ↗</a>
+    <div className="dialog-actions"><a href="https://focroom.cc/plugins/" target="_blank" rel="noreferrer" onClick={event => {
+      if (!isTauri()) return;
+      event.preventDefault();
+      setLinkFailed(false);
+      void invoke('open_product_link', { link: 'plugins' }).catch(() => setLinkFailed(true));
+    }}>{t('editor.guide', '插件下载与安装说明')} ↗</a>
+      {linkFailed && <span role="alert">{t('editor.linkFailed', '无法打开系统浏览器，请复制此地址访问：')}https://focroom.cc/plugins/</span>}
       <Button variant="primary" disabled={busy || loading || readOnly} onClick={() => { void importResults(); }}>{busy ? t('editor.working', '正在准备照片…') : t('editor.import', '导入调色结果')}</Button></div>
     {loading && <p role="status">{t('editor.loading', '正在读取调色版本…')}</p>}
     {error && <p role="alert" className="error-message">{error}</p>}

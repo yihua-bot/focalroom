@@ -45,6 +45,11 @@ pub struct CloudAuth {
     device_file: std::sync::Mutex<Option<std::path::PathBuf>>,
     bound_session: std::sync::Mutex<Option<String>>,
 }
+fn valid_billing_price_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && value.len() <= 200
+}
 impl CloudAuth {
     pub fn origin(&self) -> &str {
         &self.origin
@@ -67,13 +72,7 @@ impl CloudAuth {
         self.request("/billing/overview", None, Some(&token)).await
     }
     pub async fn billing_checkout(&self, price_id: &str, request_id: &str) -> Result<Value> {
-        if price_id.is_empty()
-            || !price_id
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
-            || price_id.len() > 200
-            || uuid::Uuid::parse_str(request_id).is_err()
-        {
+        if !valid_billing_price_id(price_id) || uuid::Uuid::parse_str(request_id).is_err() {
             return Err(AppError::new("VALIDATION_ERROR", "请重新选择订阅方案"));
         }
         let token = self.bearer(&self.origin).await?;
@@ -659,5 +658,22 @@ mod avatar_cache_tests {
             assert!(auth.avatar_path(&user).is_none());
         }
         assert!(CloudAuth::avatar_mime(&vec![0; 1_048_577]).is_none());
+    }
+}
+
+#[cfg(test)]
+mod billing_price_tests {
+    use super::valid_billing_price_id;
+    #[test]
+    fn accepts_provider_price_ids_with_or_without_underscores() {
+        assert!(valid_billing_price_id("priceprocny"));
+        assert!(valid_billing_price_id("price_pro_monthly_cny"));
+    }
+    #[test]
+    fn rejects_empty_dashed_spaced_or_overlong_references() {
+        assert!(!valid_billing_price_id(""));
+        assert!(!valid_billing_price_id("price-pro"));
+        assert!(!valid_billing_price_id("a b"));
+        assert!(!valid_billing_price_id(&"a".repeat(201)));
     }
 }

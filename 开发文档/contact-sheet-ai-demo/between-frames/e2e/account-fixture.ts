@@ -14,7 +14,7 @@ export async function installAccountFixture(page: Page, guest = false) {
     ] },
   ] };
   const overview: BillingOverview = { planId: 'free', planName: '基础版', status: 'free', currentPeriodEnd: null, cancelAtPeriodEnd: false,
-    usage: { remainingPercent: 75, hasAllowance: true, availableCredits: 37.5, totalCredits: 50 }, invoices: [], manageAvailable: false, pendingCheckout: false };
+    usage: { remainingPercent: 75, hasAllowance: true, availableCredits: 37.5, totalCredits: 50 }, invoices: [], manageAvailable: false, pendingCheckout: false, canCancelCheckout: true };
   const calls: string[] = [];
   await page.route('**/rpc', async route => {
     const { command } = route.request().postDataJSON();

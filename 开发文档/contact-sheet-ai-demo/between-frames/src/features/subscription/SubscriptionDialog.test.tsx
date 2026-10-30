@@ -14,7 +14,7 @@ const catalog: SubscriptionCatalog = { salesAvailable: true, plans: [
     { id: 'price_yearly', interval: 'year', amount: 19000, currency: 'USD', includedCredits: 600 },
   ] },
 ] };
-function overview(): BillingOverview { return { planId: 'free', planName: '基础版', status: 'free', currentPeriodEnd: null, cancelAtPeriodEnd: false, usage: { remainingPercent: 75, hasAllowance: true, availableCredits: 37.5, totalCredits: 50 }, invoices: [], manageAvailable: false, pendingCheckout: false }; }
+function overview(): BillingOverview { return { planId: 'free', planName: '基础版', status: 'free', currentPeriodEnd: null, cancelAtPeriodEnd: false, usage: { remainingPercent: 75, hasAllowance: true, availableCredits: 37.5, totalCredits: 50 }, invoices: [], manageAvailable: false, pendingCheckout: false, canCancelCheckout: true }; }
 function fixture(): BillingRepository { return { catalog: vi.fn(async () => catalog), overview: vi.fn(async () => overview()), checkout: vi.fn(async () => {}), manage: vi.fn(async () => {}), cancelCheckout: vi.fn(async () => {}) }; }
 function mount(repository: BillingRepository, signedIn = true, page: 'plans'|'usage'|'billing' = 'plans') {
   const login = vi.fn();
@@ -58,6 +58,15 @@ it('重新打开订阅仍可取消尚未完成的付款', async () => {
   mount(repository, true, 'billing');
   await userEvent.setup().click(await screen.findByRole('button', { name: '取消本次付款' }));
   expect(repository.cancelCheckout).toHaveBeenCalledOnce();
+});
+
+it('付款渠道不支持主动取消时隐藏取消按钮并说明到期失效', async () => {
+  const repository = fixture();
+  vi.mocked(repository.overview).mockResolvedValue({ ...overview(), pendingCheckout: true, canCancelCheckout: false });
+  mount(repository, true, 'billing');
+  expect(await screen.findByText(/付款链接到期后会自动失效/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: '取消本次付款' })).toBeNull();
+  expect(repository.cancelCheckout).not.toHaveBeenCalled();
 });
 
 it('网络异常重试复用付款编号，明确过期后才生成新编号', async () => {

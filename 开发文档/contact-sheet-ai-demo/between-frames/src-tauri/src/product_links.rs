@@ -7,12 +7,14 @@ use serde::Deserialize;
 pub enum ProductLink {
     Website,
     Instagram,
+    Plugins,
 }
 impl ProductLink {
     fn url(&self) -> &'static str {
         match self {
             Self::Website => "https://focroom.cc/",
             Self::Instagram => "https://www.instagram.com/YIHUAPHOTO/",
+            Self::Plugins => "https://focroom.cc/plugins/",
         }
     }
 }
@@ -66,6 +68,7 @@ mod tests {
             ProductLink::Instagram.url(),
             "https://www.instagram.com/YIHUAPHOTO/"
         );
+        assert_eq!(ProductLink::Plugins.url(), "https://focroom.cc/plugins/");
         assert!(serde_json::from_str::<ProductLink>("\"https://evil.test\"").is_err());
     }
 }
