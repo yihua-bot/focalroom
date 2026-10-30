@@ -30,7 +30,12 @@ struct FocalAIView: View {
     }
 
     private var hasPending: Bool {
-        model.chatMessages.contains { $0.state == .unknown && $0.role == "user" }
+        model.chatMessages.contains { $0.state == .unknown && $0.role == "user" && !isSending($0) }
+    }
+
+    private func isSending(_ message: AIChatMessage) -> Bool {
+        model.aiSending && streamStartedHere && streamProject == model.currentProject &&
+            model.chatMessages.last(where: { $0.role == "user" })?.id == message.id
     }
 
     var body: some View {
@@ -85,18 +90,22 @@ struct FocalAIView: View {
         HStack(spacing: 8) {
             if model.aiSending && !(streamStartedHere && streamProject == model.currentProject) {
                 Label("其他请求处理中", systemImage: "hourglass")
+                    .accessibilityIdentifier("ai.balance")
             } else if let account = model.aiAccountState {
-                if !account.enabled {
-                    Label("AI 暂未开放", systemImage: "circle")
-                } else if !account.verified {
-                    Label("请先验证邮箱", systemImage: "envelope")
-                } else if account.available == 0 {
-                    Label("暂无可用额度", systemImage: "circle")
-                } else if model.offline {
-                    Label("当前离线", systemImage: "wifi.slash")
-                } else {
-                    Label("\(account.available.formatted()) \(account.unit) 可用", systemImage: "sparkle")
+                Group {
+                    if !account.enabled {
+                        Label("AI 暂未开放", systemImage: "circle")
+                    } else if !account.verified {
+                        Label("请先验证邮箱", systemImage: "envelope")
+                    } else if account.available == 0 {
+                        Label("暂无可用额度", systemImage: "circle")
+                    } else if model.offline {
+                        Label("当前离线", systemImage: "wifi.slash")
+                    } else {
+                        Label("\(account.available.formatted()) \(account.unit) 可用", systemImage: "sparkle")
+                    }
                 }
+                .accessibilityIdentifier("ai.balance")
             } else if let error = model.aiAccountError {
                 Button { Task { await model.loadAIAccount() } } label: {
                     Label("服务状态读取失败，重试", systemImage: "arrow.clockwise")
@@ -106,6 +115,7 @@ struct FocalAIView: View {
             } else {
                 ProgressView().controlSize(.mini)
                 Text("读取 AI 状态…")
+                    .accessibilityIdentifier("ai.balance")
             }
             Spacer(minLength: 8)
             Button { activeSheet = .tasks } label: {
@@ -122,7 +132,6 @@ struct FocalAIView: View {
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 18)
-        .accessibilityIdentifier("ai.balance")
         .overlay(alignment: .bottom) { Color.white.opacity(0.08).frame(height: 0.5) }
     }
 
@@ -199,6 +208,7 @@ struct FocalAIView: View {
             Text("从一张照片，\n开始对话。")
                 .font(.system(.title2, design: .serif).weight(.medium))
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("ai.welcome")
             Text("一起整理线索、讨论选片和顺序。需要看图时，点下方 + 添加照片。")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -208,7 +218,6 @@ struct FocalAIView: View {
             }.padding(.top, 6)
         }
         .padding(.vertical, 18)
-        .accessibilityIdentifier("ai.welcome")
     }
 
     private func suggestion(_ text: String) -> some View {
@@ -253,7 +262,9 @@ struct FocalAIView: View {
                         .font(.body).lineSpacing(3)
                         .padding(.horizontal, 15).padding(.vertical, 11)
                         .background(Color.white.opacity(0.11), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    if message.state == .unknown {
+                    if message.state == .unknown && isSending(message) {
+                        Text("发送中…").font(.caption2).foregroundStyle(.secondary)
+                    } else if message.state == .unknown {
                         Label("结果待确认", systemImage: "clock.arrow.circlepath")
                             .font(.caption2).foregroundStyle(.orange)
                     } else if message.state == .failed, let failure = message.failure {
@@ -301,6 +312,7 @@ struct FocalAIView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Label("选片草案", systemImage: "sparkles")
                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("ai.draft.card")
                 Text(draft.title).font(.headline)
                 ForEach(draft.operations) { op in
                     Text("\(opTitle(op.op)) · \(op.photoFilename)\(op.toIndex.map { " · 第 \($0 + 1) 位" } ?? "")")
@@ -326,7 +338,6 @@ struct FocalAIView: View {
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
-            .accessibilityIdentifier("ai.draft.card")
         } else if model.selectedProjectID != nil, model.snapshot?.snapshot.photos.isEmpty == false, !model.offline {
             Button {
                 draftOwner = model.currentProject

@@ -12,6 +12,7 @@
 
 - `IOS_1_0_0_RELEASE_STATUS.md`：正式 Bundle/Team/版本、归档签名、IPA 导出与 Xcode 账号条件的接续记录。
 - `IOS_1_0_0_PRODUCTION_UPGRADE_PLAN.md`：公网路由实测、生产备份/迁移/回退方案；待批准执行，不代表已部署。
+- `16_IOS_COLLAB_OFFLINE_STORE_STATUS.md`：本机画布、AI 草案闭环、评论协作/邀请/授权、离线队列、StoreKit+APNs 的合并记录与用户缺陷修复。
 - `15_IOS_COMPLETION_AUDIT.md`：本期最终完成审计——已交付（07–14）/ 剩余可开发 / 外部阻塞三类清单与验证累计。
 - `14_IOS_READING_SURFACES_STATUS.md`：版本历史、双版本差异、提案投影与账单目录阅读面的实现、验证证据及边界。
 - `13_IOS_FOCAL_AI_STATUS.md`：Focal AI 文本对话（异步提交/回执恢复/不重复计费）与项目分析任务阅读的实现、验证证据及边界。

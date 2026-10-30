@@ -539,6 +539,23 @@ public struct APIClient: Sendable {
         return URL(string: result.invite_url)!
     }
 
+    // 项目授权：修改角色/权限或撤销；仅 OWNER/ADMIN，服务端最终权威。
+    public func updateGrant(projectID: String, userID: String, input: GrantUpdateInput, token: String) async throws {
+        struct Result: Decodable { let updated: Bool }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let result = try await call(Result.self, ["projects", projectID, "grants", userID], token: token,
+                                    body: try encoder.encode(input), method: "PATCH")
+        guard result.updated else { throw APIError.invalidResponse }
+    }
+
+    public func revokeGrant(projectID: String, userID: String, token: String) async throws {
+        struct Result: Decodable { let updated: Bool }
+        let result = try await call(Result.self, ["projects", projectID, "grants", userID], token: token,
+                                    body: nil, method: "DELETE")
+        guard result.updated else { throw APIError.invalidResponse }
+    }
+
     public func registerDevice(key: String, name: String, platform: String, token: String) async throws -> DeviceRegistration {
         struct Input: Encodable { let device_key: String; let name: String; let platform: String }
         guard UUID(uuidString: key) != nil else { throw APIError.invalidResponse }

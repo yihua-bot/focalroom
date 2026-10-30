@@ -135,9 +135,12 @@ final class FocalRoomUITests: XCTestCase {
         app.buttons["ai.send"].tap()
         XCTAssertTrue(app.buttons["ai.vision.confirm"].waitForExistence(timeout: 10))
         app.buttons["ai.vision.confirm"].tap()
-        selectLocalProject(app, id: localSecondID, title: "本机项目乙")
         let answerA = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "本机回复：本机甲问题"))
+        XCTAssertTrue(answerA.firstMatch.waitForExistence(timeout: 10), "流式片段应实时显示")
+        XCTAssertTrue(app.staticTexts["正在输入…"].exists)
+        selectLocalProject(app, id: localSecondID, title: "本机项目乙")
         XCTAssertFalse(answerA.firstMatch.exists, "甲的迟到结果不得进入乙的对话")
+        XCTAssertTrue(app.staticTexts["其他请求处理中"].exists, "切换项目时应说明暂时不能继续发送")
         let canSend = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: app.textFields["ai.input"])
         XCTAssertEqual(XCTWaiter.wait(for: [canSend], timeout: 15), .completed)
         app.textFields["ai.input"].tap()
@@ -221,7 +224,7 @@ final class FocalRoomUITests: XCTestCase {
             return false
         }
         if app.buttons["账户"].waitForExistence(timeout: 3) {
-            app.buttons["账户"].tap()
+            openAccount(app)
             logoutFromAccount(app)
         }
         XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10))
@@ -388,7 +391,7 @@ final class FocalRoomUITests: XCTestCase {
         XCTAssertTrue(localProject.waitForExistence(timeout: 10), "本机项目和导入记录应在重启后保留")
         let migratedBadge = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '已迁云'"), object: localProject)
         XCTAssertEqual(XCTWaiter.wait(for: [migratedBadge], timeout: 10), .completed, "迁云状态应随本机记录持久化")
-        app.buttons["账户"].tap()
+        openAccount(app)
         XCTAssertTrue(app.staticTexts["已登录设备"].waitForExistence(timeout: 10), "账户页应显示设备管理")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'device.revoke.'")).firstMatch.waitForExistence(timeout: 10),
                       "本机设备应在登录后完成登记")
@@ -418,7 +421,7 @@ final class FocalRoomUITests: XCTestCase {
         app.launchEnvironment["FOCALROOM_IOS_REVIEW_URL"] = base
         app.launch()
         if app.buttons["账户"].waitForExistence(timeout: 2) {
-            app.buttons["账户"].tap()
+            openAccount(app)
             logoutFromAccount(app)
         }
         XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10))
@@ -428,8 +431,7 @@ final class FocalRoomUITests: XCTestCase {
         app.secureTextFields["login.password"].typeText("iphone-local-test-2026")
         app.buttons["login.submit"].tap()
         dismissPasswordPrompt(app)
-        XCTAssertTrue(app.buttons["账户"].waitForExistence(timeout: 15))
-        app.buttons["账户"].tap()
+        openAccount(app)
         app.buttons["account.data.entry"].tap()
         XCTAssertTrue(app.buttons["account.data.export"].waitForExistence(timeout: 10))
         app.swipeUp()
@@ -625,6 +627,16 @@ final class FocalRoomUITests: XCTestCase {
     }
 
     private enum Anchor { case library, root, viewer, unknown }
+
+
+    /// 新导航（16 号收口）账户入口只保留在消息页：点账户前先确保位于消息 Tab。
+    @MainActor
+    private func openAccount(_ app: XCUIApplication) {
+        let tab = app.tabBars.buttons["消息"]
+        if tab.exists && tab.isSelected == false { tab.tap() }
+        let account = app.buttons["账户"]
+        if account.waitForExistence(timeout: 5) { account.tap() }
+    }
 
     // 导航栏按钮在本模拟器上间歇不可解析；回退用左缘右滑（根视图上是安全空操作），不做盲点坐标点击。
     @MainActor

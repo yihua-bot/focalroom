@@ -344,8 +344,9 @@ private struct AccountView: View {
     let model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var confirmLogout = false
-    @State private var revokeTarget: DeviceRecord?
+    @State     private var revokeTarget: DeviceRecord?
     @State private var inviteSheet = false
+    @State private var store = StoreService()
 
     var body: some View {
         NavigationStack {
@@ -413,6 +414,7 @@ private struct AccountView: View {
                     Text("账单目录")
                 }
                 .accessibilityIdentifier("billing.section")
+                storeSection
                 Section {
                     Button("退出登录", role: .destructive) { confirmLogout = true }
                         .disabled(model.busy)
@@ -441,6 +443,58 @@ private struct AccountView: View {
             }
             .sheet(isPresented: $inviteSheet) { InviteSheet(model: model) }
         }
+    }
+
+    // StoreKit 内购区：未配置产品时如实显示不可用；有产品时支持购买与恢复。
+    @ViewBuilder
+    private var storeSection: some View {
+        Section {
+            if !store.available {
+                HStack(spacing: 8) {
+                    Image(systemName: "cart.badge.exclamationmark").foregroundStyle(.secondary)
+                    Text("App 内购暂不可用（产品尚未登记）。").font(.footnote).foregroundStyle(.secondary)
+                }
+            } else if store.loading && store.products.isEmpty {
+                HStack(spacing: 8) { ProgressView(); Text("读取内购产品…").foregroundStyle(.secondary) }
+            } else if store.products.isEmpty {
+                Text("暂无可用内购产品。").font(.footnote).foregroundStyle(.secondary)
+            } else {
+                ForEach(store.products, id: \.id) { product in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(product.displayName).font(.subheadline.weight(.semibold))
+                            Text(product.description).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                        Spacer()
+                        if store.purchasedProductIDs.contains(product.id) {
+                            Label("已拥有", systemImage: "checkmark.circle.fill")
+                                .font(.caption).foregroundStyle(.green)
+                        } else {
+                            Button(product.displayPrice) {
+                                Task { await store.purchase(product) }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .font(.caption)
+                            .disabled(store.loading)
+                        }
+                    }
+                    .accessibilityIdentifier("store.product.\(product.id)")
+                }
+                Button("恢复购买") { Task { await store.restore() } }
+                    .font(.caption)
+                    .disabled(store.loading)
+                    .accessibilityIdentifier("store.restore")
+            }
+            if let storeNotice = store.notice {
+                Text(storeNotice).font(.caption2).foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("订阅与购买")
+        } footer: {
+            Text("购买与恢复经 App Store 处理；权益解锁以服务端核验为准。")
+        }
+        .accessibilityIdentifier("store.section")
+        .task { await store.loadProducts() }
     }
 }
 

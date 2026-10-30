@@ -61,7 +61,7 @@ try {
       const encoder = new TextEncoder();
       const event = value => encoder.encode(`data: ${JSON.stringify(value)}\n\n`);
       const stream = new ReadableStream({
-        async start(controller) {
+        start(controller) {
           if (last.includes('模拟流中断')) {
             controller.enqueue(event({ type: 'response.output_text.delta', delta: '尚未完成的片段' }));
             controller.close();
@@ -69,9 +69,12 @@ try {
           }
           controller.enqueue(event({ type: 'response.output_text.delta', delta: textReply }));
           // 首段立即显示，完成回执晚于项目切换，核对流式内容与结果均不串项目。
-          if (images.length) await new Promise(resolve => setTimeout(resolve, 8000));
-          controller.enqueue(event({ type: 'response.completed', response: reply }));
-          controller.close();
+          const finish = () => {
+            controller.enqueue(event({ type: 'response.completed', response: reply }));
+            controller.close();
+          };
+          if (images.length) setTimeout(finish, 12000);
+          else finish();
         },
       });
       return new Response(stream, { headers: { 'content-type': 'text/event-stream' } });

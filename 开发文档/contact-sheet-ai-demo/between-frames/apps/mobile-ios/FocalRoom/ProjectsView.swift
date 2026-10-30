@@ -174,6 +174,13 @@ struct ProjectLibraryView: View {
                 }
                 .disabled(model.offline || model.snapshot?.project_id != projectID)
                 .accessibilityLabel("版本历史").accessibilityIdentifier("history.entry")
+                NavigationLink {
+                    GrantsView(model: model, projectID: projectID)
+                } label: {
+                    Image(systemName: "person.crop.circle.badge.checkmark")
+                }
+                .disabled(model.offline || model.snapshot?.project_id != projectID)
+                .accessibilityLabel("成员与权限").accessibilityIdentifier("grants.entry")
             }
         }
         .background(Color(white: 0.055))

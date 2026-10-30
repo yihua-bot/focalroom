@@ -892,6 +892,43 @@ final class AppModel {
         }
     }
 
+    // 项目授权管理：仅 OWNER/ADMIN；EDITOR 专属权限客户端先镜像校验，服务端最终权威。
+    func updateGrant(userID: String, role: String, canApprove: Bool, canEditFormal: Bool) async {
+        guard !busy, let snapshot, let api, let credentials,
+              currentProject == .cloud(snapshot.project_id), !offline else { return }
+        let input: GrantUpdateInput
+        do { input = try GrantUpdateInput(role: role, canApprove: canApprove, canEditFormal: canEditFormal) }
+        catch { notice = "只有编辑角色可以持有审批或正式编辑权限。"; return }
+        let generation = epoch
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            try await projectRead(snapshot.project_id) {
+                try await api.updateGrant(projectID: snapshot.project_id, userID: userID,
+                                          input: input, token: credentials.token)
+            }
+            await reloadSnapshot()
+        } catch {
+            notice = message(error)
+        }
+    }
+
+    func revokeGrant(userID: String) async {
+        guard !busy, let snapshot, let api, let credentials,
+              currentProject == .cloud(snapshot.project_id), !offline else { return }
+        let generation = epoch
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            try await projectRead(snapshot.project_id) {
+                try await api.revokeGrant(projectID: snapshot.project_id, userID: userID, token: credentials.token)
+            }
+            await reloadSnapshot()
+        } catch {
+            notice = message(error)
+        }
+    }
+
     func image(photoID: String) async throws -> UIImage {
         guard let api, let credentials, let snapshot,
               let descriptor = snapshot.previews.first(where: { $0.photo_id == photoID }) else {

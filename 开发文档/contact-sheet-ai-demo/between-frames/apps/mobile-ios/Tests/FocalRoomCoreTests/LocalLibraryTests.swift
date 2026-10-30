@@ -1002,6 +1002,74 @@ final class LocalCanvasTests: XCTestCase {
 }
 
 @MainActor
+final class CollaborationSurfaceTests: XCTestCase {
+    func testAIDraftParsingAcceptsValidBlockAndMapsFilenames() throws {
+        let photos = [
+            Photo(id: "p-1", filename: "IMG_001.jpg", source_sha256: String(repeating: "a", count: 64), selection: .UNDECIDED),
+            Photo(id: "p-2", filename: "IMG_002.jpg", source_sha256: String(repeating: "b", count: 64), selection: .KEEP),
+        ]
+        let reply = """
+        根据你的项目，我建议：
+        ```json
+        {"title":"双图主线","operations":[
+            {"op":"add","photo":"IMG_002.jpg","to_index":0},
+            {"op":"remove","photo":"IMG_001.jpg"},
+            {"op":"move","photo":"IMG_002.jpg","to_index":1}]}
+        ```
+        以上建议仅供参考。
+        """
+        let draft = try XCTUnwrap(AIDraftProposal.parse(reply, photos: photos))
+        XCTAssertEqual(draft.title, "双图主线")
+        XCTAssertEqual(draft.operations.count, 3)
+        XCTAssertEqual(draft.operations[0].op, "add")
+        XCTAssertEqual(draft.operations[0].photoFilename, "IMG_002.jpg")
+        XCTAssertEqual(draft.operations[0].toIndex, 0)
+        XCTAssertEqual(draft.operations[1].op, "remove")
+        XCTAssertNil(draft.operations[1].toIndex)
+        XCTAssertEqual(draft.operations[2].toIndex, 1)
+    }
+
+    func testAIDraftParsingRejectsUnknownPhotosAndBadShapes() throws {
+        let photos = [Photo(id: "p-1", filename: "only.jpg",
+                            source_sha256: String(repeating: "a", count: 64), selection: .UNDECIDED)]
+        // 未知照片
+        XCTAssertNil(AIDraftProposal.parse("```json {\"title\":\"t\",\"operations\":[{\"op\":\"add\",\"photo\":\"ghost.jpg\",\"to_index\":0}]} ```", photos: photos))
+        // 未知操作类型
+        XCTAssertNil(AIDraftProposal.parse("```json {\"title\":\"t\",\"operations\":[{\"op\":\"delete\",\"photo\":\"only.jpg\"}]} ```", photos: photos))
+        // 缺 to_index 的 move
+        XCTAssertNil(AIDraftProposal.parse("```json {\"title\":\"t\",\"operations\":[{\"op\":\"move\",\"photo\":\"only.jpg\"}]} ```", photos: photos))
+        // 没有 JSON 代码块
+        XCTAssertNil(AIDraftProposal.parse("我建议加入 only.jpg", photos: photos))
+        // 空操作
+        XCTAssertNil(AIDraftProposal.parse("```json {\"title\":\"t\",\"operations\":[]} ```", photos: photos))
+    }
+
+    func testGrantUpdateInputMirrorsEditorOnlyRule() throws {
+        XCTAssertNoThrow(try GrantUpdateInput(role: "EDITOR", canApprove: true, canEditFormal: false))
+        XCTAssertNoThrow(try GrantUpdateInput(role: "REVIEWER", canApprove: false, canEditFormal: false))
+        XCTAssertNoThrow(try GrantUpdateInput(role: "VIEWER", canApprove: false, canEditFormal: false))
+        // 非 EDITOR 持有正式权限被客户端拒绝
+        XCTAssertThrowsError(try GrantUpdateInput(role: "VIEWER", canApprove: true, canEditFormal: false))
+        XCTAssertThrowsError(try GrantUpdateInput(role: "REVIEWER", canApprove: false, canEditFormal: true))
+        // 未知角色
+        XCTAssertThrowsError(try GrantUpdateInput(role: "ADMIN", canApprove: false, canEditFormal: false))
+    }
+
+    func testProjectGrantDecodesSnapshotShape() throws {
+        let json = Data("""
+        {"project_id":"p-1","user_id":"u-2","role":"EDITOR","can_approve":true,"can_edit_formal":false,"active":true,"email":"peer@fr.test"}
+        """.utf8)
+        let grant = try JSONDecoder().decode(ProjectGrant.self, from: json)
+        XCTAssertEqual(grant.id, "u-2")
+        XCTAssertEqual(grant.role, "EDITOR")
+        XCTAssertTrue(grant.can_approve)
+        XCTAssertFalse(grant.can_edit_formal)
+        XCTAssertTrue(grant.active)
+        XCTAssertEqual(grant.email, "peer@fr.test")
+    }
+}
+
+@MainActor
 final class PhotoTransformTests: XCTestCase {
     func testLockedAndIndependentZoomAndPosition() {
         var state = ComparisonState()

@@ -41,6 +41,10 @@ struct SyncCenterView: View {
             HStack {
                 Text(row.title).font(.headline)
                 Spacer()
+                if row.pendingCanvasMoves > 0 {
+                    Label("画布移动 ×\(row.pendingCanvasMoves)", systemImage: "rectangle.3.group")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 if let pending = row.pending {
                     Label(pendingBadge(pending.state), systemImage: "clock.arrow.circlepath")
                         .font(.caption).foregroundStyle(pending.state == .rejected ? .red : .orange)

@@ -53,6 +53,7 @@ public struct CachedProjectOverview: Codable, Sendable, Identifiable, Equatable 
     public let revision: Int
     public let savedAt: Date
     public let pending: PendingSelection?
+    public let pendingCanvasMoves: Int
 
     public var id: String { projectID }
 }
@@ -143,17 +144,27 @@ public actor ScopedStore {
     public func overview() throws -> [CachedProjectOverview] {
         let document = try read()
         let titles = Dictionary((document.projects?.projects ?? []).map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
+        // 画布待提交按命令内 projectId 归属到项目计数。
+        let canvasCounts = Dictionary(grouping: (document.canvas ?? [:]).values, by: { $0.command.projectId })
+            .mapValues(\.count)
         let cachedRows = document.snapshots.map { id, value in
             CachedProjectOverview(projectID: id, title: value.snapshot.title, revision: value.snapshot.revision,
-                                  savedAt: value.savedAt, pending: document.pending[id])
+                                  savedAt: value.savedAt, pending: document.pending[id],
+                                  pendingCanvasMoves: canvasCounts[id] ?? 0)
         }
         let pendingOnly = document.pending
             .filter { document.snapshots[$0.key] == nil }
             .map { id, value in
                 CachedProjectOverview(projectID: id, title: titles[id] ?? "未知项目", revision: -1,
-                                      savedAt: value.createdAt, pending: value)
+                                      savedAt: value.createdAt, pending: value, pendingCanvasMoves: canvasCounts[id] ?? 0)
             }
-        return (cachedRows + pendingOnly).sorted { $0.savedAt > $1.savedAt }
+        let canvasOnly = canvasCounts.keys
+            .filter { document.snapshots[$0] == nil && document.pending[$0] == nil }
+            .map { id in
+                CachedProjectOverview(projectID: id, title: titles[id] ?? "未知项目", revision: -1,
+                                      savedAt: Date.distantPast, pending: nil, pendingCanvasMoves: canvasCounts[id] ?? 0)
+            }
+        return (cachedRows + pendingOnly + canvasOnly).sorted { $0.savedAt > $1.savedAt }
     }
 
     public func saveProjects(_ projects: [ProjectSummary]) throws {

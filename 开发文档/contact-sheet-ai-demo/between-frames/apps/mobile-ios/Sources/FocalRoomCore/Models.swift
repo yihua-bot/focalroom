@@ -137,6 +137,8 @@ public struct ProjectSnapshot: Codable, Sendable {
     public let comments: [Comment]
     // 服务端始终返回 proposals；可选解码保持旧版本缓存可读，默认 nil 兼容既有构造点。
     public var proposals: [Proposal]? = nil
+    // 服务端仅对 OWNER/ADMIN 返回 grants；可选解码保持其他角色与旧缓存可读。
+    public var grants: [ProjectGrant]? = nil
 
     // 未知选片枚举由 Codable 拒绝；不忽略新状态后继续正式写入。
     public func validate(projectID: String, userID: String) throws {
@@ -174,6 +176,45 @@ public struct ProjectSnapshot: Codable, Sendable {
 
     private static func isHash(_ value: String) -> Bool {
         value.count == 64 && value.allSatisfy { "0123456789abcdef".contains($0) }
+    }
+}
+
+// 项目授权：仅 OWNER/ADMIN 可见/修改；approve/formal 权限只有 EDITOR 能持有（服务端权威，客户端先镜像校验）。
+public struct ProjectGrant: Codable, Sendable, Identifiable, Equatable {
+    public let project_id: String
+    public let user_id: String
+    public let role: String
+    public let can_approve: Bool
+    public let can_edit_formal: Bool
+    public let active: Bool
+    public let email: String
+
+    public var id: String { user_id }
+
+    public init(project_id: String, user_id: String, role: String, can_approve: Bool,
+                can_edit_formal: Bool, active: Bool, email: String) {
+        self.project_id = project_id
+        self.user_id = user_id
+        self.role = role
+        self.can_approve = can_approve
+        self.can_edit_formal = can_edit_formal
+        self.active = active
+        self.email = email
+    }
+}
+
+public struct GrantUpdateInput: Encodable, Sendable, Equatable {
+    public let role: String
+    public let can_approve: Bool
+    public let can_edit_formal: Bool
+
+    /// EDITOR 专属权限在客户端先行镜像校验；REVIEWER/VIEWER 持有正式权限直接拒绝。
+    public init(role: String, canApprove: Bool, canEditFormal: Bool) throws {
+        guard ["EDITOR", "REVIEWER", "VIEWER"].contains(role) else { throw APIError.invalidResponse }
+        guard role == "EDITOR" || (!canApprove && !canEditFormal) else { throw APIError.invalidResponse }
+        self.role = role
+        can_approve = canApprove
+        can_edit_formal = canEditFormal
     }
 }
 
