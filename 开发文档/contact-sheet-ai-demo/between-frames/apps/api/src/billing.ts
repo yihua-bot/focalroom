@@ -5,8 +5,9 @@ import type { AuthService, Headers } from './auth.ts';
 import { transaction, digest } from './database.ts';
 import { assert } from './errors.ts';
 import { checkRateLimit } from './rate-limit.ts';
-import { grantAiTokensTx, ensureFreeTierMonthlyGrant } from './hosted-ai.ts';
+import { grantAiTokensTx } from './hosted-ai.ts';
 import { StripeBillingGateway, type BillingConfig, type BillingGateway, type BillingPrice } from './billing-gateway.ts';
+import { PolarBillingGateway } from './polar-billing-gateway.ts';
 
 export class BillingService {
   readonly pool: Pool;
@@ -15,32 +16,28 @@ export class BillingService {
   readonly gateway?: BillingGateway;
   readonly salesEnabled: boolean;
   constructor(pool: Pool, auth: AuthService, config?: BillingConfig, gateway?: BillingGateway, salesEnabled = false) {
-    this.pool=pool;this.auth=auth;this.config=config;this.gateway=config ? gateway ?? new StripeBillingGateway(config) : undefined;
+    this.pool=pool;this.auth=auth;this.config=config;this.gateway=config ? gateway ?? (config.provider==='polar'?new PolarBillingGateway(config):new StripeBillingGateway(config)) : undefined;
     this.salesEnabled=salesEnabled && config?.salesEnabled!==false;
   }
   catalog() {
     return {salesAvailable:!!this.gateway && this.salesEnabled,plans:UNAVAILABLE_SUBSCRIPTION_CATALOG.plans.map(plan=>({
-      ...plan,prices:plan.id!=='free'?(this.config?.prices??[]).map(({includedTokens,...price})=>({...price,includedCredits:includedTokens/1000})):[],
+      ...plan,prices:plan.id!=='free'?(this.config?.prices??[]).filter(price=>(price.planId??'pro')===plan.id).map(price=>({id:price.id,interval:price.interval,amount:price.amount,currency:price.currency,includedCredits:price.includedTokens/1000})):[],
     }))};
   }
   async overview(headers: Headers) {
     const user=await this.auth.authenticate(headers,false);
     const sub=(await this.pool.query("SELECT * FROM fr_billing_subscriptions WHERE user_id=$1 ORDER BY current_period_end DESC,updated_at DESC LIMIT 1",[user.id])).rows[0];
     const paid=!!sub && ['active','trialing','past_due'].includes(sub.status) && new Date(sub.current_period_end).getTime()>Date.now();
-    // J5 免费层月度额度：无有效订阅时按月幂等发放；测试环境不配置则不发放。
-    if (!paid && this.config?.freeTierMonthlyTokens) {
-      await ensureFreeTierMonthlyGrant(this.pool, user.id, this.config.freeTierMonthlyTokens);
-    }
     const balance=(await this.pool.query('SELECT granted,spent,reserved FROM fr_ai_accounts WHERE user_id=$1',[user.id])).rows[0];
     const granted=Number(balance?.granted??0),available=Math.max(0,granted-Number(balance?.spent??0)-Number(balance?.reserved??0));
     const invoices=(await this.pool.query('SELECT id,amount,currency,status,issued_at FROM fr_billing_invoices WHERE user_id=$1 ORDER BY issued_at DESC LIMIT 30',[user.id])).rows;
     const customer=(await this.pool.query('SELECT customer_id FROM fr_billing_customers WHERE user_id=$1',[user.id])).rows[0];
     const pending=await this.pool.query("SELECT 1 FROM fr_billing_checkouts WHERE user_id=$1 AND state IN ('PENDING','READY') AND (expires_at IS NULL OR expires_at>now()) LIMIT 1",[user.id]);
-    return {planId:paid?sub.price_id.startsWith('studio')?'studio':'pro':'free',
-      planName:paid?(sub.price_id.startsWith('studio')?'FocalRoom Studio':sub.price_id.startsWith('pro')?'FocalRoom Pro':'FocalRoom'):'基础版',status:paid?sub.status:sub?.status==='canceled'?'canceled':'free',
+    const planId=paid?(this.config?.prices.find(price=>price.id===sub.price_id)?.planId??'pro'):'free';
+    return {planId,planName:planId==='studio'?'FocalRoom Studio':planId==='pro'?'FocalRoom Pro':'基础版',status:paid?sub.status:sub?.status==='canceled'?'canceled':'free',
       currentPeriodEnd:paid || sub?.status==='canceled' ? sub.current_period_end : null,cancelAtPeriodEnd:paid ? sub.cancel_at_period_end : sub?.status==='canceled',
       usage:{remainingPercent:granted?Math.min(100,Math.floor(available/granted*100)):null,hasAllowance:available>0,availableCredits:available/1000,totalCredits:granted/1000},
-      invoices:invoices.map(row=>({id:row.id,date:row.issued_at,amount:Number(row.amount),currency:row.currency,status:row.status,url:null})),manageAvailable:!!customer && !!this.gateway,pendingCheckout:!!pending.rowCount};
+      invoices:invoices.map(row=>({id:row.id,date:row.issued_at,amount:Number(row.amount),currency:row.currency,status:row.status,url:null})),manageAvailable:!!customer && !!this.gateway,pendingCheckout:!!pending.rowCount,canCancelCheckout:this.gateway?.canCancelCheckout!==false};
   }
   async checkout(headers: Headers, input: unknown) {
     const user=await this.auth.authenticate(headers,true);
@@ -51,7 +48,7 @@ export class BillingService {
     const gateway=this.gateway;
     const rate=await checkRateLimit(this.pool,'billing:'+user.id,10);
     assert(rate.allowed,429,'RATE_LIMITED','操作过于频繁，请稍后再试');
-    const prepared = await transaction<{url:string}|{customer:string;requestId:string}>(this.pool,async tx=>{
+    const prepared = await transaction<{url:string}|{customer:string;requestId:string;recover:boolean}>(this.pool,async tx=>{
       await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,701))',[user.id]);
       const existing=(await tx.query('SELECT * FROM fr_billing_checkouts WHERE user_id=$1 AND request_id=$2',[user.id,value.requestId])).rows[0];
       if(existing) {
@@ -73,7 +70,7 @@ export class BillingService {
         assert(Date.now()-new Date(pending.created_at).getTime()<23*3600000,409,'BILLING_RECONCILIATION_REQUIRED','付款结果需要核对，请联系支持');
         const customer=(await tx.query('SELECT customer_id FROM fr_billing_customers WHERE user_id=$1',[user.id])).rows[0];
         assert(customer,409,'BILLING_RECONCILIATION_REQUIRED','付款结果需要核对，请联系支持');
-        return {customer:customer.customer_id,requestId:pending.request_id};
+        return {customer:customer.customer_id,requestId:pending.request_id,recover:true};
       }
       let customer=(await tx.query('SELECT customer_id FROM fr_billing_customers WHERE user_id=$1',[user.id])).rows[0]?.customer_id;
       if(!customer) {
@@ -81,11 +78,13 @@ export class BillingService {
         await tx.query('INSERT INTO fr_billing_customers(user_id,customer_id) VALUES($1,$2)',[user.id,customer]);
       }
       await tx.query('INSERT INTO fr_billing_checkouts(user_id,request_id,price_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[user.id,value.requestId,price.id]);
-      return {customer,requestId:value.requestId};
+      return {customer,requestId:value.requestId,recover:!!existing};
     });
     if('url' in prepared) return prepared;
-    // 先持久化付款意图再调用远端；丢失响应仍用同一支付幂等键恢复。
-    const session=await gateway.checkout(prepared.customer,user.id,price,prepared.requestId,this.auth.origin);
+    // Stripe 用远端幂等键恢复；Polar 仅查询已有会话，未知结果不能重发创建。
+    const session=prepared.recover&&gateway.recoverCheckout
+      ?await gateway.recoverCheckout(prepared.customer,user.id,price,prepared.requestId)
+      :await gateway.checkout(prepared.customer,user.id,price,prepared.requestId,this.auth.origin);
     await this.pool.query("UPDATE fr_billing_checkouts SET session_id=$3,checkout_url=$4,expires_at=to_timestamp($5),state='READY' WHERE user_id=$1 AND request_id=$2 AND state='PENDING'",[user.id,prepared.requestId,session.id,session.url,session.expiresAt]);
     return {url:session.url};
   }
@@ -118,16 +117,16 @@ export class BillingService {
       if(!session) {
         const price=this.config?.prices.find(p=>p.id===pending.price_id);
         assert(price && Date.now()-new Date(pending.created_at).getTime()<23*3600000,409,'BILLING_RECONCILIATION_REQUIRED','付款结果需要核对，请联系支持');
-        session=(await gateway.checkout(customer.customer_id,user.id,price,pending.request_id,this.auth.origin)).id;
+        session=(gateway.recoverCheckout?await gateway.recoverCheckout(customer.customer_id,user.id,price,pending.request_id):await gateway.checkout(customer.customer_id,user.id,price,pending.request_id,this.auth.origin)).id;
       }
       await gateway.cancelCheckout(session,customer.customer_id);
       await tx.query("UPDATE fr_billing_checkouts SET state='CLOSED' WHERE user_id=$1 AND request_id=$2",[user.id,pending.request_id]);
       return {canceled:true};
     });
   }
-  async webhook(body: Buffer, signature: string) {
+  async webhook(body: Buffer, signature: string, headers?: Headers) {
     assert(this.gateway,503,'BILLING_NOT_AVAILABLE','订阅暂未开放');
-    const gateway=this.gateway,event=gateway.event(body,signature),fingerprint=digest(body);
+    const gateway=this.gateway,event=gateway.event(body,signature,headers),fingerprint=digest(body);
     return transaction(this.pool,async tx=>{
       await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,702))',[event.id]);
       const old=(await tx.query('SELECT digest FROM fr_billing_events WHERE id=$1',[event.id])).rows[0];

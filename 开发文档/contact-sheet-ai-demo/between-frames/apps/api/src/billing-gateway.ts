@@ -1,25 +1,35 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { assert } from './errors.ts';
+import type { Headers } from './auth.ts';
 
 export const priceSchema = z.strictObject({
-  id: z.string().regex(/^price_[A-Za-z0-9]+$/).max(120), interval: z.enum(['month','year']),
+  id: z.string().regex(/^[A-Za-z0-9_-]+$/).max(120), interval: z.enum(['month','year']),
+  planId: z.enum(['pro','studio']).optional(), productId: z.uuid().optional(),
   amount: z.number().int().positive().max(100000000), currency: z.enum(['USD','CNY','EUR','JPY','KRW']),
   includedTokens: z.number().int().positive().max(100000000),
   seats: z.number().int().min(1).max(50).default(3),
 });
 export type BillingPrice = z.infer<typeof priceSchema>;
-export type BillingConfig = { secret: string; webhookSecret: string; prices: BillingPrice[]; salesEnabled?: boolean; freeTierMonthlyTokens?: number };
+export type BillingConfig = { secret: string; webhookSecret: string; prices: BillingPrice[]; salesEnabled?: boolean;
+  provider?: 'stripe'|'polar'; polarEnvironment?: 'sandbox'|'production'; organizationId?: string; polarWebhookScheme?: 'standard'|'legacy' };
 export function billingConfig(): BillingConfig | undefined {
+  const provider = z.enum(['stripe','polar']).parse(process.env.FOCALROOM_BILLING_PROVIDER ?? 'stripe');
   const salesEnabled = process.env.FOCALROOM_BILLING_ENABLED === '1';
-  const secret = process.env.FOCALROOM_STRIPE_SECRET_KEY ?? '';
-  const webhookSecret = process.env.FOCALROOM_STRIPE_WEBHOOK_SECRET ?? '';
+  const secret = process.env[provider==='polar'?'FOCALROOM_POLAR_ACCESS_TOKEN':'FOCALROOM_STRIPE_SECRET_KEY'] ?? '';
+  const webhookSecret = process.env[provider==='polar'?'FOCALROOM_POLAR_WEBHOOK_SECRET':'FOCALROOM_STRIPE_WEBHOOK_SECRET'] ?? '';
   // 关闭新销售仍处理已有订阅的管理和通知；完全未配置时不创建支付网关。
   if (!salesEnabled && !secret && !webhookSecret) return undefined;
-  const prices = z.array(priceSchema).min(1).max(2).parse(JSON.parse(process.env.FOCALROOM_BILLING_PRICES ?? '[]'));
-  assert(secret.startsWith('sk_') && webhookSecret.startsWith('whsec_') && new Set(prices.map(p => p.id)).size === prices.length && new Set(prices.map(p => p.interval)).size === prices.length,
+  const prices = z.array(priceSchema).min(1).max(4).parse(JSON.parse(process.env.FOCALROOM_BILLING_PRICES ?? '[]'));
+  assert((provider==='polar'?secret.startsWith('polar_oat_'):secret.startsWith('sk_')) && webhookSecret.startsWith('whsec_') && new Set(prices.map(p => p.id)).size === prices.length && new Set(prices.map(p => `${p.planId??'pro'}:${p.interval}:${p.currency}`)).size === prices.length,
     500,'BILLING_CONFIG_INVALID','订阅服务暂时不可用');
-  return { secret, webhookSecret, prices, salesEnabled };
+  if(provider==='stripe') return { secret, webhookSecret, prices, salesEnabled, provider };
+  const organizationId=z.uuid().parse(process.env.FOCALROOM_POLAR_ORGANIZATION_ID);
+  for(const price of prices) z.uuid().parse(price.productId??price.id);
+  assert(new Set(prices.map(p=>`${p.productId??p.id}:${p.interval}:${p.currency}`)).size===prices.length,500,'BILLING_CONFIG_INVALID','订阅服务暂时不可用');
+  return { secret, webhookSecret, prices, salesEnabled, provider, organizationId,
+    polarEnvironment:z.enum(['sandbox','production']).parse(process.env.FOCALROOM_POLAR_ENVIRONMENT??'sandbox'),
+    polarWebhookScheme:z.enum(['standard','legacy']).parse(process.env.FOCALROOM_POLAR_WEBHOOK_SCHEME??'standard') };
 }
 export type BillingRefundEvent = { id: string; kind: 'refund' | 'dispute'; amount: number; currency: string; invoiceId: string | null; chargeId: string | null };
 export type BillingCharge = { id: string; customer: string; invoiceId: string | null; amount: number; currency: string };
@@ -27,6 +37,8 @@ export type BillingRemoteEvent = { id: string; type: string; subscriptionId: str
 export type BillingSubscription = { id: string; customer: string; priceId: string; status: string; currentPeriodEnd: number; cancelAtPeriodEnd: boolean };
 export type BillingInvoice = { id: string; customer: string; subscriptionId: string; priceId: string; status: 'paid'|'open'|'void'; amount: number; currency: string; issuedAt: number; billingReason: string };
 export interface BillingGateway {
+  readonly canCancelCheckout?: boolean;
+  recoverCheckout?(customer: string, userId: string, price: BillingPrice, requestId: string): Promise<{ id: string; url: string; expiresAt: number }>;
   createCustomer(userId: string, email: string): Promise<string>;
   checkout(customer: string, userId: string, price: BillingPrice, requestId: string, origin: string): Promise<{ id: string; url: string; expiresAt: number }>;
   manage(customer: string, origin: string): Promise<string>;
@@ -34,7 +46,7 @@ export interface BillingGateway {
   subscription(id: string): Promise<BillingSubscription>;
   invoice(id: string): Promise<BillingInvoice>;
   charge(id: string): Promise<BillingCharge>;
-  event(body: Buffer, signature: string): BillingRemoteEvent;
+  event(body: Buffer, signature: string, headers?: Headers): BillingRemoteEvent;
 }
 export type BillingTransport = (path: string, method: 'GET'|'POST', body?: URLSearchParams, idempotency?: string) => Promise<unknown>;
 const reference = z.string().regex(/^[A-Za-z0-9_]+$/).max(200);
