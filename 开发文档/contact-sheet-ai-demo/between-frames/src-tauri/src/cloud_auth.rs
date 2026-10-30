@@ -67,7 +67,10 @@ impl CloudAuth {
         self.request("/billing/overview", None, Some(&token)).await
     }
     pub async fn billing_checkout(&self, price_id: &str, request_id: &str) -> Result<Value> {
-        if !price_id.starts_with("price_")
+        if price_id.is_empty()
+            || !price_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
             || price_id.len() > 200
             || uuid::Uuid::parse_str(request_id).is_err()
         {
