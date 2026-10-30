@@ -286,7 +286,7 @@ export class HostedAiService {
             if (!line.startsWith("data:")) continue;
             const payload = line.slice(5).trim();
             if (!payload || payload === "[DONE]") continue;
-            let event: any; try { event = JSON.parse(payload); } catch { continue; }
+            let event: { type?: string; delta?: string; response?: { id?: string; status?: string; error?: unknown; usage?: { total_tokens?: number }; output?: unknown[] }; output_index?: number; content_index?: number; item_id?: string }; try { event = JSON.parse(payload); } catch { continue; }
             const type = event.type as string | undefined;
             if (type === "response.output_text.delta" && typeof event.delta === "string") {
               emitted += event.delta.length;

@@ -142,10 +142,8 @@ struct LocalCanvasView: View {
     let library: LocalLibraryModel
     @State private var dragOffsets: [String: CGSize] = [:]
     @State private var basePan: CGSize = .zero
-    @State private var addPhotoSheet = false
-    @State private var noteEditor: LocalCanvasNode?
+    @State private var activeSheet: CanvasSheet?
     @State private var noteDraft = ""
-    @State private var annotationTarget: String?
     @State private var annotationDraft = ""
     @State private var confirmDelete = false
 
@@ -176,14 +174,12 @@ struct LocalCanvasView: View {
         .toolbar { toolbarContent }
         .task { await model.load() }
         .onDisappear { model.shutdown() }
-        .sheet(isPresented: $addPhotoSheet) { photoPicker }
-        .sheet(item: $noteEditor, onDismiss: { noteDraft = "" }) { node in
-            noteEditorSheet(node)
-        }
-        .sheet(item: Binding(get: { annotationTarget.map { AnnotationTarget(nodeID: $0) } },
-                             set: { annotationTarget = $0?.nodeID }),
-               onDismiss: { annotationDraft = "" }) { target in
-            annotationSheet(target)
+        .sheet(item: $activeSheet, onDismiss: { noteDraft = ""; annotationDraft = "" }) { sheet in
+            switch sheet {
+            case .addPhoto: photoPicker
+            case .editNote(let node): noteEditorSheet(node)
+            case .annotate(let nodeID): annotationSheet(AnnotationTarget(nodeID: nodeID))
+            }
         }
         .confirmationDialog("删除所选节点", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) { Task { await model.removeSelected() } }
@@ -235,8 +231,8 @@ struct LocalCanvasView: View {
         .onTapGesture { model.selectedNodeID = node.id }
         .highPriorityGesture(nodeDrag(node))
         .contextMenu {
-            Button("编辑文本") { noteDraft = node.text ?? ""; noteEditor = node }
-            Button("添加批注") { annotationDraft = ""; annotationTarget = node.id }
+            Button("编辑文本") { noteDraft = node.text ?? ""; activeSheet = .editNote(node) }
+            Button("添加批注") { annotationDraft = ""; activeSheet = .annotate(node.id) }
             Button("移到最上层") { Task { await model.bringToFront(nodeID: node.id) } }
             Button("删除", role: .destructive) { model.selectedNodeID = node.id; confirmDelete = true }
         }
@@ -257,7 +253,7 @@ struct LocalCanvasView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
-            Button { addPhotoSheet = true } label: { Image(systemName: "photo.badge.plus") }
+            Button { activeSheet = .addPhoto } label: { Image(systemName: "photo.badge.plus") }
                 .disabled(model.busy)
                 .accessibilityLabel("添加照片").accessibilityIdentifier("canvas.add.photo")
             Button { Task { await model.addNote() } } label: { Image(systemName: "note.text.badge.plus") }
@@ -281,7 +277,7 @@ struct LocalCanvasView: View {
         NavigationStack {
             List(library.projects.first { $0.id == model.projectID }?.photos ?? []) { photo in
                 Button {
-                    addPhotoSheet = false
+                    activeSheet = nil
                     Task { await model.addPhotoNode(photoID: photo.id) }
                 } label: {
                     HStack {
@@ -294,7 +290,7 @@ struct LocalCanvasView: View {
                 .accessibilityIdentifier("canvas.pick.photo.\(photo.id)")
             }
             .navigationTitle("选择照片").navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button("取消") { addPhotoSheet = false } }
+            .toolbar { Button("取消") { activeSheet = nil } }
         }
         .presentationDetents([.medium, .large])
     }
@@ -305,11 +301,11 @@ struct LocalCanvasView: View {
                 .padding()
                 .navigationTitle("编辑便签").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("取消") { noteEditor = nil } }
+                    ToolbarItem(placement: .cancellationAction) { Button("取消") { activeSheet = nil } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("保存") {
                             let id = node.id, text = noteDraft
-                            noteEditor = nil
+                            activeSheet = nil
                             Task { await model.updateNoteText(nodeID: id, text: text) }
                         }
                         .disabled(noteDraft.count > LocalCanvas.textLimit)
@@ -325,11 +321,11 @@ struct LocalCanvasView: View {
                 .padding()
                 .navigationTitle("批注").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("取消") { annotationTarget = nil } }
+                    ToolbarItem(placement: .cancellationAction) { Button("取消") { activeSheet = nil } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("添加") {
                             let nodeID = target.nodeID, body = annotationDraft
-                            annotationTarget = nil
+                            activeSheet = nil
                             Task { await model.addAnnotation(to: nodeID, body: body) }
                         }
                         .disabled(annotationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
@@ -340,8 +336,22 @@ struct LocalCanvasView: View {
         .presentationDetents([.medium])
     }
 
-    private struct AnnotationTarget: Identifiable {
+    private struct AnnotationTarget {
         let nodeID: String
-        var id: String { nodeID }
+    }
+
+    // 单一枚举驱动的表单：同级多个 .sheet 修饰符在 iOS 上只有最后一个生效，选照片表单曾被顶掉。
+    private enum CanvasSheet: Identifiable {
+        case addPhoto
+        case editNote(LocalCanvasNode)
+        case annotate(String)
+
+        var id: String {
+            switch self {
+            case .addPhoto: return "add-photo"
+            case .editNote(let node): return "note-\(node.id)"
+            case .annotate(let nodeID): return "annotate-\(nodeID)"
+            }
+        }
     }
 }

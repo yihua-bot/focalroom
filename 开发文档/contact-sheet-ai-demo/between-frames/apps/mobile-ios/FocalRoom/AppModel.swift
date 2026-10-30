@@ -11,6 +11,11 @@ enum ProjectReference: Equatable, Hashable {
     case cloud(String)
 }
 
+@MainActor private final class AIStreamCapture {
+    var reply: AIReply?
+    var invalidRequest = false
+}
+
 // 设备身份：每次安装生成一次的稳定 UUID，存于 UserDefaults（非机密），配合服务端幂等注册。
 @MainActor enum DeviceIdentity {
     private static let key = "focalroom.device-key"
@@ -553,7 +558,10 @@ final class AppModel {
             return
         }
         aiSending = true
-        defer { if generation == epoch { aiSending = false } }
+        streamingText = nil
+        defer {
+            if generation == epoch { aiSending = false; streamingText = nil }
+        }
         if let vision {
             guard vision.id == visionDraftID, vision.generation == generation,
                   vision.accountID == credentials.user.id, vision.project == project,
@@ -592,22 +600,27 @@ final class AppModel {
         chatMessages.append(userMessage)
         let history = chatMessages.filter { $0.state == .sent || $0.id == userMessage.id }.suffix(20).map { ($0.role, $0.text) }
         let conversation = AIConversationInput(history: Array(history), images: vision?.photos.map(\.preview) ?? [])
-        // 流式优先：增量实时显示；服务端不支持或流中断时，同编号回退提交+轮询（幂等读回执，不重复计费）。
+        // 流式内容只是临时展示；仅服务端的完成回执能转为已完成消息。
+        let stream = AIStreamCapture()
         var streamed = false
+        var streamRouteMissing = false
         do {
             try await api.aiStream(input: conversation, requestID: requestID, token: credentials.token, imageConsent: vision != nil) { [weak self] event in
                 guard let self, self.epoch == generation else { return }
                 switch event {
-                case .start: break
+                case .start(let id):
+                    if id != requestID { stream.invalidRequest = true; self.streamingText = nil }
                 case .delta(let text):
-                    self.streamingText = (self.streamingText ?? "") + text
-                case .done, .failure:
-                    break // 结果在流收尾统一处理（下方 streamed 判定）。
+                    if !stream.invalidRequest { self.streamingText = (self.streamingText ?? "") + text }
+                case .done(let reply):
+                    if !stream.invalidRequest { stream.reply = reply }
+                case .failure:
+                    break
                 }
             }
             guard generation == epoch else { return }
-            if let final = streamingText {
-                try? await chat.complete(userMessage, text: final.isEmpty ? "（模型未返回文本）" : final)
+            if let reply = stream.reply {
+                try await chat.complete(userMessage, text: reply.text.isEmpty ? "（模型未返回文本）" : reply.text)
                 streamingText = nil
                 streamed = true
                 await loadChat()
@@ -615,11 +628,20 @@ final class AppModel {
             } else {
                 streamingText = nil
             }
-        } catch { streamingText = nil }
-        guard generation == epoch, project == currentProject else { return }
+        } catch {
+            guard generation == epoch else { return }
+            streamingText = nil
+            // 只有服务端明确没有此路由，才转用旧的异步入口；其他情况只查询原编号。
+            if let apiError = error as? APIError, case .server(let status, _) = apiError, status == 404 {
+                streamRouteMissing = true
+            }
+        }
+        guard generation == epoch else { return }
         if !streamed {
             do {
-                _ = try await api.aiSubmit(input: conversation, requestID: requestID, token: credentials.token, imageConsent: vision != nil)
+                if streamRouteMissing {
+                    _ = try await api.aiSubmit(input: conversation, requestID: requestID, token: credentials.token, imageConsent: vision != nil)
+                }
                 guard generation == epoch else { return }
                 let job = try await pollAIJob(requestID: requestID, api: api, token: credentials.token, generation: generation)
                 guard generation == epoch else { return }
@@ -1121,6 +1143,8 @@ final class AppModel {
         aiAccountState = nil
         aiAccountError = nil
         aiSending = false
+        streamingText = nil
+        lastDraft = nil
         visionDraftID = nil
         canvasSending = false
         pendingBoards = []

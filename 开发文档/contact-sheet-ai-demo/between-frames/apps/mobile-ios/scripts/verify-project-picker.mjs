@@ -51,11 +51,32 @@ try {
       assert.equal(image.detail, 'low');
     }
     aiCalls.push({ last, images: images.length });
-    // 让回复晚于项目切换，验证结果仍回到原本机项目。
-    if (images.length) await new Promise(resolve => setTimeout(resolve, 8000));
-    return new Response(JSON.stringify({ id: randomUUID(), status: 'completed',
-      output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: `本机回复：${last.split('\n')[0]}` }] }],
-      usage: { input_tokens: 12, output_tokens: 8, total_tokens: 20 } }), { headers: { 'content-type': 'application/json' } });
+    const textReply = `本机回复：${last.split('\n')[0]}` + (last.includes('本机甲问题')
+      ? '\n\n我们可以先从画面的光线、节奏和视觉重心入手，再考虑它在整组作品中的位置。'
+      : '');
+    const reply = { id: randomUUID(), status: 'completed',
+      output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: textReply }] }],
+      usage: { input_tokens: 12, output_tokens: 8, total_tokens: 20 } };
+    if (body.stream) {
+      const encoder = new TextEncoder();
+      const event = value => encoder.encode(`data: ${JSON.stringify(value)}\n\n`);
+      const stream = new ReadableStream({
+        async start(controller) {
+          if (last.includes('模拟流中断')) {
+            controller.enqueue(event({ type: 'response.output_text.delta', delta: '尚未完成的片段' }));
+            controller.close();
+            return;
+          }
+          controller.enqueue(event({ type: 'response.output_text.delta', delta: textReply }));
+          // 首段立即显示，完成回执晚于项目切换，核对流式内容与结果均不串项目。
+          if (images.length) await new Promise(resolve => setTimeout(resolve, 8000));
+          controller.enqueue(event({ type: 'response.completed', response: reply }));
+          controller.close();
+        },
+      });
+      return new Response(stream, { headers: { 'content-type': 'text/event-stream' } });
+    }
+    return new Response(JSON.stringify(reply), { headers: { 'content-type': 'application/json' } });
   };
   api = await createApi({ pool, store: new LocalPreviewStore(join(directory, 'picker-previews')), origin: 'http://127.0.0.1:1424',
     hostedAi: { key: 'local-fixture-key', initialTokens: 50000 }, hostedAiTransport: aiTransport });
@@ -133,8 +154,11 @@ try {
   const rows = (await pool.query('SELECT id,revision,snapshot FROM fr_projects ORDER BY id')).rows;
   assert.deepEqual(rows, beforeProjects, '切换项目不得创建云端副本、修改作品版本或快照');
   assert.deepEqual((await pool.query('SELECT id,revision FROM fr_boards ORDER BY id')).rows, beforeBoards, '切换项目不得修改画布');
-  assert.equal(aiCalls.length, 2, '取消授权不发图，发送与恢复不重复调用模型桩');
-  assert.deepEqual(aiCalls.map(call => call.images), [1, 0]);
+  assert.equal(aiCalls.length, 3, '取消授权不发图，流中断与恢复不得重复调用模型桩');
+  assert.deepEqual(aiCalls.map(call => call.images), [1, 0, 0]);
+  const jobStates = (await pool.query('SELECT state,count(*)::int AS count FROM fr_ai_requests GROUP BY state ORDER BY state')).rows;
+  assert.deepEqual(jobStates, [{ state: 'COMPLETED', count: 2 }, { state: 'UNKNOWN', count: 1 }],
+    '流中断必须保留未知结果，不得把片段标成完整回复');
   const finalContainer = execFileSync('xcrun', ['simctl', 'get_app_container', device, 'studio.focalroom.ios.development', 'data'], { encoding: 'utf8' }).trim();
   const localDocument = JSON.parse(await readFile(join(finalContainer, libraryPath, 'library.json'), 'utf8'));
   assert.equal(localDocument.projects.length, 3);

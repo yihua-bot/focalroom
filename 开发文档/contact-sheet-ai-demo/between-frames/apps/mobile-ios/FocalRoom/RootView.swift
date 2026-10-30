@@ -13,11 +13,11 @@ struct RootView: View {
                 LoginView(model: model)
             } else {
                 TabView {
-                    workspace { ProjectsView(model: model) }
+                    workspace(account: false) { ProjectsView(model: model) }
                         .tabItem { Label("项目", systemImage: "square.stack.3d.up") }
-                    workspace { FocalAIView(model: model) }
+                    workspace(account: false) { FocalAIView(model: model) }
                         .tabItem { Label("Focal AI", systemImage: "sparkle") }
-                    workspace { BoardsView(model: model) }
+                    workspace(account: false) { BoardsView(model: model) }
                         .tabItem { Label("画布", systemImage: "rectangle.3.group") }
                     workspace { CommentsView(model: model) }
                         .tabItem { Label("消息", systemImage: "bubble.left.and.bubble.right") }
@@ -30,12 +30,15 @@ struct RootView: View {
         } message: { Text(model.notice ?? "") }
     }
 
-    private func workspace<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+    // 账户入口只保留在消息页；画布/项目/AI 页不再重复放置账户按钮。
+    private func workspace<Content: View>(account: Bool = true, @ViewBuilder _ content: () -> Content) -> some View {
         NavigationStack {
             content().toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { accountPresented = true } label: { Image(systemName: "person.crop.circle") }
-                        .accessibilityLabel("账户")
+                if account {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { accountPresented = true } label: { Image(systemName: "person.crop.circle") }
+                            .accessibilityLabel("账户")
+                    }
                 }
             }
         }

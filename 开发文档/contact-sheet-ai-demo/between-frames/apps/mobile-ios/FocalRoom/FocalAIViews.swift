@@ -7,17 +7,27 @@ struct FocalAIView: View {
     @State private var results: [AgentResult] = []
     @State private var jobs: [AgentJob] = []
     @State private var tasksError: String?
-    @State private var choosingPhotos = false
     @State private var selectedPhotos: Set<String> = []
     @State private var preparingVision = false
-    @State private var vision: PreparedVision?
-    @State private var showingTasks = false
+    @State private var activeSheet: ActiveSheet?
     @State private var followingConversation = true
     @State private var scrollRequest = 0
     @State private var streamStartedHere = false
     @State private var streamProject: ProjectReference?
     @State private var draftOwner: ProjectReference?
+    @State private var projectDrafts: [ProjectReference?: String] = [:]
     @FocusState private var inputFocused: Bool
+
+    private enum ActiveSheet: Identifiable {
+        case photos, tasks, vision(PreparedVision)
+        var id: String {
+            switch self {
+            case .photos: "photos"
+            case .tasks: "tasks"
+            case .vision(let prepared): "vision-\(prepared.id)"
+            }
+        }
+    }
 
     private var hasPending: Bool {
         model.chatMessages.contains { $0.state == .unknown && $0.role == "user" }
@@ -40,26 +50,42 @@ struct FocalAIView: View {
             await model.aiResolvePending()
             await loadTasks()
         }
-        .onChange(of: model.currentProject) { _, _ in resetContext() }
-        .onChange(of: model.credentials?.user.id) { _, _ in resetContext() }
-        .sheet(isPresented: $choosingPhotos) { photoPicker }
-        .sheet(isPresented: $showingTasks) { tasksSheet }
-        .sheet(item: $vision, onDismiss: { model.cancelVision() }) { prepared in
-            VisionConsentView(draft: prepared) {
-                // Sheet 收起会撤销尚未使用的授权；发送任务先消费授权，再主动收起。
-                beginFollowingRequest()
-                Task {
-                    await model.aiSend(text: prepared.text, vision: prepared, onVisionConsumed: { vision = nil })
-                }
-                draft = ""
-                selectedPhotos = []
-            } cancel: { vision = nil }
+        .onChange(of: model.currentProject) { old, new in
+            projectDrafts[old] = draft
+            draft = projectDrafts[new] ?? ""
+            resetContext()
+        }
+        .onChange(of: model.credentials?.user.id) { _, _ in
+            projectDrafts.removeAll()
+            draft = ""
+            resetContext()
+        }
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .photos:
+                photoPicker
+            case .tasks:
+                tasksSheet
+            case .vision(let prepared):
+                VisionConsentView(draft: prepared) {
+                    // 授权只消费一次；发送任务先消费授权，再主动收起确认页。
+                    beginFollowingRequest()
+                    Task {
+                        await model.aiSend(text: prepared.text, vision: prepared, onVisionConsumed: { activeSheet = nil })
+                    }
+                    draft = ""
+                    selectedPhotos = []
+                } cancel: { activeSheet = nil }
+                .onDisappear { model.cancelVision() }
+            }
         }
     }
 
     private var statusBar: some View {
         HStack(spacing: 8) {
-            if let account = model.aiAccountState {
+            if model.aiSending && !(streamStartedHere && streamProject == model.currentProject) {
+                Label("其他请求处理中", systemImage: "hourglass")
+            } else if let account = model.aiAccountState {
                 if !account.enabled {
                     Label("AI 暂未开放", systemImage: "circle")
                 } else if !account.verified {
@@ -82,7 +108,7 @@ struct FocalAIView: View {
                 Text("读取 AI 状态…")
             }
             Spacer(minLength: 8)
-            Button { showingTasks = true } label: {
+            Button { activeSheet = .tasks } label: {
                 HStack(spacing: 5) {
                     Text("项目动态")
                     if !jobs.isEmpty || !results.isEmpty { Text("\(jobs.count + results.count)").monospacedDigit() }
@@ -173,12 +199,12 @@ struct FocalAIView: View {
             Text("从一张照片，\n开始对话。")
                 .font(.system(.title2, design: .serif).weight(.medium))
                 .fixedSize(horizontal: false, vertical: true)
-            Text("一起看照片、整理线索，或讨论一组作品的顺序。")
+            Text("一起整理线索、讨论选片和顺序。需要看图时，点下方 + 添加照片。")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 0) {
-                suggestion("帮我看看这组照片的共同气质")
-                suggestion("这组照片可以怎样排列？")
+                suggestion("怎样制定一组照片的选片标准？")
+                suggestion("给我一些排列照片的思路")
             }.padding(.top, 6)
         }
         .padding(.vertical, 18)
@@ -187,7 +213,11 @@ struct FocalAIView: View {
 
     private func suggestion(_ text: String) -> some View {
         Button {
-            draft = text
+            if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                draft = text
+            } else {
+                draft += (draft.hasSuffix("\n") ? "" : "\n") + text
+            }
             inputFocused = true
         } label: {
             HStack(spacing: 10) {
@@ -207,11 +237,9 @@ struct FocalAIView: View {
             Image(systemName: "clock.arrow.circlepath").foregroundStyle(.orange)
             Text("有消息结果待确认").font(.caption).foregroundStyle(.secondary)
             Spacer()
-            if hasPending {
-                Button("核对结果") { Task { await model.aiResolvePending() } }
-                    .font(.caption.weight(.medium)).frame(minHeight: 44)
-                    .accessibilityIdentifier("ai.resolve")
-            }
+            Button("核对结果") { Task { await model.aiResolvePending() } }
+                .font(.caption.weight(.medium)).frame(minHeight: 44)
+                .accessibilityIdentifier("ai.resolve")
         }
     }
 
@@ -299,14 +327,14 @@ struct FocalAIView: View {
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
             .accessibilityIdentifier("ai.draft.card")
-        } else if model.selectedProjectID != nil, !model.offline {
+        } else if model.selectedProjectID != nil, model.snapshot?.snapshot.photos.isEmpty == false, !model.offline {
             Button {
                 draftOwner = model.currentProject
                 model.lastDraft = nil
                 beginFollowingRequest()
                 Task { await model.requestDraft() }
             } label: {
-                Label("生成选片草案", systemImage: "sparkles.rectangle.stack")
+                Label("生成选片草案", systemImage: "sparkles")
                     .font(.subheadline).foregroundStyle(.secondary).frame(minHeight: 44)
             }
                 .buttonStyle(.plain)
@@ -374,7 +402,7 @@ struct FocalAIView: View {
                 .navigationTitle("项目动态").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("完成") { showingTasks = false }
+                        Button("完成") { activeSheet = nil }
                     }
                 }
         }
@@ -389,7 +417,7 @@ struct FocalAIView: View {
                             Button { selectedPhotos.remove(photo.id) } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "photo")
-                                    Text(photo.filename).lineLimit(1)
+                                    Text(photo.filename).lineLimit(1).frame(maxWidth: 160, alignment: .leading)
                                     Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
                                 }
                                 .font(.caption).foregroundStyle(.secondary)
@@ -404,7 +432,7 @@ struct FocalAIView: View {
                 }
             }
             HStack(alignment: .bottom, spacing: 2) {
-                Button { choosingPhotos = true } label: {
+                Button { activeSheet = .photos } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 19, weight: .regular))
                         .foregroundStyle(.white.opacity(0.8))
@@ -469,7 +497,11 @@ struct FocalAIView: View {
             preparingVision = true
             Task {
                 defer { preparingVision = false }
-                do { vision = try await model.prepareVision(text: text, photoIDs: selectedPhotos) }
+                do {
+                    let prepared = try await model.prepareVision(text: text, photoIDs: selectedPhotos)
+                    guard prepared.project == model.currentProject else { model.cancelVision(); return }
+                    activeSheet = .vision(prepared)
+                }
                 catch is CancellationError { }
                 catch { model.notice = error.localizedDescription }
             }
@@ -477,7 +509,7 @@ struct FocalAIView: View {
     }
 
     private func clearPhotos() {
-        selectedPhotos = []; vision = nil; choosingPhotos = false
+        selectedPhotos = []; activeSheet = nil
         model.cancelVision()
     }
 
@@ -501,6 +533,10 @@ struct FocalAIView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("最多选择 4 张。发送前会逐次确认照片和接收方。")
                         .font(.subheadline).foregroundStyle(.secondary)
+                    if selectedPhotos.count == 4 {
+                        Text("已选满 4 张，取消一张后可更换。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 16) {
                         ForEach(model.observationPhotos) { photo in
                             Button {
@@ -534,7 +570,7 @@ struct FocalAIView: View {
             }
             .background(Color(white: 0.055))
             .navigationTitle("选择照片 · \(selectedPhotos.count)/4").navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button("完成") { choosingPhotos = false } }
+            .toolbar { Button("完成") { activeSheet = nil } }
         }
     }
 
