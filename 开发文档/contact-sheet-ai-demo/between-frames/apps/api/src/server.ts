@@ -110,7 +110,9 @@ class ApiController {
     if (billingSeat && req.method === 'DELETE') return s.billing.releaseSeat(headers, billingSeat[1], billingSeat[2]);
     if (path === '/billing/webhook' && req.method === 'POST') {
       assert(Buffer.isBuffer(req.body),400,'BILLING_SIGNATURE_INVALID','付款通知无效');
-      return s.billing.webhook(req.body,typeof headers['stripe-signature']==='string'?headers['stripe-signature']:'');
+      // Stripe 用 stripe-signature 头；Polar 用 webhook-id/webhook-timestamp/webhook-signature 头。
+      // 把完整的规范化 Headers 传入，由各网关自行取所需字段。
+      return s.billing.webhook(req.body,typeof headers['stripe-signature']==='string'?headers['stripe-signature']:'',headers);
     }
     if (path === "/ai/account" && req.method === "GET") return s.ai.account(headers);
     if (path === "/ai/deepseek-flash-v1/responses" && req.method === "POST") return s.ai.respond(headers,req.body);
