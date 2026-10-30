@@ -23,7 +23,7 @@ struct FocalAIView: View {
             ScrollViewReader { scroll in
                 List {
                     balanceSection
-                    conversationSection
+                    conversationSection(scroll)
                     tasksSection
                 }
                 .onChange(of: model.chatMessages.last?.id) { _, id in
@@ -86,7 +86,7 @@ struct FocalAIView: View {
         }
     }
 
-    private var conversationSection: some View {
+    private func conversationSection(_ scroll: ScrollViewProxy) -> some View {
         Section("对话") {
             if hasPending {
                 Button("查询待确认结果") {
@@ -102,6 +102,30 @@ struct FocalAIView: View {
             }
             ForEach(model.chatMessages) { message in
                 bubble(message).id(message.id)
+            }
+            if let streaming = model.streamingText {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(streaming.isEmpty ? "正在思考…" : streaming)
+                        .font(.subheadline)
+                        .textSelection(.enabled)
+                    if !streaming.isEmpty {
+                        HStack(spacing: 4) {
+                            ProgressView().controlSize(.mini)
+                            Text("正在输入").font(.caption2).foregroundStyle(.tertiary)
+                        }
+                    }
+                    Text("Focal AI").font(.caption2).foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
+                .id("ai.streaming")
+            }
+        }
+        .onChange(of: model.streamingText) { _, _ in
+            // 流式增量到达时贴底跟随（正式消息 id 变化的滚动已由外层处理）。
+            if model.streamingText != nil {
+                withAnimation { scroll.scrollTo("ai.streaming", anchor: .bottom) }
             }
         }
     }

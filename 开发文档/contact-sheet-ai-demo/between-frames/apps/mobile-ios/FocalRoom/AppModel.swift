@@ -72,6 +72,8 @@ final class AppModel {
     private(set) var aiAccountError: String?
     private(set) var chatMessages: [AIChatMessage] = []
     private(set) var aiSending = false
+    /// 流式回复的实时预览文本：仅在流式进行中非空；完成后正式落盘并清空。
+    private(set) var streamingText: String?
     private(set) var canvasSending = false
     private(set) var pendingBoards: Set<String> = []
     var notice: String?
@@ -589,26 +591,53 @@ final class AppModel {
         guard generation == epoch, project == currentProject else { return }
         chatMessages.append(userMessage)
         let history = chatMessages.filter { $0.state == .sent || $0.id == userMessage.id }.suffix(20).map { ($0.role, $0.text) }
+        let conversation = AIConversationInput(history: Array(history), images: vision?.photos.map(\.preview) ?? [])
+        // 流式优先：增量实时显示；服务端不支持或流中断时，同编号回退提交+轮询（幂等读回执，不重复计费）。
+        var streamed = false
         do {
-            _ = try await api.aiSubmit(input: AIConversationInput(history: Array(history), images: vision?.photos.map(\.preview) ?? []),
-                                       requestID: requestID, token: credentials.token, imageConsent: vision != nil)
-            guard generation == epoch else { return }
-            let job = try await pollAIJob(requestID: requestID, api: api, token: credentials.token, generation: generation)
-            guard generation == epoch else { return }
-            if job.state == "COMPLETED", let result = job.result {
-                try? await chat.complete(userMessage, text: result.text.isEmpty ? "（模型未返回文本）" : result.text)
-                await loadChat()
-            } else if job.state == "REJECTED" {
-                try? await replaceMessage(userMessage, state: .failed, failure: "模型服务拒绝了请求，额度已释放。", in: chat)
-                await loadChat()
-                if project == currentProject { notice = "模型服务拒绝了请求，额度已释放。" }
-            } else {
-                if project == currentProject { notice = "结果尚未确认；可稍后用“查询待确认结果”核对，不会重复计费。" }
+            try await api.aiStream(input: conversation, requestID: requestID, token: credentials.token, imageConsent: vision != nil) { [weak self] event in
+                guard let self, self.epoch == generation else { return }
+                switch event {
+                case .start: break
+                case .delta(let text):
+                    self.streamingText = (self.streamingText ?? "") + text
+                case .done, .failure:
+                    break // 结果在流收尾统一处理（下方 streamed 判定）。
+                }
             }
-            await loadAIAccount()
-        } catch {
-            // 网络中断等：消息保留待确认状态，凭原编号可恢复。
-            if generation == epoch, project == currentProject { notice = message(error) }
+            guard generation == epoch else { return }
+            if let final = streamingText {
+                try? await chat.complete(userMessage, text: final.isEmpty ? "（模型未返回文本）" : final)
+                streamingText = nil
+                streamed = true
+                await loadChat()
+                await loadAIAccount()
+            } else {
+                streamingText = nil
+            }
+        } catch { streamingText = nil }
+        guard generation == epoch, project == currentProject else { return }
+        if !streamed {
+            do {
+                _ = try await api.aiSubmit(input: conversation, requestID: requestID, token: credentials.token, imageConsent: vision != nil)
+                guard generation == epoch else { return }
+                let job = try await pollAIJob(requestID: requestID, api: api, token: credentials.token, generation: generation)
+                guard generation == epoch else { return }
+                if job.state == "COMPLETED", let result = job.result {
+                    try? await chat.complete(userMessage, text: result.text.isEmpty ? "（模型未返回文本）" : result.text)
+                    await loadChat()
+                } else if job.state == "REJECTED" {
+                    try? await replaceMessage(userMessage, state: .failed, failure: "模型服务拒绝了请求，额度已释放。", in: chat)
+                    await loadChat()
+                    if project == currentProject { notice = "模型服务拒绝了请求，额度已释放。" }
+                } else {
+                    if project == currentProject { notice = "结果尚未确认；可稍后用“查询待确认结果”核对，不会重复计费。" }
+                }
+                await loadAIAccount()
+            } catch {
+                // 网络中断等：消息保留待确认状态，凭原编号可恢复。
+                if generation == epoch, project == currentProject { notice = message(error) }
+            }
         }
     }
 

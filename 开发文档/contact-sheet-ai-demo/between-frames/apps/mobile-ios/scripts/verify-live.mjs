@@ -50,6 +50,26 @@ try {
     const last = body.input[body.input.length - 1];
     const prompt = typeof last?.content?.[0]?.text === 'string' ? last.content[0].text : '';
     const text = `桩回复：收到「${prompt.slice(0, 40)}」（${body.input.length} 条输入，观察 ${images.length} 张预览）`;
+    // 流式请求按 SSE 形状应答（与服务端 stream 路由的上游契约一致），验证客户端流式消费。
+    if (body.stream === true) {
+      const frame = event => `data: ${JSON.stringify(event)}\n\n`;
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(frame({ type: 'response.output_text.delta', delta: '桩回复：' })));
+          controller.enqueue(new TextEncoder().encode(frame({ type: 'response.output_text.delta', delta: text.slice('桩回复：'.length) })));
+          controller.enqueue(new TextEncoder().encode(frame({
+            type: 'response.completed',
+            response: {
+              id: `resp-stub-${randomUUID()}`, status: 'completed',
+              output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] }],
+              usage: { input_tokens: 12, output_tokens: 8, total_tokens: 20 },
+            },
+          })));
+          controller.close();
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }
     return new Response(JSON.stringify({
       id: `resp-stub-${randomUUID()}`, status: 'completed',
       output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] }],

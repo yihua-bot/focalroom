@@ -401,6 +401,76 @@ public struct APIClient: Sendable {
         return job
     }
 
+    /// 流式事件：start 携带回执编号；delta 为增量文本；done 携带完整回复（含计量）。
+    public enum AIStreamEvent: Sendable {
+        case start(requestID: String)
+        case delta(String)
+        case done(AIReply)
+        case failure(code: String, message: String)
+    }
+
+    /// 流式提交：与 aiSubmit 相同的鉴权/额度/幂等边界；增量经 SSE 转发。
+    /// 直接使用 URLSession 字节流（不经 transport 全量缓冲）；服务端不支持时抛错由调用方回退轮询。
+    /// 流式提交：与 aiSubmit 相同的鉴权/额度/幂等边界；增量经 SSE 转发，事件经回调实时交付。
+    /// 服务端不支持或流中断时抛错，由调用方凭原编号回退提交+轮询（幂等读回执，不重复计费）。
+    public func aiStream(input: AIConversationInput, requestID: String, token: String, imageConsent: Bool = false,
+                         onEvent: @MainActor @Sendable (AIStreamEvent) -> Void) async throws {
+        guard UUID(uuidString: requestID) != nil, input.imageCount <= 4,
+              input.imageCount == 0 || imageConsent else { throw APIError.permissionDenied }
+        var request = URLRequest(url: configuration.origin.appendingPathComponent("api/v2/ai/deepseek-flash-v1/responses/stream"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("deepseek-flash-v1", forHTTPHeaderField: "x-focalroom-ai-policy")
+        request.setValue(requestID, forHTTPHeaderField: "x-focalroom-request-id")
+        if input.imageCount > 0 { request.setValue("granted", forHTTPHeaderField: "x-focalroom-image-consent") }
+        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
+        request.httpBody = try encoder.encode(input)
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+        guard http.statusCode == 200 else {
+            struct Failure: Decodable { struct Detail: Decodable { let code: String; let message: String? }; let error: Detail }
+            var raw = ""
+            for try await line in bytes.lines { raw += line }
+            if let data = raw.data(using: .utf8),
+               let failure = try? JSONDecoder().decode(Failure.self, from: data) {
+                throw APIError.server(status: http.statusCode, code: failure.error.code)
+            }
+            throw APIError.server(status: http.statusCode, code: "UNAVAILABLE")
+        }
+        struct Envelope: Decodable {
+            let type: String
+            let text: String?
+            let request_id: String?
+            let reply: AIReply?
+            let code: String?
+            let message: String?
+        }
+        for try await line in bytes.lines {
+            guard line.hasPrefix("data:") else { continue }
+            let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+            guard !payload.isEmpty, let data = payload.data(using: .utf8),
+                  let envelope = try? JSONDecoder().decode(Envelope.self, from: data) else { continue }
+            switch envelope.type {
+            case "start":
+                if let id = envelope.request_id { await onEvent(.start(requestID: id)) }
+            case "delta":
+                if let text = envelope.text { await onEvent(.delta(text)) }
+            case "done":
+                guard let reply = envelope.reply else { throw APIError.invalidResponse }
+                try reply.validate()
+                await onEvent(.done(reply))
+                return
+            case "error":
+                await onEvent(.failure(code: envelope.code ?? "AI_RESULT_UNKNOWN",
+                                 message: envelope.message ?? "模型结果无法确认"))
+                return
+            default: break
+            }
+        }
+        throw APIError.invalidResponse
+    }
+
     public func agentJobs(projectID: String, token: String) async throws -> [AgentJob] {
         struct Envelope: Decodable { let jobs: [AgentJob] }
         let envelope = try await call(Envelope.self, ["projects", projectID, "agent-jobs"], token: token)
