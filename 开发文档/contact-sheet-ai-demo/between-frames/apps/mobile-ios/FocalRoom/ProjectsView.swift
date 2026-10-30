@@ -234,11 +234,23 @@ struct PhotoViewer: View {
     let photoID: String
     @Environment(\.dismiss) private var dismiss
     @State private var transform = PhotoTransform()
+    @State private var currentID: String
+    @GestureState private var dragOffset = CGSize.zero
+
+    init(model: AppModel, projectID: String, photoID: String) {
+        self.model = model
+        self.projectID = projectID
+        self.photoID = photoID
+        _currentID = State(initialValue: photoID)
+    }
+
+    private var photos: [Photo] { model.snapshot?.snapshot.photos ?? [] }
+    private var currentIndex: Int { photos.firstIndex { $0.id == currentID } ?? 0 }
     @State private var info = false
     @State private var compare = false
     private var photo: Photo? {
         guard model.snapshot?.project_id == projectID else { return nil }
-        return model.snapshot?.snapshot.photos.first { $0.id == photoID }
+        return model.snapshot?.snapshot.photos.first { $0.id == currentID }
     }
 
     var body: some View {
@@ -255,9 +267,20 @@ struct PhotoViewer: View {
     private var viewerContent: some View {
         VStack(spacing: 0) {
             PendingBanner(model: model)
-            PhotoViewport(transform: $transform) {
-                PhotoPreview(model: model, photoID: photoID, fit: true)
+            // 左右滑动只做翻页（页式容器，与系统相册一致）；选片走底部按钮。
+            TabView(selection: $currentID) {
+                ForEach(photos) { item in
+                    PhotoViewport(transform: $transform) {
+                        PhotoPreview(model: model, photoID: item.id, fit: true)
+                    }
+                    .clipped()
+                    .tag(item.id)
+                }
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .onChange(of: currentID) { _, _ in transform = PhotoTransform() }
+            .accessibilityLabel("照片查看区。左滑排除，右滑保留，上滑待选；放大后可拖动查看细节")
+            .accessibilityIdentifier("cloud.viewer.photo")
 
             VStack(spacing: 14) {
                 HStack {
@@ -265,10 +288,17 @@ struct PhotoViewer: View {
                     Spacer()
                     Text("授权派生预览").font(.caption2).foregroundStyle(.secondary)
                 }
+                HStack {
+                    Button("上一张") {
+                        if currentIndex > 0 { currentID = photos[currentIndex - 1].id; transform = PhotoTransform() }
+                    }.disabled(currentIndex == 0 || model.busy)
+                    Spacer()
+                    Text("← 排除   ↑ 待选   保留 →").foregroundStyle(.secondary)
+                }.font(.caption)
                 HStack(spacing: 12) {
                     ForEach(Selection.allCases, id: \.self) { selection in
                         Button {
-                            if let photo { Task { await model.select(photo: photo, selection: selection) } }
+                            choose(selection)
                         } label: {
                             Label(selection.title, systemImage: selection == .KEEP ? "checkmark" : selection == .REJECT ? "xmark" : "minus")
                                 .font(.subheadline).frame(maxWidth: .infinity, minHeight: 48)
@@ -277,6 +307,7 @@ struct PhotoViewer: View {
                         }
                         .disabled(!model.canSelect)
                         .accessibilityIdentifier("selection.\(selection.rawValue)")
+                        .accessibilityValue(photo?.selection == selection ? "已选" : "未选")
                         .accessibilityValue(photo?.selection == selection ? "已选" : "未选")
                     }
                 }
@@ -297,7 +328,7 @@ struct PhotoViewer: View {
         .sheet(isPresented: $compare) {
             if model.snapshot?.project_id == projectID {
                 PhotoComparisonView(photos: model.snapshot?.snapshot.photos.map { ComparisonPhoto(id: $0.id, filename: $0.filename) } ?? [],
-                                    initialPhotoID: photoID, sourceLabel: "授权派生预览 · 非原片 100% 像素") { id in
+                                    initialPhotoID: currentID, sourceLabel: "授权派生预览 · 非原片 100% 像素") { id in
                     guard model.selectedProjectID == projectID else { throw APIError.permissionDenied }
                     return try await model.image(photoID: id)
                 }
@@ -309,7 +340,7 @@ struct PhotoViewer: View {
                     LabeledContent("文件", value: photo?.filename ?? "")
                     LabeledContent("选片", value: photo?.selection.title ?? "")
                     LabeledContent("显示来源", value: "云端授权 JPEG 派生预览")
-                    if let descriptor = model.snapshot?.previews.first(where: { $0.photo_id == photoID }) {
+                    if let descriptor = model.snapshot?.previews.first(where: { $0.photo_id == currentID }) {
                         LabeledContent("预览尺寸", value: "\(descriptor.width) × \(descriptor.height)")
                     }
                     Text("此预览不代表原片 100% 像素或印前签样。专业色彩与原片检视请使用 Mac。")
@@ -319,4 +350,19 @@ struct PhotoViewer: View {
             }.presentationDetents([.medium, .large])
         }
     }
+    private func choose(_ selection: Selection) {
+        guard let photo, model.canSelect else { return }
+        let chosenID = currentID
+        let nextID = photos.indices.contains(currentIndex + 1) ? photos[currentIndex + 1].id : nil
+        Task {
+            await model.select(photo: photo, selection: selection)
+            if model.selectedProjectID == projectID, model.pending == nil,
+               model.snapshot?.snapshot.photos.first(where: { $0.id == chosenID })?.selection == selection,
+               currentID == chosenID, let nextID {
+                currentID = nextID
+                transform = PhotoTransform()
+            }
+        }
+    }
+
 }

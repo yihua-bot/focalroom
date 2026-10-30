@@ -75,7 +75,7 @@ final class LocalLibraryModel {
     }
 
     func importFiles(_ urls: [URL], projectID: String) {
-        // 文件导入无系统相册身份；「保留」收藏同步对其自动跳过。
+        // 文件导入没有系统相册身份，保留时会说明无法自动同步。
         startImport(projectID: projectID, count: urls.count) { (urls[$0], false, nil) }
     }
 
@@ -196,19 +196,27 @@ final class LocalLibraryModel {
         return candidate
     }
 
-    func select(projectID: String, photoID: String, selection: Selection) async {
-        guard active, !isSaving else { return }
-        if readOnly { notice = "离线只读模式不修改选片；请登录后操作。"; return }
+    @discardableResult
+    func select(projectID: String, photoID: String, selection: Selection) async -> Bool {
+        guard active, !isSaving else { return false }
+        if readOnly { notice = "离线只读模式不修改选片；请登录后操作。"; return false }
         isSaving = true
         defer { isSaving = false }
         do {
             // 先取照片身份（相册导入的带 PHAsset 标识）供收藏同步。
             let photo = projects.first(where: { $0.id == projectID })?.photos.first(where: { $0.id == photoID })
             try await library.select(projectID: projectID, photoID: photoID, selection: selection)
-            // 「保留」同步系统相册收藏（仅相册导入的照片；未授权/失败静默不阻塞选片）。
-            if let photo { await PhotoFavorites.sync(photos: [photo], to: selection) }
+            // 选片关键路径不等收藏同步：同步（含相册权限弹窗）放后台，失败提示回主界面不阻塞选片与翻页。
+            if selection == .KEEP, let photo {
+                Task { @MainActor [weak self] in
+                    if let problem = await PhotoFavorites.syncKeptPhoto(photo), let self, self.active {
+                        self.notice = problem
+                    }
+                }
+            }
             if active { await reload() }
-        } catch { if active { notice = message(error) } }
+            return true
+        } catch { if active { notice = message(error) }; return false }
     }
 
     func reportPickerFailure(_ error: Error) {

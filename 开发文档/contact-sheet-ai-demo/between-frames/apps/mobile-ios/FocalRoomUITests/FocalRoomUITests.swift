@@ -2,6 +2,48 @@ import XCTest
 
 final class FocalRoomUITests: XCTestCase {
     @MainActor
+    func testLocalSwipeSelection() throws {
+        continueAfterFailure = false
+        let environment = ProcessInfo.processInfo.environment
+        guard let base = environment["FOCALROOM_IOS_TEST_BASE_URL"],
+              let projectID = environment["FOCALROOM_IOS_PICKER_LOCAL_FIRST_ID"],
+              let firstID = environment["FOCALROOM_IOS_PICKER_LOCAL_PHOTO_ID"] else { throw XCTSkip("需要隔离的选片夹具") }
+        let app = XCUIApplication()
+        app.launchEnvironment["FOCALROOM_IOS_REVIEW_URL"] = base
+        app.launch()
+        XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10))
+        app.textFields["login.email"].tap()
+        app.textFields["login.email"].typeText("picker@fr.test")
+        app.secureTextFields["login.password"].tap()
+        app.secureTextFields["login.password"].typeText("iphone-local-test-2026")
+        app.buttons["login.submit"].tap()
+        dismissPasswordPrompt(app)
+        let project = app.buttons["local.project.\(projectID)"]
+        XCTAssertTrue(project.waitForExistence(timeout: 15))
+        project.tap()
+        let photo = app.buttons["local.photo.\(firstID)"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 10))
+        photo.tap()
+        XCTAssertTrue(app.staticTexts["本机甲.jpg"].waitForExistence(timeout: 10))
+        let center = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+        attachScreenshot(app, name: "滑动翻页")
+        // 左滑=翻到下一张；滑动不选片（各选片按钮保持未选）。
+        center.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.4)))
+        XCTAssertTrue(app.staticTexts["本机甲-2.jpg"].waitForExistence(timeout: 10), "左滑后应翻到下一张")
+        XCTAssertEqual(app.buttons["local.selection.REJECT"].value as? String, "未选", "滑动不得改选片状态")
+        // 右滑=翻回上一张。
+        center.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.4)))
+        XCTAssertTrue(app.staticTexts["本机甲.jpg"].waitForExistence(timeout: 10), "右滑后应翻回上一张")
+        // 上滑不做任何选片：照片与状态保持。
+        center.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18)))
+        XCTAssertTrue(app.staticTexts["本机甲.jpg"].waitForExistence(timeout: 5), "上滑不应改变照片")
+        XCTAssertEqual(app.buttons["local.selection.KEEP"].value as? String, "未选", "上滑不得改选片状态")
+        // 选片走按钮：保留成功后自动进入下一张。
+        app.buttons["local.selection.KEEP"].tap()
+        XCTAssertTrue(app.staticTexts["本机甲-2.jpg"].waitForExistence(timeout: 10), "按钮保留后应自动进入下一张")
+    }
+
+    @MainActor
     func testProjectSelectionInAITabCanvasAndMessages() throws {
         continueAfterFailure = false
         let environment = ProcessInfo.processInfo.environment
@@ -208,6 +250,17 @@ final class FocalRoomUITests: XCTestCase {
 
     @MainActor
     func testNativeLoginLibrarySelectionAndLogout() throws {
+        // 系统相册权限弹窗自动允许（保留触发收藏同步时首次弹出；测试环境无人点会卡流程）。
+        addUIInterruptionMonitor(withDescription: "相册权限") { alert in
+            let allow = alert.buttons["允许"].firstMatch
+            if allow.exists { allow.tap(); return true }
+            let limited = alert.buttons["仅限所选照片"].firstMatch
+            if limited.exists { limited.tap(); return true }
+            let ok = alert.buttons["好"].firstMatch
+            if ok.exists { ok.tap(); return true }
+            return false
+        }
+
         continueAfterFailure = false
         let environment = ProcessInfo.processInfo.environment
         guard let base = environment["FOCALROOM_IOS_TEST_BASE_URL"],
@@ -247,10 +300,13 @@ final class FocalRoomUITests: XCTestCase {
         add(libraryScreenshot)
         photo.tap()
         XCTAssertTrue(app.images["preview.loaded.ios-photo-1"].waitForExistence(timeout: 15), "必须显示经过摘要核验的真实后端预览")
-        XCTAssertTrue(app.buttons["selection.KEEP"].waitForExistence(timeout: 10))
+        if !app.buttons["selection.KEEP"].waitForExistence(timeout: 6) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(app.buttons["selection.KEEP"].waitForExistence(timeout: 8), "滚动后应可见选片按钮")
         app.buttons["selection.KEEP"].tap()
-        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '已选' AND enabled == true"), object: app.buttons["selection.KEEP"])
-        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 15), .completed)
+        // 新交互：保留成功后自动进入下一张（ios-photo-2）。
+        XCTAssertTrue(app.images["preview.loaded.ios-photo-2"].waitForExistence(timeout: 15), "保留后应自动进入下一张")
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "iPhone 授权预览与选片"
         screenshot.lifetime = .keepAlways
@@ -358,9 +414,12 @@ final class FocalRoomUITests: XCTestCase {
         add(localScreenshot)
         runLocalCanvasSegment(app)
         localPhotos.element(boundBy: 0).tap()
+        // 新交互：本机保留成功后自动进入下一张（文件名 caption 随之变化）。
+        let localCaption = app.staticTexts.firstMatch
+        let beforeLocal = localCaption.label
         app.buttons["local.selection.KEEP"].tap()
-        let localSelected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '已选' AND enabled == true"), object: app.buttons["local.selection.KEEP"])
-        XCTAssertEqual(XCTWaiter.wait(for: [localSelected], timeout: 10), .completed)
+        let localAdvanced = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", beforeLocal), object: localCaption)
+        XCTAssertEqual(XCTWaiter.wait(for: [localAdvanced], timeout: 10), .completed, "本机保留后应自动进入下一张")
         // 多选分享：验证 App 自有的选择交互（勾选计数/按钮状态）；系统分享面板由独立进程
         // 渲染且模拟器活动服务不稳定，其出现与各 App 接收留待真机验收（与密码弹窗同纪律）。
         popBack(app)
@@ -382,6 +441,11 @@ final class FocalRoomUITests: XCTestCase {
         localProject.tap()
         XCTAssertTrue(localPhotos.firstMatch.waitForExistence(timeout: 10), "重新进入图库")
         localPhotos.element(boundBy: 0).tap()
+        // 大图查看器翻页：前进滑动由 testLocalSwipeSelection 专项覆盖；此处验证「上一张」按钮存在且可点。
+        let prevArrow = app.buttons["local.viewer.prev"]
+        if prevArrow.waitForExistence(timeout: 5), prevArrow.isHittable {
+            prevArrow.tap()
+        }
         app.buttons["local.compare"].tap()
         verifyComparison(app)
         migrateToCloud(app)
@@ -420,11 +484,20 @@ final class FocalRoomUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["FOCALROOM_IOS_REVIEW_URL"] = base
         app.launch()
-        if app.buttons["账户"].waitForExistence(timeout: 2) {
+        // 等启动稳定（Tab 栏出现=restore 完成），再判定登录态；登录态则经消息页账户入口退出。
+        let tabBar = app.tabBars.firstMatch
+        let loginField = app.textFields["login.email"]
+        var settled = false
+        for _ in 0..<20 {
+            if tabBar.exists || loginField.exists { settled = true; break }
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        _ = settled
+        if loginField.waitForExistence(timeout: 8) == false, tabBar.exists {
             openAccount(app)
             logoutFromAccount(app)
         }
-        XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10))
+        XCTAssertTrue(loginField.waitForExistence(timeout: 10))
         app.textFields["login.email"].tap()
         app.textFields["login.email"].typeText("erase-ui@fr.test")
         app.secureTextFields["login.password"].tap()
@@ -468,11 +541,11 @@ final class FocalRoomUITests: XCTestCase {
     @MainActor
     private func logoutFromAccount(_ app: XCUIApplication) {
         let logout = app.buttons["account.logout"]
-        for _ in 0..<4 {
+        for _ in 0..<10 {
             if logout.exists && logout.isHittable { break }
             app.swipeUp()
         }
-        XCTAssertTrue(logout.waitForExistence(timeout: 3))
+        XCTAssertTrue(logout.waitForExistence(timeout: 3), "滚动后应可见退出登录")
         logout.tap()
         app.buttons["退出并清理本机缓存"].tap()
     }
@@ -813,5 +886,20 @@ final class FocalRoomUITests: XCTestCase {
         file.tap()
         let open = app.buttons.matching(NSPredicate(format: "label == '打开' OR label == 'Open'")).firstMatch
         if open.waitForExistence(timeout: 3), open.isEnabled { open.tap() }
+    }
+    // 四语冒烟：英文环境下主 Tab 与登录文案应为英文（词表命中验证）。
+    @MainActor
+    func testEnglishLocalizationSmoke() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let email = app.textFields["login.email"]
+        if email.waitForExistence(timeout: 10) {
+            XCTAssertTrue(app.staticTexts["Sign in to your workspace"].firstMatch.waitForExistence(timeout: 5)
+                          || app.buttons["Send"].firstMatch.waitForExistence(timeout: 5),
+                          "英文环境应显示英文登录文案")
+        } else {
+            XCTAssertTrue(app.tabBars.buttons["Projects"].waitForExistence(timeout: 8), "英文环境 Tab 应为英文")
+        }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "between-frames"
-version = "1.4.2"
+version = "1.4.3"
 description = "序间：本地优先的摄影编辑工作台"
 authors = ["Between Frames"]
 edition = "2024"
@@ -54,11 +54,11 @@ tempfile = "3"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
-codegen-units = 1
-lto = true
+codegen-units = 16
+lto = false
 opt-level = 3
 panic = "abort"
-strip = true
+strip = false
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }

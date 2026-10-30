@@ -113,7 +113,7 @@ struct LocalProjectView: View {
         .onChange(of: migration?.finishedCloudProjectID) { _, _ in
             Task { await model.reloadProjects() }
         }
-        .photosPicker(isPresented: $picker, selection: $selected, maxSelectionCount: 20, matching: .images, preferredItemEncoding: .current)
+        .photosPicker(isPresented: $picker, selection: $selected, maxSelectionCount: 20, matching: .images, preferredItemEncoding: .current, photoLibrary: .shared())
         .onChange(of: selected) { _, items in
             guard !items.isEmpty else { return }
             library.importPhotos(items, projectID: projectID)
@@ -391,6 +391,7 @@ private struct LocalPhotoViewer: View {
     let photoID: String
     @State private var currentID: String
     @State private var transform = PhotoTransform()
+    @GestureState private var dragOffset = CGSize.zero
     @State private var info = false
     @State private var compare = false
     private var project: LocalProject? { library.projects.first { $0.id == projectID } }
@@ -407,27 +408,22 @@ private struct LocalPhotoViewer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PhotoViewport(transform: $transform) {
-                AsyncPhotoPreview(photoID: currentID, identity: currentID, fit: true) { try await library.image(projectID: projectID, photoID: currentID) }
-            }
-            // 左右滑动翻到上一张/下一张。并行手势：视口内部平移/缩放照常；原大小时水平滑动翻页。
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 40).onEnded { value in
-                    let dx = value.translation.width, dy = value.translation.height
-                    guard abs(dx) > max(60, abs(dy)), transform.zoom <= 1.001 else { return }
-                    let step = dx < 0 ? 1 : -1
-                    let target = currentIndex + step
-                    guard photos.indices.contains(target) else { return }
-                    currentID = photos[target].id
-                    transform = PhotoTransform()
+            // 左右滑动只做翻页（页式容器，与系统相册一致）；选片走底部按钮（保留后自动下一张）。
+            TabView(selection: $currentID) {
+                ForEach(photos) { item in
+                    PhotoViewport(transform: $transform) {
+                        AsyncPhotoPreview(photoID: item.id, identity: item.id, fit: true) {
+                            try await library.image(projectID: projectID, photoID: item.id)
+                        }
+                    }
+                    .clipped()
+                    .tag(item.id)
                 }
-            )
-            .overlay(alignment: .leading) {
-                if currentIndex > 0 { Image(systemName: "chevron.left").font(.title2).foregroundStyle(.white.opacity(0.55)).padding(12) }
             }
-            .overlay(alignment: .trailing) {
-                if currentIndex + 1 < photos.count { Image(systemName: "chevron.right").font(.title2).foregroundStyle(.white.opacity(0.55)).padding(12) }
-            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .onChange(of: currentID) { _, _ in transform = PhotoTransform() }
+            .accessibilityLabel("照片查看区，左右滑动切换照片")
+            .accessibilityIdentifier("local.viewer.photo")
             VStack(spacing: 12) {
                 HStack {
                     Text(photo?.filename ?? "照片").font(.caption).lineLimit(1)
@@ -435,8 +431,16 @@ private struct LocalPhotoViewer: View {
                     Text("本机 sRGB 预览").font(.caption2).foregroundStyle(.secondary)
                 }
                 HStack {
+                    Button("上一张") {
+                        if currentIndex > 0 { currentID = photos[currentIndex - 1].id; transform = PhotoTransform() }
+                    }.disabled(currentIndex == 0 || library.isSaving)
+                        .accessibilityIdentifier("local.viewer.prev")
+                    Spacer()
+                    Text("左右滑动切换照片 · 按钮选片").foregroundStyle(.secondary)
+                }.font(.caption)
+                HStack {
                     ForEach(Selection.allCases, id: \.self) { selection in
-                        Button(selection.title) { Task { await library.select(projectID: projectID, photoID: currentID, selection: selection) } }
+                        Button(selection.title) { choose(selection) }
                             .frame(maxWidth: .infinity, minHeight: 48)
                             .background(photo?.selection == selection ? .white.opacity(0.2) : .white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
                             .disabled(library.isSaving || project?.migration != nil || library.readOnly).accessibilityIdentifier("local.selection.\(selection.rawValue)")
@@ -453,6 +457,9 @@ private struct LocalPhotoViewer: View {
             }.padding(18)
         }
         .background(.black).navigationBarTitleDisplayMode(.inline)
+        .alert("提示", isPresented: Binding(get: { library.notice != nil }, set: { if !$0 { library.notice = nil } })) {
+            Button("知道了", role: .cancel) { library.notice = nil }
+        } message: { Text(library.notice ?? "") }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { compare = true } label: { Image(systemName: "rectangle.split.2x1") }
@@ -482,6 +489,18 @@ private struct LocalPhotoViewer: View {
                     }
                 }.navigationTitle("本机照片信息").toolbar { Button("完成") { info = false } }
             }.presentationDetents([.medium, .large])
+        }
+    }
+
+    private func choose(_ selection: Selection) {
+        let chosenID = currentID
+        let nextID = photos.indices.contains(currentIndex + 1) ? photos[currentIndex + 1].id : nil
+        Task {
+            let saved = await library.select(projectID: projectID, photoID: chosenID, selection: selection)
+            if saved, currentID == chosenID, let nextID {
+                currentID = nextID
+                transform = PhotoTransform()
+            }
         }
     }
 }

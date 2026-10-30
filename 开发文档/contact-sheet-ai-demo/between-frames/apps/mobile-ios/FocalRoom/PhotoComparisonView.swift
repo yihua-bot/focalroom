@@ -49,15 +49,36 @@ struct PhotoViewport<Content: View>: View {
             content().frame(width: geometry.size.width, height: geometry.size.height)
                 .scaleEffect(transform.zoom)
                 .offset(x: transform.x * geometry.size.width, y: transform.y * geometry.size.height)
-                .gesture(SimultaneousGesture(MagnifyGesture(), DragGesture()).onChanged { value in
+                // 双指缩放始终可用；单指平移仅在放大后启用——
+                // 原大小时不挂拖动手势，把单指左右滑动完整让给页式翻页（TabView pager）。
+                .gesture(MagnifyGesture().onChanged { value in
                     let origin = gestureOrigin ?? transform
                     gestureOrigin = origin
-                    transform = origin.magnified(by: Double(value.first?.magnification ?? 1))
-                        .translated(x: Double((value.second?.translation.width ?? 0) / max(1, geometry.size.width)),
-                                    y: Double((value.second?.translation.height ?? 0) / max(1, geometry.size.height)))
+                    transform = origin.magnified(by: Double(value.magnification))
                 }.onEnded { _ in gestureOrigin = nil })
+                .modifier(PanGestureWhenZoomed(transform: $transform, gestureOrigin: $gestureOrigin))
                 .onTapGesture(count: 2) { transform = transform.zoom == 1 ? PhotoTransform().magnified(by: 2) : PhotoTransform() }
         }.clipped().contentShape(Rectangle())
+    }
+}
+
+/// 放大状态（zoom>1）下的单指平移；未放大时不挂手势，避免拦截翻页滑动。
+private struct PanGestureWhenZoomed: ViewModifier {
+    @Binding var transform: PhotoTransform
+    @Binding var gestureOrigin: PhotoTransform?
+
+    func body(content: Content) -> some View {
+        if transform.zoom > 1.001 {
+            content.gesture(DragGesture().onChanged { value in
+                let origin = gestureOrigin ?? transform
+                gestureOrigin = origin
+                let size = UIScreen.main.bounds.size
+                transform = origin.translated(x: Double(value.translation.width / max(1, size.width)),
+                                              y: Double(value.translation.height / max(1, size.height)))
+            }.onEnded { _ in gestureOrigin = nil })
+        } else {
+            content
+        }
     }
 }
 
