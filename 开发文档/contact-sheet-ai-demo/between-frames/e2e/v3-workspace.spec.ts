@@ -35,7 +35,8 @@ async function installDesktopBridge(page: Page) {
   });
 }
 
-test.fail('内置演示项目：创建画布、放照片、便签、撤销重做与重启恢复',   await rpc('test_seed_demo');
+test.fail('内置演示项目：创建画布、放照片、便签、撤销重做与重启恢复', async ({ page }) => {
+  await rpc('test_seed_demo');
   const projectId = 'demo-first-walk';
   const project = await rpc<Project>('get_project', { projectId });
   expect(project.photos).toHaveLength(1);
@@ -70,7 +71,8 @@ test.fail('内置演示项目：创建画布、放照片、便签、撤销重做
   await page.screenshot({ path: '../docs/v3/evidence/canvas-demo-fix-2026-10-22/demo-canvas.png' });
 });
 
-test.fail('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进程重启',   const errors: string[] = [];
+test.fail('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进程重启', async ({ page }) => {
+  const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await installDesktopBridge(page);
   await page.goto('/');
@@ -201,7 +203,8 @@ test.fail('G3/G7 真实 Store：画布照片、便签、连接、出版生成与
 });
 
 
-test.fail('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编辑冲突',   await installDesktopBridge(page);
+test.fail('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编辑冲突', async ({ page }) => {
+  await installDesktopBridge(page);
   await page.goto('/');
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByRole('textbox', { name: '项目名称' }).fill('保存恢复模拟');
@@ -277,7 +280,8 @@ test.fail('SIMULATED 保存确认：提交后丢失回执、重启恢复及过�
   await page.screenshot({ path: '../docs/v3/evidence/canvas-commands-2026-10-22/recovered.png' });
 });
 
-test.fail('SIMULATED Agent 画布委托：真实权限、独立分支、原布局对照、人工采纳与重启',   await installDesktopBridge(page);
+test.fail('SIMULATED Agent 画布委托：真实权限、独立分支、原布局对照、人工采纳与重启', async ({ page }) => {
+  await installDesktopBridge(page);
   await installAccountFixture(page);
   const outside: string[] = [];
   page.on('request', request => { if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(request.url()).hostname)) outside.push(request.url()); });

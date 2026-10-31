@@ -443,6 +443,10 @@ private struct LocalPhotoViewer: View {
             .onChange(of: currentID) { _, _ in transform = PhotoTransform() }
             .accessibilityLabel("照片查看区，左右滑动切换照片")
             .accessibilityIdentifier("local.viewer.photo")
+            .frame(maxWidth: .infinity)
+            .aspectRatio(3 / 4, contentMode: .fit)
+            .frame(maxHeight: UIScreen.main.bounds.height * 0.62)
+            .frame(maxWidth: .infinity)
             .layoutPriority(1)
             VStack(spacing: 12) {
                 HStack {
