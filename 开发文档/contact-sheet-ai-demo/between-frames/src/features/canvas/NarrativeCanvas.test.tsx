@@ -13,10 +13,11 @@ beforeEach(() => {
 
 // 便签落点要走完整的按下-松开：pointerdown 记落点、mousedown 把焦点交给画布（surface 有 tabIndex=0）、pointerup 才挂编辑框。
 // fireEvent.pointerDown 单发会跳过中间那步失焦，浏览器里能复现的"编辑框刚出现就被 blur 丢掉"在测试里复现不了。
+// user-event 的按住语法是 [MouseLeft>]，松开是 {/MouseLeft}；写成 [MouseLeftDown] 会被静默忽略、一个事件都不发。
 type Pointer = ReturnType<typeof userEvent.setup>;
 const dropSticky = (user: Pointer, surface: HTMLElement, x: number, y: number) => user.pointer([
-  { keys: '[MouseLeftDown]', target: surface, coords: { clientX: x, clientY: y } },
-  { keys: '[MouseLeftUp]', target: surface, coords: { clientX: x, clientY: y } },
+  { keys: '[MouseLeft>]', target: surface, coords: { clientX: x, clientY: y } },
+  { keys: '{/MouseLeft}' },
 ]);
 
 it('方案显示真实变化与原布局叠层，原版更新有提示', async () => {
