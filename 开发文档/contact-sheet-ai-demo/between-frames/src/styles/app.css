@@ -312,6 +312,15 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .version-preview { min-width:0; }
 .version-preview ol { max-height:30vh; overflow:auto; padding-left:22px; font-size:13px; }
 .version-preview li { padding:4px; }
+.version-toolbar { display:flex; gap:8px; margin-bottom:16px; }
+.version-toolbar button { padding:7px 14px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--muted); font-size:12px; }
+.version-toolbar button[aria-selected="true"] { color:var(--text); border-color:var(--accent); }
+.version-compare { display:flex; flex-direction:column; gap:16px; }
+.compare-pickers { display:flex; flex-wrap:wrap; align-items:end; gap:12px; color:var(--muted); font-size:12px; }
+.compare-pickers label { display:flex; flex-direction:column; gap:6px; }
+.compare-pickers select { min-width:180px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); }
+.compare-result ul { max-height:26vh; overflow:auto; padding-left:22px; font-size:13px; }
+.compare-result li { padding:4px; }
 @media (max-width:1000px) { .history-toolbar { padding:10px 18px; } .version-layout { grid-template-columns:1fr; } }
 
 /* M2 任务与草案沿用现有视觉 tokens，局部滚动不遮挡审批操作。 */
@@ -599,7 +608,12 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .canvas-sticky-node.dragging{box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:.9;z-index:9999!important}
 .canvas-annotation-pin{position:absolute;font-size:16px;cursor:pointer;transform:translate(-50%,-100%);filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));pointer-events:auto}
 .canvas-annotation-pin:hover{transform:translate(-50%,-100%) scale(1.2)}
-.canvas-photo-node.link-target{outline:2px dashed var(--accent,#6c5ce7);outline-offset:2px}
+.canvas-photo-node.link-source,.canvas-sticky-node.link-source,.canvas-reference-node.link-source{outline:2px dashed var(--accent,#6c5ce7);outline-offset:2px}
+.canvas-surface.ink-mode,.canvas-surface.link-mode{cursor:crosshair}
+.canvas-surface.note-mode{cursor:copy}
+.canvas-tool-group{display:flex;gap:6px;align-items:center}
+.canvas-tool-sep{width:1px;height:18px;background:var(--border,#2a2a40)}
+.canvas-tool-status{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 16px;font-size:12px;color:var(--text,#e8e8f0);background:rgba(108,92,231,.14);border-bottom:1px solid var(--accent,#6c5ce7)}
 .canvas-surface.ink-mode{cursor:crosshair}
 
 /* G7 Publication Panel */
@@ -621,11 +635,14 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .publication-notice{color:#2ecc71;font-size:13px}
 .publication-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2,#888)}
 
-.canvas-note-editor{display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
-.canvas-note-editor textarea{flex:1;min-height:64px;resize:vertical;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)}
+.canvas-sticky-node.canvas-sticky-empty{border:1px dashed rgba(0,0,0,.3);box-shadow:none}
+.canvas-sticky-editor{position:absolute;z-index:9997;display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:8px;background:#ffe082;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.canvas-sticky-editor textarea{flex:1;min-height:0;border:none;background:transparent;color:#25231f;font:inherit;font-size:13px;line-height:1.5;resize:none;padding:0;outline:none}
+.canvas-sticky-editor-actions{display:flex;gap:6px;justify-content:flex-end}
+.canvas-ask-input{width:100%;min-height:88px;resize:vertical;max-height:240px;padding:10px;border:1px solid var(--border,#2a2a40);border-radius:8px;background:var(--bg-secondary,#14141f);color:var(--text,#e8e8f0);font:inherit;font-size:13px;line-height:1.5}
+.canvas-comment-body{margin:0 0 14px;line-height:1.6;white-space:pre-wrap}
 .canvas-notice{padding:8px 16px;margin:0}
-.canvas-toolbar,.canvas-pending,.canvas-note-editor,.canvas-notice{flex-shrink:0}
-.canvas-note-editor textarea{max-height:160px}
+.canvas-toolbar,.canvas-pending,.canvas-tool-status,.canvas-notice{flex-shrink:0}
 
 .publication-pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;padding-top:12px}
 .publication-page-preview{margin:0;max-width:240px}

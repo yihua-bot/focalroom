@@ -278,6 +278,27 @@
   },
   {
     "schemaVersion": 3,
+    "commandId": "3f0b7c21-9d4e-5a86-b1f2-7c5d9e2a4b10",
+    "idempotencyKey": "8a1c6d34-2b5f-5e07-9a41-3d60c7b8e5f2",
+    "projectId": "15740517-8824-468c-b22b-6e099d67a197",
+    "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+    "baseRevision": 5,
+    "operations": [
+      {
+        "opId": "6d2e94a1-73bc-5f19-8d4a-05e1f7c39b62",
+        "action": {
+          "type": "SetNodeText",
+          "data": {
+            "boardId": "ff4082f2-44d9-483b-a82f-2fa07212f0a7",
+            "nodeId": "b7e3d0c5-48af-5216-9c7e-2a94d16b80f3",
+            "text": "开场用逆光，把两个人留在同一格"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
     "commandId": "d518f556-9637-5cf5-a19a-0fed7c139204",
     "idempotencyKey": "594de1f7-c3f1-53aa-8b04-b37372d23551",
     "projectId": "15740517-8824-468c-b22b-6e099d67a197",

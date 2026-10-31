@@ -79,9 +79,10 @@ export function ImportDialog({ repository, projectId, onClose, onChanged, onBack
     finally { setChoosing(false); }
   };
   const running = Boolean(jobId && (!job || job.status === 'running') && !error);
-  const background = () => { if (jobId && onBackground) { onBackground(jobId); onClose(); } };
+  const canBackground = Boolean(running && jobId && onBackground);
+  const background = () => { if (jobId && onBackground) { onBackground(jobId); onClose(); } else if (!running) onClose(); };
   return <Modal title="导入照片" description="原图保留在原目录。"
-    onClose={() => { if (!running && !choosing) onClose(); }}>
+    onClose={() => { if (choosing) return; if (running && jobId && onBackground) { background(); return; } if (!running) onClose(); }}>
     {!running && <div className="export-options"><Button variant="primary" disabled={choosing} onClick={() => { void start(false); }}>选择照片</Button>
       <Button disabled={choosing} onClick={() => { void start(true); }}>选择文件夹</Button></div>}
     <details><summary>支持的格式</summary><p>JPEG、PNG、WebP、TIFF。HEIC 和 RAW 支持情况取决于系统解码能力。</p></details>
@@ -97,6 +98,6 @@ export function ImportDialog({ repository, projectId, onClose, onChanged, onBack
       {!running && !!job?.failures.length && <Button onClick={() => { void repository.retryImport(jobId).then(id => { setJob(null); setJobId(id); setError(''); }).catch(failure => setError(String(failure))); }}>重试失败照片</Button>}
     </section>}
     {error && <p role="alert" className="error-message">{error}</p>}
-    <div className="dialog-actions"><Button disabled={running || choosing} onClick={onClose}>完成</Button></div>
+    <div className="dialog-actions"><Button disabled={choosing || (running && !canBackground)} onClick={canBackground ? background : onClose}>{canBackground ? '后台继续' : '完成'}</Button></div>
   </Modal>;
 }

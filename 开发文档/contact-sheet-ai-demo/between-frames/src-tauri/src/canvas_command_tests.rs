@@ -1,10 +1,10 @@
 use super::*;
 
 #[test]
-fn shared_protocol_examples_roundtrip_all_sixteen_actions_without_extra_fields() {
+fn shared_protocol_examples_roundtrip_every_action_without_extra_fields() {
     let examples: Vec<Value> =
         serde_json::from_str(include_str!("../../contracts/canvas-command-examples.json")).unwrap();
-    assert_eq!(examples.len(), 20);
+    assert_eq!(examples.len(), 21);
     for example in examples {
         let request: CanvasCommandRequest = serde_json::from_value(example.clone()).unwrap();
         validate(&request).unwrap();
@@ -716,4 +716,137 @@ async fn v28_upgrade_keeps_history_rowids_comments_and_verified_backup() {
         28
     );
     saved.close().await;
+}
+
+
+async fn content_of(db: &Store, p: &str, b: &str, id: &str) -> String {
+    db.canvas_snapshot(p, b)
+        .await
+        .unwrap()
+        .nodes
+        .iter()
+        .find(|node| node.id == id)
+        .unwrap()
+        .content_json
+        .clone()
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn set_node_text_rewrites_in_place_and_survives_undo_redo() {
+    let (_t, db, p, b) = fixture().await;
+    let batch = request(&p, &b, 1, vec![text(&b, "初稿"), text(&b, "结尾")]);
+    let sticky = batch.operations[0].op_id.clone();
+    let other = batch.operations[1].op_id.clone();
+    db.execute_canvas(batch).await.unwrap();
+    db.execute_canvas(request(
+        &p,
+        &b,
+        2,
+        vec![CanvasAction::AddArrow(AddArrowCommand {
+            board_id: b.clone(),
+            from_node_id: sticky.clone(),
+            to_node_id: other.clone(),
+            color: None,
+        })],
+    ))
+    .await
+    .unwrap();
+    let edit = |r: i64, value: &str| {
+        request(
+            &p,
+            &b,
+            r,
+            vec![CanvasAction::SetNodeText(SetNodeTextCommand {
+                board_id: b.clone(),
+                node_id: sticky.clone(),
+                text: value.into(),
+            })],
+        )
+    };
+    // 空白内容不落库也不推进版本；改写只换 content_json，节点 id 因而不会断开已有连线。
+    assert_eq!(
+        db.execute_canvas(edit(3, "   ")).await.unwrap_err().code,
+        "VALIDATION_ERROR"
+    );
+    assert_eq!(revision(&db, &p, &b).await, 3);
+    db.execute_canvas(edit(3, "逆光开场")).await.unwrap();
+    assert!(content_of(&db, &p, &b, &sticky)
+        .await
+        .contains("逆光开场"));
+    let arrow = db
+        .canvas_snapshot(&p, &b)
+        .await
+        .unwrap()
+        .nodes
+        .into_iter()
+        .find(|node| node.node_type == "arrow")
+        .unwrap();
+    assert_eq!(
+        arrow.children_json.clone().unwrap(),
+        format!("[\"{sticky}\",\"{other}\"]")
+    );
+    // 同一内容重复提交不产生历史，避免一次失焦就多一条撤销记录。
+    assert!(!db.execute_canvas(edit(4, "逆光开场")).await.unwrap().changed);
+    assert_eq!(revision(&db, &p, &b).await, 4);
+    db.execute_canvas(request(
+        &p,
+        &b,
+        4,
+        vec![CanvasAction::Undo(UndoCanvasCommand {
+            board_id: b.clone(),
+        })],
+    ))
+    .await
+    .unwrap();
+    assert!(content_of(&db, &p, &b, &sticky).await.contains("初稿"));
+    db.execute_canvas(request(
+        &p,
+        &b,
+        5,
+        vec![CanvasAction::Redo(RedoCanvasCommand {
+            board_id: b.clone(),
+        })],
+    ))
+    .await
+    .unwrap();
+    assert!(content_of(&db, &p, &b, &sticky)
+        .await
+        .contains("逆光开场"));
+    assert_eq!(revision(&db, &p, &b).await, 6);
+    sqlx::query("UPDATE canvas_nodes SET locked=1 WHERE id=?")
+        .bind(&sticky)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    // 绕过命令层直接改 locked 会踩中 0034 的修订触发器，基准版本必须以库里的实际值为准。
+    let locked_at = revision(&db, &p, &b).await;
+    let locked = request(
+        &p,
+        &b,
+        locked_at,
+        vec![CanvasAction::SetNodeText(SetNodeTextCommand {
+            board_id: b.clone(),
+            node_id: sticky.clone(),
+            text: "改不动".into(),
+        })],
+    );
+    let err = db.execute_canvas(locked).await.unwrap_err();
+    assert_eq!(err.code, "NOT_FOUND", "{}", err.message);
+    assert_eq!(
+        db.execute_canvas(request(
+            &p,
+            &b,
+            locked_at,
+            vec![CanvasAction::SetNodeText(SetNodeTextCommand {
+                board_id: b.clone(),
+                node_id: arrow.id.clone(),
+                text: "连线没有正文".into(),
+            })],
+        ))
+        .await
+        .unwrap_err()
+        .code,
+        "NOT_FOUND"
+    );
 }

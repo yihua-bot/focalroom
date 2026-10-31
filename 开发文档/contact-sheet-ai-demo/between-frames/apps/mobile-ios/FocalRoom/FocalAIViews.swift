@@ -391,7 +391,7 @@ struct FocalAIView: View {
                     Text(result.task_type == "summarize_disagreement" ? "评论分歧" : "评论汇总")
                         .font(.subheadline.weight(.semibold))
                     Text(result.summary).font(.footnote).textSelection(.enabled)
-                    Text("\(result.model_id) · \(result.comment_count) 条评论 · \(result.created_by_name)")
+                    Text("\(result.comment_count) 条评论 · \(result.created_by_name)")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }
@@ -404,7 +404,7 @@ struct FocalAIView: View {
                 tasksSection
                 if let account = model.aiAccountState {
                     Section("AI 服务") {
-                        LabeledContent("服务", value: "\(account.provider) · \(account.model)")
+                        LabeledContent("服务", value: "FocalRoom AI")
                         LabeledContent("可用", value: "\(account.available.formatted()) \(account.unit)")
                         LabeledContent("已用", value: "\(account.spent.formatted()) \(account.unit)")
                     }

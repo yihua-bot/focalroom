@@ -74,6 +74,25 @@ final class LocalLibraryModel {
         } catch { notice = message(error); return nil }
     }
 
+    private(set) var isDeleting = false
+    var onProjectDeleted: (() -> Void)?
+
+    func deleteProject(projectID: String) async {
+        guard active, !isDeleting, !readOnly else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+        do {
+            try await library.deleteProject(projectID: projectID)
+            guard active else { return }
+            await reload()
+            onProjectDeleted?()
+        } catch LocalLibraryError.projectFrozen {
+            notice = "迁云进行中的项目暂不能删除；请等迁云完成或放弃迁云后再试。"
+        } catch {
+            if active { notice = message(error) }
+        }
+    }
+
     func importFiles(_ urls: [URL], projectID: String) {
         // 文件导入没有系统相册身份，保留时会说明无法自动同步。
         startImport(projectID: projectID, count: urls.count) { (urls[$0], false, nil) }

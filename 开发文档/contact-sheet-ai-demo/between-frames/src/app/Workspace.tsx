@@ -37,6 +37,8 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   const account = useAccount();
   const openAI = () => { if (account) void account.requireSignIn('ai', ui.openAgent); else ui.openAgent(); };
   const filters: PhotoFilter[] = ['all', 'keep', 'undecided', 'reject'];
+  const photoTools = ui.view === 'grid' || ui.view === 'sequence';
+  const gridTools = ui.view === 'grid';
   const readOnly = !!sharing && sharing.authority !== 'local';
   return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={openAI} readOnly={readOnly} />
     {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 请在线继续审稿，本机项目仅供查看。' : '共享尚未完成 · 编辑已暂停，请在导出窗口继续或取消共享。'}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
@@ -48,13 +50,13 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
       <Button size="small" disabled={busy} onClick={onActivity}>操作历史{project.events.length ? ` · ${project.events.length}` : ''}</Button>
       <span className="micro">{project.history?.undoCount ?? 0} 次可撤销编辑</span>
     </div>}
-    <div className="toolbar"><div className="filter-tabs" aria-label="照片筛选">{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter && ui.view === 'grid'}
-      className={ui.filter === filter && ui.view === 'grid' ? 'active' : ''} onClick={() => ui.setFilter(filter)}>{String(zh['filters.' + filter] ?? filter)}<span className="count">{filter === 'all' ? project.photos.length : project.photos.filter(photo => photo.status === filter).length}</span></button>)}</div>
-      <div className="toolbar-actions"><Button size="small" onClick={ui.toggleDensity} aria-label="切换网格密度" aria-pressed={ui.dense}><Columns3 size={15} /></Button>
-        <Button size="small" disabled={project.photos.length < 2 || !active} onClick={onCompare}>{zh.compare}</Button><Button size="small" onClick={onExport}>{zh.export} ↗</Button>
-        <Button size="small" onClick={ui.toggleFilmstrip} aria-label={ui.filmstripOpen ? '收起序列带' : '展开序列带'} aria-pressed={ui.filmstripOpen}><Film size={15} /></Button>
+    <div className="toolbar">{gridTools && <div className="filter-tabs" aria-label="照片筛选">{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter}
+      className={ui.filter === filter ? 'active' : ''} onClick={() => ui.setFilter(filter)}>{String(zh['filters.' + filter] ?? filter)}<span className="count">{filter === 'all' ? project.photos.length : project.photos.filter(photo => photo.status === filter).length}</span></button>)}</div>}
+      <div className="toolbar-actions">{gridTools && <Button size="small" onClick={ui.toggleDensity} aria-label="切换网格密度" aria-pressed={ui.dense}><Columns3 size={15} /></Button>}
+        {photoTools && <Button size="small" disabled={project.photos.length < 2 || !active} onClick={onCompare}>{zh.compare}</Button>}<Button size="small" onClick={onExport}>{zh.export} ↗</Button>
+        {photoTools && <Button size="small" onClick={ui.toggleFilmstrip} aria-label={ui.filmstripOpen ? '收起序列带' : '展开序列带'} aria-pressed={ui.filmstripOpen}><Film size={15} /></Button>}
         <Button size="small" onClick={ui.toggleInspector} aria-label={ui.inspectorOpen ? zh.hidePanel : zh.showPanel}>{ui.inspectorOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}</Button></div>
-      <div className="workspace-tools"><label className="search-field" htmlFor="photo-search"><Search size={14} /><input id="photo-search" type="search" aria-label="搜索照片文件名或备注" placeholder="搜索文件名或备注 · ⌘F" value={ui.search} onChange={event => ui.setSearch(event.target.value)} /></label>
+      {gridTools && <div className="workspace-tools"><label className="search-field" htmlFor="photo-search"><Search size={14} /><input id="photo-search" type="search" aria-label="搜索照片文件名或备注" placeholder="搜索文件名或备注 · ⌘F" value={ui.search} onChange={event => ui.setSearch(event.target.value)} /></label>
         <label className="group-field">分组
           <select aria-label="网格分组" value={ui.grouping} onChange={event => ui.setGrouping(event.target.value as GridGrouping)}>
             <option value="none">不分组</option>
@@ -63,8 +65,8 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
             <option value="prefix">按文件名前缀</option>
           </select>
         </label>
-        <span className="micro">⌘ / Ctrl 点选 · Shift 连选</span></div>
-      {selectedIds.length > 1 && <div className="selection-tools" role="group" aria-label="批量选片"><span>已选 {selectedIds.length} 张</span>{(['keep', 'reject', 'undecided'] as const).map(status => <Button key={status} size="small" disabled={busy} onClick={() => onBatchDecide(status)}>{status === 'keep' ? '保留选区' : status === 'reject' ? '淘汰选区' : '选区待定'}</Button>)}
+        <span className="micro">⌘ / Ctrl 点选 · Shift 连选</span></div>}
+      {photoTools && selectedIds.length > 1 && <div className="selection-tools" role="group" aria-label="批量选片"><span>已选 {selectedIds.length} 张</span>{(['keep', 'reject', 'undecided'] as const).map(status => <Button key={status} size="small" disabled={busy} onClick={() => onBatchDecide(status)}>{status === 'keep' ? '保留选区' : status === 'reject' ? '淘汰选区' : '选区待定'}</Button>)}
         <select aria-label="批量人工评分" disabled={busy} value="" onChange={event => onBatchRate(Number(event.target.value))}><option value="" disabled>人工评分…</option>{[0, 1, 2, 3, 4, 5].map(rating => <option key={rating} value={rating}>{rating ? `${rating} 星` : '清除评分'}</option>)}</select>
         {onAICompare && selectedIds.length === 2 && <Button size="small" disabled={busy} onClick={onAICompare} title="把两张选区照片交给Focal AI，比较叙事价值">AI 比较叙事价值</Button>}
         {onAIOrder && <Button size="small" disabled={busy} onClick={onAIOrder} title="把选区交给Focal AI，生成两版顺序方案">生成两版顺序</Button>}
@@ -85,7 +87,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
         : <EmptyState title={project.photos.length ? zh.emptyFilter : zh.emptyTitle} hint={project.photos.length ? '更改筛选条件。' : local ? '导入照片或文件夹。' : zh.emptyHint}
           action={<Button onClick={project.photos.length ? () => { ui.setFilter('all'); ui.setSearch(''); } : onImport}>{project.photos.length ? zh.allPhotos : local ? zh.import : `${zh.import} · 桌面版`}</Button>} />)
         : ui.view === 'sequence' ? (kept.length ? <SequenceBoard photos={kept} activeId={active?.id ?? null} busy={busy} onSelect={ui.select} onOpen={onEnlarge} onReorder={onReorder} />
-          : <EmptyState title={zh.emptySequence} hint={zh.sequenceHint} action={<Button onClick={() => ui.setFilter('all')}>{zh.toWorkspace}</Button>} />) : null}
+          : <EmptyState title={zh.emptySequence} hint={zh.sequenceHint} action={<Button onClick={() => { ui.setFilter('all'); ui.setView('grid'); }}>{zh.toWorkspace}</Button>} />) : null}
     </div>{ui.filmstripOpen && <SelectionDock photos={kept} onSelect={id => { ui.setFilter('all'); ui.setSearch(''); ui.select(id); }} onSequence={() => ui.setView('sequence')} />}</div>
   </>;
 }

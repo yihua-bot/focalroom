@@ -1,10 +1,15 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { NarrativeCanvas } from './NarrativeCanvas';
 import type { CanvasRepository, CanvasPhoto } from '../../domain/canvas';
 import { useUIStore } from '../../stores/uiStore';
 afterEach(() => { cleanup(); useUIStore.getState().reset(); });
+// jsdom 不实现指针捕获，画布拖拽/框选依赖它，缺失会让 pointerdown 直接抛错。
+beforeEach(() => {
+  Element.prototype.setPointerCapture ??= () => {};
+  Element.prototype.releasePointerCapture ??= () => {};
+});
 
 it('方案显示真实变化与原布局叠层，原版更新有提示', async () => {
   const repo = repository();
@@ -64,7 +69,7 @@ function repository(): CanvasRepository {
   return {
     listBoards: vi.fn().mockResolvedValue([{ id: 'board-1', projectId: 'project', title: '第一章', state: 'draft' }]),
     createBoard: vi.fn(), getNodes: vi.fn().mockResolvedValue([]), getAnnotations: vi.fn().mockResolvedValue([]),
-    placePhoto: vi.fn(), moveNodes: vi.fn(), addText: vi.fn(), deleteNode: vi.fn(),
+    placePhoto: vi.fn(), moveNodes: vi.fn(), addText: vi.fn(), setNodeText: vi.fn(), deleteNode: vi.fn(),
     addAnnotation: vi.fn(), resolveAnnotation: vi.fn(), addArrow: vi.fn(), undo: vi.fn(), redo: vi.fn(), adoptBoard: vi.fn(), addInk: vi.fn(), groupNodes: vi.fn(), resizeNode: vi.fn(), setNodeLocked: vi.fn(),
   };
 }
@@ -153,6 +158,7 @@ it('快捷键仅作用于当前画布，文本输入保留自己的撤销行为'
   await user.keyboard('{Control>}{Shift>}z{/Shift}{/Control}');
   await waitFor(() => expect(repo.redo).toHaveBeenCalledTimes(1));
   await user.click(screen.getByRole('button', { name: '便签' }));
+  fireEvent.pointerDown(screen.getByLabelText('叙事画布'), { button: 0, clientX: 20, clientY: 20 });
   await user.click(screen.getByRole('textbox', { name: '便签内容' }));
   await user.keyboard('{Control>}z{/Control}');
   expect(repo.undo).toHaveBeenCalledTimes(1);
@@ -187,4 +193,141 @@ it('缩放超过 1.25× 后按最粗满足级请求瓦片并叠加图层，回�
   fireEvent.wheel(surface, { deltaY: 100 });
   fireEvent.wheel(surface, { deltaY: 100 });
   await waitFor(() => expect(document.querySelector('.canvas-tile-layer')).toBeNull());
+});
+
+const sticky = (id: string, text: string): CanvasPhoto => ({
+  id, boardId: 'board-1', nodeType: 'sticky', x: 10, y: 20, width: 200, height: 120,
+  rotation: 0, zOrder: 1, assetId: null, renditionRef: null, contentJson: JSON.stringify({ text }),
+});
+
+it('便签先落点再就地输入，空白落点与取消都不留节点', async () => {
+  const repo = repository();
+  const user = userEvent.setup();
+  const { container } = render(<NarrativeCanvas repository={repo} projectId="project" selectedPhotoIds={[]} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '便签' })).toBeEnabled());
+  await user.click(screen.getByRole('button', { name: '便签' }));
+  // 旧版是先弹输入框再落节点，用户不知道便签会在哪里出现；现在落点前不应有任何输入框。
+  expect(screen.queryByRole('textbox', { name: '便签内容' })).not.toBeInTheDocument();
+  fireEvent.pointerDown(container.querySelector('.canvas-surface')!, { button: 0, clientX: 30, clientY: 40 });
+  await user.type(screen.getByRole('textbox', { name: '便签内容' }), '开场用逆光');
+  await user.click(screen.getByRole('button', { name: '保存' }));
+  await waitFor(() => expect(repo.addText).toHaveBeenCalledWith('project', 'board-1', 'sticky', 30, 40, 200, 120, '开场用逆光', '#ffe082'));
+  expect(container.querySelector('.canvas-tool-status')).toBeNull();
+  vi.mocked(repo.addText).mockClear();
+  await user.click(screen.getByRole('button', { name: '便签' }));
+  fireEvent.pointerDown(container.querySelector('.canvas-surface')!, { button: 0, clientX: 60, clientY: 60 });
+  await user.click(screen.getByRole('button', { name: '取消' }));
+  expect(repo.addText).not.toHaveBeenCalled();
+  expect(screen.queryByRole('textbox', { name: '便签内容' })).not.toBeInTheDocument();
+});
+
+it('双击已有便签就地改写，清空正文则删除节点', async () => {
+  const repo = repository();
+  vi.mocked(repo.getNodes).mockResolvedValue([sticky('s1', '初稿')]);
+  const user = userEvent.setup();
+  const { container } = render(<NarrativeCanvas repository={repo} projectId="project" selectedPhotoIds={[]} />);
+  await waitFor(() => expect(container.querySelector('[data-node-id="s1"]')).toBeInTheDocument());
+  await user.dblClick(container.querySelector('[data-node-id="s1"]')!);
+  const input = screen.getByRole('textbox', { name: '便签内容' });
+  expect(input).toHaveValue('初稿');
+  await user.clear(input);
+  await user.type(input, '逆光开场');
+  await user.click(screen.getByRole('button', { name: '保存' }));
+  await waitFor(() => expect(repo.setNodeText).toHaveBeenCalledWith('project', 'board-1', 's1', '逆光开场'));
+  expect(repo.deleteNode).not.toHaveBeenCalled();
+  await user.dblClick(container.querySelector('[data-node-id="s1"]')!);
+  await user.clear(screen.getByRole('textbox', { name: '便签内容' }));
+  await user.click(screen.getByRole('button', { name: '保存' }));
+  await waitFor(() => expect(repo.deleteNode).toHaveBeenCalledWith('project', 'board-1', 's1'));
+});
+
+it('连接模式给出进行中提示，并有取消、Esc、点空白三条退出路径', async () => {
+  const repo = repository();
+  vi.mocked(repo.getNodes).mockResolvedValue([node('n1', 'board-1'), { ...node('n2', 'board-1'), x: 300 }]);
+  const user = userEvent.setup();
+  const { container } = render(<NarrativeCanvas repository={repo} projectId="project" selectedPhotoIds={[]} />);
+  await waitFor(() => expect(container.querySelector('[data-node-id="n2"]')).toBeInTheDocument());
+  const connect = screen.getByRole('button', { name: '连接' });
+  const surface = container.querySelector<HTMLElement>('.canvas-surface')!;
+  await user.click(connect);
+  expect(connect).toHaveAttribute('aria-pressed', 'true');
+  expect(container.querySelector('.canvas-tool-status')?.textContent).toContain('先点击起点节点');
+  await user.click(container.querySelector('[data-node-id="n1"]')!);
+  expect(container.querySelector('.canvas-tool-status')?.textContent).toContain('再点击终点节点');
+  expect(container.querySelector('[data-node-id="n1"]')!.className).toContain('link-source');
+  await user.click(container.querySelector('[data-node-id="n2"]')!);
+  await waitFor(() => expect(repo.addArrow).toHaveBeenCalledWith('project', 'board-1', 'n1', 'n2'));
+  expect(connect).toHaveAttribute('aria-pressed', 'false');
+  await user.click(connect);
+  await user.click(container.querySelector('[data-node-id="n1"]')!);
+  await user.click(screen.getByRole('button', { name: '取消' }));
+  expect(connect).toHaveAttribute('aria-pressed', 'false');
+  await user.click(connect);
+  await user.click(container.querySelector('[data-node-id="n1"]')!);
+  surface.focus();
+  await user.keyboard('{Escape}');
+  expect(connect).toHaveAttribute('aria-pressed', 'false');
+  await user.click(connect);
+  expect(connect).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.pointerDown(surface, { button: 0, clientX: 500, clientY: 500 });
+  expect(connect).toHaveAttribute('aria-pressed', 'false');
+  expect(container.querySelector('.canvas-tool-status')).toBeNull();
+});
+
+it('删除只作用于选中节点，锁定节点跳过并说明原因', async () => {
+  const repo = repository();
+  vi.mocked(repo.getNodes).mockResolvedValue([node('n1', 'board-1'), { ...node('n2', 'board-1'), x: 300, locked: true }]);
+  const user = userEvent.setup();
+  const { container } = render(<NarrativeCanvas repository={repo} projectId="project" selectedPhotoIds={[]} />);
+  await waitFor(() => expect(container.querySelector('[data-node-id="n2"]')).toBeInTheDocument());
+  await user.click(container.querySelector('[data-node-id="n1"]')!);
+  fireEvent.pointerDown(container.querySelector('[data-node-id="n2"]')!, { button: 0, shiftKey: true });
+  const remove = screen.getByRole('button', { name: '删除' });
+  expect(remove).toBeEnabled();
+  await user.click(remove);
+  await waitFor(() => expect(repo.deleteNode).toHaveBeenCalledWith('project', 'board-1', 'n1'));
+  expect(repo.deleteNode).toHaveBeenCalledTimes(1);
+  expect(await screen.findByRole('status')).toHaveTextContent('1 个锁定节点已跳过');
+});
+
+it('右键落评论、图钉可读并可标记已解决', async () => {
+  const repo = repository();
+  const pins = [{ id: 'a1', boardId: 'board-1', anchorType: 'board', x: 20, y: 20, author: '摄影师', body: '这里换成日落那张', resolved: false, createdAt: 'now' }];
+  vi.mocked(repo.getAnnotations).mockImplementation(async () => pins.map(pin => ({ ...pin })));
+  vi.mocked(repo.resolveAnnotation).mockImplementation(async (_project, annotationId, resolved) => {
+    const pin = pins.find(item => item.id === annotationId);
+    if (pin) pin.resolved = resolved;
+  });
+  const user = userEvent.setup();
+  const { container } = render(<NarrativeCanvas repository={repo} projectId="project" selectedPhotoIds={[]} />);
+  await waitFor(() => expect(container.querySelector('.canvas-annotation-pin')).toBeInTheDocument());
+  fireEvent.contextMenu(container.querySelector('.canvas-surface')!, { clientX: 20, clientY: 20 });
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByRole('heading', { name: '添加画布评论' })).toBeInTheDocument();
+  await user.type(within(dialog).getByRole('textbox', { name: '评论内容' }), '第二格太挤');
+  await user.click(within(dialog).getByRole('button', { name: '添加评论' }));
+  await waitFor(() => expect(repo.addAnnotation).toHaveBeenCalledWith('project', 'board-1', 20, 20, '第二格太挤'));
+  await user.click(container.querySelector('.canvas-annotation-pin')!);
+  const comment = await screen.findByRole('dialog');
+  expect(within(comment).getByText('这里换成日落那张')).toBeInTheDocument();
+  await user.click(within(comment).getByRole('button', { name: '标记已解决' }));
+  await waitFor(() => expect(repo.resolveAnnotation).toHaveBeenCalledWith('project', 'a1', true));
+  await waitFor(() => expect(container.querySelector('.canvas-annotation-pin')).toBeNull());
+});
+
+it('分组改走应用内输入框，不再依赖浏览器 prompt', async () => {
+  const repo = repository();
+  vi.mocked(repo.getNodes).mockResolvedValue([node('n1', 'board-1'), { ...node('n2', 'board-1'), x: 300 }]);
+  const prompt = vi.spyOn(window, 'prompt').mockImplementation(() => null);
+  const user = userEvent.setup();
+  const { container } = render(<NarrativeCanvas repository={repo} projectId="project" selectedPhotoIds={[]} />);
+  await waitFor(() => expect(container.querySelector('[data-node-id="n2"]')).toBeInTheDocument());
+  await user.click(container.querySelector('[data-node-id="n1"]')!);
+  fireEvent.pointerDown(container.querySelector('[data-node-id="n2"]')!, { button: 0, shiftKey: true });
+  await user.click(screen.getByRole('button', { name: '分组' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(prompt).not.toHaveBeenCalled();
+  await user.type(within(dialog).getByRole('textbox', { name: '分组名称' }), '开场段落');
+  await user.click(within(dialog).getByRole('button', { name: '分组' }));
+  await waitFor(() => expect(repo.groupNodes).toHaveBeenCalledWith('project', 'board-1', ['n1', 'n2'], '开场段落'));
 });

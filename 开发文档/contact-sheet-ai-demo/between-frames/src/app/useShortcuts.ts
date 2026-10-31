@@ -3,8 +3,10 @@ import type { Photo, PhotoStatus, WorkspaceView } from '../domain/models';
 import type { SelectionGesture } from '../domain/selection';
 import { eventToShortcut, type ShortcutActionId, type ShortcutMap } from './shortcutConfig';
 
-export function useShortcuts({ shortcuts, photos, activeId, view, blocked, onCommandPalette, onSelect, onSelectAll, onClear, onDecide, onRate, onCompare, onEnlarge, onView, onSearch, onAgent, onUndo, onRedo, onMove }: {
-  shortcuts: ShortcutMap; photos: Photo[]; activeId: string | null; view: WorkspaceView; blocked: boolean; onCommandPalette: () => void;
+export function useShortcuts({ shortcuts, photos, activeId, view, blocked, photoScope, onCommandPalette, onSelect, onSelectAll, onClear, onDecide, onRate, onCompare, onEnlarge, onView, onSearch, onAgent, onUndo, onRedo, onMove }: {
+  shortcuts: ShortcutMap; photos: Photo[]; activeId: string | null; view: WorkspaceView; blocked: boolean;
+  // 照片动作只在网格/序列生效：画布与出版物视图里 space/k/x/1-5/g/s 各自有别的用途，不能越权接管。
+  photoScope: boolean; onCommandPalette: () => void;
   onSelect: (id: string, gesture?: SelectionGesture) => void; onSelectAll: (ids: string[]) => void; onClear: () => void;
   onDecide: (id: string, status: PhotoStatus) => void; onRate: (rating: number) => void;
   onCompare: () => void; onEnlarge: () => void; onView: (view: WorkspaceView) => void;
@@ -25,6 +27,7 @@ export function useShortcuts({ shortcuts, photos, activeId, view, blocked, onCom
         event.preventDefault(); onAgent(); return;
       }
       if (blocked || event.defaultPrevented || event.repeat || event.altKey || event.isComposing || target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], .drag-handle')) return;
+      if (!photoScope) return;
       const combo = eventToShortcut(event);
       const action = (Object.keys(shortcuts) as ShortcutActionId[]).find(id => shortcuts[id] === combo);
       if (!action) {
@@ -66,5 +69,5 @@ export function useShortcuts({ shortcuts, photos, activeId, view, blocked, onCom
     };
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
-  }, [shortcuts, photos, activeId, view, blocked, onCommandPalette, onSelect, onSelectAll, onClear, onDecide, onRate, onCompare, onEnlarge, onView, onSearch, onAgent, onUndo, onRedo, onMove]);
+  }, [shortcuts, photos, activeId, view, blocked, photoScope, onCommandPalette, onSelect, onSelectAll, onClear, onDecide, onRate, onCompare, onEnlarge, onView, onSearch, onAgent, onUndo, onRedo, onMove]);
 }

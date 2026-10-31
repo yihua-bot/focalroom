@@ -316,7 +316,10 @@ final class FocalRoomUITests: XCTestCase {
         runResearchSegment(app, projectID: projectID)
         verifySyncCenter(app, projectID: projectID)
         runHistorySegment(app)
-        // 返回动画期间 TabBar 可能短暂缺席；先等其回到 AX 树再切标签。
+        // navigationDestination 推入的页面可能遮盖标签栏；不可用时先退一层再查。
+        if !app.tabBars.firstMatch.waitForExistence(timeout: 10) {
+            popBack(app)
+        }
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15), "标签栏应可用")
         app.tabBars.buttons["消息"].tap()
         XCTAssertTrue(app.staticTexts["iPhone 本地隔离测试批注"].waitForExistence(timeout: 10))
@@ -601,7 +604,10 @@ final class FocalRoomUITests: XCTestCase {
 
     @MainActor
     private func runProposalsSegment(_ app: XCUIApplication) {
-        app.buttons["proposals.entry"].tap()
+        openProjectToolMenu(app)
+        let proposalButton = app.buttons["proposals.entry"]
+        XCTAssertTrue(proposalButton.waitForExistence(timeout: 5), "菜单应含提案入口")
+        proposalButton.tap()
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'proposals.row.'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10), "联调留下的 SUBMITTED 提案应出现在待审阅")
         row.tap()
@@ -663,7 +669,10 @@ final class FocalRoomUITests: XCTestCase {
 
     @MainActor
     private func runHistorySegment(_ app: XCUIApplication) {
-        app.buttons["history.entry"].tap()
+        openProjectToolMenu(app)
+        let historyButton = app.buttons["history.entry"]
+        XCTAssertTrue(historyButton.waitForExistence(timeout: 5), "菜单应含版本历史入口")
+        historyButton.tap()
         let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'version.row.'"))
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), "版本历史应列出已提交版本")
         // List 内按钮命中会被文本截获（研究段同类问题），按坐标选择两个版本。
@@ -677,7 +686,7 @@ final class FocalRoomUITests: XCTestCase {
         historyScreenshot.name = "iPhone 版本历史与差异"
         historyScreenshot.lifetime = .keepAlways
         add(historyScreenshot)
-        popBack(app)
+        dismissSheet(app)
     }
 
     @MainActor
@@ -712,6 +721,22 @@ final class FocalRoomUITests: XCTestCase {
     }
 
     // 导航栏按钮在本模拟器上间歇不可解析；回退用左缘右滑（根视图上是安全空操作），不做盲点坐标点击。
+    // 工具视图以 sheet 呈现，下拉关闭即返回图库层。
+    @MainActor
+    private func dismissSheet(_ app: XCUIApplication) {
+        app.swipeDown()
+        Thread.sleep(forTimeInterval: 1)
+        if !app.tabBars.firstMatch.exists { app.swipeDown() }
+    }
+
+    // 工具菜单：提案/历史/授权收入菜单后需要先打开再点项。
+    @MainActor
+    private func openProjectToolMenu(_ app: XCUIApplication) {
+        let menu = app.buttons["project.tools.menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), "工具菜单应可见")
+        menu.tap()
+    }
+
     @MainActor
     private func popBack(_ app: XCUIApplication) {
         let button = app.navigationBars.buttons.element(boundBy: 0)

@@ -84,6 +84,12 @@ struct ProjectLibraryView: View {
     let model: AppModel
     let projectID: String
     @State private var filter: Selection?
+    @State private var toolDestination: ProjectTool?
+
+    private enum ProjectTool: String, Identifiable {
+        case proposals, history, grants
+        var id: String { rawValue }
+    }
     private let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
 
     private var photos: [Photo] {
@@ -160,27 +166,28 @@ struct ProjectLibraryView: View {
                 }
                 .disabled(model.offline || model.snapshot?.project_id != projectID)
                 .accessibilityLabel("研究资料").accessibilityIdentifier("research.entry")
-                NavigationLink {
-                    ProposalsView(model: model)
-                } label: {
-                    Image(systemName: "checklist")
+                // 提案/历史/授权收入菜单：五个直排在 iPhone 上溢出到"更多"导致入口不可达。
+                Menu {
+                    Button { toolDestination = .proposals } label: { Label("提案", systemImage: "checklist") }
+                        .disabled(model.offline || model.snapshot?.project_id != projectID)
+                        .accessibilityIdentifier("proposals.entry")
+                    Button { toolDestination = .history } label: { Label("版本历史", systemImage: "clock.arrow.circlepath") }
+                        .disabled(model.offline || model.snapshot?.project_id != projectID)
+                        .accessibilityIdentifier("history.entry")
+                    Button { toolDestination = .grants } label: { Label("成员与权限", systemImage: "person.crop.circle.badge.checkmark") }
+                        .disabled(model.offline || model.snapshot?.project_id != projectID)
+                        .accessibilityIdentifier("grants.entry")
+                } label: { Image(systemName: "ellipsis.circle") }
+                .accessibilityLabel("更多工具").accessibilityIdentifier("project.tools.menu")
+            }
+        }
+        .sheet(item: $toolDestination) { destination in
+            NavigationStack {
+                switch destination {
+                case .proposals: ProposalsView(model: model)
+                case .history: VersionHistoryView(model: model, projectID: projectID)
+                case .grants: GrantsView(model: model, projectID: projectID)
                 }
-                .disabled(model.offline || model.snapshot?.project_id != projectID)
-                .accessibilityLabel("提案").accessibilityIdentifier("proposals.entry")
-                NavigationLink {
-                    VersionHistoryView(model: model, projectID: projectID)
-                } label: {
-                    Image(systemName: "clock.arrow.circlepath")
-                }
-                .disabled(model.offline || model.snapshot?.project_id != projectID)
-                .accessibilityLabel("版本历史").accessibilityIdentifier("history.entry")
-                NavigationLink {
-                    GrantsView(model: model, projectID: projectID)
-                } label: {
-                    Image(systemName: "person.crop.circle.badge.checkmark")
-                }
-                .disabled(model.offline || model.snapshot?.project_id != projectID)
-                .accessibilityLabel("成员与权限").accessibilityIdentifier("grants.entry")
             }
         }
         .background(Color(white: 0.055))

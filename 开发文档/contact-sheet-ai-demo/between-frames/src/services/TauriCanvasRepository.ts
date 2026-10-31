@@ -128,6 +128,9 @@ export class TauriCanvasRepository implements CanvasRepository {
   async addText(projectId: string, boardId: string, nodeType: string, x: number, y: number, width: number, height: number, content: string, color?: string) {
     return nodeSchema.parse((await this.edit(projectId, boardId, [{ type: 'AddText', data: { boardId, nodeType: z.enum(['text', 'sticky', 'shape']).parse(nodeType), x, y, width, height, content, color } }]))[0]);
   }
+  async setNodeText(projectId: string, boardId: string, nodeId: string, text: string) {
+    await this.edit(projectId, boardId, [{ type: 'SetNodeText', data: { boardId, nodeId, text } }]);
+  }
   async deleteNode(projectId: string, boardId: string, nodeId: string) {
     await this.edit(projectId, boardId, [{ type: 'DeleteNode', data: { boardId, nodeId } }]);
   }

@@ -1070,6 +1070,92 @@ final class CollaborationSurfaceTests: XCTestCase {
 }
 
 @MainActor
+final class LocalProjectDeletionTests: XCTestCase {
+    func testDeleteProjectRemovesRecordAndUnreferencedMediaButKeepsShared() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let scope = AccountScope(configuration: try APIConfiguration("https://example.com"), userID: "one")
+        let root = directory.appendingPathComponent("library")
+        let library = LocalLibrary(root: root, scope: scope)
+        let first = try await library.createProject(title: "甲")
+        let second = try await library.createProject(title: "乙")
+        // 两项目各导入一张，乙再导入与甲相同的字节（跨项目共享同一内容寻址文件）。
+        let sourceA = directory.appendingPathComponent("a.jpg")
+        try jpeg(seed: 1).write(to: sourceA)
+        let sourceB = directory.appendingPathComponent("b.jpg")
+        try jpeg(seed: 2).write(to: sourceB)
+        guard case .imported(let photoA) = try await library.importFile(sourceA, projectID: first.id),
+              case .imported(let photoB) = try await library.importFile(sourceB, projectID: second.id,
+              ) else { return XCTFail() }
+        _ = photoB
+        // 跨项目同字节：记录独立但文件内容寻址共享（同一 SHA 同一文件）。
+        guard case .imported(let sharedA) = try await library.importFile(sourceA, projectID: second.id) else {
+            return XCTFail("跨项目导入应创建新记录")
+        }
+        XCTAssertEqual(sharedA.sourceSHA256, photoA.sourceSHA256, "同字节导入共享同一内容寻址文件")
+        let mediaDir = root.appendingPathComponent(scope.key).appendingPathComponent("media")
+        let originalA = mediaDir.appendingPathComponent(photoA.sourceSHA256 + ".original")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: originalA.path))
+
+        // 删除乙：乙独有文件清除，甲仍引用的共享文件保留。
+        try await library.deleteProject(projectID: second.id)
+        var projects = try await library.projects()
+        XCTAssertEqual(projects.map(\.id), [first.id])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: originalA.path, ), "甲仍引用的原片必须保留")
+        // 甲的记录完整。
+        XCTAssertEqual(projects.first?.photos.count, 1)
+
+        // 删除甲：全部媒体文件清除。
+        try await library.deleteProject(projectID: first.id)
+        projects = try await library.projects()
+        XCTAssertTrue(projects.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: originalA.path), "最后一个引用者删除后文件应清除")
+
+        // 重建后的库可继续使用。
+        let recreated = try await library.createProject(title: "新")
+        let finalProjects = try await library.projects()
+        XCTAssertEqual(finalProjects.count, 1)
+        _ = recreated
+    }
+
+    func testDeleteProjectBlockedDuringActiveMigration() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let source = directory.appendingPathComponent("p.jpg")
+        try jpeg(seed: 3).write(to: source)
+        let scope = AccountScope(configuration: try APIConfiguration("https://example.com"), userID: "one")
+        let library = LocalLibrary(root: directory.appendingPathComponent("library"), scope: scope)
+        let project = try await library.createProject(title: "冻结")
+        guard case .imported = try await library.importFile(source, projectID: project.id) else { return XCTFail() }
+        _ = try await library.beginMigration(projectID: project.id, workspaceID: "w")
+        do { try await library.deleteProject(projectID: project.id); XCTFail("迁云期间不得删除") }
+        catch LocalLibraryError.projectFrozen { }
+        // 已迁云（migrated）允许删除。
+        try await library.migrationEnrolled(projectID: project.id, cloudProjectID: "c", manifestDigest: String(repeating: "a", count: 64))
+        let projectsBefore = try await library.projects()
+        let firstPhotoID = try XCTUnwrap(projectsBefore.first?.photos.first?.id)
+        try await library.markUploaded(projectID: project.id, photoID: firstPhotoID)
+        try await library.completeMigration(projectID: project.id)
+        try await library.deleteProject(projectID: project.id)
+        let after = try await library.projects()
+        XCTAssertTrue(after.isEmpty)
+    }
+
+    private func jpeg(seed: Int) throws -> Data {
+        let context = try XCTUnwrap(CGContext(data: nil, width: 96, height: 64, bitsPerComponent: 8, bytesPerRow: 0,
+                                              space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor(red: Double(seed) * 0.2, green: 0.5, blue: 0.8, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 96, height: 64))
+        let image = try XCTUnwrap(context.makeImage())
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, nil)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+}
+
+@MainActor
 final class PhotoTransformTests: XCTestCase {
     func testLockedAndIndependentZoomAndPosition() {
         var state = ComparisonState()

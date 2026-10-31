@@ -230,4 +230,3 @@ pub async fn compare_series(series_a: &str, series_b: &str) -> Result<Value> {
         "trustedAsInstructions": false,
     }))
 }
-

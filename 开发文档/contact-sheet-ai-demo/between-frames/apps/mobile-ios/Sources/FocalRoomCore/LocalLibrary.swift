@@ -213,6 +213,50 @@ public actor LocalLibrary {
         return project
     }
 
+    /// 删除本机项目：移除记录与不再被其他项目引用的媒体文件（原片与预览内容寻址共享）。
+    /// 迁云进行中（enrolling/uploading）不允许删除，防止迁云驱动状态丢失。
+    public func deleteProject(projectID: String) throws {
+        try Task.checkCancellation()
+        var document = try read()
+        guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else {
+            throw LocalLibraryError.invalidProject
+        }
+        guard document.projects[index].migration == nil || document.projects[index].migration?.phase == .migrated else {
+            throw LocalLibraryError.projectFrozen
+        }
+        let project = document.projects[index]
+        document.projects.remove(at: index)
+        // 只删除不再被任何其他项目引用的媒体文件。
+        let others = Set(document.projects.flatMap { $0.photos.flatMap { [$0.sourceSHA256, $0.previewSHA256] } })
+        for photo in project.photos {
+            let original = originalURL(photo)
+            let preview = previewURL(photo)
+            for (url, sha, limit) in [(original, photo.sourceSHA256, LocalMediaFiles.sourceLimit),
+                                       (preview, photo.previewSHA256, LocalMediaFiles.previewLimit)] {
+                if !others.contains(sha), FileManager.default.fileExists(atPath: url.path) {
+                    // 校验文件仍是声称的内容后才删除；不匹配则保留现场供人工核查。
+                    if let digest = try? Self.digestFile(url, limit: limit), digest == sha {
+                        try? FileManager.default.removeItem(at: url)
+                    }
+                }
+            }
+        }
+        try write(document)
+    }
+
+    private static func digestFile(_ url: URL, limit: Int) throws -> String {
+        let file = try FileHandle(forReadingFrom: url)
+        defer { try? file.close() }
+        var hash = SHA256()
+        var count = 0
+        while let data = try file.read(upToCount: 1024 * 1024), !data.isEmpty {
+            count += data.count
+            guard count <= limit else { return "" }
+            hash.update(data: data)
+        }
+        return hash.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
     public func importFile(_ url: URL, projectID: String, phAssetID: String? = nil) throws -> LocalImportResult {
         try Task.checkCancellation()
         var document = try read()

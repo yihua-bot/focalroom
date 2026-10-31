@@ -28,7 +28,7 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { Modal } from '../components/shared/Modal';
 import { Button } from '../components/shared/Button';
 import { isDesktopRepository } from '../services/TauriRepository';
-import { ImportDialog } from '../features/photo-import/ImportDialog';
+import { ImportBanner, ImportDialog } from '../features/photo-import/ImportDialog';
 import { EditorVersionsDialog } from '../features/photo-import/EditorVersionsDialog';
 import { VersionsDialog } from '../features/project/VersionsDialog';
 import { ActivityDialog } from '../features/project/ActivityDialog';
@@ -82,6 +82,9 @@ export function AppController({ repository }: { repository: ProjectRepository })
       ? previous.map(item => item.id === updated.id ? updated : item) : [...(previous ?? []), updated]);
   }, onError: error => { setNotice(`操作失败：${error.message}`); void client.invalidateQueries({ queryKey: ['projects'] }); } });
   const refresh = useCallback(() => { void client.invalidateQueries({ queryKey: ['projects'] }); void client.invalidateQueries({ queryKey: ['sharing'] }); }, [client]);
+  // 导入弹窗关闭后任务仍在跑：把 jobId 交给常驻横幅，避免用户被锁在弹窗里干等。
+  const [backgroundImport, setBackgroundImport] = useState<string | null>(null);
+  const finishBackgroundImport = useCallback(() => { setBackgroundImport(null); refresh(); }, [refresh, setBackgroundImport]);
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 4000); return () => window.clearTimeout(timer); }, [notice]);
   const openProject = (id: string) => { ui.reset(); ui.select(projects.find(item => item.id === id)?.photos[0]?.id ?? null); navigate(id); };
   const terms = ui.search.normalize('NFKC').toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
@@ -133,7 +136,10 @@ export function AppController({ repository }: { repository: ProjectRepository })
     if (right && right.id !== active.id) { setNotice('比较当前照片与下一张；也可选中两张后比较。'); setDialog({ kind: 'compare', left: active, right }); }
     else setNotice('当前视图不足两张照片，请调整筛选或搜索。');
   };
+  // 灯箱内决策会让照片离开当前筛选/序列集合；列表必须继续含它，否则弹窗静默消失而 dialog 仍占住全部快捷键。
+  const lightboxPhotos = dialog?.kind === 'enlarge' && !navigable.some(photo => photo.id === dialog.photo.id) ? [...navigable, dialog.photo] : navigable;
   useShortcuts({ shortcuts: shortcutConfig.shortcuts, photos: navigable, activeId: active?.id ?? null, view: ui.view, blocked: Boolean(dialog) || mutation.isPending || route.page !== 'workspace',
+    photoScope: ui.view === 'grid' || ui.view === 'sequence',
     onCommandPalette: () => setDialog(current => current?.kind === 'palette' ? null : { kind: 'palette' }),
     onSelect: select, onSelectAll: ui.selectAll, onClear: ui.clearSelection, onDecide: (_id, status) => decideSelection(status), onRate: rateSelection,
     onCompare: compare, onEnlarge: () => { if (active) setDialog({ kind: 'enlarge', photo: active }); }, onView: ui.setView,
@@ -224,7 +230,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
       onRestore={versionId => act(() => repository.restoreVersion(project.id, versionId), '版本已恢复，可撤销此操作', true)} />}
     {dialog?.kind === 'activity' && project && <ActivityDialog project={project} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'export' && <ExportDialog repository={local ? repository : undefined} projectId={project?.id} revision={project?.revision} onChanged={refresh} onClose={() => setDialog(null)} />}
-    {dialog?.kind === 'import' && (local ? project && <ImportDialog repository={repository} projectId={project.id} onClose={() => { setDialog(null); refresh(); }} onChanged={refresh} />
+    {dialog?.kind === 'import' && (local ? project && <ImportDialog repository={repository} projectId={project.id} onClose={() => { setDialog(null); refresh(); }} onChanged={refresh} onBackground={setBackgroundImport} />
       : <Modal title={zh.import} description="请在桌面版导入照片。" onClose={() => setDialog(null)}><div className="dialog-actions"><Button onClick={() => setDialog(null)}>继续体验示例项目</Button></div></Modal>)}
     {dialog?.kind === 'archive' && local && <Modal title="确认归档项目" description={`“${dialog.project.title}”将移至归档列表，可随时恢复。原图、备注和决策日志全部保留。`} onClose={() => setDialog(null)}>
       <div className="dialog-actions"><Button onClick={() => setDialog(null)}>取消</Button><Button variant="primary" onClick={() => {
@@ -234,12 +240,13 @@ export function AppController({ repository }: { repository: ProjectRepository })
       <div className="dialog-actions"><Button onClick={() => setDialog(null)}>取消</Button><Button variant="primary" onClick={() => {
         void repository.delete(dialog.project.id).then(() => { setDialog(null); refresh(); }).catch(error => setNotice(`删除失败：${String(error)}`));
       }}>确认删除</Button></div></Modal>}
-    {dialog?.kind === 'enlarge' && <Lightbox photos={navigable} activeId={dialog.photo.id} onClose={() => setDialog(null)} onNavigate={photo => { ui.select(photo.id); setDialog({ kind: 'enlarge', photo }); }} onDecide={(id, status) => decide(id, status)} onRate={(id, rating) => project && act(() => repository.rate(project.id, [id], rating), rating ? `人工评分已保存：${rating} 星` : '人工评分已清除')} />}
+    {dialog?.kind === 'enlarge' && <Lightbox photos={lightboxPhotos} activeId={dialog.photo.id} onClose={() => setDialog(null)} onNavigate={photo => { ui.select(photo.id); setDialog({ kind: 'enlarge', photo }); }} onDecide={(id, status) => decide(id, status)} onRate={(id, rating) => project && act(() => repository.rate(project.id, [id], rating), rating ? `人工评分已保存：${rating} 星` : '人工评分已清除')} />}
     {dialog?.kind === 'palette' && <CommandPalette commands={paletteCommands} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'editorVersions' && local && project && repository.editorVersions && <EditorVersionsDialog repository={repository.editorVersions} projectId={project.id} readOnly={readOnly} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'help' && <Modal title={zh.help} description={zh.helpHint} onClose={() => setDialog(null)}>
       <div style={{marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border, #2a2a40)'}}><UpdateCheck /></div>
       <ShortcutEditor shortcuts={shortcutConfig.shortcuts} overrides={shortcutConfig.overrides} save={shortcutConfig.save} reset={shortcutConfig.reset} />
     </Modal>}
+    {backgroundImport && local && <ImportBanner repository={repository} jobId={backgroundImport} onDone={finishBackgroundImport} />}
   </>;
 }

@@ -22,6 +22,7 @@ export const canvasActionSchema = z.discriminatedUnion('type', [
   action('PlacePhoto', { ...board, assetId: z.string().min(1), ...rectangle }),
   action('MoveNodes', { ...board, nodeIds, dx: coordinate, dy: coordinate }),
   action('AddText', { ...board, nodeType: z.enum(['text', 'sticky', 'shape']), ...rectangle, content: z.string().max(5000), color }),
+  action('SetNodeText', { ...board, nodeId: id, text: z.string().trim().min(1).max(5000) }),
   action('AddReference', { ...board, ...rectangle,
     kind: z.enum(['link', 'note']),
     title: z.string().trim().min(1).max(200),

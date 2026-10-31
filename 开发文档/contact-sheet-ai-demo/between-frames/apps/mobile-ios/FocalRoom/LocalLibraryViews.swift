@@ -82,6 +82,8 @@ struct LocalProjectView: View {
     @State private var selected: [PhotosPickerItem] = []
     @State private var filter: Selection?
     @State private var confirmMigrate = false
+    @State private var confirmDeleteProject = false
+    @Environment(\.dismiss) private var dismiss
     // 多选分享：勾选本机照片原图，经系统分享面板发到微信/微博/X 等。
     @State private var selecting = false
     @State private var picked: Set<String> = []
@@ -103,6 +105,20 @@ struct LocalProjectView: View {
         }
         .navigationTitle("本机图库").navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
+        .confirmationDialog("删除项目", isPresented: $confirmDeleteProject, titleVisibility: .visible) {
+            Button("永久删除项目与原片", role: .destructive) {
+                Task {
+                    await library.deleteProject(projectID: projectID)
+                    dismiss()
+                }
+            }
+        } message: {
+            if project?.migration?.phase == .migrated {
+                Text("该项目已迁云：云端副本保留，本机原片与预览将永久删除且不可恢复。")
+            } else {
+                Text("将永久删除 \(project?.photos.count ?? 0) 张原片、预览与选片记录，且不可恢复。没有其他项目引用的照片文件会一并清除。")
+            }
+        }
         .confirmationDialog("迁云到工作区", isPresented: $confirmMigrate, titleVisibility: .visible) {
             Button("开始迁云", role: .destructive) {
                 migration?.migrate(projectID: projectID)
@@ -264,6 +280,9 @@ struct LocalProjectView: View {
                 }
                 .disabled(library.isExporting || project?.photos.isEmpty != false)
                 .accessibilityIdentifier("local.export")
+                Button("删除项目…", systemImage: "trash", role: .destructive) { confirmDeleteProject = true }
+                    .disabled(library.isDeleting || library.readOnly)
+                    .accessibilityIdentifier("local.delete")
                 Button(selecting ? "完成选择" : "选择并分享…", systemImage: "checkmark.circle") {
                     selecting.toggle()
                     if !selecting { picked = [] }

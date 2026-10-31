@@ -103,3 +103,17 @@ test('stream rejects replayed ids, provider rejections and unverified metering',
   const quota = await fetch(base + '/api/v2/ai/account', { headers: { authorization: `Bearer ${user.token}` } });
   assert.equal((await quota.json()).available > 0, true);
 });
+
+// 本地化冒烟：同一错误按 Accept-Language 返回对应语言文案。
+test('error messages localize by Accept-Language', async () => {
+  for (const [lang, expected] of [['en', 'Please sign in first'], ['ja', '先にログインしてください'], ['ko', '먼저 로그인하세요']]) {
+    const r = await fetch(base + '/api/v2/auth/me', { headers: { 'accept-language': lang } });
+    const body = await r.json();
+    assert.equal(r.status, 401);
+    assert.equal(body.error.message, expected, `${lang} 应返回本地化文案`);
+  }
+  const zh = await (await fetch(base + '/api/v2/auth/me', { headers: { 'accept-language': 'zh-Hans' } })).json();
+  assert.equal(zh.error.message, '请先登录');
+  const fallback = await (await fetch(base + '/api/v2/auth/me')).json();
+  assert.equal(fallback.error.message, '请先登录', '无语言头回落中文');
+});

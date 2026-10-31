@@ -918,6 +918,16 @@ pub struct DeleteNodeCommand {
     pub node_id: String,
 }
 
+/// 改写文字/便签/形状节点的正文。删除重建会换掉节点 id，
+/// 指向它的连线与审稿历史随之失效，所以内容更新必须是独立命令。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetNodeTextCommand {
+    pub board_id: String,
+    pub node_id: String,
+    pub text: String,
+}
+
 impl CommandHandler<'_> {
     /// 添加文本/便签/形状节点。
     pub async fn add_text_node(
@@ -1516,6 +1526,17 @@ async fn apply_history(
             let changed = sqlx::query("UPDATE canvas_nodes SET locked=?,updated_at=? WHERE id=? AND board_id=? AND visible=1 AND locked=?")
                 .bind(target).bind(&now).bind(data["nodeId"].as_str().ok_or_else(conflict)?)
                 .bind(board).bind(expected).execute(&mut **tx).await?;
+            if changed.rows_affected() != 1 {
+                return Err(conflict());
+            }
+        }
+        "set_text" => {
+            let state = data[if redo { "after" } else { "before" }]
+                .as_str()
+                .ok_or_else(conflict)?;
+            let changed = sqlx::query("UPDATE canvas_nodes SET content_json=?,updated_at=? WHERE id=? AND board_id=? AND node_type IN ('text','sticky','shape') AND visible=1 AND locked=0")
+                .bind(state).bind(&now).bind(data["nodeId"].as_str().ok_or_else(conflict)?)
+                .bind(board).execute(&mut **tx).await?;
             if changed.rows_affected() != 1 {
                 return Err(conflict());
             }
@@ -2371,11 +2392,59 @@ impl CommandHandler<'_> {
         Self::log_canvas_op(tx, project, &cmd.board_id, "set_lock", &data, &data).await?;
         Ok(())
     }
+
+    /// 就地改写节点正文，保留 id、位置与样式。
+    pub async fn set_node_text(&self, project: &str, cmd: &SetNodeTextCommand) -> Result<()> {
+        let mut tx = self.store.pool.begin_with("BEGIN IMMEDIATE").await?;
+        self.set_node_text_tx(&mut tx, project, cmd).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn set_node_text_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        project: &str,
+        cmd: &SetNodeTextCommand,
+    ) -> Result<()> {
+        if cmd.text.trim().is_empty() {
+            return Err(AppError::new("VALIDATION_ERROR", "内容不能为空"));
+        }
+        if cmd.text.chars().count() > 5000 {
+            return Err(AppError::new("VALIDATION_ERROR", "内容不超过 5000 字符"));
+        }
+        crate::agent::promotion::ensure_local_write(tx, project).await?;
+        let before: Option<String> = sqlx::query_scalar(
+            "SELECT COALESCE(content_json,'{}') FROM canvas_nodes WHERE id=? AND board_id=? AND node_type IN ('text','sticky','shape') AND visible=1 AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+        ).bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
+            .fetch_optional(&mut **tx).await?;
+        let before = before.ok_or_else(|| AppError::new("NOT_FOUND", "节点不存在、已锁定或不是文字节点"))?;
+        let content_json = serde_json::to_string(&serde_json::json!({"text": cmd.text}))
+            .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
+        if content_json == before {
+            return Ok(());
+        }
+        let result = sqlx::query(
+            "UPDATE canvas_nodes SET content_json=?, updated_at=? WHERE id=? AND board_id=? AND visible=1 AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
+        )
+        .bind(&content_json).bind(domain::timestamp())
+        .bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
+        .execute(&mut **tx).await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::new("NOT_FOUND", "节点不存在或已锁定"));
+        }
+        let data = serde_json::json!({"nodeId":cmd.node_id,"before":before,"after":content_json});
+        Self::log_canvas_op(tx, project, &cmd.board_id, "set_text", &data, &data).await?;
+        Ok(())
+    }
 }
 
 impl Store {
     pub async fn resize_node(&self, project: &str, cmd: &ResizeNodesCommand) -> Result<()> {
         CommandHandler::new(self).resize_node(project, cmd).await
+    }
+    pub async fn set_node_text(&self, project: &str, cmd: &SetNodeTextCommand) -> Result<()> {
+        CommandHandler::new(self).set_node_text(project, cmd).await
     }
     pub async fn set_node_locked(&self, project: &str, cmd: &SetNodeLockedCommand) -> Result<()> {
         CommandHandler::new(self)

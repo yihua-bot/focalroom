@@ -92,6 +92,8 @@ export interface CanvasRepository {
   placePhoto(projectId: string, boardId: string, assetId: string, x: number, y: number, w: number, h: number): Promise<CanvasNodeInfo>;
   moveNodes(projectId: string, boardId: string, nodeIds: string[], dx: number, dy: number): Promise<void>;
   addText(projectId: string, boardId: string, nodeType: string, x: number, y: number, w: number, h: number, content: string, color?: string): Promise<CanvasNodeInfo>;
+  /** 改写已有节点的文字内容；删除重建会让指向它的连线一起消失，故单列一条命令。 */
+  setNodeText(projectId: string, boardId: string, nodeId: string, text: string): Promise<void>;
   deleteNode(projectId: string, boardId: string, nodeId: string): Promise<void>;
   addAnnotation(projectId: string, boardId: string, x: number, y: number, body: string): Promise<void>;
   resolveAnnotation(projectId: string, annotationId: string, resolved: boolean): Promise<void>;

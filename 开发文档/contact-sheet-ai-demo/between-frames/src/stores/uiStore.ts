@@ -59,8 +59,9 @@ export const useUIStore = create<UIState>(set => ({
   selectRange: (id, order, gesture = {}) => set(state => ({ activeId: id, selectedIds: selectPhotos(state.selectedIds, state.anchorId, id, order, gesture), anchorId: gesture.range ? state.anchorId ?? id : id })),
   selectAll: selectedIds => set({ selectedIds, activeId: selectedIds[0] ?? null, anchorId: selectedIds[0] ?? null }),
   clearSelection: () => set({ selectedIds: [], anchorId: null }),
-  setSearch: search => set({ search, selectedIds: [], anchorId: null, activeId: null, view: 'grid' }),
-  setFilter: filter => set({ filter, view: 'grid', selectedIds: [], anchorId: null, activeId: null }),
+  // 筛选与搜索只描述网格看法，不接管用户当前视图，也不动画布上下文。
+  setSearch: search => set({ search, selectedIds: [], anchorId: null, activeId: null }),
+  setFilter: filter => set({ filter, selectedIds: [], anchorId: null, activeId: null }),
   setGrouping: grouping => set({ grouping }),
   setView: view => set(state => ({ view, aiOpen: false, aiMemoryOpen: false, panel: 'photo', inspectorOpen: true,
     selectedIds: view === 'canvas' ? state.selectedIds : [], anchorId: view === 'canvas' ? state.anchorId : null })),
@@ -73,8 +74,8 @@ export const useUIStore = create<UIState>(set => ({
   toggleSidebar: () => set(state => ({ sidebarOpen: !state.sidebarOpen })),
   openCanvasAgent: canvasTaskSource => set({ aiOpen: true, aiMemoryOpen: false, canvasTaskSource, view: 'canvas', panel: 'photo' }),
   openCanvasBoard: canvasBoardId => set(state => ({ canvasBoardId, canvasBoardRequest: state.canvasBoardRequest + 1, view: 'canvas', aiOpen: false, aiMemoryOpen: false, panel: 'photo', selectedIds: [], activeId: null })),
-  openAgent: () => set({ aiOpen: true, aiMemoryOpen: false, canvasTaskSource: null, view: 'grid', panel: 'photo' }),
+  openAgent: () => set({ aiOpen: true, aiMemoryOpen: false, canvasTaskSource: null, panel: 'photo' }),
   closeAgent: () => set({ aiOpen: false }),
-  toggleAgent: () => set(state => ({ aiOpen: !state.aiOpen, aiMemoryOpen: false, canvasTaskSource: null, view: 'grid', panel: 'photo' })),
+  toggleAgent: () => set(state => ({ aiOpen: !state.aiOpen, aiMemoryOpen: false, canvasTaskSource: null, panel: 'photo' })),
   reset: () => set({ ...initial, draftRevisionRequest: null, selectedIds: [...initial.selectedIds], filter: 'all', view: 'grid', panel: 'photo' }),
 }));
