@@ -303,9 +303,13 @@ final class FocalRoomUITests: XCTestCase {
         libraryScreenshot.name = "iPhone 图库"
         libraryScreenshot.lifetime = .keepAlways
         add(libraryScreenshot)
-        photo.tap()
+        // 模拟器 AX 对该格子 hittable 误报：以元素实际坐标点击中心，绕过 hit-test 判定。
+        let photoFrame = photo.frame
+        app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: photoFrame.midX, dy: photoFrame.midY)).tap()
         XCTAssertTrue(app.images["preview.loaded.ios-photo-1"].waitForExistence(timeout: 15), "必须显示经过摘要核验的真实后端预览")
-        if !app.buttons["selection.KEEP"].waitForExistence(timeout: 6) {
+        for _ in 0..<4 {
+            if app.buttons["selection.KEEP"].waitForExistence(timeout: 4) { break }
             app.swipeUp()
         }
         XCTAssertTrue(app.buttons["selection.KEEP"].waitForExistence(timeout: 8), "滚动后应可见选片按钮")

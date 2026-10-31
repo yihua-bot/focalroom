@@ -288,7 +288,9 @@ struct PhotoViewer: View {
             .onChange(of: currentID) { _, _ in transform = PhotoTransform() }
             .accessibilityLabel("照片查看区。左滑排除，右滑保留，上滑待选；放大后可拖动查看细节")
             .accessibilityIdentifier("cloud.viewer.photo")
+            .frame(maxHeight: .infinity)
 
+            // 底部信息与选片区布局优先：防止上方页式容器膨胀把按钮挤出屏幕。
             VStack(spacing: 14) {
                 HStack {
                     Text(photo?.filename ?? "照片").font(.caption).lineLimit(1)

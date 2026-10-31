@@ -52,8 +52,9 @@ test('内置演示项目：创建画布、放照片、便签、撤销重做与�
   await expect(page.locator('.canvas-photo-node img')).toHaveCount(1);
   await expect.poll(() => page.locator('.canvas-photo-node img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await page.getByRole('button', { name: '便签', exact: true }).click();
+  await page.locator('.canvas-viewport, .canvas-surface, [class*="canvas"]').first().click({ position: { x: 300, y: 200 } });
   await page.getByRole('textbox', { name: '便签内容' }).fill('演示项目也可以编排');
-  await page.getByRole('button', { name: '保存便签', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.locator('.canvas-sticky-node')).toHaveText('演示项目也可以编排');
   await page.getByRole('button', { name: '撤销', exact: true }).click();
   await expect(page.locator('.canvas-sticky-node')).toHaveCount(0);
@@ -101,8 +102,9 @@ test('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进�
   await expect(page.locator('.canvas-photo-node img')).toHaveCount(1);
   await expect.poll(() => page.locator('.canvas-photo-node img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await page.getByRole('button', { name: '便签', exact: true }).click();
+  await page.locator('.canvas-viewport, .canvas-surface, [class*="canvas"]').first().click({ position: { x: 300, y: 200 } });
   await page.getByRole('textbox', { name: '便签内容' }).fill('用这张照片作为开篇');
-  await page.getByRole('button', { name: '保存便签', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.locator('.canvas-sticky-node')).toHaveCount(1);
   await expect(page.locator('.canvas-sticky-node')).toHaveText('用这张照片作为开篇');
   await expect(page.locator('.canvas-photo-node')).toHaveCount(1);
@@ -227,8 +229,9 @@ test('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编�
     } else await route.continue();
   });
   await page.getByRole('button', { name: '便签', exact: true }).click();
+  await page.locator('.canvas-viewport, .canvas-surface, [class*="canvas"]').first().click({ position: { x: 300, y: 200 } });
   await page.getByRole('textbox', { name: '便签内容' }).fill('重启后只保留一张便签');
-  await page.getByRole('button', { name: '保存便签', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('button', { name: '确认上次操作', exact: true })).toBeVisible();
   const saved = await rpc<{ board: { revision: number }; nodes: unknown[] }>('canvas_snapshot', { projectId, boardId });
   expect(saved.board.revision).toBe(2); expect(saved.nodes).toHaveLength(1);
@@ -257,8 +260,9 @@ test('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编�
     } } }],
   } });
   await page.getByRole('button', { name: '便签', exact: true }).click();
+  await page.locator('.canvas-viewport, .canvas-surface, [class*="canvas"]').first().click({ position: { x: 300, y: 200 } });
   await page.getByRole('textbox', { name: '便签内容' }).fill('保留我的未提交想法');
-  await page.getByRole('button', { name: '保存便签', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.locator('.canvas-notice')).toHaveText('画布已更新，请刷新后重新操作');
   const noticeBounds = await page.locator('.canvas-notice').boundingBox();
   const canvasBounds = await page.locator('.canvas-wrapper').boundingBox();
@@ -268,7 +272,7 @@ test('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编�
   await expect(page.getByRole('textbox', { name: '便签内容' })).toHaveValue('保留我的未提交想法');
   await page.screenshot({ path: '../docs/v3/evidence/canvas-commands-2026-10-22/conflict-preserves-input.png' });
   // 显式重新点击才能基于新快照保存，不偷偷改版本重试。
-  await page.getByRole('button', { name: '保存便签', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.locator('.canvas-sticky-node')).toHaveCount(3);
   const final = await rpc<{ board: { revision: number } }>('canvas_snapshot', { projectId, boardId });
   expect(final.board.revision).toBe(6);
@@ -293,8 +297,9 @@ test('SIMULATED Agent 画布委托：真实权限、独立分支、原布局对�
   await page.getByRole('button', { name: /放入选中照片/ }).click();
   await expect(page.locator('.canvas-photo-node')).toHaveCount(1);
   await page.getByRole('button', { name: '便签', exact: true }).click();
+  await page.locator('.canvas-viewport, .canvas-surface, [class*="canvas"]').first().click({ position: { x: 300, y: 200 } });
   await page.getByRole('textbox', { name: '便签内容' }).fill('原版意图：用留白维持节奏');
-  await page.getByRole('button', { name: '保存便签', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   const sourceId = await page.getByRole('combobox', { name: '选择画布' }).inputValue();
   const source = await rpc('canvas_snapshot', { projectId: project.id, boardId: sourceId });
   await page.getByRole('button', { name: 'AI 编排', exact: true }).click();

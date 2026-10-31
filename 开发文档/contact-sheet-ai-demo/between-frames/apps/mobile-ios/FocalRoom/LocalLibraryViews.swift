@@ -443,6 +443,7 @@ private struct LocalPhotoViewer: View {
             .onChange(of: currentID) { _, _ in transform = PhotoTransform() }
             .accessibilityLabel("照片查看区，左右滑动切换照片")
             .accessibilityIdentifier("local.viewer.photo")
+            .layoutPriority(1)
             VStack(spacing: 12) {
                 HStack {
                     Text(photo?.filename ?? "照片").font(.caption).lineLimit(1)
