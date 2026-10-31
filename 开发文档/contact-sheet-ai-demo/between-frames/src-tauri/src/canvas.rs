@@ -2418,7 +2418,8 @@ impl CommandHandler<'_> {
             "SELECT COALESCE(content_json,'{}') FROM canvas_nodes WHERE id=? AND board_id=? AND node_type IN ('text','sticky','shape') AND visible=1 AND locked=0 AND EXISTS(SELECT 1 FROM boards WHERE id=? AND project_id=?)",
         ).bind(&cmd.node_id).bind(&cmd.board_id).bind(&cmd.board_id).bind(project)
             .fetch_optional(&mut **tx).await?;
-        let before = before.ok_or_else(|| AppError::new("NOT_FOUND", "节点不存在、已锁定或不是文字节点"))?;
+        let before =
+            before.ok_or_else(|| AppError::new("NOT_FOUND", "节点不存在、已锁定或不是文字节点"))?;
         let content_json = serde_json::to_string(&serde_json::json!({"text": cmd.text}))
             .map_err(|e| AppError::new("VALIDATION_ERROR", e.to_string()))?;
         if content_json == before {

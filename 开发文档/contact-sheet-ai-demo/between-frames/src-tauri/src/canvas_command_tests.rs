@@ -718,7 +718,6 @@ async fn v28_upgrade_keeps_history_rowids_comments_and_verified_backup() {
     saved.close().await;
 }
 
-
 async fn content_of(db: &Store, p: &str, b: &str, id: &str) -> String {
     db.canvas_snapshot(p, b)
         .await
@@ -771,9 +770,7 @@ async fn set_node_text_rewrites_in_place_and_survives_undo_redo() {
     );
     assert_eq!(revision(&db, &p, &b).await, 3);
     db.execute_canvas(edit(3, "逆光开场")).await.unwrap();
-    assert!(content_of(&db, &p, &b, &sticky)
-        .await
-        .contains("逆光开场"));
+    assert!(content_of(&db, &p, &b, &sticky).await.contains("逆光开场"));
     let arrow = db
         .canvas_snapshot(&p, &b)
         .await
@@ -787,7 +784,12 @@ async fn set_node_text_rewrites_in_place_and_survives_undo_redo() {
         format!("[\"{sticky}\",\"{other}\"]")
     );
     // 同一内容重复提交不产生历史，避免一次失焦就多一条撤销记录。
-    assert!(!db.execute_canvas(edit(4, "逆光开场")).await.unwrap().changed);
+    assert!(
+        !db.execute_canvas(edit(4, "逆光开场"))
+            .await
+            .unwrap()
+            .changed
+    );
     assert_eq!(revision(&db, &p, &b).await, 4);
     db.execute_canvas(request(
         &p,
@@ -810,9 +812,7 @@ async fn set_node_text_rewrites_in_place_and_survives_undo_redo() {
     ))
     .await
     .unwrap();
-    assert!(content_of(&db, &p, &b, &sticky)
-        .await
-        .contains("逆光开场"));
+    assert!(content_of(&db, &p, &b, &sticky).await.contains("逆光开场"));
     assert_eq!(revision(&db, &p, &b).await, 6);
     sqlx::query("UPDATE canvas_nodes SET locked=1 WHERE id=?")
         .bind(&sticky)

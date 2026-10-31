@@ -294,6 +294,11 @@ final class FocalRoomUITests: XCTestCase {
         runProposalsSegment(app)
         let photo = app.buttons["photo.ios-photo-1"]
         XCTAssertTrue(photo.waitForExistence(timeout: 15))
+        // 提案段后列表刷新中格子可能短暂不可点；轮询至可点再操作。
+        for _ in 0..<10 {
+            if photo.isHittable { break }
+            Thread.sleep(forTimeInterval: 0.5)
+        }
         let libraryScreenshot = XCTAttachment(screenshot: app.screenshot())
         libraryScreenshot.name = "iPhone 图库"
         libraryScreenshot.lifetime = .keepAlways
