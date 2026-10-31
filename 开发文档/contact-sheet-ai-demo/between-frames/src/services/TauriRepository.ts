@@ -139,6 +139,7 @@ export class TauriRepository implements DesktopProjectRepository {
   async discardDraft(id: string, draft: SelectionDraft) { return this.execute(id, { type: 'DiscardDraft', draftId: draft.id, expectedDraftRevision: draft.revision }); }
   async archive(id: string) { await this.execute(id, { type: 'ArchiveProject' }); this.snapshots.delete(id); }
   async restore(id: string) { return this.execute(id, { type: 'RestoreProject' }); }
+  async delete(id: string) { await command('delete_project', { projectId: id }); this.snapshots.delete(id); }
   async subscribe(onChange: (projectId: string, revision?: number) => void) {
     const changed = z.object({ projectId: z.string(), revision: z.number().int().optional() });
     const handle = (payload: unknown) => { const event = changed.safeParse(payload); if (event.success) onChange(event.data.projectId, event.data.revision); };

@@ -104,6 +104,7 @@ export interface DesktopProjectRepository extends ProjectRepository, DraftReposi
   subscribe(onChange: (projectId: string, revision?: number) => void): Promise<() => void>;
   archive(id: string): Promise<void>;
   restore(id: string): Promise<Project>;
+  delete(id: string): Promise<void>;
   import(id: string, folder: boolean): Promise<string | null>;
   importJob(jobId: string): Promise<ImportJob>;
   cancelImport(jobId: string): Promise<void>;

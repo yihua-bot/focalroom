@@ -102,7 +102,7 @@ impl Store {
 
     pub async fn list(&self, archived: bool) -> Result<Vec<Project>> {
         let ids: Vec<String> = sqlx::query_scalar(
-            "SELECT id FROM projects WHERE (deleted_at IS NOT NULL)=? ORDER BY updated_at DESC,id",
+            "SELECT id FROM projects WHERE (deleted_at IS NOT NULL)=? AND purged_at IS NULL ORDER BY updated_at DESC,id",
         )
         .bind(archived)
         .fetch_all(&self.pool)
@@ -161,6 +161,47 @@ impl Store {
         let project = self.snapshot(id, true).await?;
         self.gui(id, project.revision, GuiCommand::RestoreProject {})
             .await
+    }
+    pub async fn delete(&self, id: &str) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        let archived =
+            sqlx::query_scalar::<_, bool>("SELECT deleted_at IS NOT NULL FROM projects WHERE id=?")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        match archived {
+            None => return Err(AppError::new("NOT_FOUND", "项目不存在")),
+            Some(false) => {
+                return Err(AppError::new(
+                    "PROJECT_NOT_ARCHIVED",
+                    "请先归档项目，再删除",
+                ));
+            }
+            Some(true) => {}
+        }
+        sqlx::query("PRAGMA defer_foreign_keys=ON")
+            .execute(&mut *tx)
+            .await?;
+        let tables: Vec<String> = sqlx::query_scalar(
+            "SELECT m.name FROM sqlite_master m \
+             JOIN pragma_table_info(m.name) p ON p.name='project_id' \
+             WHERE m.type='table' AND m.name<>'projects' \
+             AND NOT EXISTS (SELECT 1 FROM sqlite_master t WHERE t.type='trigger' AND t.tbl_name=m.name AND t.sql LIKE '%BEFORE DELETE%')",
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        for table in tables {
+            sqlx::query(&format!("DELETE FROM \"{table}\" WHERE project_id=?"))
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        sqlx::query("UPDATE projects SET purged_at=datetime('now') WHERE id=?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
     }
     pub async fn decide(
         &self,

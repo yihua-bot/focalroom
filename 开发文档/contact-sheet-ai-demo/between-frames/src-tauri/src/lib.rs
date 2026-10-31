@@ -178,6 +178,7 @@ pub fn run() {
             commands::set_hypothesis_enabled,
             commands::set_privacy_consent,
             commands::list_projects,
+            commands::delete_project,
             commands::get_project,
             commands::get_original_photo,
             commands::execute_gui_command,

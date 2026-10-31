@@ -6,10 +6,10 @@ import { Button } from '../../components/shared/Button';
 import { AdminStats } from '../../components/shared/AdminStats';
 import { EmptyState } from '../../components/shared/EmptyState';
 
-export function ProjectList({ projects, onOpen, onCreate, onQuickStart, local = false, archived = false, onArchive, onRestore, onToggleArchive }: {
+export function ProjectList({ projects, onOpen, onCreate, onQuickStart, local = false, archived = false, onArchive, onRestore, onDelete, onToggleArchive }: {
   projects: Project[]; onOpen: (id: string) => void; onCreate: () => void;
   onQuickStart?: () => void; local?: boolean; archived?: boolean;
-  onArchive?: (project: Project) => void; onRestore?: (project: Project) => void; onToggleArchive?: () => void;
+  onArchive?: (project: Project) => void; onRestore?: (project: Project) => void; onDelete?: (project: Project) => void; onToggleArchive?: () => void;
 }) {
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const allTags = [...new Set(projects.flatMap(project => project.tags ?? []))].sort();
@@ -23,7 +23,7 @@ export function ProjectList({ projects, onOpen, onCreate, onQuickStart, local = 
       <div className="project-card-body">{(archived || !local) && <span className="eyebrow">{archived ? '已归档' : '演示项目'}</span>}<h2>{project.title}<ArrowUpRight size={19} /></h2>
         <p>{project.photos.length} 张照片 · {project.sequence.length} 张入选</p>
         {(project.tags?.length ?? 0) > 0 && <p className="tag-chips">{project.tags!.map(tag => <span key={tag}>{tag}</span>)}</p>}{project.updatedAt && <p>最近修改 {new Date(project.updatedAt).toLocaleString('zh-CN')}</p>}</div></button>
-      {local && <div className="project-card-actions"><Button size="small" onClick={() => { if (archived) onRestore?.(project); else onArchive?.(project); }}>{archived ? '恢复项目' : '归档项目'}</Button></div>}
+      {local && <div className="project-card-actions">{archived && onDelete && <Button size="small" onClick={() => onDelete(project)}>删除项目</Button>}<Button size="small" onClick={() => { if (archived) onRestore?.(project); else onArchive?.(project); }}>{archived ? '恢复项目' : '归档项目'}</Button></div>}
     </article>)}<AdminStats /></div>
       : visible.length === 0 && filterTag ? <EmptyState title="此标签下没有项目" hint="换一个标签，或清除筛选。" action={<Button onClick={() => setFilterTag(null)}>查看全部</Button>} /> : <EmptyState title="还没有项目" hint={zh.projectListHint} action={<Button onClick={onCreate}>{zh.newProject}</Button>} />}
   </section>;

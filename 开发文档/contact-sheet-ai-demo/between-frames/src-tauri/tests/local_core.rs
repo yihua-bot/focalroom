@@ -289,7 +289,7 @@ async fn rating_migration_upgrades_old_database_without_changing_legacy_data() {
             .fetch_one(&store.pool)
             .await
             .unwrap(),
-        34
+        35
     );
     store.pool.close().await;
     let reopened = Store::open(&database).await.unwrap();
@@ -625,4 +625,58 @@ fn native_heic_and_canon_raw_are_decoded_without_changing_originals() {
             path.extension().unwrap().to_string_lossy()
         );
     }
+}
+
+#[tokio::test]
+async fn project_delete_requires_archive_then_clears_deletable_rows() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("delete.sqlite");
+    let store = Store::open(&database).await.unwrap();
+    let project = store.create("删除演练", "先归档再删除").await.unwrap();
+
+    let unarchived = store.delete(&project.id).await;
+    assert!(unarchived.is_err(), "未归档的项目不允许直接删除");
+
+    store.archive(&project.id, project.revision).await.unwrap();
+    store.delete(&project.id).await.unwrap();
+
+    assert!(store.list(false).await.unwrap().is_empty());
+    assert!(
+        store.list(true).await.unwrap().is_empty(),
+        "归档列表不应再显示已删除项目"
+    );
+
+    let pool = sqlx::SqlitePool::connect(&database.to_string_lossy())
+        .await
+        .unwrap();
+    for table in ["photos", "source_assets", "drafts"] {
+        let count: i64 =
+            sqlx::query_scalar(&format!("SELECT count(*) FROM {table} WHERE project_id=?"))
+                .bind(&project.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(count, 0, "{table} 可删数据应清空");
+    }
+    let purged_at: Option<String> = sqlx::query_scalar("SELECT purged_at FROM projects WHERE id=?")
+        .bind(&project.id)
+        .fetch_optional(&pool)
+        .await
+        .unwrap()
+        .flatten();
+    assert!(
+        purged_at.is_some(),
+        "项目行按审计架构保留并带 purged_at 标记"
+    );
+    let command_events: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM command_events WHERE project_id=?")
+            .bind(&project.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        command_events >= 2,
+        "create/archive 命令审计行应保留（append-only 架构）"
+    );
+    pool.close().await;
 }

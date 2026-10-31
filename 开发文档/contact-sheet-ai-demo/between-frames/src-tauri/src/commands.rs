@@ -39,6 +39,11 @@ pub async fn list_projects(
         })
         .collect())
 }
+
+#[tauri::command]
+pub async fn delete_project(state: State<'_, Backend>, project_id: String) -> Result<()> {
+    state.store.delete(&project_id).await
+}
 #[tauri::command]
 pub async fn get_project(
     state: State<'_, Backend>,

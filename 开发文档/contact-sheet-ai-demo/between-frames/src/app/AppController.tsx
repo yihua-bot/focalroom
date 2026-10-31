@@ -37,7 +37,7 @@ import type { SelectionGesture } from '../domain/selection';
 import { useAccount } from '../features/cloud-login/AccountProvider';
 import { UpdateCheck } from '../components/shared/UpdateCheck';
 
-type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'editorVersions' | 'versions' | 'activity' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive'; project: Project };
+type OpenDialog = { kind: 'edit' | 'create' | 'export' | 'help' | 'import' | 'editorVersions' | 'versions' | 'activity' | 'quickStart' | 'palette' } | { kind: 'compare'; left: Photo; right: Photo } | { kind: 'enlarge'; photo: Photo } | { kind: 'archive' | 'delete'; project: Project };
 
 export function AppController({ repository }: { repository: ProjectRepository }) {
   useI18n();
@@ -194,7 +194,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
     onProjects={() => { setArchived(false); navigate(null); }} onHelp={() => setDialog({ kind: 'help' })} />}>
     {query.isPending ? <p role="status" className="page-message">正在加载项目…</p> : query.isError ? <EmptyState title="项目加载失败" hint={query.error.message} action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />
       : route.page === 'projects' ? <ProjectList projects={projects} onOpen={openProject} onCreate={() => { setArchived(false); setPendingGoal(null); setDialog({ kind: 'create' }); }} onQuickStart={local ? () => { setArchived(false); setDialog({ kind: 'quickStart' }); } : undefined} local={local} archived={archived}
-        onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })}
+        onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })} onDelete={item => setDialog({ kind: 'delete', project: item })}
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />
       : project ? <Workspace key={project.id} canvas={local ? repository.canvas : undefined} publication={local ? repository.publication : undefined} project={project} visible={visible} kept={kept} active={active} selectedIds={selectedIds} onSelect={select} onBatchDecide={decideSelection} onBatchRate={rateSelection} busy={mutation.isPending || readOnly} local={local} sharing={sharing.data ?? undefined} onEdit={() => setDialog({ kind: 'edit' })} onImport={() => setDialog({ kind: 'import' })}
         onEditorVersions={local && repository.editorVersions ? () => setDialog({ kind: 'editorVersions' }) : undefined} onUndo={undo} onRedo={redo} onVersions={() => setDialog({ kind: 'versions' })} onActivity={() => setDialog({ kind: 'activity' })} onCopyPlan={copyPlan} onAICompare={aiCompare} onAIOrder={aiOrder} onCompare={compare} onExport={() => setDialog({ kind: 'export' })} onDecide={decide} onReorder={reorder} onEnlarge={photo => setDialog({ kind: 'enlarge', photo })} />
@@ -230,6 +230,10 @@ export function AppController({ repository }: { repository: ProjectRepository })
       <div className="dialog-actions"><Button onClick={() => setDialog(null)}>取消</Button><Button variant="primary" onClick={() => {
         void repository.archive(dialog.project.id).then(() => { setDialog(null); refresh(); }).catch(error => setNotice(`归档失败：${String(error)}`));
       }}>确认归档</Button></div></Modal>}
+    {dialog?.kind === 'delete' && local && <Modal title="确认删除项目" description={`“${dialog.project.title}”的照片记录、选片与草稿将被清除，不可恢复；磁盘上的原图文件不受影响。`} onClose={() => setDialog(null)}>
+      <div className="dialog-actions"><Button onClick={() => setDialog(null)}>取消</Button><Button variant="primary" onClick={() => {
+        void repository.delete(dialog.project.id).then(() => { setDialog(null); refresh(); }).catch(error => setNotice(`删除失败：${String(error)}`));
+      }}>确认删除</Button></div></Modal>}
     {dialog?.kind === 'enlarge' && <Lightbox photos={navigable} activeId={dialog.photo.id} onClose={() => setDialog(null)} onNavigate={photo => { ui.select(photo.id); setDialog({ kind: 'enlarge', photo }); }} onDecide={(id, status) => decide(id, status)} onRate={(id, rating) => project && act(() => repository.rate(project.id, [id], rating), rating ? `人工评分已保存：${rating} 星` : '人工评分已清除')} />}
     {dialog?.kind === 'palette' && <CommandPalette commands={paletteCommands} onClose={() => setDialog(null)} />}
     {dialog?.kind === 'editorVersions' && local && project && repository.editorVersions && <EditorVersionsDialog repository={repository.editorVersions} projectId={project.id} readOnly={readOnly} onClose={() => setDialog(null)} />}
