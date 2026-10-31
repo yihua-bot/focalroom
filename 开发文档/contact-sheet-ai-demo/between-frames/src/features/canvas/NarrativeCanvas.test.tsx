@@ -11,6 +11,14 @@ beforeEach(() => {
   Element.prototype.releasePointerCapture ??= () => {};
 });
 
+// 便签落点要走完整的按下-松开：pointerdown 记落点、mousedown 把焦点交给画布（surface 有 tabIndex=0）、pointerup 才挂编辑框。
+// fireEvent.pointerDown 单发会跳过中间那步失焦，浏览器里能复现的"编辑框刚出现就被 blur 丢掉"在测试里复现不了。
+type Pointer = ReturnType<typeof userEvent.setup>;
+const dropSticky = (user: Pointer, surface: HTMLElement, x: number, y: number) => user.pointer([
+  { keys: '[MouseLeftDown]', target: surface, coords: { clientX: x, clientY: y } },
+  { keys: '[MouseLeftUp]', target: surface, coords: { clientX: x, clientY: y } },
+]);
+
 it('方案显示真实变化与原布局叠层，原版更新有提示', async () => {
   const repo = repository();
   vi.mocked(repo.listBoards).mockResolvedValue([{ id: 'board-1', projectId: 'project', title: '候选', state: 'draft', owningTaskId: 'task', revision: 3 }]);
@@ -158,7 +166,7 @@ it('快捷键仅作用于当前画布，文本输入保留自己的撤销行为'
   await user.keyboard('{Control>}{Shift>}z{/Shift}{/Control}');
   await waitFor(() => expect(repo.redo).toHaveBeenCalledTimes(1));
   await user.click(screen.getByRole('button', { name: '便签' }));
-  fireEvent.pointerDown(screen.getByLabelText('叙事画布'), { button: 0, clientX: 20, clientY: 20 });
+  await dropSticky(user, screen.getByLabelText('叙事画布'), 20, 20);
   await user.click(screen.getByRole('textbox', { name: '便签内容' }));
   await user.keyboard('{Control>}z{/Control}');
   expect(repo.undo).toHaveBeenCalledTimes(1);
@@ -208,14 +216,14 @@ it('便签先落点再就地输入，空白落点与取消都不留节点', asyn
   await user.click(screen.getByRole('button', { name: '便签' }));
   // 旧版是先弹输入框再落节点，用户不知道便签会在哪里出现；现在落点前不应有任何输入框。
   expect(screen.queryByRole('textbox', { name: '便签内容' })).not.toBeInTheDocument();
-  fireEvent.pointerDown(container.querySelector('.canvas-surface')!, { button: 0, clientX: 30, clientY: 40 });
+  await dropSticky(user, container.querySelector('.canvas-surface')!, 30, 40);
   await user.type(screen.getByRole('textbox', { name: '便签内容' }), '开场用逆光');
   await user.click(screen.getByRole('button', { name: '保存' }));
   await waitFor(() => expect(repo.addText).toHaveBeenCalledWith('project', 'board-1', 'sticky', 30, 40, 200, 120, '开场用逆光', '#ffe082'));
   expect(container.querySelector('.canvas-tool-status')).toBeNull();
   vi.mocked(repo.addText).mockClear();
   await user.click(screen.getByRole('button', { name: '便签' }));
-  fireEvent.pointerDown(container.querySelector('.canvas-surface')!, { button: 0, clientX: 60, clientY: 60 });
+  await dropSticky(user, container.querySelector('.canvas-surface')!, 60, 60);
   await user.click(screen.getByRole('button', { name: '取消' }));
   expect(repo.addText).not.toHaveBeenCalled();
   expect(screen.queryByRole('textbox', { name: '便签内容' })).not.toBeInTheDocument();

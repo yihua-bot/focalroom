@@ -112,6 +112,9 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const noteMode = tool === 'note';
   const dragStart = useRef<{ x: number; y: number; nodeX: number; nodeY: number; positions: Map<string, { x: number; y: number }> } | null>(null);
   const panning = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  // 便签落点先记在这里，pointerup 才挂编辑框：mousedown 会把焦点交给 tabIndex=0 的画布，
+  // 若 pointerdown 就挂载 autoFocus 的输入框，紧随其后的失焦会把这个空便签当成"用户放弃了"丢掉。
+  const noteDrop = useRef<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const toBoard = (clientX: number, clientY: number) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -334,15 +337,25 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     } else setLinking(nodeId);
   };
 
+  // pointerdown 只记落点，编辑框到 pointerup 才挂载：那时 mousedown 的焦点转移已经结束，autoFocus 不会被画布抢回去。
+  const dropNote = () => {
+    const point = noteDrop.current;
+    if (!point) return false;
+    noteDrop.current = null;
+    // 按住的过程中工具已经变了，说明这次按压作废（指针在别处松开），不该凭空落下便签。
+    if (!noteMode) return false;
+    setStickyDraft({ nodeId: null, x: point.x, y: point.y, text: '' });
+    setTool('select');
+    return true;
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (working) return;
     const target = e.target as HTMLElement;
     if (target.closest('textarea,input,select,[contenteditable="true"]')) return;
     const nodeEl = target.closest('[data-node-id]');
     if (noteMode && e.button === 0 && !nodeEl) {
-      const point = toBoard(e.clientX, e.clientY);
-      if (point) setStickyDraft({ nodeId: null, x: point.x, y: point.y, text: '' });
-      setTool('select');
+      noteDrop.current = toBoard(e.clientX, e.clientY);
       return;
     }
     // 连接模式：点节点交给 click 处理，点空白即退出并照常平移——原先这里整体 return，用户会困在模式里出不来。
@@ -517,7 +530,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     }));
     if (resizing) setNodes(current => current.map(node => node.id === resizing.nodeId ? { ...node, width: resizing.startW, height: resizing.startH } : node));
     setResizing(null); setMarquee(null); setDragging(null);
-    dragStart.current = null; panning.current = null; setInkPoints([]);
+    dragStart.current = null; panning.current = null; noteDrop.current = null; setInkPoints([]);
   };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
@@ -636,6 +649,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
         onPointerMove={onPointerMove}
         onPointerUp={() => {
           panning.current = null;
+          if (dropNote()) return;
           if (dragging || resizing || marquee || inkPoints.length) void run(async () => {
             try { await onPointerUp(); }
             catch (error) {
