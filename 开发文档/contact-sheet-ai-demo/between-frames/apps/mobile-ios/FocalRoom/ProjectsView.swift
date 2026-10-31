@@ -87,7 +87,7 @@ struct ProjectLibraryView: View {
     @State private var toolDestination: ProjectTool?
 
     private enum ProjectTool: String, Identifiable {
-        case proposals, history, grants
+        case proposals, history, grants, research
         var id: String { rawValue }
     }
     private let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
@@ -159,9 +159,7 @@ struct ProjectLibraryView: View {
                 } label: { Image(systemName: "lock.icloud") }
                 .disabled(model.offline || model.snapshot?.project_id != projectID)
                 .accessibilityLabel("同步与共享").accessibilityIdentifier("project.sync.entry")
-                NavigationLink {
-                    ResearchView(model: model, projectID: projectID)
-                } label: {
+                Button { toolDestination = .research } label: {
                     Image(systemName: "text.book.closed")
                 }
                 .disabled(model.offline || model.snapshot?.project_id != projectID)
@@ -187,6 +185,7 @@ struct ProjectLibraryView: View {
                 case .proposals: ProposalsView(model: model)
                 case .history: VersionHistoryView(model: model, projectID: projectID)
                 case .grants: GrantsView(model: model, projectID: projectID)
+                case .research: ResearchView(model: model, projectID: projectID)
                 }
             }
         }

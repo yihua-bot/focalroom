@@ -812,7 +812,8 @@ final class FocalRoomUITests: XCTestCase {
             XCTFail("比较表单收起后应有可识别的落点")
         }
         app.buttons["research.entry"].tap()
-        XCTAssertTrue(app.staticTexts["还没有研究资料"].waitForExistence(timeout: 10))
+        // 到达研究页即算（创建入口存在）；夹具有无研究资料都应通过，不再依赖空态文案。
+        XCTAssertTrue(app.buttons["research.create"].waitForExistence(timeout: 10), "应进入研究资料页")
         app.buttons["research.create"].tap()
         let title = app.textFields["research.title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
