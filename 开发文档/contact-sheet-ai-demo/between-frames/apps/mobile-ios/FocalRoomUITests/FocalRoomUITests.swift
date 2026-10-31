@@ -303,10 +303,17 @@ final class FocalRoomUITests: XCTestCase {
         libraryScreenshot.name = "iPhone 图库"
         libraryScreenshot.lifetime = .keepAlways
         add(libraryScreenshot)
-        // 模拟器 AX 对该格子 hittable 误报：以元素实际坐标点击中心，绕过 hit-test 判定。
-        let photoFrame = photo.frame
-        app.coordinate(withNormalizedOffset: .zero)
-            .withOffset(CGVector(dx: photoFrame.midX, dy: photoFrame.midY)).tap()
+        // 网格缩略图与查看器共用 preview.loaded 标识：以查看器专属标识确认真正进入大图页。
+        // 坐标点击可能未触发导航，最多重试三次。
+        let viewerArea = app.otherElements["cloud.viewer.photo"].firstMatch
+        var entered = false
+        for _ in 0..<3 {
+            let photoFrame = photo.frame
+            app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: photoFrame.midX, dy: photoFrame.midY)).tap()
+            if viewerArea.waitForExistence(timeout: 5) { entered = true; break }
+        }
+        XCTAssertTrue(entered, "应进入照片查看器")
         XCTAssertTrue(app.images["preview.loaded.ios-photo-1"].waitForExistence(timeout: 15), "必须显示经过摘要核验的真实后端预览")
         for _ in 0..<4 {
             if app.buttons["selection.KEEP"].waitForExistence(timeout: 4) { break }
