@@ -1,4 +1,5 @@
 import type { MagicEmailDelivery } from "./magic-login.ts";
+import { negotiateLocale, localizeMessage } from "./locale.ts";
 import "reflect-metadata";
 import { Controller, All, Req, Res, Inject, Module } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
@@ -44,17 +45,19 @@ class ApiController {
       const value = await this.route(req, res);
       if (!res.headersSent) res.json(value);
     } catch (error) {
-      const typed =
-        error instanceof ApiError
-          ? error
-          : error instanceof ZodError
-            ? new ApiError(400, "VALIDATION_ERROR", "请求不符合接口契约")
-            : (error as { code?: string }).code === "23505"
-              ? new ApiError(409, "CONFLICT", "记录已存在")
-              : new ApiError(500, "INTERNAL", "服务暂时不可用");
+      let typed: ApiError;
+      if (error instanceof ApiError) typed = error;
+      else if (error instanceof ZodError)
+        typed = new ApiError(400, "VALIDATION_ERROR", "请求不符合接口契约");
+      else if ((error as { code?: string }).code === "23505")
+        typed = new ApiError(409, "CONFLICT", "记录已存在");
+      else {
+        console.error("unexpected api error", error);
+        typed = new ApiError(500, "INTERNAL", "服务暂时不可用");
+      }
       res
         .status(typed.status)
-        .json({ error: { code: typed.code, message: typed.message } });
+        .json({ error: { code: typed.code, message: localizeMessage(typed.message, negotiateLocale(req.headers["accept-language"] as string | undefined)) } });
     }
   }
   async route(req: Request, res: Response): Promise<unknown> {
@@ -293,7 +296,13 @@ class ApiController {
     if (path === "/agent/comments" && req.method === "GET")
       return s.agentComments(headers);
     if (path === "/projects" && req.method === "GET")
-      return s.projects(headers);
+      return s.projects(headers, req.query.include === "archived");
+    const projectLifecycle = path.match(/^\/projects\/([^/]+)\/(archive|unarchive)$/);
+    if (projectLifecycle && req.method === "POST")
+      return s.archiveProject(headers, projectLifecycle[1], projectLifecycle[2] === "archive");
+    const projectDelete = path.match(/^\/projects\/([^/]+)$/);
+    if (projectDelete && req.method === "DELETE")
+      return s.deleteProject(headers, projectDelete[1]);
     if (path === "/promotions" && req.method === "POST")
       return s.promote(headers, req.body);
     if (path === "/private-promotions" && req.method === "POST")

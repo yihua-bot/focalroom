@@ -12,6 +12,7 @@ type ProjectCard = {
   state: string;
   revision: number;
   workspace_id: string;
+  is_owner?: boolean;
 };
 export function ProjectHome({
   session,
@@ -22,16 +23,20 @@ export function ProjectHome({
 }) {
   const [projects, setProjects] = useState<ProjectCard[]>([]),
     [error, setError] = useState(""),
-    [wizard, setWizard] = useState(false);
+    [wizard, setWizard] = useState(false),
+    [busy, setBusy] = useState(""),
+    [confirming, setConfirming] = useState("");
   const [invite, setInvite] = useState(
     () => new URLSearchParams(location.hash.slice(1)).get("invite") ?? "",
   );
   const reload = useCallback(async () => {
-    setProjects(await request<ProjectCard[]>("/projects", session));
+    setProjects(
+      await request<ProjectCard[]>("/projects?include=archived", session),
+    );
   }, [session]);
   useEffect(() => {
     let active = true;
-    request<ProjectCard[]>("/projects", session)
+    request<ProjectCard[]>("/projects?include=archived", session)
       .then((items) => {
         if (active) setProjects(items);
       })
@@ -56,6 +61,21 @@ export function ProjectHome({
       if (result.project_id) onOpen(result.project_id);
     } catch (error) {
       setError(message(error));
+    }
+  };
+  const act = async (id: string, action: "archive" | "unarchive" | "delete") => {
+    setBusy(id + ":" + action);
+    setError("");
+    setConfirming("");
+    try {
+      if (action === "delete")
+        await request(`/projects/${id}`, session, "DELETE");
+      else await request(`/projects/${id}/${action}`, session, "POST");
+      await reload();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy("");
     }
   };
   return (
@@ -95,12 +115,13 @@ export function ProjectHome({
         />
       )}
       <WorkspaceMembers session={session} />
-      {projects.length ? (
-        <div className="fr-projects">
-          {projects.map((project) => (
+      {(() => {
+        const active = projects.filter((p) => p.state !== "ARCHIVED");
+        const archived = projects.filter((p) => p.state === "ARCHIVED");
+        const card = (project: ProjectCard, isArchived: boolean) => (
+          <div className="fr-project-item" key={project.id}>
             <button
-              className="fr-project-card"
-              key={project.id}
+              className={`fr-project-card${isArchived ? " fr-project-archived" : ""}`}
               onClick={() => onOpen(project.id)}
             >
               <div className="fr-project-cover">
@@ -108,21 +129,85 @@ export function ProjectHome({
               </div>
               <h2>{project.title}</h2>
               <p>
-                {project.state === "SHARED" ? "共享评片" : "预览上传中"} · v
-                {project.revision}
+                {isArchived
+                  ? "已归档"
+                  : project.state === "SHARED"
+                    ? "共享评片"
+                    : "预览上传中"}{" "}
+                · v{project.revision}
               </p>
-              <span>进入项目 →</span>
+              <span>{isArchived ? "查看归档项目 →" : "进入项目 →"}</span>
             </button>
-          ))}
-        </div>
-      ) : (
-        <div className="fr-empty">
-          <h2>暂无共享项目</h2>
-          <p>
-            接受邀请或导入共享预览包。
-          </p>
-        </div>
-      )}
+            {project.is_owner && (
+              <div className="fr-project-actions">
+                {isArchived ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={busy !== ""}
+                      onClick={() => void act(project.id, "unarchive")}
+                    >
+                      {busy === project.id + ":unarchive" ? "恢复中…" : "恢复项目"}
+                    </button>
+                    {confirming === project.id ? (
+                      <span className="fr-project-confirm">
+                        删除后不可恢复
+                        <button
+                          type="button"
+                          className="fr-danger"
+                          disabled={busy !== ""}
+                          onClick={() => void act(project.id, "delete")}
+                        >
+                          {busy === project.id + ":delete" ? "删除中…" : "确认删除"}
+                        </button>
+                        <button type="button" disabled={busy !== ""} onClick={() => setConfirming("")}>
+                          取消
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busy !== ""}
+                        onClick={() => setConfirming(project.id)}
+                      >
+                        删除项目
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  project.state === "SHARED" && (
+                    <button
+                      type="button"
+                      disabled={busy !== ""}
+                      onClick={() => void act(project.id, "archive")}
+                    >
+                      {busy === project.id + ":archive" ? "归档中…" : "归档项目"}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        );
+        return (
+          <>
+            {active.length ? (
+              <div className="fr-projects">{active.map((p) => card(p, false))}</div>
+            ) : (
+              <div className="fr-empty">
+                <h2>暂无共享项目</h2>
+                <p>接受邀请或导入共享预览包。</p>
+              </div>
+            )}
+            {archived.length > 0 && (
+              <section className="fr-archived">
+                <h2>已归档</h2>
+                <div className="fr-projects">{archived.map((p) => card(p, true))}</div>
+              </section>
+            )}
+          </>
+        );
+      })()}
     </main>
   );
 }

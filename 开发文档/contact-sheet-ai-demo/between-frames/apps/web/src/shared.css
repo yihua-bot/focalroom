@@ -1071,3 +1071,15 @@
 .fr-knowledge-claim-type[data-status="verified"]{background:#e7f0e4;color:#3c6e47}
 .fr-knowledge-claim-type[data-status="imported"]{background:#f3eadf;color:#8a5a2b}
 @media (max-width:800px){.fr-knowledge-body{flex-direction:column}.fr-knowledge-detail{position:static;width:100%}}
+
+/* 项目归档与删除 */
+.fr-project-item{display:flex;flex-direction:column;gap:6px}
+.fr-project-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fr-project-actions button{border:1px solid var(--fr-edge);border-radius:6px;background:none;padding:5px 12px;font-size:12px;cursor:pointer}
+.fr-project-actions button:hover:enabled{background:rgba(0,0,0,.05)}
+.fr-project-actions button:disabled{opacity:.5;cursor:default}
+.fr-project-actions .fr-danger{color:#b3261e;border-color:#b3261e}
+.fr-project-confirm{display:inline-flex;gap:8px;align-items:center;font-size:12px;color:#b3261e}
+.fr-project-archived{opacity:.65}
+.fr-archived{margin-top:34px}
+.fr-archived h2{font-size:15px;color:var(--fr-muted);margin:0 0 12px}

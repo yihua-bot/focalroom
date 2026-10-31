@@ -16,7 +16,7 @@ export type Project = {
   workspace_id: string;
   owner_id: string;
   title: string;
-  state: "STAGING" | "SHARED" | "ABORTED";
+  state: "STAGING" | "SHARED" | "ABORTED" | "ARCHIVED" | "DELETED";
   revision: number;
   snapshot: SharedSnapshot;
 };
@@ -108,6 +108,12 @@ export class AuthorityService {
             [id],
           )
         ).rows[0] as Project;
+        assert(
+          project.state !== "DELETED",
+          404,
+          "NOT_FOUND",
+          "项目不存在",
+        );
         const principal = await this.principal(tx, user, project);
         const result = await action({ tx, user, project, principal });
         await tx.query(

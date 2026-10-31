@@ -251,14 +251,129 @@ export class CloudService {
       ).rows;
     });
   }
-  async projects(headers: Headers) {
+  async projects(headers: Headers, includeArchived = false) {
     const user = await this.auth.authenticate(headers, false);
+    const states = includeArchived ? "('STAGING','SHARED','ARCHIVED')" : "('STAGING','SHARED')";
     return (
       await this.pool.query(
-        "SELECT DISTINCT p.id,p.workspace_id,p.title,p.revision,p.state,s.mode AS sync_mode FROM fr_projects p LEFT JOIN fr_project_sync s ON s.project_id=p.id LEFT JOIN fr_memberships m ON m.workspace_id=p.workspace_id AND m.user_id=$1 LEFT JOIN fr_grants g ON g.project_id=p.id AND g.user_id=$1 AND g.active WHERE (p.owner_id=$1 OR m.role IN ('OWNER','ADMIN') OR g.user_id=$1) AND p.state IN ('STAGING','SHARED') AND (p.state='SHARED' OR p.owner_id=$1) AND (s.mode IS NULL OR s.mode='SHARED' OR p.owner_id=$1) ORDER BY p.id",
+        `SELECT DISTINCT p.id,p.workspace_id,p.title,p.revision,p.state,(p.owner_id=$1) AS is_owner,p.archived_at,s.mode AS sync_mode FROM fr_projects p LEFT JOIN fr_project_sync s ON s.project_id=p.id LEFT JOIN fr_memberships m ON m.workspace_id=p.workspace_id AND m.user_id=$1 LEFT JOIN fr_grants g ON g.project_id=p.id AND g.user_id=$1 AND g.active WHERE (p.owner_id=$1 OR m.role IN ('OWNER','ADMIN') OR g.user_id=$1) AND p.state IN ${states} AND (p.state='SHARED' OR p.state='ARCHIVED' OR p.owner_id=$1) AND (s.mode IS NULL OR s.mode='SHARED' OR p.owner_id=$1) ORDER BY p.id`,
         [user.id],
       )
     ).rows;
+  }
+  async archiveProject(headers: Headers, id: string, archive: boolean) {
+    return transaction(this.pool, async (tx) => {
+      const user = await this.auth.authenticate(headers, true, tx);
+      const project = (
+        await tx.query("SELECT * FROM fr_projects WHERE id=$1 FOR UPDATE", [id])
+      ).rows[0];
+      assert(project, 404, "NOT_FOUND", "项目不存在");
+      const role = (
+        await tx.query(
+          "SELECT role FROM fr_memberships WHERE workspace_id=$1 AND user_id=$2",
+          [project.workspace_id, user.id],
+        )
+      ).rows[0]?.role;
+      assert(
+        project.owner_id === user.id || ["OWNER", "ADMIN"].includes(role),
+        403,
+        "PERMISSION_DENIED",
+        "只有项目所有者或工作区管理员可归档项目",
+      );
+      if (archive) {
+        assert(
+          project.state === "SHARED",
+          409,
+          "PROJECT_STATE_INVALID",
+          "仅共享中的项目可归档",
+        );
+        await tx.query(
+          "UPDATE fr_projects SET state='ARCHIVED', archived_at=now(), archived_by=$2 WHERE id=$1",
+          [id, user.id],
+        );
+      } else {
+        assert(
+          project.state === "ARCHIVED",
+          409,
+          "PROJECT_STATE_INVALID",
+          "仅已归档的项目可恢复",
+        );
+        await tx.query(
+          "UPDATE fr_projects SET state='SHARED', archived_at=NULL, archived_by=NULL WHERE id=$1",
+          [id],
+        );
+      }
+      await tx.query(
+        "INSERT INTO fr_acl_audit(user_id,project_id,action,allowed) VALUES($1,$2,$3,true)",
+        [user.id, id, archive ? "project.archive" : "project.unarchive"],
+      );
+      return { archived: archive };
+    });
+  }
+  async deleteProject(headers: Headers, id: string) {
+    return transaction(this.pool, async (tx) => {
+      const user = await this.auth.authenticate(headers, true, tx);
+      const project = (
+        await tx.query(
+          "SELECT * FROM fr_projects WHERE id=$1 AND state<>'DELETED' FOR UPDATE",
+          [id],
+        )
+      ).rows[0];
+      assert(project, 404, "NOT_FOUND", "项目不存在");
+      const role = (
+        await tx.query(
+          "SELECT role FROM fr_memberships WHERE workspace_id=$1 AND user_id=$2",
+          [project.workspace_id, user.id],
+        )
+      ).rows[0]?.role;
+      assert(
+        project.owner_id === user.id || role === "OWNER",
+        403,
+        "PERMISSION_DENIED",
+        "只有项目所有者可删除项目",
+      );
+      const erasure = (
+        await tx.query(
+          "SELECT count(*)::int AS n FROM fr_erasure_audit WHERE project_id=$1",
+          [id],
+        )
+      ).rows[0].n;
+      assert(
+        erasure === 0,
+        409,
+        "PROJECT_ERASURE_LOCKED",
+        "此项目包含账号注销审计记录，无法删除；可改为归档",
+      );
+      const previews = (
+        await tx.query("SELECT object_key FROM fr_previews WHERE project_id=$1", [id])
+      ).rows;
+      for (const table of [
+        "fr_presence",
+        "fr_agent_jobs",
+        "fr_agent_scopes",
+        "fr_tickets",
+        "fr_drafts",
+        "fr_model_consents",
+        "fr_sync_commands",
+        "fr_comments",
+        "fr_proposals",
+        "fr_invitations",
+        "fr_previews",
+        "fr_grants",
+        "fr_project_sync",
+      ])
+        await tx.query(`DELETE FROM ${table} WHERE project_id=$1`, [id]);
+      await tx.query(
+        "UPDATE fr_projects SET state='DELETED', deleted_at=now() WHERE id=$1",
+        [id],
+      );
+      for (const preview of previews) await this.store.remove?.(preview.object_key);
+      await tx.query(
+        "INSERT INTO fr_acl_audit(user_id,action,allowed) VALUES($1,$2,true)",
+        [user.id, "project.delete:" + id],
+      );
+      return { deleted: true };
+    });
   }
   async invite(headers: Headers, workspaceId: string, input: unknown) {
     const value = inviteInput.parse(input);
