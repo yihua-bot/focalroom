@@ -25,6 +25,7 @@ const aiConfigSchema = z.object({
  consent: consentView.nullable(),
 });
 export class TauriAgentRepository implements AgentRepository {
+ async chat(turns: import('../domain/agent').ChatTurn[]) { return z.string().parse(await invoke('agent_chat', { turns })); }
  async selectionRevisionContext(projectId: string, draftId: string, offset = 0) {
   const result = selectionRevisionSchema.nullable().parse(await invoke('selection_revision_context', {projectId,draftId,offset}));
   if (result && (result.draftId !== draftId || result.parent.id === draftId || (result.nextOffset !== null && result.nextOffset !== offset+30) || result.items.length > result.totalItems || result.reviews.some(review => review.photoNames.length !== review.photoIds.length || (review.kind === 'apply' && review.mode === null)))) throw new Error('修订依据与方案不一致。');

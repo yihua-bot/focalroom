@@ -19,6 +19,11 @@ interface UIState {
   closeAgent: () => void;
   aiDrafts: Record<string, { goal: string; count: number; scopeSelection: boolean }>;
   saveAIDraft: (projectId: string, draft: { goal: string; count: number; scopeSelection: boolean }) => void;
+  aiMode: 'chat' | 'task';
+  setAiMode: (mode: 'chat' | 'task') => void;
+  aiChat: Record<string, import('../domain/agent').ChatTurn[]>;
+  pushChat: (projectId: string, turn: import('../domain/agent').ChatTurn) => void;
+  clearChat: (projectId: string) => void;
   activeId: string | null;
   selectedIds: string[];
   anchorId: string | null;
@@ -54,6 +59,11 @@ export const useUIStore = create<UIState>(set => ({
   consumeDraftRevision: id => set(state => state.draftRevisionRequest?.id === id ? { draftRevisionRequest: null } : {}),
   aiDrafts: {},
   saveAIDraft: (projectId, draft) => set(state => ({ aiDrafts: { ...state.aiDrafts, [projectId]: draft } })),
+  aiMode: 'task',
+  setAiMode: aiMode => set({ aiMode }),
+  aiChat: {},
+  pushChat: (projectId, turn) => set(state => ({ aiChat: { ...state.aiChat, [projectId]: [...(state.aiChat[projectId] ?? []), turn].slice(-40) } })),
+  clearChat: projectId => set(state => ({ aiChat: { ...state.aiChat, [projectId]: [] } })),
   ...initial, filter: 'all', grouping: 'none', view: 'grid', panel: 'photo',
   select: activeId => set({ activeId, selectedIds: activeId ? [activeId] : [], anchorId: activeId }),
   selectRange: (id, order, gesture = {}) => set(state => ({ activeId: id, selectedIds: selectPhotos(state.selectedIds, state.anchorId, id, order, gesture), anchorId: gesture.range ? state.anchorId ?? id : id })),

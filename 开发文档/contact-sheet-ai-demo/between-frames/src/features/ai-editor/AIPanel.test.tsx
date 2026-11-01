@@ -11,7 +11,7 @@ const project = { id: 'p1', title: 't', brief: '', revision: 3, photos: [{ id: '
 const readyConfig: AiConfig = { observation: null, consentProvider: 'openai@' + 'a'.repeat(64), providerId: 'openai', modelId: 'test-model', ready: true, apiKeyTail: 'abcd', keySource: 'keychain', baseUrl: 'https://x', promptVersion: 'test', capabilities: ['vision', 'tool_calling', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null, consent: null };
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn().mockResolvedValue(() => {}) }));
 function fixture(config: Partial<AiConfig> = {}, projection: AgentProjection = { tasks: [], drafts: [] }) {
- const agent = { queryVisionResult: vi.fn().mockResolvedValue({state:'pending',images:1}), query: vi.fn().mockResolvedValue(projection), request: vi.fn().mockResolvedValue('task-1'), subscribe: vi.fn().mockResolvedValue(() => {}), aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...config }), setConsent: vi.fn().mockResolvedValue({ id: 9 }) };
+ const agent = { chat: vi.fn().mockResolvedValue('聊天模式回复'), queryVisionResult: vi.fn().mockResolvedValue({state:'pending',images:1}), query: vi.fn().mockResolvedValue(projection), request: vi.fn().mockResolvedValue('task-1'), subscribe: vi.fn().mockResolvedValue(() => {}), aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...config }), setConsent: vi.fn().mockResolvedValue({ id: 9 }) };
  return { agent };
 }
 function mount(repository = fixture(), props: Partial<React.ComponentProps<typeof AIPanel>> = {}) {
@@ -22,7 +22,7 @@ function mount(repository = fixture(), props: Partial<React.ComponentProps<typeo
 const send = () => screen.getByRole('button', { name: '发送' });
 const ready = () => waitFor(() => expect(send()).toBeEnabled());
 function task(state: AgentTask['state']): AgentTask { return { id: 't1', state, goal: '旅行故事', baseRevision: 3, reason: '预算已用完', question: state === 'needs_input' ? '希望以人物为主吗？' : null, budget: defaultAgentBudget, usage: { modelTurns: 1, toolCalls: 1, inputEstimate: 1, outputEstimate: 1, cloudImages: 0, costMinorUsd: 0 }, elapsedMs: 1, finalDraftIds: [], providerId: 'test', steps: [], createdAt: 'now' }; }
-beforeEach(() => { useUIStore.getState().reset(); useUIStore.setState({ aiDrafts: {} }); });
+beforeEach(() => { useUIStore.getState().reset(); useUIStore.setState({ aiDrafts: {}, aiMode: 'task', aiChat: {} }); });
 
 it('审稿修订入口只填入消息和父方案，用户发送后才启动任务', async () => {
  const reference={kind:'board' as const,id:'review-board',revision:9};
@@ -85,9 +85,9 @@ describe('选片对话与本次预览使用', () => {
   expect(screen.queryByRole('button', { name: /^继续$/ })).not.toBeInTheDocument();
   expect(repo.agent.request).not.toHaveBeenCalled();
  });
- it('同一对话入口发送自然语言，无需切换任务模式', async () => {
+ it('默认任务模式发送自然语言，无需先切换模式', async () => {
   const { repository } = mount(fixture(), { initialGoal: '给我一些画布布局思路' }); await ready();
-  expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: '任务模式' })).toHaveAttribute('aria-selected', 'true');
   await userEvent.click(send());
   expect(repository.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'StartConversation' }));
  });
@@ -142,7 +142,7 @@ describe('统一摄影助手', () => {
   expect(screen.getByText('什么是观看距离？')).toBeVisible();
   expect(screen.getByText('可以从主体在画面中的尺度谈起。')).toBeVisible();
   expect(screen.queryByText('内部完成状态')).not.toBeInTheDocument();
-  expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: '任务模式' })).toHaveAttribute('aria-selected', 'true');
  });
  it('视觉证据可展开并定位对应照片，元数据没有证据卡', async () => {
   const reply = { ...task('completed'), conversation: true, inspectedPhotos: [{ photo_id: 'a', visible_facts: ['画面左侧有深色主体'], interpretation: '可能形成停顿', uncertainty: '预览无法辨认远处细节' }] };
@@ -242,4 +242,43 @@ it('回答旧任务的问题时不提供扩大暂存许可的选项',async()=>{
  view.rerender(view.panel({settingsOpen:false}));await ready();await userEvent.click(send());
  expect(repo.agent.request).toHaveBeenCalledWith('p1',expect.objectContaining({type:'SubmitFeedback',taskId:'t1'}));
  expect(repo.agent.setConsent).not.toHaveBeenCalled();
+});
+
+it('切到聊天模式后走纯文字对话，不上传照片也不进任务管线', async () => {
+ const repo = fixture();
+ mount(repo); await ready();
+ await userEvent.click(screen.getByRole('tab', { name: '聊天模式' }));
+ // 任务模式专属控件（照片范围、张数）在聊天模式隐藏
+ expect(screen.queryByRole('combobox', { name: '照片范围' })).not.toBeInTheDocument();
+ const box = screen.getByRole('textbox', { name: '消息' });
+ await userEvent.clear(box);
+ await userEvent.type(box, '逆光怎么拍更好看');
+ await userEvent.click(send());
+ await waitFor(() => expect(repo.agent.chat).toHaveBeenCalledWith([{ role: 'user', content: '逆光怎么拍更好看' }]));
+ expect(repo.agent.request).not.toHaveBeenCalled();
+ expect(repo.agent.setConsent).not.toHaveBeenCalled();
+ expect(await screen.findByText('逆光怎么拍更好看')).toBeInTheDocument();
+ expect(await screen.findByText('聊天模式回复')).toBeInTheDocument();
+});
+
+it('聊天模式发送失败时把错误显示出来，不留半截回复', async () => {
+ const repo = fixture();
+ repo.agent.chat.mockRejectedValueOnce(new Error('boom'));
+ mount(repo); await ready();
+ await userEvent.click(screen.getByRole('tab', { name: '聊天模式' }));
+ await userEvent.type(screen.getByRole('textbox', { name: '消息' }), '你好');
+ await userEvent.click(send());
+ expect(await screen.findByRole('alert')).toBeInTheDocument();
+ expect(screen.queryByText('聊天模式回复')).not.toBeInTheDocument();
+});
+
+it('默认任务模式，切换开关不改变任务发送路径', async () => {
+ const repo = fixture();
+ mount(repo); await ready();
+ expect(screen.getByRole('tab', { name: '任务模式' })).toHaveAttribute('aria-selected', 'true');
+ expect(screen.getByRole('combobox', { name: '照片范围' })).toBeInTheDocument();
+ await userEvent.type(screen.getByRole('textbox', { name: '消息' }), '选一组');
+ await userEvent.click(send());
+ await waitFor(() => expect(repo.agent.request).toHaveBeenCalled());
+ expect(repo.agent.chat).not.toHaveBeenCalled();
 });

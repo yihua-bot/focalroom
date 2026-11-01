@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '../../stores/uiStore';
 import { zh } from '../../app/copy';
 import type { DesktopProjectRepository, Project } from '../../domain/models';
-import { defaultAgentBudget, type AiConfig, type AgentTask, type TaskCommand, type TaskState, type DraftReference } from '../../domain/agent';
+import { defaultAgentBudget, type AiConfig, type AgentTask, type TaskCommand, type TaskState, type DraftReference, type ChatTurn } from '../../domain/agent';
 import { budgetMessage, resumeBudget } from './budgetRecovery';
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
@@ -16,6 +16,8 @@ import { PreferenceProposalCard } from './PreferenceProposalCard';
 
 export const taskLabels: Record<TaskState, string> = { queued: '排队中', planning: '准备中', running: '执行中', needs_input: '等待答复', review_ready: '待审核', completed: '已完成', paused: '已暂停', stale: '项目已更新', failed: '失败', cancelled: '已取消', interrupted: '已中断' };
 export interface QuickAgentAction { id: string; goal: string; count: number; photoIds: string[] }
+// 稳定的空数组引用，避免 zustand 选择器每次返回新 [] 触发无限重渲染。
+const NO_TURNS: ChatTurn[] = [];
 const supportsVision = (config?: AiConfig) => ['vision', 'structured_output', 'instruction_following'].every(capability => (config?.observation?.capabilities ?? config?.capabilities)?.includes(capability));
 function unavailable(config?: AiConfig): string {
  if (!config?.ready) return zh.aiNotReady;
@@ -45,6 +47,11 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  const config = configQuery.data;
  const saved = useUIStore(state => state.aiDrafts[project.id]);
  const saveDraft = useUIStore(state => state.saveAIDraft);
+ const aiMode = useUIStore(state => state.aiMode);
+ const setAiMode = useUIStore(state => state.setAiMode);
+ const chatTurns = useUIStore(state => state.aiChat[project.id] ?? NO_TURNS);
+ const pushChat = useUIStore(state => state.pushChat);
+ const chatMode = aiMode === 'chat';
  const [message, setMessage] = useState(initialRevision?.message ?? saved?.goal ?? initialGoal ?? '');
  const [count, setCount] = useState(initialRevision?.count ?? saved?.count ?? initialCount ?? 20);
  const [scopeSelection, setScopeSelection] = useState(initialRevision ? false : saved?.scopeSelection ?? false);
@@ -136,6 +143,26 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
   } catch (cause) { if (currentContext.current === sourceContext) setError(userFacingError(cause)); }
   finally { sending.current = false; if (currentContext.current === sourceContext) setBusy(false); }
  };
+ const sendChat = async () => {
+  if (!repository || sending.current || blocked || !message.trim()) return;
+  if (!/[\p{L}\p{N}]/u.test(message)) { setError(zh.chatClarifyMessage); return; }
+  const prompt = message.trim();
+  sending.current = true; setBusy(true); setError('');
+  try {
+   const fresh = await configQuery.refetch();
+   if (fresh.isError || !fresh.data) throw new Error(zh.aiConnectionFailed);
+   if (currentContext.current !== contextKey) return;
+   const reason = unavailable(fresh.data);
+   if (reason) throw new Error(reason);
+   if (currentContext.current !== contextKey) return;
+   pushChat(project.id, { role: 'user', content: prompt });
+   const reply = await repository.agent.chat([...chatTurns, { role: 'user', content: prompt }]);
+   if (currentContext.current !== contextKey) return;
+   pushChat(project.id, { role: 'assistant', content: reply });
+   updateMessage('');
+  } catch (cause) { if (currentContext.current === contextKey) setError(userFacingError(cause)); }
+  finally { sending.current = false; setBusy(false); }
+ };
  const send = async () => {
   if (!repository || sending.current || blocked || running || !message.trim() || selectionEmpty || count < 1 || count > 500) return;
   if (!/[\p{L}\p{N}]/u.test(message)) { setError(zh.chatClarifyMessage); return; }
@@ -200,7 +227,19 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
   { label: zh.chatSuggestSequence, goal: zh.chatGoalSequence },
  ];
  return <section className="ai-chat">
+  <div className="ai-mode-toggle" role="tablist" aria-label={zh.chatModeToggle}>
+   <button type="button" role="tab" aria-selected={!chatMode} className={!chatMode ? 'active' : ''} disabled={busy} onClick={() => setAiMode('task')}>{zh.chatModeTask}</button>
+   <button type="button" role="tab" aria-selected={chatMode} className={chatMode ? 'active' : ''} disabled={busy} onClick={() => setAiMode('chat')}>{zh.chatModeChat}</button>
+  </div>
   <div className="ai-chat-feed" role="log" aria-label={zh.chatHistory} aria-live="polite">
+   {chatMode ? <>
+    {!chatTurns.length && <div className="ai-chat-welcome"><span className="chat-welcome-mark"><Sparkles size={27} /></span><h3>{zh.chatModeChatTitle}</h3><p>{zh.chatModeChatHint}</p></div>}
+    {chatTurns.map((turn, index) => <div key={index} className={turn.role === 'user' ? 'chat-user-message' : 'chat-assistant-message'}>
+     {turn.role === 'assistant' && <span className="chat-assistant-icon"><Sparkles size={15} /></span>}
+     <p className="focal-message-text">{turn.content}</p>
+    </div>)}
+    {running && <p className="chat-footnote">{zh.chatModeTaskRunning}</p>}
+   </> : <>
    {!tasks.length && <div className="ai-chat-welcome"><span className="chat-welcome-mark"><Sparkles size={27} /></span><h3>{zh.chatWelcome}</h3><p>{zh.chatWelcomeHint}</p>
     <div className="chat-suggestions">{suggestions.map(item => <button key={item.label} onClick={() => updateMessage(item.goal)}>{item.label}<span>↗</span></button>)}</div>
    </div>}
@@ -248,6 +287,7 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
      </div>}
     </div></div>}
    </article>)}
+   </>}
    {(error || query.error) && <p role="alert" className="chat-error">{error || userFacingError(query.error)}</p>}
    {children}
    <div ref={last} />
@@ -255,23 +295,23 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
   <footer className="ai-chat-composer">
    {account && !account.status?.authenticated ? <p className="chat-notice"><button onClick={() => account.signIn('ai')}>{zh.signIn}</button></p> : !repository ? <p className="chat-notice">{zh.aiDesktop}</p> : configQuery.isError ? <p role="alert" className="chat-notice">{zh.aiConnectionFailed}<button onClick={() => { void configQuery.refetch(); }}>{zh.retryAI}</button></p> : unavailable(config) && <p role="status" className="chat-notice">{unavailable(config)}{config?.hostedAccount && !config.hostedAccount.available && account && <button onClick={() => account.openSubscription('plans')}>查看订阅</button>}</p>}
    {repository && config?.ready && !vision && <p className="chat-notice">{zh.chatTextOnly}</p>}
-   <form onSubmit={event => { event.preventDefault(); if (account) void account.requireSignIn('ai', send); else void send(); }}>
-    {continuation ? <p className="chat-footnote">{zh.chatRevisionOf} {continuation.title} · {continuation.reference.revision} <button type="button" aria-label={zh.chatRevisionClear} onClick={() => setContinuation(null)}>×</button></p> : canvasSource && <p className="chat-footnote">{zh.chatCanvasSource}</p>}
+   <form onSubmit={event => { event.preventDefault(); const action = chatMode ? sendChat : send; if (account) void account.requireSignIn('ai', action); else void action(); }}>
+    {!chatMode && (continuation ? <p className="chat-footnote">{zh.chatRevisionOf} {continuation.title} · {continuation.reference.revision} <button type="button" aria-label={zh.chatRevisionClear} onClick={() => setContinuation(null)}>×</button></p> : canvasSource && <p className="chat-footnote">{zh.chatCanvasSource}</p>)}
     <div className="chat-compose-box">
-     <textarea ref={composer} aria-label={zh.chatMessage} placeholder={task?.state === 'needs_input' ? zh.chatReplyPlaceholder : zh.chatPlaceholder} maxLength={2000} rows={3} value={message} disabled={busy}
+     <textarea ref={composer} aria-label={zh.chatMessage} placeholder={chatMode ? zh.chatModeChatPlaceholder : task?.state === 'needs_input' ? zh.chatReplyPlaceholder : zh.chatPlaceholder} maxLength={2000} rows={3} value={message} disabled={busy}
       onChange={event => updateMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
      <div className="chat-compose-actions">
-      <details className="chat-count-options"><summary>{zh.chatOptions}</summary><label className="chat-count">{zh.chatCount}<input aria-label={zh.chatCount} type="number" min={1} max={500} required disabled={busy} value={count} onChange={event => { const count = Number(event.target.value); setCount(count); saveDraft(project.id, { goal: message, count, scopeSelection }); }} /></label></details>
-      <button type="submit" className="chat-send" aria-label={zh.chatSend} disabled={blocked || busy || running || selectionEmpty || !message.trim()}><ArrowUp size={19} /></button>
+      {!chatMode && <details className="chat-count-options"><summary>{zh.chatOptions}</summary><label className="chat-count">{zh.chatCount}<input aria-label={zh.chatCount} type="number" min={1} max={500} required disabled={busy} value={count} onChange={event => { const count = Number(event.target.value); setCount(count); saveDraft(project.id, { goal: message, count, scopeSelection }); }} /></label></details>}
+      <button type="submit" className="chat-send" aria-label={zh.chatSend} disabled={blocked || busy || !message.trim() || (!chatMode && (running || selectionEmpty))}><ArrowUp size={19} /></button>
      </div>
     </div>
-    <div className="chat-scope-row"><Image size={13} /><select aria-label={zh.chatScope} value={effectiveScope ? 'selected' : 'project'} disabled={busy} onChange={event => { const enabled = event.target.value === 'selected'; setUserToggled(true); setScopeSelection(enabled); saveDraft(project.id, { goal: message, count, scopeSelection: enabled }); }}>
+    {!chatMode && <div className="chat-scope-row"><Image size={13} /><select aria-label={zh.chatScope} value={effectiveScope ? 'selected' : 'project'} disabled={busy} onChange={event => { const enabled = event.target.value === 'selected'; setUserToggled(true); setScopeSelection(enabled); saveDraft(project.id, { goal: message, count, scopeSelection: enabled }); }}>
      <option value="project">{zh.chatProjectPhotos} · {project.photos.length}</option><option value="selected">{zh.chatSelectedPhotos} · {selectedIds.length}</option>
-    </select></div>
+    </select></div>}
    </form>
-   {selectionEmpty && <p className="chat-footnote">{zh.chatSelectPhotos}</p>}
-   {effectiveScope && selectedIds.length > 500 && <p className="chat-footnote warning">选中 {selectedIds.length} 张超过单次上限 500 张——请先筛选或分批处理</p>}
-   {allowQueuedRecovery && <p className="chat-footnote">{zh.chatQueuePrivacy}</p>}
+   {!chatMode && selectionEmpty && <p className="chat-footnote">{zh.chatSelectPhotos}</p>}
+   {!chatMode && effectiveScope && selectedIds.length > 500 && <p className="chat-footnote warning">选中 {selectedIds.length} 张超过单次上限 500 张——请先筛选或分批处理</p>}
+   {!chatMode && allowQueuedRecovery && <p className="chat-footnote">{zh.chatQueuePrivacy}</p>}
   </footer>
   {settingsOpen && <Modal title={zh.settings} onClose={onSettingsClose}>
    <div className="ai-settings-fields"><div className="settings-service"><Sparkles size={17} /><span>FocalRoom AI</span></div>

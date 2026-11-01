@@ -475,6 +475,10 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .ai-memory-heading h3 { margin: 0; font-size: 15px; }
 .ai-memory-heading .icon-button { display: grid; place-items: center; width: 32px; height: 32px; }
 .ai-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.ai-mode-toggle { display: flex; gap: 4px; padding: 10px 22px 0; }
+.ai-mode-toggle button { flex: 1; padding: 7px 10px; border: 1px solid #ffffff12; border-radius: 9px; background: #ffffff03; color: #9ba8b5; font: inherit; font-size: 12px; cursor: pointer; }
+.ai-mode-toggle button.active { border-color: #7ab5d966; background: #75b8e214; color: #e6edf3; }
+.ai-mode-toggle button:disabled { cursor: default; opacity: .6; }
 .ai-chat-feed { overflow: auto; flex: 1; min-height: 0; padding: 24px 22px; overscroll-behavior: contain; }
 .ai-chat-welcome { padding: 36px 0 24px; }
 .chat-welcome-mark { width: 52px; height: 52px; border-radius: 18px; margin-bottom: 24px; }

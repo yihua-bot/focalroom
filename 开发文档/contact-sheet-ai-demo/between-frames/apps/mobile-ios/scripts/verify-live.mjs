@@ -158,8 +158,10 @@ try {
     const evidence = { fixture_only: true, actual_model_calls: 0, generated_photos: photos.length, lost_receipt_command_count: 1,
       source_baseline: sourceBaseline, ui_tested: false, migration_project: migration.id, migration_resumed_after_dropped_upload: true,
       research_tested: true };
+    // UI 旅程变量在 --ui 块内赋值，但旅程数据库断言在块外引用；提升到外层作用域避免 no-undef。
+    let device; let fileName; let fileBytes;
     if (process.argv.includes('--ui')) {
-      const device = process.env.FOCALROOM_IOS_SIMULATOR_ID;
+      device = process.env.FOCALROOM_IOS_SIMULATOR_ID;
       assert.ok(device, '请指定独立评审 iPhone 模拟器 FOCALROOM_IOS_SIMULATOR_ID');
       const devices = JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', '-j'], { encoding: 'utf8' }));
       assert.ok(Object.values(devices.devices).flat().some(item => item.udid === device && item.name.startsWith('FocalRoom ')), '仅使用独立 FocalRoom 评审模拟器');
@@ -183,8 +185,8 @@ try {
       const documentDirectory = join(container, 'Documents');
       await mkdir(documentDirectory, { recursive: true });
       await writeFile(join(documentDirectory, '.focalroom-test-fixture.json'), JSON.stringify({ fixture_only: true, run: basename(directory) }));
-      const fileName = `FocalRoomFile-${projectID.slice(0, 8)}.jpg`;
-      const fileBytes = await sharp({ create: { width: 640, height: 960, channels: 3, background: '#6f486a' } }).jpeg().toBuffer();
+      fileName = `FocalRoomFile-${projectID.slice(0, 8)}.jpg`;
+      fileBytes = await sharp({ create: { width: 640, height: 960, channels: 3, background: '#6f486a' } }).jpeg().toBuffer();
       await writeFile(join(documentDirectory, fileName), fileBytes);
       const pickerFiles = [];
       for (const photo of photos) {

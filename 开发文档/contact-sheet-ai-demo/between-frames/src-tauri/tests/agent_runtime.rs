@@ -911,3 +911,34 @@ async fn in_flight_wait_is_charged_once_on_pause_and_interruption() {
         assert_eq!(db.get(&p.id).await.unwrap().revision, p.revision);
     }
 }
+
+#[tokio::test]
+async fn chat_turn_validates_history_and_requires_a_text_service() {
+    let temp = tempfile::tempdir().unwrap();
+    let (db, _p) = setup(temp.path(), 0).await;
+    let engine = AgentEngine::new(db.clone());
+    // 空历史、越界角色、超长正文都在碰网络之前被拦下。
+    assert_eq!(engine.chat_turn(&[]).await.unwrap_err().code, "VALIDATION_ERROR");
+    assert_eq!(
+        engine
+            .chat_turn(&[ChatTurn { role: "system".into(), content: "x".into() }])
+            .await
+            .unwrap_err()
+            .code,
+        "VALIDATION_ERROR"
+    );
+    assert_eq!(
+        engine
+            .chat_turn(&[ChatTurn { role: "user".into(), content: "长".repeat(4001) }])
+            .await
+            .unwrap_err()
+            .code,
+        "VALIDATION_ERROR"
+    );
+    // 只有 Mock 的引擎不能假装会聊天：明确报服务未开放，而不是回一条假答复。
+    let err = engine
+        .chat_turn(&[ChatTurn { role: "user".into(), content: "威廉·艾格斯顿是什么风格？".into() }])
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, "AI_NOT_CONFIGURED", "{}", err.message);
+}
