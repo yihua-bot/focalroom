@@ -663,6 +663,10 @@ pub async fn set_hypothesis_enabled(
     crate::agent::memory::set_enabled(&state.store, &project_id, hypothesis_id, enabled).await
 }
 #[tauri::command]
+pub async fn agent_chat(state: State<'_, Backend>, turns: Vec<crate::agent::types::ChatTurn>) -> Result<String> {
+    state.agent.chat_turn(&turns).await
+}
+#[tauri::command]
 pub async fn query_vision_result(
     state: State<'_, Backend>,
     project_id: String,

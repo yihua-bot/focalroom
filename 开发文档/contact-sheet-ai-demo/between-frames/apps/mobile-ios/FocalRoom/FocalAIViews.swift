@@ -1,5 +1,8 @@
 import SwiftUI
 import FocalRoomCore
+import os
+
+fileprivate let frLog = Logger(subsystem: "studio.focalroom.probe", category: "aiview")
 
 struct FocalAIView: View {
     let model: AppModel
@@ -64,6 +67,9 @@ struct FocalAIView: View {
             projectDrafts.removeAll()
             draft = ""
             resetContext()
+        }
+        .onChange(of: model.streamingText) { _, new in
+            frLog.info("PROBE model-streamingText count=\(new?.count ?? -1) started=\(streamStartedHere) match=\(streamProject == model.currentProject) sending=\(model.aiSending)")
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
@@ -196,7 +202,8 @@ struct FocalAIView: View {
             .onChange(of: model.chatMessages.last?.id) { _, _ in
                 if followingConversation { withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo("ai.bottom", anchor: .bottom) } }
             }
-            .onChange(of: visibleStreamingText) { _, _ in
+            .onChange(of: visibleStreamingText) { _, new in
+                frLog.info("PROBE visible-streamingText count=\(new?.count ?? -1) thinking=\(showingThinking)")
                 if followingConversation { scroll.scrollTo("ai.bottom", anchor: .bottom) }
             }
             .onChange(of: scrollRequest) { _, _ in

@@ -14,6 +14,8 @@ pub const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 /// 保守费用上界估算（非账单）：每张上传图 1 美分、每千文本 token 1 美分。
 pub const IMAGE_COST_MINOR_USD: u32 = 1;
 pub const TEXT_COST_MINOR_PER_K_TOKENS: u32 = 1;
+/// 聊天模式系统提示：纯文字对话，不上传照片、不创建任务、不写草案。
+const CHAT_PROMPT: &str = include_str!("../../../prompts/focal-chat-v1.md");
 
 pub struct OpenAiProvider {
     client: reqwest::Client,
@@ -397,6 +399,27 @@ impl OpenAiProvider {
             "max_output_tokens": request.task.budget.max_output_tokens,
             "store": false,
         })
+    }
+    /// 聊天模式单轮纯文字请求：不传照片、不挂工具、不创建任务；托管计量由账户服务在服务端完成。
+    pub async fn chat_text(&self, turns: &[(&str, &str)], max_output_tokens: u32) -> Result<String> {
+        let input: Vec<Value> = turns
+            .iter()
+            .map(|(role, text)| json!({"role": role, "content": [{"type": "input_text", "text": text}]}))
+            .collect();
+        let body = json!({
+            "model": self.model,
+            "instructions": CHAT_PROMPT,
+            "input": input,
+            "tools": [],
+            "max_output_tokens": max_output_tokens,
+            "store": false,
+        });
+        let response = self.post(&body).await?;
+        let text = output_text(&response);
+        if text.trim().is_empty() {
+            return Err(AppError::new("MODEL_UNAVAILABLE", "模型没有返回文字，请重试"));
+        }
+        Ok(text)
     }
     /// 视觉观察子请求：固定小上下文 + 严格 JSON 输出；照片预览以 data URL 提供。
     pub async fn observe(

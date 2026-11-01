@@ -266,6 +266,13 @@ pub struct AgentProjection {
     pub tasks: Vec<TaskView>,
     pub drafts: Vec<Draft>,
 }
+/// 聊天模式的一条历史；只承载文字，不含照片与工具回执。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ChatTurn {
+    pub role: String,
+    pub content: String,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskView {

@@ -29,6 +29,32 @@ pub struct AgentEngine {
     tier: ServiceTier,
 }
 impl AgentEngine {
+    /// 聊天模式单轮对话：不上传照片、不创建任务、不写草案；托管账户按普通文字请求在服务端计量。
+    pub async fn chat_turn(&self, turns: &[ChatTurn]) -> Result<String> {
+        if turns.is_empty() || turns.len() > 40 {
+            return Err(AppError::new("VALIDATION_ERROR", "聊天历史长度不合法"));
+        }
+        for turn in turns {
+            if turn.content.chars().count() > 4000 || !matches!(turn.role.as_str(), "user" | "assistant") {
+                return Err(AppError::new("VALIDATION_ERROR", "聊天内容不合法"));
+            }
+        }
+        let provider = self.openai.as_ref().ok_or_else(|| {
+            AppError::new("AI_NOT_CONFIGURED", "Focal AI 暂未开放，请先登录或检查服务配置")
+        })?;
+        let bound = if provider.is_hosted() {
+            let bound = provider.bind_account()?;
+            bound.validate_hosted_account().await?;
+            bound
+        } else {
+            provider.as_ref().clone()
+        };
+        let refs: Vec<(&str, &str)> = turns
+            .iter()
+            .map(|turn| (turn.role.as_str(), turn.content.as_str()))
+            .collect();
+        bound.chat_text(&refs, 1024).await
+    }
     /// 只查询已持久记录的原请求；不会排队任务、调用模型或重新发送图片。
     pub async fn query_vision_result(
         &self,
