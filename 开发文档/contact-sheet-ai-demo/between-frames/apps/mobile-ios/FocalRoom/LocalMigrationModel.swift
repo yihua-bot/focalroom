@@ -20,6 +20,7 @@ enum MigrationError: Error, LocalizedError {
 final class LocalMigrationModel {
     private(set) var activeProjectID: String?
     private(set) var isWorking = false
+    private(set) var isAbandoning = false
     private(set) var uploaded = 0
     private(set) var total = 0
     private(set) var finishedCloudProjectID: String?
@@ -44,7 +45,7 @@ final class LocalMigrationModel {
     }
 
     func migrate(projectID: String) {
-        guard active, !isWorking else { return }
+        guard active, !isWorking, !isAbandoning else { return }
         isWorking = true
         activeProjectID = projectID
         lastError = nil
@@ -58,9 +59,13 @@ final class LocalMigrationModel {
     func pause() { task?.cancel() }
 
     func abandon(projectID: String) {
-        guard active, !isWorking else { return }
+        guard active, !isWorking, !isAbandoning else { return }
+        // 放弃过程也归属该项目：否则 abandonRun 写入的 lastError 因 activeProjectID 不匹配而无人显示。
+        isAbandoning = true
+        activeProjectID = projectID
+        lastError = nil
         task = Task {
-            defer { task = nil }
+            defer { task = nil; if active { isAbandoning = false } }
             await abandonRun(projectID: projectID)
         }
     }

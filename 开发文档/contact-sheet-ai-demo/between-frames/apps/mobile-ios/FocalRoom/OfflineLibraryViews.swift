@@ -8,6 +8,7 @@ struct OfflineLibraryView: View {
     let model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var scopes: [LocalScopeEntry] = []
+    @State private var scopesError: String?
     @State private var library: LocalLibraryModel?
 
     var body: some View {
@@ -23,6 +24,15 @@ struct OfflineLibraryView: View {
                             }
                         }.padding(20)
                     }
+                } else if let scopesError {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("本机账户索引读不出来", systemImage: "exclamationmark.triangle").font(.headline)
+                        Text(scopesError).font(.footnote).foregroundStyle(.secondary)
+                        Button("重试") { reload() }
+                            .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                            .accessibilityIdentifier("offline.scopes.retry")
+                    }
+                    .padding(24)
                 } else if scopes.isEmpty {
                     EmptyWorkspace(title: "没有可离线访问的资料", detail: "登录过至少一次后，本机资料才可离线查看。", symbol: "internaldrive")
                 } else {
@@ -53,7 +63,16 @@ struct OfflineLibraryView: View {
                     }
                 }
             }
-            .onAppear { if scopes.isEmpty { scopes = LocalScopeIndex.list(root: root) } }
+            .onAppear(perform: reload)
+        }
+    }
+
+    private func reload() {
+        guard scopes.isEmpty else { return }
+        scopesError = nil
+        switch LocalScopeIndex.load(root: root) {
+        case .success(let entries): scopes = entries
+        case .failure: scopesError = "本机账户索引无法读取，可能是文件损坏或空间不足。重新登录一次可重建索引。"
         }
     }
 

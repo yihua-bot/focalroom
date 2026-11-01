@@ -75,8 +75,10 @@ struct CommentsView: View {
                             replyTarget = nil
                             Task { await model.replyComment(threadID: id, body: body) }
                         }
+                        // 上限按服务端实际校验的 trim 后长度判定：尾部空格不该让「发送」莫名变灰。
                         .disabled(replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                                  replyDraft.count > 2000 || model.busy || model.offline)
+                                  replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).count > 2000 ||
+                                  model.busy || model.offline)
                         .accessibilityIdentifier("comment.reply.send")
                     }
                 }
@@ -98,8 +100,11 @@ struct BoardsView: View {
             if let localProjectID = model.selectedLocalProjectID {
                 // 本机项目直接进入本机画布编辑（新建/触控/批注/撤销重做）；标识沿用供界面断言。
                 if let libraryModel = model.localLibrary {
-                    LocalCanvasView(model: LocalCanvasModel(library: libraryModel.library, projectID: localProjectID),
+                    LocalCanvasView(model: libraryModel.canvasModel(projectID: localProjectID),
                                     library: libraryModel)
+                        // 必须显式保留子元素：只加标识会让整块画布塌成一个无障碍元素，
+                        // 每个节点的 local.canvas.node.* 标识随之消失，VoiceOver 也逐个选不中节点。
+                        .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("boards.local.project")
                 } else {
                     EmptyWorkspace(title: "本机资料未就绪", detail: "请先在本机图库打开一次项目后返回。", symbol: "internaldrive")

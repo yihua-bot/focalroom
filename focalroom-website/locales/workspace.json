@@ -466,5 +466,17 @@
     "Revoking permission stops future sends but cannot recall content already sent. Clearing local observation caches does not delete the provider’s records.",
     "許可の撤回は以後の送信を止めますが、送信済みの内容は取り戻せません。ローカルの観察キャッシュを消しても、サービス側の記録は削除されません。",
     "권한 철회는 이후 전송을 막지만 이미 보낸 내용을 회수하지는 못합니다. 로컬 관찰 캐시를 비워도 서비스 제공자의 기록이 삭제되는 것은 아닙니다."
+  ],
+  [
+    "微信：bitcoin1019",
+    "WeChat: bitcoin1019",
+    "WeChat: bitcoin1019",
+    "WeChat: bitcoin1019"
+  ],
+  [
+    "X：@allen_6688",
+    "X: @allen_6688",
+    "X: @allen_6688",
+    "X: @allen_6688"
   ]
 ]

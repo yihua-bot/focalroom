@@ -12,7 +12,7 @@ public struct Credentials: Codable, Sendable {
     public let user: User
 }
 
-public enum ProjectState: String, Codable, Sendable { case STAGING, SHARED }
+public enum ProjectState: String, Codable, Sendable { case STAGING, SHARED, ARCHIVED }
 public enum Selection: String, Codable, Sendable, CaseIterable {
     case UNDECIDED, KEEP, REJECT
 

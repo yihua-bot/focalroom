@@ -18,6 +18,7 @@ struct ResearchView: View {
     let projectID: String
     @State private var entries: [ResearchEntry] = []
     @State private var loading = true
+    @State private var loadError: String?
     @State private var busy = false
     @State private var notice: String?
     @State private var editorTarget: ResearchEditorTarget?
@@ -30,13 +31,30 @@ struct ResearchView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                if entries.isEmpty {
+                // 读取失败与「真的没有资料」必须分开：否则失败会伪装成空列表，用户不知道出了什么问题。
+                if loading {
+                    ProgressView("读取研究资料…").frame(maxWidth: .infinity).padding(.top, 60)
+                        .accessibilityIdentifier("research.loading")
+                } else if let loadError {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("暂时读不到研究资料", systemImage: "exclamationmark.triangle")
+                            .font(.headline)
+                        Text(loadError).font(.footnote).foregroundStyle(.secondary)
+                        Button("重试") { Task { await load() } }
+                            .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                            .disabled(model.offline)
+                            .accessibilityIdentifier("research.retry")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 40)
+                } else if entries.isEmpty {
                     EmptyWorkspace(title: "还没有研究资料", detail: "记录参考笔记与链接，辅助项目研究与整理。", symbol: "text.book.closed")
                         .padding(.top, 60)
                 } else {
                     ForEach(entries) { entry in
                         Button {
                             if canEdit { editorTarget = .edit(entry) }
+                            else { notice = model.offline ? "离线状态下为只读，联网后可编辑。" : "当前项目权限为只读，无法编辑这条资料。" }
                         } label: {
                             row(entry)
                         }
@@ -48,6 +66,7 @@ struct ResearchView: View {
             .padding(.horizontal, 16).padding(.vertical, 12)
         }
         .navigationTitle("研究资料").navigationBarTitleDisplayMode(.inline)
+        .refreshable { await load() }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -99,9 +118,17 @@ struct ResearchView: View {
     private func load() async {
         loading = true
         defer { loading = false }
-        do { entries = try await model.research(projectID: projectID) }
-        catch {
-            if !entries.isEmpty { notice = message(error) }
+        guard !model.offline else {
+            // 离线时 model 返回空数组，不能当成「没有资料」展示。
+            loadError = "当前离线，研究资料需联网读取。"
+            return
+        }
+        do {
+            entries = try await model.research(projectID: projectID)
+            loadError = nil
+        } catch is CancellationError {
+        } catch {
+            loadError = message(error)
         }
     }
 
@@ -205,6 +232,8 @@ struct ResearchEditorView: View {
             .alert("提示", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
                 Button("知道了", role: .cancel) { notice = nil }
             } message: { Text(notice ?? "") }
+            // 下拉手势关闭表单不会走取消/保存/删除路径，必须在这里收麦克风，否则录音后台继续。
+            .onDisappear { voice.stop() }
         }
     }
 
@@ -238,6 +267,7 @@ struct ResearchEditorView: View {
     private func remove() async {
         guard let entry = editingEntry, !busy else { return }
         busy = true
+        voice.stop()
         defer { busy = false }
         do {
             try await model.deleteResearch(projectID: projectID, referenceID: entry.id)

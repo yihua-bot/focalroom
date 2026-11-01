@@ -52,7 +52,8 @@ struct AccountDataView: View {
                 SecureField("再次输入当前密码", text: $password).accessibilityIdentifier("account.erase.password")
                 Toggle("我已了解删除与保留范围", isOn: $understood).accessibilityIdentifier("account.erase.understand")
                 Button("删除账号", role: .destructive) { confirming = true }
-                    .disabled(busy || model.offline || !understood || password.isEmpty || email.lowercased() != model.credentials?.user.email)
+                    .disabled(busy || model.offline || !understood || password.isEmpty ||
+                              email.lowercased() != model.credentials?.user.email.lowercased())
                     .accessibilityIdentifier("account.erase")
             }
             if let notice { Text(notice).font(.footnote).foregroundStyle(.orange) }
@@ -113,14 +114,11 @@ struct SetPasswordView: View {
                 Button {
                     let entered = next, enteredCurrent = current.isEmpty ? nil : current
                     current = ""; next = ""; confirm = ""
-                    Task {
-                        await model.setPassword(entered, current: enteredCurrent)
-                        saved = true
-                    }
+                    Task { saved = await model.setPassword(entered, current: enteredCurrent) }
                 } label: {
                     if model.busy { ProgressView() } else { Text("保存新密码") }
                 }
-                .disabled(!valid)
+                .disabled(!valid || model.busy)
                 .accessibilityIdentifier("password.save")
                 if saved, model.notice?.contains("已更新") == true {
                     Label("已保存", systemImage: "checkmark.circle.fill")

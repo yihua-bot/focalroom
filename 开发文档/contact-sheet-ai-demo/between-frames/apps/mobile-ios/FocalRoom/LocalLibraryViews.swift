@@ -8,7 +8,7 @@ struct LocalProjectsSection: View {
     let model: AppModel
     let query: String
 
-    private func caption(_ project: LocalProject) -> String {
+    private func caption(_ project: LocalProject) -> LocalizedStringKey {
         switch project.migration?.phase {
         case .migrated: return "\(project.photos.count) 张照片 · 已迁云 · 原片保留本机"
         case .uploading: return "\(project.photos.count) 张照片 · 迁云进行中"
@@ -81,15 +81,49 @@ struct LocalProjectView: View {
     @State private var files = false
     @State private var selected: [PhotosPickerItem] = []
     @State private var filter: Selection?
-    @State private var confirmMigrate = false
-    @State private var confirmDeleteProject = false
     @Environment(\.dismiss) private var dismiss
+    @State private var canvasPresented = false
     // 多选分享：勾选本机照片原图，经系统分享面板发到微信/微博/X 等。
     @State private var selecting = false
     @State private var picked: Set<String> = []
-    @State private var shareImages: [UIImage]? = nil
     @State private var sharing = false
     private var project: LocalProject? { library.projects.first { $0.id == projectID } }
+
+    // 危险操作与浮层各用单一枚举驱动：同级多个 .confirmationDialog / .sheet 在 iOS 上只有一个能弹出，
+    // 之前导出浮层被分享浮层顶掉，迁云确认也可能被删除确认顶掉。
+    private enum LocalDanger {
+        case deleteProject, migrate
+    }
+    private struct SharePack: Identifiable {
+        let id = UUID()
+        let images: [UIImage]
+    }
+    private enum LocalLayer: Identifiable {
+        case export
+        case share(SharePack)
+        var id: String {
+            switch self {
+            case .export: "export"
+            case .share(let pack): "share-\(pack.id.uuidString)"
+            }
+        }
+    }
+    @State private var danger: LocalDanger?
+    @State private var layer: LocalLayer?
+    private var dangerPresented: Binding<Bool> {
+        Binding(get: { danger != nil }, set: { if !$0 { danger = nil } })
+    }
+    private var dangerMessage: String {
+        switch danger {
+        case .deleteProject:
+            if project?.migration?.phase == .migrated {
+                return "该项目已迁云：云端副本保留，本机原片与预览将永久删除且不可恢复。"
+            }
+            return "将永久删除 \(project?.photos.count ?? 0) 张原片、预览与选片记录，且不可恢复。没有其他项目引用的照片文件会一并清除。"
+        default:
+            return "将上传每张照片的 2048 像素浏览预览（不含 GPS 与私密备注）到你的工作区，原片保留在本机。迁云期间本机写入冻结，完成后项目以云端为权威，可在 Mac 与其他设备续接。"
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -105,26 +139,23 @@ struct LocalProjectView: View {
         }
         .navigationTitle("本机图库").navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
-        .confirmationDialog("删除项目", isPresented: $confirmDeleteProject, titleVisibility: .visible) {
-            Button("永久删除项目与原片", role: .destructive) {
-                Task {
-                    await library.deleteProject(projectID: projectID)
-                    dismiss()
-                }
-            }
-        } message: {
-            if project?.migration?.phase == .migrated {
-                Text("该项目已迁云：云端副本保留，本机原片与预览将永久删除且不可恢复。")
+        .confirmationDialog(danger == .deleteProject ? "删除项目" : "迁云到工作区",
+                            isPresented: dangerPresented, titleVisibility: .visible) {
+            if danger == .deleteProject {
+                Button("永久删除项目与原片", role: .destructive) {
+                    Task {
+                        await library.deleteProject(projectID: projectID)
+                        dismiss()
+                    }
+                }.accessibilityIdentifier("local.delete.confirm")
             } else {
-                Text("将永久删除 \(project?.photos.count ?? 0) 张原片、预览与选片记录，且不可恢复。没有其他项目引用的照片文件会一并清除。")
+                Button("开始迁云", role: .destructive) {
+                    migration?.migrate(projectID: projectID)
+                }.accessibilityIdentifier("local.migrate.confirm")
             }
-        }
-        .confirmationDialog("迁云到工作区", isPresented: $confirmMigrate, titleVisibility: .visible) {
-            Button("开始迁云", role: .destructive) {
-                migration?.migrate(projectID: projectID)
-            }.accessibilityIdentifier("local.migrate.confirm")
+            Button("取消", role: .cancel) {}
         } message: {
-            Text("将上传每张照片的 2048 像素浏览预览（不含 GPS 与私密备注）到你的工作区，原片保留在本机。迁云期间本机写入冻结，完成后项目以云端为权威，可在 Mac 与其他设备续接。")
+            Text(dangerMessage)
         }
         .onChange(of: migration?.finishedCloudProjectID) { _, _ in
             Task { await model.reloadProjects() }
@@ -144,12 +175,19 @@ struct LocalProjectView: View {
         .alert("提示", isPresented: Binding(get: { library.notice != nil }, set: { if !$0 { library.notice = nil } })) {
             Button("知道了", role: .cancel) { library.notice = nil }
         } message: { Text(library.notice ?? "") }
-        .sheet(isPresented: Binding(get: { library.exportTarget != nil }, set: { if !$0 { library.cancelExport() } })) {
-            FolderPicker { library.pickExportDestination($0) }
+        .onChange(of: library.exportTarget?.staging) { _, path in
+            if path != nil { layer = .export } else if case .export = layer { layer = nil }
         }
-        .sheet(isPresented: Binding(get: { shareImages != nil }, set: { if !$0 { shareImages = nil } })) {
-            if let images = shareImages {
-                ShareSheet(items: images)
+        .sheet(item: $layer, onDismiss: { library.cancelExport() }) { value in
+            switch value {
+            case .export: FolderPicker { library.pickExportDestination($0) }
+            case .share(let pack): ShareSheet(items: pack.images)
+            }
+        }
+        .fullScreenCover(isPresented: $canvasPresented) {
+            NavigationStack {
+                LocalCanvasView(model: library.canvasModel(projectID: projectID),
+                                library: library)
             }
         }
     }
@@ -161,7 +199,7 @@ struct LocalProjectView: View {
                 .accessibilityIdentifier("local.project.status")
             Picker("选片筛选", selection: $filter) {
                 Text("全部").tag(Optional<Selection>.none)
-                ForEach(Selection.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
+                ForEach(Selection.allCases, id: \.self) { Text(LocalizedStringKey($0.title)).tag(Optional($0)) }
             }.pickerStyle(.segmented)
             if selecting {
                 HStack(spacing: 12) {
@@ -205,7 +243,7 @@ struct LocalProjectView: View {
                     images.append(image)
                 }
                 guard !images.isEmpty else { return }
-                shareImages = images
+                layer = .share(SharePack(images: images))
             } catch {
                 library.notice = "部分照片读取失败，已停止分享。"
             }
@@ -256,7 +294,7 @@ struct LocalProjectView: View {
     private func cellContent(_ photo: LocalPhoto) -> some View {
         ZStack(alignment: .bottomLeading) {
             localPreview(photo).frame(height: 210)
-            Text(photo.selection.title).font(.caption2).padding(8)
+            Text(LocalizedStringKey(photo.selection.title)).font(.caption2).padding(8)
                 .background(.black.opacity(0.75), in: Capsule()).padding(8)
         }.frame(maxWidth: .infinity).clipped().contentShape(Rectangle())
     }
@@ -271,7 +309,7 @@ struct LocalProjectView: View {
                     Button("从文件导入", systemImage: "folder") { files = true }
                         .disabled(project?.migration != nil)
                     if canStartMigration {
-                        Button("迁云到工作区…", systemImage: "icloud.and.arrow.up") { confirmMigrate = true }
+                        Button("迁云到工作区…", systemImage: "icloud.and.arrow.up") { danger = .migrate }
                             .accessibilityIdentifier("local.migrate")
                     }
                 }
@@ -280,7 +318,7 @@ struct LocalProjectView: View {
                 }
                 .disabled(library.isExporting || project?.photos.isEmpty != false)
                 .accessibilityIdentifier("local.export")
-                Button("删除项目…", systemImage: "trash", role: .destructive) { confirmDeleteProject = true }
+                Button("删除项目…", systemImage: "trash", role: .destructive) { danger = .deleteProject }
                     .disabled(library.isDeleting || library.readOnly)
                     .accessibilityIdentifier("local.delete")
                 Button(selecting ? "完成选择" : "选择并分享…", systemImage: "checkmark.circle") {
@@ -290,10 +328,7 @@ struct LocalProjectView: View {
                 .disabled(project?.photos.isEmpty != false)
                 .accessibilityIdentifier("local.share.mode")
                 if project?.migration == nil, !library.readOnly {
-                    NavigationLink {
-                        LocalCanvasView(model: LocalCanvasModel(library: library.library, projectID: projectID),
-                                        library: library)
-                    } label: {
+                    Button { canvasPresented = true } label: {
                         Label("本机画布", systemImage: "rectangle.3.group")
                     }
                     .accessibilityIdentifier("local.canvas.entry")
@@ -309,7 +344,7 @@ struct LocalProjectView: View {
             project?.photos.isEmpty == false && !migration!.isWorking
     }
 
-    private var statusLabel: String {
+    private var statusLabel: LocalizedStringKey {
         switch project?.migration?.phase {
         case .migrated: return "已迁云 · 原片保留本机 · 云端为权威"
         case .uploading, .enrolling: return "迁云进行中 · 本机写入冻结"
@@ -354,6 +389,9 @@ struct MigrationCard: View {
                         .accessibilityIdentifier("local.migrate.progress")
                     Button("暂停迁云") { migration.pause() }
                         .accessibilityIdentifier("local.migrate.pause")
+                } else if migration.isAbandoning && migration.activeProjectID == project.id {
+                    Label("正在放弃迁云", systemImage: "hourglass").font(.subheadline.weight(.semibold))
+                        .accessibilityIdentifier("local.migrate.abandoning")
                 } else {
                     Label("迁云未完成", systemImage: "clock.arrow.circlepath").font(.subheadline.weight(.semibold))
                     Text("已上传 \(project.migration?.uploadedPhotoIDs.count ?? 0)/\(project.photos.count)。继续会沿用同一迁移，不会创建重复的云端项目。")
@@ -390,17 +428,21 @@ private struct ImportProgressView: View {
     let library: LocalLibraryModel
 
     var body: some View {
+        // 轻量摘要：不占整块背景。仅在导入进行中、被取消或有失败时出现；
+        // 全部成功导入的场合由网格本身反映，无需常驻提示条。
         VStack(alignment: .leading, spacing: 8) {
             if library.isImporting {
                 ProgressView("正在导入 \(library.completed)/\(library.total)", value: Double(library.completed), total: Double(library.total))
                 Button("取消剩余导入") { library.cancelImport() }
             }
-            Text("\(library.wasCancelled ? "已取消，完成项已保留。" : "")已导入 \(library.imported) 张，跳过重复 \(library.duplicates) 张，失败 \(library.failures.count) 张。")
-                .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("local.import.summary")
+            if library.isImporting || library.wasCancelled || !library.failures.isEmpty {
+                Text("\(library.wasCancelled ? "已取消，完成项已保留。" : "")已导入 \(library.imported) 张，跳过重复 \(library.duplicates) 张，失败 \(library.failures.count) 张。")
+                    .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("local.import.summary")
+            }
             if !library.failures.isEmpty {
                 DisclosureGroup("查看失败原因") { ForEach(library.failures, id: \.self) { Text($0).font(.caption) } }
             }
-        }.padding(16)
+        }
     }
 }
 
@@ -464,7 +506,7 @@ private struct LocalPhotoViewer: View {
                 }.font(.caption)
                 HStack {
                     ForEach(Selection.allCases, id: \.self) { selection in
-                        Button(selection.title) { choose(selection) }
+                        Button(LocalizedStringKey(selection.title)) { choose(selection) }
                             .frame(maxWidth: .infinity, minHeight: 48)
                             .background(photo?.selection == selection ? .white.opacity(0.2) : .white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
                             .disabled(library.isSaving || project?.migration != nil || library.readOnly).accessibilityIdentifier("local.selection.\(selection.rawValue)")

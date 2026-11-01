@@ -76,10 +76,16 @@ struct FocalAIView: View {
                     // 授权只消费一次；发送任务先消费授权，再主动收起确认页。
                     beginFollowingRequest()
                     Task {
-                        await model.aiSend(text: prepared.text, vision: prepared, onVisionConsumed: { activeSheet = nil })
+                        let sent = await model.aiSend(text: prepared.text, vision: prepared,
+                                                      onVisionConsumed: { activeSheet = nil })
+                        if sent {
+                            draft = ""
+                            selectedPhotos = []
+                        } else {
+                            // 被拒时收起确认页：浮层还开着会把提示 alert 挡在后面，看起来像点了没反应。
+                            activeSheet = nil
+                        }
                     }
-                    draft = ""
-                    selectedPhotos = []
                 } cancel: { activeSheet = nil }
                 .onDisappear { model.cancelVision() }
             }
@@ -244,9 +250,9 @@ struct FocalAIView: View {
     private var pendingNotice: some View {
         HStack(alignment: .center, spacing: 10) {
             Image(systemName: "clock.arrow.circlepath").foregroundStyle(.orange)
-            Text("有消息结果待确认").font(.caption).foregroundStyle(.secondary)
+            Text("正在确认结果，完成后自动显示").font(.caption).foregroundStyle(.secondary)
             Spacer()
-            Button("核对结果") { Task { await model.aiResolvePending() } }
+            Button("核对结果") { Task { await model.aiResolvePending(manual: true) } }
                 .font(.caption.weight(.medium)).frame(minHeight: 44)
                 .accessibilityIdentifier("ai.resolve")
         }
@@ -369,7 +375,13 @@ struct FocalAIView: View {
                 Text("可直接选择本机照片向 AI 提问，无需迁云。云端项目分析任务不会出现在本机项目中。")
                     .font(.footnote).foregroundStyle(.secondary)
             } else if let tasksError {
-                Text(tasksError).font(.footnote).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(tasksError).font(.footnote).foregroundStyle(.secondary)
+                    Button("重试") { Task { await loadTasks() } }
+                        .font(.footnote.weight(.semibold)).frame(minHeight: 36)
+                        .disabled(model.offline)
+                        .accessibilityIdentifier("ai.tasks.retry")
+                }
             } else if jobs.isEmpty && results.isEmpty {
                 Text("暂无任务。项目内已有的分析任务与评论汇总会显示在这里。")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -496,14 +508,32 @@ struct FocalAIView: View {
         model.canSendAI && !model.aiSending && !preparingVision && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    // 键盘「发送」不经按钮，会绕过 disabled；被挡住时必须说明原因，否则像点了没反应。
+    private var sendBlockReason: String? {
+        if preparingVision { return "正在准备照片授权，请稍候。" }
+        if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请输入消息内容。" }
+        if model.aiSending { return "上一条请求仍在处理，稍后再发送。" }
+        if model.offline { return "当前离线，无法发送消息。" }
+        guard let account = model.aiAccountState else {
+            return model.aiAccountError != nil ? "AI 服务状态读取失败，请点按状态栏重试。" : "正在读取 AI 服务状态，请稍候。"
+        }
+        if !account.enabled { return "AI 服务当前未开放。" }
+        if !account.verified { return "请先验证邮箱后再使用 AI。" }
+        if account.available == 0 { return "账户暂无可用额度，请先续费或等待额度重置。" }
+        return nil
+    }
+
     private func send() {
-        guard canSendNow else { return }
+        guard canSendNow else {
+            if let reason = sendBlockReason { model.notice = reason }
+            return
+        }
         inputFocused = false
         let text = draft
         if selectedPhotos.isEmpty {
-            draft = ""
             beginFollowingRequest()
-            Task { await model.aiSend(text: text) }
+            // 只有请求真正入库后才清空草稿；被拒时保留正文，避免用户重新输入。
+            Task { if await model.aiSend(text: text) { draft = "" } }
         } else {
             preparingVision = true
             Task {
@@ -514,9 +544,20 @@ struct FocalAIView: View {
                     activeSheet = .vision(prepared)
                 }
                 catch is CancellationError { }
-                catch { model.notice = error.localizedDescription }
+                catch { model.notice = visionPrepareFailure(error) }
             }
         }
+    }
+
+    // prepareVision 用同一个 permissionDenied 覆盖多种前置条件，直接展示其文案会把离线说成权限问题。
+    private func visionPrepareFailure(_ error: Error) -> String {
+        if model.offline { return "当前离线，无法准备照片观察。" }
+        if model.aiSending { return "上一条请求仍在处理，稍后再发送。" }
+        if selectedPhotos.isEmpty { return "请先选择要观察的照片。" }
+        if model.currentProject == nil { return "请先选择项目，再向 AI 提问。" }
+        if let value = error as? LocalizedError, let description = value.errorDescription,
+           description != APIError.permissionDenied.errorDescription { return description }
+        return "照片准备失败，请重新选择照片后再试。"
     }
 
     private func clearPhotos() {
@@ -600,7 +641,12 @@ struct FocalAIView: View {
 
     private func loadTasks() async {
         results = []; jobs = []; tasksError = nil
-        guard let projectID = model.selectedProjectID, !model.offline else { return }
+        let projectID = model.selectedProjectID
+        guard projectID != nil else { return }
+        guard !model.offline else {
+            tasksError = "当前离线，无法读取项目任务。联网后可重试。"
+            return
+        }
         do {
             let loadedResults = try await model.agentResults()
             guard !Task.isCancelled, model.selectedProjectID == projectID else { return }
@@ -611,7 +657,7 @@ struct FocalAIView: View {
             tasksError = nil
         } catch is CancellationError {
         } catch {
-            if !Task.isCancelled, model.selectedProjectID == projectID { tasksError = "任务读取失败，切换项目后重试。" }
+            if !Task.isCancelled, model.selectedProjectID == projectID { tasksError = "任务读取失败，可在此重试。" }
         }
     }
 

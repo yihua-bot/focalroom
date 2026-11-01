@@ -28,11 +28,19 @@ enum LocalScopeIndex {
     }
 
     static func list(root: URL) -> [LocalScopeEntry] {
-        guard let data = try? Data(contentsOf: file(root: root)),
+        guard case let .success(entries) = load(root: root) else { return [] }
+        return entries
+    }
+
+    // 区分「确实没有登记过账户」与「索引读不出/已损坏」：后者不能显示成空列表。
+    static func load(root: URL) -> Result<[LocalScopeEntry], LocalLibraryError> {
+        let url = file(root: root)
+        guard FileManager.default.fileExists(atPath: url.path) else { return .success([]) }
+        guard let data = try? Data(contentsOf: url),
               let entries = try? JSONDecoder().decode([LocalScopeEntry].self, from: data),
               entries.count <= 50,
               Set(entries.map(\.id)).count == entries.count
-        else { return [] }
-        return entries.sorted { $0.updatedAt > $1.updatedAt }
+        else { return .failure(.corruptLibrary) }
+        return .success(entries.sorted { $0.updatedAt > $1.updatedAt })
     }
 }

@@ -4,10 +4,42 @@ import FocalRoomCore
 struct ProjectsView: View {
     let model: AppModel
     @State private var query = ""
-    @State private var createLocalProject = false
-    @State private var syncCenter = false
+    @State private var sheet: ProjectSheet?
     private var filtered: [ProjectSummary] {
         model.projects.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
+    }
+
+    // 单一枚举驱动的浮层：同级两个 .sheet 在 iOS 上只有最后一个生效，新建本机项目会被同步中心顶掉。
+    private enum ProjectSheet: String, Identifiable {
+        case createLocal, syncCenter
+        var id: String { rawValue }
+    }
+
+    private var active: [ProjectSummary] { filtered.filter { $0.state != .ARCHIVED } }
+    private var archived: [ProjectSummary] { filtered.filter { $0.state == .ARCHIVED } }
+
+    private func projectLabel(_ project: ProjectSummary) -> String {
+        if project.sync_mode == .PRIVATE_SYNCED { return "私有同步" }
+        return project.state == .SHARED ? "可访问" : "准备中"
+    }
+
+    private func projectCard(_ project: ProjectSummary, note: String) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack {
+                Image(systemName: "rectangle.stack").font(.title2).foregroundStyle(.secondary)
+                Spacer()
+                Label(note, systemImage: project.state == .SHARED ? "checkmark.icloud" : "clock")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Text(project.title).font(.title2.weight(.medium)).multilineTextAlignment(.leading)
+            HStack {
+                Text("版本 \(project.revision)").font(.caption.monospacedDigit())
+                Spacer()
+                Image(systemName: "arrow.up.right")
+            }.foregroundStyle(.secondary)
+        }
+        .padding(22).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 18))
     }
 
     var body: some View {
@@ -22,34 +54,30 @@ struct ProjectsView: View {
                     LocalProjectsSection(library: localLibrary, model: model, query: query)
                 }
                 Text("已同步项目").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                if filtered.isEmpty {
+                if active.isEmpty {
                     EmptyWorkspace(title: query.isEmpty ? "还没有可访问的项目" : "未找到项目",
                                    detail: "可在 Mac 开启项目共享，或使用已有邀请加入项目。")
                 }
-                ForEach(filtered) { project in
+                ForEach(active) { project in
                     NavigationLink {
                         ProjectLibraryView(model: model, projectID: project.id)
                     } label: {
-                        VStack(alignment: .leading, spacing: 22) {
-                            HStack {
-                                Image(systemName: "rectangle.stack").font(.title2).foregroundStyle(.secondary)
-                                Spacer()
-                                Label(project.sync_mode == .PRIVATE_SYNCED ? "私有同步" : project.state == .SHARED ? "可访问" : "准备中",
-                                      systemImage: project.state == .SHARED ? "checkmark.icloud" : "clock")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Text(project.title).font(.title2.weight(.medium)).multilineTextAlignment(.leading)
-                            HStack {
-                                Text("版本 \(project.revision)").font(.caption.monospacedDigit())
-                                Spacer()
-                                Image(systemName: "arrow.up.right")
-                            }.foregroundStyle(.secondary)
-                        }
-                        .padding(22).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 18))
+                        projectCard(project, note: projectLabel(project))
                     }
                     .buttonStyle(.plain).disabled(project.state != .SHARED || model.busy)
                     .accessibilityIdentifier("project.\(project.id)")
+                }
+                // 归档项目只在服务端列表里默认隐藏；这里必须显式列出并可恢复，否则归档即失联。
+                if !archived.isEmpty {
+                    Text("已归档").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(archived) { project in
+                        HStack(spacing: 12) {
+                            projectCard(project, note: "已归档")
+                            Button("恢复") { Task { await model.archiveCloudProject(project.id, archive: false) } }
+                                .disabled(model.busy)
+                                .accessibilityIdentifier("project.unarchive.\(project.id)")
+                        }
+                    }
                 }
             }.padding(20)
         }
@@ -58,22 +86,24 @@ struct ProjectsView: View {
         .refreshable { await model.reloadProjects(); await model.localLibrary?.reload() }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { createLocalProject = true } label: { Image(systemName: "plus") }
+                Button { sheet = .createLocal } label: { Image(systemName: "plus") }
                     .accessibilityLabel("新建本机项目").accessibilityIdentifier("local.create")
                     .disabled(model.busy || model.localLibrary == nil)
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button { syncCenter = true } label: {
+                Button { sheet = .syncCenter } label: {
                     Image(systemName: model.offline ? "wifi.slash" : "arrow.triangle.2.circlepath")
                 }
                 .accessibilityLabel("同步中心").accessibilityIdentifier("sync.center")
             }
         }
-        .sheet(isPresented: $createLocalProject) {
-            if let library = model.localLibrary { CreateLocalProjectView(library: library) }
-        }
-        .sheet(isPresented: $syncCenter) {
-            SyncCenterView(model: model)
+        .sheet(item: $sheet) { value in
+            switch value {
+            case .createLocal:
+                if let library = model.localLibrary { CreateLocalProjectView(library: library) }
+            case .syncCenter:
+                SyncCenterView(model: model)
+            }
         }
         .task(id: model.credentials?.user.id) { await model.localLibrary?.reload() }
         .background(Color(white: 0.055))
@@ -83,8 +113,32 @@ struct ProjectsView: View {
 struct ProjectLibraryView: View {
     let model: AppModel
     let projectID: String
+    private func cloudPhotoLink(_ photo: Photo) -> some View {
+        NavigationLink {
+            PhotoViewer(model: model, projectID: projectID, photoID: photo.id)
+        } label: {
+            cloudPhotoCell(photo)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(photo.filename)，\(photo.selection.title)")
+        .accessibilityIdentifier("photo.\(photo.id)")
+    }
+
+    private func cloudPhotoCell(_ photo: Photo) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            PhotoPreview(model: model, photoID: photo.id)
+                .frame(height: 210).clipped()
+            Text(LocalizedStringKey(photo.selection.title))
+                .font(.caption2.weight(.medium))
+                .padding(.horizontal, 9).padding(.vertical, 5)
+                .background(.black.opacity(0.75), in: Capsule())
+                .padding(8)
+        }
+    }
+
     @State private var filter: Selection?
     @State private var toolDestination: ProjectTool?
+    @Environment(\.dismiss) private var dismiss
 
     private enum ProjectTool: String, Identifiable {
         case proposals, history, grants, research
@@ -92,63 +146,131 @@ struct ProjectLibraryView: View {
     }
     private let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
 
+    // 项目级危险操作走一个枚举驱动的对话框：同级两个 .confirmationDialog 只有一个能弹出。
+    private enum ProjectDanger {
+        case archive, unarchive, delete
+    }
+    @State private var danger: ProjectDanger?
+    private var dangerPresented: Binding<Bool> {
+        Binding(get: { danger != nil }, set: { if !$0 { danger = nil } })
+    }
+    private var dangerTitle: String {
+        switch danger {
+        case .delete: return "删除云端项目"
+        case .unarchive: return "取消归档"
+        default: return "归档项目"
+        }
+    }
+    private var dangerMessage: String {
+        switch danger {
+        case .delete: return "仅项目所有者可删除；含注销审计或共享协作的项目会被拒绝并说明原因。本机原片不受影响。"
+        case .unarchive: return "恢复后项目重新出现在默认列表，内容与协作记录不变。"
+        default: return "归档不影响项目内容与协作记录，只是从默认列表收起到「已归档」分组，可随时恢复。"
+        }
+    }
+
+    @ViewBuilder
+    private var dangerActions: some View {
+        switch danger {
+        case .archive:
+            Button("归档（列表默认隐藏，可随时恢复）") {
+                Task { if await model.archiveCloudProject(projectID, archive: true) { dismiss() } }
+            }.accessibilityIdentifier("project.archive.confirm")
+        case .unarchive:
+            Button("恢复为正常项目") {
+                Task { if await model.archiveCloudProject(projectID, archive: false) { dismiss() } }
+            }.accessibilityIdentifier("project.unarchive.confirm")
+        case .delete:
+            Button("永久删除云端项目", role: .destructive) {
+                Task { if await model.deleteCloudProject(projectID) { dismiss() } }
+            }.accessibilityIdentifier("project.delete.confirm")
+        case nil:
+            EmptyView()
+        }
+    }
+
     private var photos: [Photo] {
         guard model.snapshot?.project_id == projectID else { return [] }
         return model.snapshot?.snapshot.photos.filter { filter == nil || $0.selection == filter } ?? []
     }
 
+    private var loadingState: some View {
+        ProgressView("读取项目…").frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var unavailableState: some View {
+        EmptyWorkspace(title: "暂时无法打开项目", detail: "检查网络和项目权限后重试。")
+            .safeAreaInset(edge: .bottom) {
+                Button("重新读取") { Task { await model.openProject(projectID) } }.padding()
+            }
+    }
+
+    private var galleryHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(model.snapshot?.title ?? "图库").font(.title2.weight(.medium))
+            HStack {
+                Text("\(model.snapshot?.snapshot.photos.count ?? 0) 张照片")
+                Spacer()
+                Label(model.offline ? "离线缓存" : "已同步",
+                      systemImage: model.offline ? "wifi.slash" : "checkmark.icloud")
+            }.font(.caption).foregroundStyle(.secondary)
+            if let date = model.cachedAt, model.offline {
+                Text("缓存于 \(date.formatted(date: .abbreviated, time: .shortened))，权限待联网核实")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Picker("选片筛选", selection: $filter) {
+                Text("全部").tag(Optional<Selection>.none)
+                ForEach(Selection.allCases, id: \.self) { Text(LocalizedStringKey($0.title)).tag(Optional($0)) }
+            }.pickerStyle(.segmented)
+        }.padding(.horizontal, 16)
+    }
+
+    private var gallery: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                galleryHeader
+                PendingBanner(model: model)
+                if photos.isEmpty { EmptyWorkspace(title: "没有符合条件的照片", detail: "选择其他选片状态查看。", symbol: "photo") }
+                LazyVGrid(columns: columns, spacing: 4) {
+                    ForEach(photos) { photo in
+                        cloudPhotoLink(photo)
+                    }
+                }
+            }.padding(.top, 16)
+        }
+        .refreshable { await model.reloadSnapshot() }
+    }
+
+    // 工具菜单项单独成属性：内联在 ToolbarItemGroup 里会超出编译器类型推断时限。
+    @ViewBuilder
+    private var toolsMenuContent: some View {
+        let ready = !model.offline && model.snapshot?.project_id == projectID
+        Button { toolDestination = .proposals } label: {
+            Label("提案", systemImage: "checklist")
+        }.disabled(!ready).accessibilityIdentifier("proposals.entry")
+        Button { toolDestination = .history } label: {
+            Label("版本历史", systemImage: "clock.arrow.circlepath")
+        }.accessibilityIdentifier("history.entry")
+        Button { danger = model.snapshot?.state == .ARCHIVED ? .unarchive : .archive } label: {
+            Label(model.snapshot?.state == .ARCHIVED ? "取消归档…" : "归档项目…", systemImage: "archivebox")
+        }.disabled(!ready).accessibilityIdentifier("project.archive")
+        Button(role: .destructive) { danger = .delete } label: {
+            Label("删除云端项目…", systemImage: "trash")
+        }.disabled(!ready).accessibilityIdentifier("project.delete.cloud")
+        Button { toolDestination = .grants } label: {
+            Label("成员与权限", systemImage: "person.crop.circle.badge.checkmark")
+        }.disabled(!ready).accessibilityIdentifier("grants.entry")
+    }
+
     var body: some View {
+        // 三个分支各自成子视图：整段内联时类型推断会超出编译器时限（v1.4.7 归档入口加入后 Debug 编译失败）。
         Group {
             if model.loadingProject && model.snapshot == nil {
-                ProgressView("读取项目…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                loadingState
             } else if model.snapshot?.project_id == projectID {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(model.snapshot?.title ?? "图库").font(.title2.weight(.medium))
-                            HStack {
-                                Text("\(model.snapshot?.snapshot.photos.count ?? 0) 张照片")
-                                Spacer()
-                                Label(model.offline ? "离线缓存" : "已同步",
-                                      systemImage: model.offline ? "wifi.slash" : "checkmark.icloud")
-                            }.font(.caption).foregroundStyle(.secondary)
-                            if let date = model.cachedAt, model.offline {
-                                Text("缓存于 \(date.formatted(date: .abbreviated, time: .shortened))，权限待联网核实")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Picker("选片筛选", selection: $filter) {
-                                Text("全部").tag(Optional<Selection>.none)
-                                ForEach(Selection.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
-                            }.pickerStyle(.segmented)
-                        }.padding(.horizontal, 16)
-                        PendingBanner(model: model)
-                        if photos.isEmpty { EmptyWorkspace(title: "没有符合条件的照片", detail: "选择其他选片状态查看。", symbol: "photo") }
-                        LazyVGrid(columns: columns, spacing: 4) {
-                            ForEach(photos) { photo in
-                                NavigationLink {
-                                    PhotoViewer(model: model, projectID: projectID, photoID: photo.id)
-                                } label: {
-                                    ZStack(alignment: .bottomLeading) {
-                                        PhotoPreview(model: model, photoID: photo.id)
-                                            .frame(height: 210).clipped()
-                                        Text(photo.selection.title).font(.caption2.weight(.medium))
-                                            .padding(.horizontal, 9).padding(.vertical, 5)
-                                            .background(.black.opacity(0.75), in: Capsule()).padding(8)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("\(photo.filename)，\(photo.selection.title)")
-                                .accessibilityIdentifier("photo.\(photo.id)")
-                            }
-                        }
-                    }.padding(.top, 16)
-                }
-                .refreshable { await model.reloadSnapshot() }
+                gallery
             } else {
-                EmptyWorkspace(title: "暂时无法打开项目", detail: "检查网络和项目权限后重试。")
-                    .safeAreaInset(edge: .bottom) {
-                        Button("重新读取") { Task { await model.openProject(projectID) } }.padding()
-                    }
+                unavailableState
             }
         }
         .navigationTitle("图库").navigationBarTitleDisplayMode(.inline)
@@ -165,20 +287,14 @@ struct ProjectLibraryView: View {
                 .disabled(model.offline || model.snapshot?.project_id != projectID)
                 .accessibilityLabel("研究资料").accessibilityIdentifier("research.entry")
                 // 提案/历史/授权收入菜单：五个直排在 iPhone 上溢出到"更多"导致入口不可达。
-                Menu {
-                    Button { toolDestination = .proposals } label: { Label("提案", systemImage: "checklist") }
-                        .disabled(model.offline || model.snapshot?.project_id != projectID)
-                        .accessibilityIdentifier("proposals.entry")
-                    Button { toolDestination = .history } label: { Label("版本历史", systemImage: "clock.arrow.circlepath") }
-                        .disabled(model.offline || model.snapshot?.project_id != projectID)
-                        .accessibilityIdentifier("history.entry")
-                    Button { toolDestination = .grants } label: { Label("成员与权限", systemImage: "person.crop.circle.badge.checkmark") }
-                        .disabled(model.offline || model.snapshot?.project_id != projectID)
-                        .accessibilityIdentifier("grants.entry")
-                } label: { Image(systemName: "ellipsis.circle") }
+                Menu { toolsMenuContent } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("更多工具").accessibilityIdentifier("project.tools.menu")
             }
         }
+        .confirmationDialog(dangerTitle, isPresented: dangerPresented, titleVisibility: .visible) {
+            dangerActions
+            Button("取消", role: .cancel) {}
+        } message: { Text(dangerMessage) }
         .sheet(item: $toolDestination) { destination in
             NavigationStack {
                 switch destination {
@@ -311,7 +427,7 @@ struct PhotoViewer: View {
                         Button {
                             choose(selection)
                         } label: {
-                            Label(selection.title, systemImage: selection == .KEEP ? "checkmark" : selection == .REJECT ? "xmark" : "minus")
+                            Label(LocalizedStringKey(selection.title), systemImage: selection == .KEEP ? "checkmark" : selection == .REJECT ? "xmark" : "minus")
                                 .font(.subheadline).frame(maxWidth: .infinity, minHeight: 48)
                                 .background(photo?.selection == selection ? .white.opacity(0.2) : .white.opacity(0.06),
                                             in: RoundedRectangle(cornerRadius: 12))

@@ -236,8 +236,22 @@ public struct APIClient: Sendable {
         return receipt
     }
 
+    /// 云端项目归档/取消归档（归档后默认列表隐藏，可显式包含查看）。
+    public func archiveProject(projectID: String, archive: Bool, token: String) async throws {
+        struct Result: Decodable { let archived: Bool? }
+        _ = try await call(Result.self, ["projects", projectID, archive ? "archive" : "unarchive"], token: token, body: Data("{}".utf8))
+    }
+
+    /// 云端项目删除：仅项目所有者；含账号注销审计或共享协作时服务端按规则拒绝/处理。
+    public func deleteCloudProject(projectID: String, token: String) async throws {
+        struct Result: Decodable { let deleted: Bool? }
+        _ = try await call(Result.self, ["projects", projectID], token: token, body: nil, method: "DELETE")
+    }
+
     public func projects(token: String) async throws -> [ProjectSummary] {
-        let projects = try await call([ProjectSummary].self, ["projects"], token: token)
+        // 归档项必须一起取回：否则在 iPhone 上归档后项目直接从列表消失，无法恢复。
+        let projects = try await call([ProjectSummary].self, ["projects"], token: token,
+                                      query: [URLQueryItem(name: "include", value: "archived")])
         guard Set(projects.map(\.id)).count == projects.count,
               projects.allSatisfy({ !$0.id.isEmpty && $0.revision >= 0 }) else { throw APIError.invalidResponse }
         return projects

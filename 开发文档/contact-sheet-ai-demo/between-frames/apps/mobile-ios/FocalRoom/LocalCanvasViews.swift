@@ -14,13 +14,16 @@ final class LocalCanvasModel {
     var notice: String?
     var panOffset: CGSize = .zero
     var zoom: CGFloat = 1
+    // 由视图写入、仅在放置新节点时读取的可视尺寸；界面不依赖它，故不进观察范围。
+    @ObservationIgnored var viewport: CGSize = .zero
 
     let projectID: String
+    // 视图把节点坐标映射到屏幕中心时的固定边距；放置新节点须与视图用同一个值，否则落点会算偏。
+    static let canvasEdgeInset: Double = 120
     @ObservationIgnored private let library: LocalLibrary
     // undoStack 存逆操作（提交即撤销）；redoStack 存正向操作（提交即重做）。
     @ObservationIgnored private var undoStack: [LocalCanvasOperation] = []
     @ObservationIgnored private var redoStack: [LocalCanvasOperation] = []
-    @ObservationIgnored private var active = true
 
     init(library: LocalLibrary, projectID: String) {
         self.library = library
@@ -39,12 +42,8 @@ final class LocalCanvasModel {
         } catch { notice = "画布读取失败，请重试。" }
     }
 
-    func shutdown() {
-        active = false
-    }
-
     private func perform(_ operation: LocalCanvasOperation) async {
-        guard active, !busy else { return }
+        guard !busy else { return }
         busy = true
         defer { busy = false }
         do {
@@ -90,23 +89,48 @@ final class LocalCanvasModel {
     }
 
     func addPhotoNode(photoID: String) async {
-        let z = (nodes.map(\.zOrder).max() ?? 0) + 1
-        let column = nodes.count % 4
-        let row = nodes.count / 4
+        let origin = visibleOrigin(width: 240, height: 180)
         let node = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .photo, photoID: photoID,
-                                   x: Double(40 + column * 260), y: Double(40 + row * 220),
-                                   width: 240, height: 180, zOrder: z)
+                                   x: origin.x, y: origin.y, width: 240, height: 180, zOrder: nextZOrder)
         await perform(.createNode(node))
         selectedNodeID = node.id
     }
 
     func addNote() async {
-        let z = (nodes.map(\.zOrder).max() ?? 0) + 1
+        let origin = visibleOrigin(width: 200, height: 120)
         let node = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .note, text: "新便签",
-                                   x: Double(60 + nodes.count * 24), y: Double(60 + nodes.count * 18),
-                                   width: 200, height: 120, zOrder: z)
+                                   x: origin.x, y: origin.y, width: 200, height: 120, zOrder: nextZOrder)
         await perform(.createNode(node))
         selectedNodeID = node.id
+    }
+
+    private var nextZOrder: Int { (nodes.map(\.zOrder).max() ?? 0) + 1 }
+
+    /// 画布坐标 → 视图中心点；新节点落点的反向计算以它为准。
+    func center(of node: LocalCanvasNode) -> CGPoint {
+        CGPoint(x: CGFloat(node.x) * zoom + panOffset.width + CGFloat(Self.canvasEdgeInset),
+                y: CGFloat(node.y) * zoom + panOffset.height + CGFloat(Self.canvasEdgeInset))
+    }
+
+    /// 新节点必须落在当前可视矩形内：画布按 `坐标 × zoom + panOffset + 120` 映射到屏幕中心，
+    /// 固定网格在 iPhone 宽度上第二列就整格出界，用户点了照片却什么都看不到。
+    private func visibleOrigin(width: Double, height: Double) -> (x: Double, y: Double) {
+        let scale = Double(zoom)
+        let marginX = width * scale / 2 + 12
+        let marginY = height * scale / 2 + 12
+        let viewWidth = max(Double(viewport.width), marginX * 2 + 24)
+        let viewHeight = max(Double(viewport.height), marginY * 2 + 24)
+        let panX = Double(panOffset.width) + Self.canvasEdgeInset
+        let panY = Double(panOffset.height) + Self.canvasEdgeInset
+        let minX = (marginX - panX) / scale
+        let maxX = (viewWidth - marginX - panX) / scale
+        let minY = (marginY - panY) / scale
+        let maxY = (viewHeight - marginY - panY) / scale
+        let step = nodes.count % 5
+        let tier = nodes.count / 5
+        let fx = step == 0 ? 0 : Double(step) / 5
+        let fy = tier == 0 ? 0 : 0.35 + Double(tier - 1) / 5
+        return (minX + (maxX - minX) * fx, minY + (maxY - minY) * min(fy, 1))
     }
 
     func move(nodeID: String, x: Double, y: Double) async {
@@ -148,13 +172,11 @@ struct LocalCanvasView: View {
     @State private var confirmDelete = false
 
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { proxy in
             ZStack {
                 Color(white: 0.07)
                 ForEach(model.nodes.sorted { ($0.zOrder, $0.id) < ($1.zOrder, $1.id) }) { node in
-                    nodeView(node)
-                        .position(x: CGFloat(node.x) * model.zoom + model.panOffset.width + 120,
-                                  y: CGFloat(node.y) * model.zoom + model.panOffset.height + 120)
+                    nodeView(node).position(model.center(of: node))
                 }
                 if model.nodes.isEmpty {
                     VStack(spacing: 10) {
@@ -169,11 +191,12 @@ struct LocalCanvasView: View {
             .contentShape(Rectangle())
             .onTapGesture { model.selectedNodeID = nil }
             .gesture(panGesture)
+            .onAppear { model.viewport = proxy.size }
+            .onChange(of: proxy.size) { _, size in model.viewport = size }
         }
         .navigationTitle("本机画布").navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
-        .task { await model.load() }
-        .onDisappear { model.shutdown() }
+        .task(id: model.projectID) { await model.load() }
         .sheet(item: $activeSheet, onDismiss: { noteDraft = ""; annotationDraft = "" }) { sheet in
             switch sheet {
             case .addPhoto: photoPicker
@@ -236,6 +259,9 @@ struct LocalCanvasView: View {
             Button("移到最上层") { Task { await model.bringToFront(nodeID: node.id) } }
             Button("删除", role: .destructive) { model.selectedNodeID = node.id; confirmDelete = true }
         }
+        // 合并为一个可访问元素：不加这一层时容器本身不是无障碍元素，
+        // 下面的标识会被丢弃（只有标签落到内部文本上），VoiceOver 与自动化都点不到"节点"。
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("local.canvas.node.\(node.id)")
         .accessibilityLabel(node.kind == .photo ? "画布照片" : "便签：\(node.text ?? "")")
     }
@@ -275,19 +301,29 @@ struct LocalCanvasView: View {
 
     private var photoPicker: some View {
         NavigationStack {
-            List(library.projects.first { $0.id == model.projectID }?.photos ?? []) { photo in
-                Button {
-                    activeSheet = nil
-                    Task { await model.addPhotoNode(photoID: photo.id) }
-                } label: {
-                    HStack {
-                        Image(systemName: "photo").foregroundStyle(.secondary)
-                        Text(photo.filename).lineLimit(1)
-                        Spacer()
-                        Text(photo.selection.title).font(.caption).foregroundStyle(.secondary)
+            // 本机图库尚未刷新时这里会是空表：空表必须说明原因，否则像按钮失灵。
+            let photos = library.projects.first { $0.id == model.projectID }?.photos ?? []
+            Group {
+                if photos.isEmpty {
+                    ContentUnavailableView("这个项目还没有照片", systemImage: "photo",
+                                           description: Text("请先在相册导入照片，再添加到画布。"))
+                        .accessibilityIdentifier("canvas.pick.empty")
+                } else {
+                    List(photos) { photo in
+                        Button {
+                            activeSheet = nil
+                            Task { await model.addPhotoNode(photoID: photo.id) }
+                        } label: {
+                            HStack {
+                                Image(systemName: "photo").foregroundStyle(.secondary)
+                                Text(photo.filename).lineLimit(1)
+                                Spacer()
+                                Text(LocalizedStringKey(photo.selection.title)).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityIdentifier("canvas.pick.photo.\(photo.id)")
                     }
                 }
-                .accessibilityIdentifier("canvas.pick.photo.\(photo.id)")
             }
             .navigationTitle("选择照片").navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("取消") { activeSheet = nil } }

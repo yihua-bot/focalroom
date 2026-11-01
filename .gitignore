@@ -38,4 +38,7 @@ apps/mobile-ios/build/
 *.xcresult
 .module-cache/
 .dd-verify/
+.dd-archive/
+.archives/
+*.xcarchive/
 *.pcm

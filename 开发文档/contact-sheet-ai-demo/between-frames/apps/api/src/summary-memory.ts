@@ -2,7 +2,6 @@
 // 参考 OpenYC RAG 设计的 summary memory 层
 
 import { Pool } from "pg";
-import { z } from "zod";
 
 export interface TaskSummary {
   id: string;

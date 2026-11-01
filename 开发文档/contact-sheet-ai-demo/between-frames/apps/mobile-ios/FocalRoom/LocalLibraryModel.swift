@@ -44,6 +44,16 @@ final class LocalLibraryModel {
     @ObservationIgnored private let images = NSCache<NSString, UIImage>()
     @ObservationIgnored private var importTask: Task<Void, Never>?
     @ObservationIgnored private var active = true
+    // 画布状态按项目缓存在这里，不能由父视图 body 每次新建：新建会丢掉选中/撤销栈，
+    // 而 LocalCanvasView 的 .task 只在视图首次出现时加载，换实例后画布会一直显示为空。
+    @ObservationIgnored private var canvasModels: [String: LocalCanvasModel] = [:]
+
+    func canvasModel(projectID: String) -> LocalCanvasModel {
+        if let cached = canvasModels[projectID] { return cached }
+        let model = LocalCanvasModel(library: library, projectID: projectID)
+        canvasModels[projectID] = model
+        return model
+    }
 
     // LocalLibrary 是每文件一次读改写的 actor；迁云与本机导入必须共享同一实例，避免整文件互相覆盖。
     // readOnly 用于未登录的本机资料离线浏览：只读原片与记录，不提供导入、选片或迁云写入。
@@ -75,7 +85,7 @@ final class LocalLibraryModel {
     }
 
     private(set) var isDeleting = false
-    var onProjectDeleted: (() -> Void)?
+    var onProjectDeleted: ((String) -> Void)?
 
     func deleteProject(projectID: String) async {
         guard active, !isDeleting, !readOnly else { return }
@@ -83,9 +93,10 @@ final class LocalLibraryModel {
         defer { isDeleting = false }
         do {
             try await library.deleteProject(projectID: projectID)
+            canvasModels[projectID] = nil
             guard active else { return }
             await reload()
-            onProjectDeleted?()
+            onProjectDeleted?(projectID)
         } catch LocalLibraryError.projectFrozen {
             notice = "迁云进行中的项目暂不能删除；请等迁云完成或放弃迁云后再试。"
         } catch {
@@ -265,6 +276,7 @@ final class LocalLibraryModel {
         active = false
         importTask?.cancel()
         images.removeAllObjects()
+        canvasModels.removeAll()
         projects = []
     }
 }

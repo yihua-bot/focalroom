@@ -1,0 +1,27 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "mobile-ios",
+          "kind" : "fileSystem",
+          "location" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios",
+          "name" : "FocalRoomCore"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/yihua/Documents/film/开发文档/contact-sheet-ai-demo/between-frames/apps/mobile-ios"
+        },
+        "subpath" : "mobile-ios"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

@@ -71,7 +71,7 @@ private struct LoginView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("登录你的工作空间").font(.headline)
                     Picker("登录方式", selection: $mode) {
-                        ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        ForEach(Mode.allCases, id: \.self) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("login.mode")
@@ -229,7 +229,7 @@ struct ProjectContext: View {
         .accessibilityIdentifier("project.context")
         .accessibilityLabel("选择项目")
         .accessibilityValue(model.currentProjectTitle ?? "尚未选择")
-        .disabled(model.busy)
+        // 不在这里用 model.busy 整体禁用：请求进行中也要能打开选择面板浏览（列表项各自禁用）。
         .sheet(isPresented: $choosingProject) { ProjectChooser(model: model) }
         if let project = model.selectedLocalProject, let library = model.localLibrary {
             HStack {
@@ -276,7 +276,9 @@ private struct ProjectChooser: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(project.title).foregroundStyle(.primary)
-                                    Text(project.state != .SHARED ? "正在准备，暂不可打开" : project.sync_mode == .PRIVATE_SYNCED ? "私有同步" : "已同步")
+                                    Text(project.state == .ARCHIVED ? "已归档，可在项目页恢复后打开"
+                                        : project.state != .SHARED ? "正在准备，暂不可打开"
+                                        : project.sync_mode == .PRIVATE_SYNCED ? "私有同步" : "已同步")
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()

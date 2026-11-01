@@ -123,13 +123,16 @@ final class AppModel {
             #endif
             address = saved.address
             activate(saved.credentials, configuration: configuration)
-            // 缓存优先：先渲染上次的项目列表秒开界面，网络刷新随后替换权威数据。
+            // 缓存优先：先渲染上次的项目列表秒开界面，随后立即放行主界面。
             if let store, let cached = try? await store.projects() {
                 projects = cached.projects
             }
-            await reloadProjects()
-            // 设备登记与绑定不阻塞启动：后台静默完成，失败下次前台重试。
-            Task { await registerCurrentDevice() }
+            // 网络刷新与设备登记都放后台：主界面立刻可见，数据到了自动更新。
+            starting = false
+            Task {
+                await reloadProjects()
+                await registerCurrentDevice()
+            }
         } catch { notice = message(error) }
     }
 
@@ -188,21 +191,34 @@ final class AppModel {
         } catch { if generation == epoch { notice = message(error) } }
     }
 
-    /// 登录态设置/修改密码；验证码新建的账号可不带当前密码。
-    func setPassword(_ password: String, current: String?) async {
-        guard let api, !busy else { return }
+    /// 登录态设置/修改密码；验证码新建的账号可不带当前密码。返回 false 表示未提交。
+    @discardableResult
+    func setPassword(_ password: String, current: String?) async -> Bool {
+        guard !busy else {
+            notice = "上一个请求仍在处理，请稍候再试。"
+            return false
+        }
+        guard let api else {
+            notice = "登录状态已失效，请重新登录后再设置密码。"
+            return false
+        }
         busy = true
         notice = nil
         let generation = epoch
         defer { if generation == epoch { busy = false } }
         do {
             try await api.setPassword(token: credentials?.token ?? "", password: password, current: current)
-            guard generation == epoch else { return }
+            guard generation == epoch else { return false }
             notice = "密码已更新。下次登录可使用邮箱与新密码。"
-        } catch { if generation == epoch { notice = message(error) } }
+            return true
+        } catch {
+            if generation == epoch { notice = message(error) }
+            return false
+        }
     }
 
     private func activate(_ value: Credentials, configuration: APIConfiguration) {
+        stopAutoResolve()
         epoch = UUID()
         credentials = value
         api = APIClient(configuration: configuration)
@@ -214,10 +230,62 @@ final class AppModel {
         chat = AIChatStore(root: root.appendingPathComponent("AIChat"), scope: scope)
         let library = LocalLibrary(root: root.appendingPathComponent("LocalLibrary"), scope: scope)
         let libraryModel = LocalLibraryModel(library: library)
+        // 删除的正是当前打开的本机项目时，必须清空项目上下文；否则各 Tab 仍持有已消失项目的引用。
+        libraryModel.onProjectDeleted = { [weak self] deletedID in
+            guard let self, self.currentProject == .local(deletedID) else { return }
+            self.resetProject()
+            self.notice = "本机项目已删除，已退出其画布与对话上下文。"
+        }
         localLibrary = libraryModel
         let migrationModel = LocalMigrationModel(library: library, api: APIClient(configuration: configuration), credentials: value)
         migrationModel.onRecordChanged = { [weak libraryModel] in await libraryModel?.reload() }
         migration = migrationModel
+    }
+
+    /// 云端项目归档/取消归档：成功返回 true，调用方据此退出项目详情页。
+    @discardableResult
+    func archiveCloudProject(_ projectID: String, archive: Bool) async -> Bool {
+        guard let api, let credentials else {
+            notice = "当前离线，无法修改项目归档状态。"
+            return false
+        }
+        let generation = epoch
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            try await api.archiveProject(projectID: projectID, archive: archive, token: credentials.token)
+            guard generation == epoch else { return false }
+            notice = archive ? "项目已归档，可在项目列表的「已归档」分组中恢复。" : "项目已恢复为正常项目。"
+            await reloadProjects()
+            if selectedProjectID == projectID { resetProject() }
+            return true
+        } catch {
+            if generation == epoch { notice = message(error) }
+            return false
+        }
+    }
+
+    /// 云端项目删除：仅所有者；含审计记录或共享协作时服务端按规则拒绝并说明原因。
+    @discardableResult
+    func deleteCloudProject(_ projectID: String) async -> Bool {
+        guard let api, let credentials else {
+            notice = "当前离线，无法删除云端项目。"
+            return false
+        }
+        let generation = epoch
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            try await api.deleteCloudProject(projectID: projectID, token: credentials.token)
+            guard generation == epoch else { return false }
+            notice = "云端项目已删除。"
+            await reloadProjects()
+            if selectedProjectID == projectID { resetProject() }
+            return true
+        } catch {
+            if generation == epoch { notice = message(error) }
+            return false
+        }
     }
 
     func refreshOnResume() async {
@@ -316,7 +384,11 @@ final class AppModel {
             // 迁云刚完成时项目列表可能尚未刷新；先补一次权威列表再判定。
             await reloadProjects()
         }
-        guard projects.contains(where: { $0.id == id && $0.state == .SHARED }) else { return }
+        guard projects.contains(where: { $0.id == id && $0.state == .SHARED }) else {
+            // 静默返回会让「打开项目」看起来完全没反应；说明原因并给出下一步。
+            notice = "这个项目当前不可打开：可能仍在准备、已归档或权限已变化。请返回列表刷新后重试。"
+            return
+        }
         resetProject()
         currentProject = .cloud(id)
         await reloadSnapshot()
@@ -508,6 +580,7 @@ final class AppModel {
     }
 
     func loadChat() async {
+        scheduleAutoResolve()
         guard let chat else { return }
         let generation = epoch, project = currentProject
         let messages = (try? await chat.messages(localProjectID: selectedLocalProjectID)) ?? []
@@ -551,11 +624,17 @@ final class AppModel {
 
     func cancelVision() { visionDraftID = nil }
 
-    func aiSend(text: String, vision: PreparedVision? = nil, onVisionConsumed: () -> Void = {}) async {
-        guard !aiSending, let api, let credentials, let chat else { return }
+    /// 返回 false 表示请求未被受理（调用方需保留用户已输入的正文，不能静默丢弃草稿）。
+    @discardableResult
+    func aiSend(text: String, vision: PreparedVision? = nil, onVisionConsumed: () -> Void = {}) async -> Bool {
+        guard !aiSending, let api, let credentials, let chat else {
+            if aiSending { notice = "上一条请求仍在处理，稍后再发送。" }
+            else { notice = offline ? "当前离线，无法发送消息。" : "会话存储不可用，请重新登录后重试。" }
+            return false
+        }
         guard canSendAI else {
             notice = "请先确认 AI 服务已开放、邮箱已验证且账户额度可用，再发送消息。"
-            return
+            return false
         }
         let generation = epoch
         let project = currentProject
@@ -563,7 +642,7 @@ final class AppModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 8000 else {
             notice = trimmed.isEmpty ? "请输入消息内容。" : "消息过长，请分段发送。"
-            return
+            return false
         }
         aiSending = true
         streamingText = nil
@@ -574,7 +653,7 @@ final class AppModel {
             guard vision.id == visionDraftID, vision.generation == generation,
                   vision.accountID == credentials.user.id, vision.project == project,
                   vision.text == text, Date().timeIntervalSince(vision.createdAt) < 300 else {
-                notice = "照片授权已失效，请重新选择照片并确认。"; return
+                notice = "照片授权已失效，请重新选择照片并确认。"; return false
             }
             // 授权消费一次；点击确认后重新核实项目权限与照片身份，失败不发送。
             visionDraftID = nil
@@ -594,17 +673,17 @@ final class AppModel {
                         current.previews.contains { $0.photo_id == photo.photoID && $0.content_sha256 == photo.contentSHA }
                     }) else { throw APIError.permissionDenied }
                 }
-            } catch { if generation == epoch { notice = message(error) }; return }
+            } catch { if generation == epoch { notice = message(error) }; return false }
         }
-        guard generation == epoch, project == currentProject else { return }
+        guard generation == epoch, project == currentProject else { return false }
         let requestID = UUID().uuidString.lowercased()
         // 先按待确认持久化：响应丢失时凭原编号查询回执，不重复发送、不重复计费。
         let storedText = trimmed + (vision.map { "\n（本次授权观察：" + $0.photos.map(\.filename).joined(separator: "、") + "）" } ?? "")
         let userMessage = AIChatMessage(id: UUID().uuidString.lowercased(), role: "user", text: storedText,
                                         requestID: requestID, state: .unknown, localProjectID: localProjectID)
         do { try await chat.append(userMessage) }
-        catch { notice = "无法保存消息，请重试。"; return }
-        guard generation == epoch, project == currentProject else { return }
+        catch { notice = "无法保存消息，请重试。"; return false }
+        guard generation == epoch, project == currentProject else { return false }
         chatMessages.append(userMessage)
         let history = chatMessages.filter { $0.state == .sent || $0.id == userMessage.id }.suffix(20).map { ($0.role, $0.text) }
         let conversation = AIConversationInput(history: Array(history), images: vision?.photos.map(\.preview) ?? [])
@@ -626,7 +705,7 @@ final class AppModel {
                     break
                 }
             }
-            guard generation == epoch else { return }
+            guard generation == epoch else { return false }
             if let reply = stream.reply {
                 try await chat.complete(userMessage, text: reply.text.isEmpty ? "（模型未返回文本）" : reply.text)
                 streamingText = nil
@@ -637,22 +716,22 @@ final class AppModel {
                 streamingText = nil
             }
         } catch {
-            guard generation == epoch else { return }
+            guard generation == epoch else { return false }
             streamingText = nil
             // 只有服务端明确没有此路由，才转用旧的异步入口；其他情况只查询原编号。
             if let apiError = error as? APIError, case .server(let status, _) = apiError, status == 404 {
                 streamRouteMissing = true
             }
         }
-        guard generation == epoch else { return }
+        guard generation == epoch else { return false }
         if !streamed {
             do {
                 if streamRouteMissing {
                     _ = try await api.aiSubmit(input: conversation, requestID: requestID, token: credentials.token, imageConsent: vision != nil)
                 }
-                guard generation == epoch else { return }
+                guard generation == epoch else { return false }
                 let job = try await pollAIJob(requestID: requestID, api: api, token: credentials.token, generation: generation)
-                guard generation == epoch else { return }
+                guard generation == epoch else { return false }
                 if job.state == "COMPLETED", let result = job.result {
                     try? await chat.complete(userMessage, text: result.text.isEmpty ? "（模型未返回文本）" : result.text)
                     await loadChat()
@@ -661,7 +740,8 @@ final class AppModel {
                     await loadChat()
                     if project == currentProject { notice = "模型服务拒绝了请求，额度已释放。" }
                 } else {
-                    if project == currentProject { notice = "结果尚未确认；可稍后用“查询待确认结果”核对，不会重复计费。" }
+                    // 回退轮询未出结果：自动后台核对直至完成，不需要用户手动点。
+                    scheduleAutoResolve()
                 }
                 await loadAIAccount()
             } catch {
@@ -669,30 +749,74 @@ final class AppModel {
                 if generation == epoch, project == currentProject { notice = message(error) }
             }
         }
+        // 走到这里说明消息已入库（已发送或待确认），草稿可以清空。
+        return true
     }
 
-    func aiResolvePending() async {
-        guard let api, let credentials, let chat else { return }
+    /// 核对「结果待确认」的 AI 消息。manual 为用户主动点按，失败必须给出提示；自动核对保持安静。
+    func aiResolvePending(manual: Bool = false) async {
+        guard let api, let credentials, let chat else {
+            if manual { notice = offline ? "当前离线，无法核对结果，请稍后重试。" : "会话存储不可用，请重新登录后重试。" }
+            return
+        }
         let generation = epoch
         var changed = false
-        for message in chatMessages where message.state == .unknown && message.role == "user" {
-            guard let requestID = message.requestID else { continue }
+        var failure: String?
+        for entry in chatMessages where entry.state == .unknown && entry.role == "user" {
+            guard let requestID = entry.requestID else { continue }
             do {
                 let job = try await api.aiJob(requestID: requestID, token: credentials.token)
                 guard generation == epoch else { return }
                 if job.state == "COMPLETED", let result = job.result {
-                    try? await chat.complete(message, text: result.text.isEmpty ? "（模型未返回文本）" : result.text)
+                    try? await chat.complete(entry, text: result.text.isEmpty ? "（模型未返回文本）" : result.text)
                     changed = true
                 } else if job.state == "REJECTED" {
-                    try? await replaceMessage(message, state: .failed, failure: "模型服务拒绝了请求，额度已释放。", in: chat)
+                    try? await replaceMessage(entry, state: .failed, failure: "模型服务拒绝了请求，额度已释放。", in: chat)
                     changed = true
                 }
-            } catch { break }
+            } catch {
+                guard generation == epoch else { return }
+                failure = message(error)
+                break
+            }
         }
-        if changed, generation == epoch {
+        guard generation == epoch else { return }
+        if changed {
             await loadChat()
             await loadAIAccount()
+            if manual { notice = "已核对：待确认结果已更新。" }
+        } else if let failure {
+            notice = "未能核对结果：\(failure)"
+        } else if manual {
+            notice = "这些请求仍在处理中，结果确认后会自动显示，不会重复计费。"
         }
+    }
+
+    // MARK: - 待确认结果自动核对
+    // 流式抖动/回退轮询超时会留下 unknown 消息：后台循环重查直至出结果，
+    // 用户无需手动点「核对」；离开页面或换账号自动停止。
+    @ObservationIgnored private var autoResolveTask: Task<Void, Never>?
+
+    func scheduleAutoResolve() {
+        guard autoResolveTask == nil else { return }
+        guard chatMessages.contains(where: { $0.state == .unknown && $0.role == "user" }) else { return }
+        let generation = epoch
+        autoResolveTask = Task { [weak self] in
+            // 最多约 5 分钟：每 3 秒核对一次，出结果/换纪元即停。
+            for _ in 0..<100 {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard let self else { break }
+                if Task.isCancelled || self.epoch != generation { break }
+                guard self.chatMessages.contains(where: { $0.state == .unknown && $0.role == "user" }) else { break }
+                await self.aiResolvePending(manual: false)
+            }
+            await MainActor.run { [weak self] in self?.autoResolveTask = nil }
+        }
+    }
+
+    func stopAutoResolve() {
+        autoResolveTask?.cancel()
+        autoResolveTask = nil
     }
 
     func agentJobs() async throws -> [AgentJob] {
@@ -903,7 +1027,10 @@ final class AppModel {
     // 项目授权管理：仅 OWNER/ADMIN；EDITOR 专属权限客户端先镜像校验，服务端最终权威。
     func updateGrant(userID: String, role: String, canApprove: Bool, canEditFormal: Bool) async {
         guard !busy, let snapshot, let api, let credentials,
-              currentProject == .cloud(snapshot.project_id), !offline else { return }
+              currentProject == .cloud(snapshot.project_id), !offline else {
+            notice = grantBlockReason
+            return
+        }
         let input: GrantUpdateInput
         do { input = try GrantUpdateInput(role: role, canApprove: canApprove, canEditFormal: canEditFormal) }
         catch { notice = "只有编辑角色可以持有审批或正式编辑权限。"; return }
@@ -921,9 +1048,23 @@ final class AppModel {
         }
     }
 
+    // 成员权限操作的前置条件：静默返回会让「保存/撤销」看起来完全失灵，必须说明原因。
+    private var grantBlockReason: String {
+        if busy { return "上一个请求仍在处理，请稍候再试。" }
+        if offline { return "当前离线，无法修改成员权限。" }
+        if api == nil || credentials == nil { return "登录状态已失效，请重新登录。" }
+        guard let snapshot, currentProject == .cloud(snapshot.project_id) else {
+            return "项目上下文已变化，请返回项目页重新进入后再试。"
+        }
+        return "无法修改成员权限，请返回项目页重试。"
+    }
+
     func revokeGrant(userID: String) async {
         guard !busy, let snapshot, let api, let credentials,
-              currentProject == .cloud(snapshot.project_id), !offline else { return }
+              currentProject == .cloud(snapshot.project_id), !offline else {
+            notice = grantBlockReason
+            return
+        }
         let generation = epoch
         busy = true
         defer { if generation == epoch { busy = false } }

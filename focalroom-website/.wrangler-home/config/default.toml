@@ -1,0 +1,4 @@
+oauth_token = "cfoat_OfhEkQrg00ATsFMC0AER2BzfHW8omwRKT5OIZQuBDgI.K3FrMkhQq9ui6ikVLAahr5lHSHE0JgLZkY4Km168mic"
+expiration_time = "2026-11-01T06:55:25.508Z"
+refresh_token = "cfort_nAaEqzN6mZQxYZ2FsjosKiZWFSjwl8O960480d7YPk0.JwbIilVqPaDSt86NTkwWM7dFSnGwVBxJ4NL9URoGZlg"
+scopes = [ "user:read", "offline_access", "account:read", "pages:write" ]
