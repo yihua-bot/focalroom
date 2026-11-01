@@ -271,7 +271,6 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
    </form>
    {selectionEmpty && <p className="chat-footnote">{zh.chatSelectPhotos}</p>}
    {effectiveScope && selectedIds.length > 500 && <p className="chat-footnote warning">选中 {selectedIds.length} 张超过单次上限 500 张——请先筛选或分批处理</p>}
-   {!selectionEmpty && !(effectiveScope && selectedIds.length > 500) && project.photos.length > 0 && vision && <p className="chat-footnote">{zh.chatSendConsent.replace('{count}', String(imageLimit)).replace('{provider}', config?.hostedAccount?.provider ?? config?.observation?.modelId ?? config?.modelId ?? 'FocalRoom AI')}</p>}
    {allowQueuedRecovery && <p className="chat-footnote">{zh.chatQueuePrivacy}</p>}
   </footer>
   {settingsOpen && <Modal title={zh.settings} onClose={onSettingsClose}>

@@ -185,7 +185,7 @@ pub(crate) async fn request_bound(
         } else {
             selected_photo_ids.clone()
         };
-        if (!conversation && allowed.is_empty()) || allowed.len() > 500 {
+        if !conversation && (allowed.is_empty() || allowed.len() > 500) {
             return Err(AppError::new(
                 "VALIDATION_ERROR",
                 "任务需限定 1–500 张照片；较大图库请先选择照片",
