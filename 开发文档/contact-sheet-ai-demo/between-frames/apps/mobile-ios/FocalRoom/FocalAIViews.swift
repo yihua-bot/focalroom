@@ -1,22 +1,5 @@
 import SwiftUI
-import os
 import FocalRoomCore
-
-private let frProbe = Logger(subsystem: "studio.focalroom.probe", category: "ai")
-
-private final class FRCounters: @unchecked Sendable {
-    static let shared = FRCounters()
-    private var counts: [String: Int] = [:]
-    private let lock = NSLock()
-    func bump(_ site: String) {
-        lock.lock(); defer { lock.unlock() }
-        counts[site, default: 0] += 1
-        let n = counts[site]!
-        if n == 1 || n % 200 == 0 { frProbe.error("site=\(site) n=\(n)") }
-    }
-}
-
-private func frTick(_ site: String) { FRCounters.shared.bump(site) }
 
 struct FocalAIView: View {
     let model: AppModel
@@ -28,6 +11,7 @@ struct FocalAIView: View {
     @State private var preparingVision = false
     @State private var activeSheet: ActiveSheet?
     @State private var followingConversation = true
+    @State private var followSettledAt = Date.distantPast
     @State private var scrollRequest = 0
     @State private var streamStartedHere = false
     @State private var streamProject: ProjectReference?
@@ -56,7 +40,6 @@ struct FocalAIView: View {
     }
 
     var body: some View {
-        let _ = frTick("body")
         VStack(spacing: 0) {
             ProjectContext(model: model)
             statusBar
@@ -69,13 +52,11 @@ struct FocalAIView: View {
             await model.loadAIAccount()
         }
         .task(id: model.currentProject) {
-            frTick("taskProject")
             await model.loadChat()
             await model.aiResolvePending()
             await loadTasks()
         }
         .onChange(of: model.currentProject) { old, new in
-            frTick("onChangeProject")
             projectDrafts[old] = draft
             draft = projectDrafts[new] ?? ""
             resetContext()
@@ -192,8 +173,8 @@ struct FocalAIView: View {
                     draftSection
                     if hasPending { pendingNotice }
                     Color.clear.frame(height: 1).id("ai.bottom")
-                        .onAppear { frTick("bottomIn"); followingConversation = true }
-                        .onDisappear { frTick("bottomOut"); followingConversation = false }
+                        .onAppear { follow(bottomVisible: true) }
+                        .onDisappear { follow(bottomVisible: false) }
                 }
                 .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 18)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -202,6 +183,8 @@ struct FocalAIView: View {
             .overlay(alignment: .bottomTrailing) {
                 if !followingConversation && !model.chatMessages.isEmpty {
                     Button {
+                        followSettledAt = Date()
+                        followingConversation = true
                         withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo("ai.bottom", anchor: .bottom) }
                     } label: {
                         Image(systemName: "arrow.down")
@@ -216,15 +199,12 @@ struct FocalAIView: View {
                 }
             }
             .onChange(of: model.chatMessages.last?.id) { _, _ in
-                frTick("onChangeChatLast")
                 if followingConversation { withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo("ai.bottom", anchor: .bottom) } }
             }
             .onChange(of: visibleStreamingText) { _, _ in
-                frTick("onChangeStreamText")
                 if followingConversation { scroll.scrollTo("ai.bottom", anchor: .bottom) }
             }
             .onChange(of: scrollRequest) { _, _ in
-                frTick("onChangeScrollRequest")
                 withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo("ai.bottom", anchor: .bottom) }
             }
         }
@@ -606,6 +586,14 @@ struct FocalAIView: View {
         scrollRequest += 1
     }
 
+    // 键盘弹起时底边 1pt 锚点会被 LazyVStack 反复挂接与卸载；逐次写状态会自激成
+    // 每秒数百轮整树重算（实测主线程 100%、内存涨到 6.8GB）。按时间窗吞掉抖动，跟随语义不变。
+    private func follow(bottomVisible: Bool) {
+        guard Date().timeIntervalSince(followSettledAt) > 0.25 else { return }
+        followSettledAt = Date()
+        followingConversation = bottomVisible
+    }
+
     private func beginFollowingRequest() {
         streamProject = model.currentProject
         streamStartedHere = true
@@ -729,16 +717,13 @@ private struct AIObservationThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .accessibilityHidden(true)
         .task(id: identity) {
-            frTick("thumbStart")
             image = nil; failed = false
             do {
                 let loaded = try await load()
-                guard !Task.isCancelled else { frTick("thumbCancelled"); return }
+                guard !Task.isCancelled else { return }
                 image = loaded
-                frTick("thumbLoaded")
             } catch {
                 if !Task.isCancelled { failed = true }
-                frTick("thumbFailed")
             }
         }
     }

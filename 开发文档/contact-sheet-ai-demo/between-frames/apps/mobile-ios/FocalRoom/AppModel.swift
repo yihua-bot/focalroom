@@ -701,8 +701,9 @@ final class AppModel {
                     if !stream.invalidRequest { self.streamingText = (self.streamingText ?? "") + text }
                 case .done(let reply):
                     if !stream.invalidRequest { stream.reply = reply }
-                case .failure:
-                    break
+                case .failure(_, let message):
+                    // 服务端已把这次请求结算为结果不明；不吭声就只是「点了没反应」。
+                    if self.currentProject == project { self.notice = message }
                 }
             }
             guard generation == epoch else { return false }
