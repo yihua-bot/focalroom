@@ -56,6 +56,7 @@ async function migrations() {
       "0033_audited_private_erasure.sql",
       "0034_photography_knowledge.sql",
       "0035_project_archive.sql",
+      "0036_summary_memory.sql",
     ].map(
       async (name) => {
         const sql = await readFile(
