@@ -42,3 +42,5 @@ apps/mobile-ios/build/
 .archives/
 *.xcarchive/
 *.pcm
+apps-build/
+.wrangler-home/

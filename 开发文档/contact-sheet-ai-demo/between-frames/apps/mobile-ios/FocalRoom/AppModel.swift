@@ -4,9 +4,6 @@ import Observation
 import ImageIO
 import UIKit
 import FocalRoomCore
-import os
-
-fileprivate let frLog = Logger(subsystem: "studio.focalroom.probe", category: "aisend")
 
 // 本机与云端编号属于不同身份域，不能把本机编号传入云端项目接口。
 enum ProjectReference: Equatable, Hashable {
@@ -699,19 +696,15 @@ final class AppModel {
                 guard let self, self.epoch == generation else { return }
                 switch event {
                 case .start(let id):
-                    frLog.info("PROBE start match=\(id == requestID) invalid=\(stream.invalidRequest)")
                     if id != requestID { stream.invalidRequest = true; self.streamingText = nil }
                 case .delta(let text):
                     if !stream.invalidRequest { self.streamingText = (self.streamingText ?? "") + text }
-                    frLog.info("PROBE delta len=\(text.count) total=\(self.streamingText?.count ?? -1) invalid=\(stream.invalidRequest)")
                 case .done(let reply):
                     if !stream.invalidRequest { stream.reply = reply }
-                    frLog.info("PROBE done hasReply=\(stream.reply != nil)")
                 case .failure:
-                    frLog.info("PROBE failure-event")
+                    break
                 }
             }
-            frLog.info("PROBE stream-returned streamed=\(streamed) reply=\(stream.reply != nil) streamingText=\(self.streamingText?.count ?? -1)")
             guard generation == epoch else { return false }
             if let reply = stream.reply {
                 try await chat.complete(userMessage, text: reply.text.isEmpty ? "（模型未返回文本）" : reply.text)

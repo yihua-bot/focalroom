@@ -657,9 +657,14 @@ final class FocalRoomUITests: XCTestCase {
         let later = app.buttons.matching(NSPredicate(format: "label IN %@", ["以后", "Not Now"])).firstMatch
         guard later.waitForExistence(timeout: timeout) else { return }
         // 系统 Sheet 暴露在宿主 AX 树中；用其实际屏幕框命中，避免跨服务坐标偏移。
-        let frame = later.frame
-        app.coordinate(withNormalizedOffset: .zero)
-            .withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
+        // 框会随动画/重新布局失效，且提示可能连续出现多次，命中失败要按最新框重试。
+        for _ in 0..<6 {
+            let frame = later.frame
+            guard frame.width > 0, frame.height > 0 else { break }
+            app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
+            if later.waitForNonExistence(timeout: 3) { return }
+        }
         XCTAssertTrue(later.waitForNonExistence(timeout: 5), "系统密码提示应先关闭")
     }
 

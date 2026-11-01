@@ -1,8 +1,22 @@
 import SwiftUI
-import FocalRoomCore
 import os
+import FocalRoomCore
 
-fileprivate let frLog = Logger(subsystem: "studio.focalroom.probe", category: "aiview")
+private let frProbe = Logger(subsystem: "studio.focalroom.probe", category: "ai")
+
+private final class FRCounters: @unchecked Sendable {
+    static let shared = FRCounters()
+    private var counts: [String: Int] = [:]
+    private let lock = NSLock()
+    func bump(_ site: String) {
+        lock.lock(); defer { lock.unlock() }
+        counts[site, default: 0] += 1
+        let n = counts[site]!
+        if n == 1 || n % 200 == 0 { frProbe.error("site=\(site) n=\(n)") }
+    }
+}
+
+private func frTick(_ site: String) { FRCounters.shared.bump(site) }
 
 struct FocalAIView: View {
     let model: AppModel
@@ -42,6 +56,7 @@ struct FocalAIView: View {
     }
 
     var body: some View {
+        let _ = frTick("body")
         VStack(spacing: 0) {
             ProjectContext(model: model)
             statusBar
@@ -54,11 +69,13 @@ struct FocalAIView: View {
             await model.loadAIAccount()
         }
         .task(id: model.currentProject) {
+            frTick("taskProject")
             await model.loadChat()
             await model.aiResolvePending()
             await loadTasks()
         }
         .onChange(of: model.currentProject) { old, new in
+            frTick("onChangeProject")
             projectDrafts[old] = draft
             draft = projectDrafts[new] ?? ""
             resetContext()
@@ -67,9 +84,6 @@ struct FocalAIView: View {
             projectDrafts.removeAll()
             draft = ""
             resetContext()
-        }
-        .onChange(of: model.streamingText) { _, new in
-            frLog.info("PROBE model-streamingText count=\(new?.count ?? -1) started=\(streamStartedHere) match=\(streamProject == model.currentProject) sending=\(model.aiSending)")
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
@@ -81,12 +95,12 @@ struct FocalAIView: View {
                 VisionConsentView(draft: prepared) {
                     // 授权只消费一次；发送任务先消费授权，再主动收起确认页。
                     beginFollowingRequest()
+                    let origin = model.currentProject
                     Task {
                         let sent = await model.aiSend(text: prepared.text, vision: prepared,
                                                       onVisionConsumed: { activeSheet = nil })
                         if sent {
-                            draft = ""
-                            selectedPhotos = []
+                            clearSentDraft(for: origin)
                         } else {
                             // 被拒时收起确认页：浮层还开着会把提示 alert 挡在后面，看起来像点了没反应。
                             activeSheet = nil
@@ -167,8 +181,10 @@ struct FocalAIView: View {
                         messageRow(message).id(message.id)
                     }
                     if let streaming = visibleStreamingText {
+                        // 内容长度进入标识：增量到达时让 LazyVStack 用新身份重建该行，
+                        // 否则与「正在思考…」分支共用同一 id 会让行停在思考态不刷新。
                         assistantRow(text: streaming.isEmpty ? "正在思考…" : streaming, streaming: true)
-                            .id("ai.streaming")
+                            .id(streaming.isEmpty ? "ai.streaming" : "ai.streaming-\(streaming.count)")
                     } else if showingThinking {
                         assistantRow(text: "正在思考…", streaming: true)
                             .id("ai.streaming")
@@ -176,8 +192,8 @@ struct FocalAIView: View {
                     draftSection
                     if hasPending { pendingNotice }
                     Color.clear.frame(height: 1).id("ai.bottom")
-                        .onAppear { followingConversation = true }
-                        .onDisappear { followingConversation = false }
+                        .onAppear { frTick("bottomIn"); followingConversation = true }
+                        .onDisappear { frTick("bottomOut"); followingConversation = false }
                 }
                 .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 18)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -200,13 +216,15 @@ struct FocalAIView: View {
                 }
             }
             .onChange(of: model.chatMessages.last?.id) { _, _ in
+                frTick("onChangeChatLast")
                 if followingConversation { withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo("ai.bottom", anchor: .bottom) } }
             }
-            .onChange(of: visibleStreamingText) { _, new in
-                frLog.info("PROBE visible-streamingText count=\(new?.count ?? -1) thinking=\(showingThinking)")
+            .onChange(of: visibleStreamingText) { _, _ in
+                frTick("onChangeStreamText")
                 if followingConversation { scroll.scrollTo("ai.bottom", anchor: .bottom) }
             }
             .onChange(of: scrollRequest) { _, _ in
+                frTick("onChangeScrollRequest")
                 withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo("ai.bottom", anchor: .bottom) }
             }
         }
@@ -539,8 +557,9 @@ struct FocalAIView: View {
         let text = draft
         if selectedPhotos.isEmpty {
             beginFollowingRequest()
+            let origin = model.currentProject
             // 只有请求真正入库后才清空草稿；被拒时保留正文，避免用户重新输入。
-            Task { if await model.aiSend(text: text) { draft = "" } }
+            Task { if await model.aiSend(text: text) { clearSentDraft(for: origin) } }
         } else {
             preparingVision = true
             Task {
@@ -570,6 +589,14 @@ struct FocalAIView: View {
     private func clearPhotos() {
         selectedPhotos = []; activeSheet = nil
         model.cancelVision()
+    }
+
+    // 回执落地时用户可能已切到别的项目并在输入框里打了新字：只清发起项目的草稿，不动当前输入区。
+    private func clearSentDraft(for origin: ProjectReference?) {
+        projectDrafts[origin] = ""
+        guard model.currentProject == origin else { return }
+        draft = ""
+        selectedPhotos = []
     }
 
     private func resetContext() {
@@ -702,13 +729,16 @@ private struct AIObservationThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .accessibilityHidden(true)
         .task(id: identity) {
+            frTick("thumbStart")
             image = nil; failed = false
             do {
                 let loaded = try await load()
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else { frTick("thumbCancelled"); return }
                 image = loaded
+                frTick("thumbLoaded")
             } catch {
                 if !Task.isCancelled { failed = true }
+                frTick("thumbFailed")
             }
         }
     }
