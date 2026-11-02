@@ -42,6 +42,14 @@ final class LocalCanvasModel {
         } catch { notice = "画布读取失败，请重试。" }
     }
 
+    func recordAIAddition(_ nodeIDs: [String]) async {
+        undoStack.append(.removeNodes(ids: nodeIDs))
+        redoStack.removeAll()
+        canUndo = true
+        canRedo = false
+        await load()
+    }
+
     private func perform(_ operation: LocalCanvasOperation) async {
         guard !busy else { return }
         busy = true
@@ -209,9 +217,7 @@ struct LocalCanvasView: View {
         } message: {
             Text("节点及其批注一并删除，可撤销。")
         }
-        .alert("提示", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
-            Button("知道了", role: .cancel) { model.notice = nil }
-        } message: { Text(model.notice ?? "") }
+        .noticeAlert(model.notice, onDismiss: { model.notice = nil })
     }
 
     private var panGesture: some Gesture {

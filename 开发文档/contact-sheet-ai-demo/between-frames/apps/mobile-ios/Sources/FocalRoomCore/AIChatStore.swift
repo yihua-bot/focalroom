@@ -10,17 +10,19 @@ public struct AIChatMessage: Codable, Sendable, Identifiable, Equatable {
     public let createdAt: Date
     public let requestID: String?
     public let localProjectID: String?
+    public let cloudProjectID: String?
     public var state: State
     public var failure: String?
 
     public init(id: String, role: String, text: String, createdAt: Date = Date(),
-                requestID: String? = nil, state: State = .sent, failure: String? = nil, localProjectID: String? = nil) {
+                requestID: String? = nil, state: State = .sent, failure: String? = nil, localProjectID: String? = nil, cloudProjectID: String? = nil) {
         self.id = id
         self.role = role
         self.text = text
         self.createdAt = createdAt
         self.requestID = requestID
         self.localProjectID = localProjectID
+        self.cloudProjectID = cloudProjectID
         self.state = state
         self.failure = failure
     }
@@ -50,8 +52,8 @@ public actor AIChatStore {
     }
 
     // 旧消息没有本机项目归属，继续留在原账户对话中，不倒填到任意本机项目。
-    public func messages(localProjectID: String?) throws -> [AIChatMessage] {
-        try read().messages.filter { $0.localProjectID == localProjectID }
+    public func messages(localProjectID: String?, cloudProjectID: String? = nil) throws -> [AIChatMessage] {
+        try read().messages.filter { $0.localProjectID == localProjectID && $0.cloudProjectID == cloudProjectID }
     }
 
     public func append(_ message: AIChatMessage) throws {
@@ -78,12 +80,13 @@ public actor AIChatStore {
         guard original.role == "user", let requestID = original.requestID, !text.isEmpty,
               let index = document.messages.firstIndex(where: { $0.id == original.id }),
               document.messages[index].requestID == requestID,
-              document.messages[index].localProjectID == original.localProjectID else { throw APIError.unconfirmedCommand }
+              document.messages[index].localProjectID == original.localProjectID,
+              document.messages[index].cloudProjectID == original.cloudProjectID else { throw APIError.unconfirmedCommand }
         document.messages[index].state = .sent
         document.messages[index].failure = nil
         if !document.messages.contains(where: { $0.role == "assistant" && $0.requestID == requestID }) {
             document.messages.append(.init(id: UUID().uuidString.lowercased(), role: "assistant", text: text,
-                                            requestID: requestID, localProjectID: original.localProjectID))
+                                            requestID: requestID, localProjectID: original.localProjectID, cloudProjectID: original.cloudProjectID))
         }
         if document.messages.count > Self.messageLimit {
             document.messages.removeFirst(document.messages.count - Self.messageLimit)
@@ -110,7 +113,9 @@ public actor AIChatStore {
               document.messages.count <= Self.messageLimit,
               Set(document.messages.map(\.id)).count == document.messages.count,
               document.messages.allSatisfy({ ["user", "assistant"].contains($0.role) && !$0.text.isEmpty &&
-                  ($0.localProjectID == nil || UUID(uuidString: $0.localProjectID!) != nil) })
+                  ($0.localProjectID == nil || UUID(uuidString: $0.localProjectID!) != nil) &&
+                  ($0.cloudProjectID == nil || (!$0.cloudProjectID!.isEmpty && $0.cloudProjectID!.count <= 300)) &&
+                  ($0.localProjectID == nil || $0.cloudProjectID == nil) })
         else { throw APIError.invalidResponse }
         return document
     }

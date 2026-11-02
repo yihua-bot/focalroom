@@ -3,7 +3,7 @@ use super::semantic_index::{self, Index, Profile};
 use serde::Serialize;
 
 pub(crate) const MAX_DOCUMENTS: usize = 500;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 const STRIDE: usize = 1024;
 
 #[derive(Debug, Clone, Serialize)]
@@ -111,7 +111,7 @@ pub(crate) async fn rank_cached(
     })
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "ios", test))]
 fn cosine(left: &[f32], right: &[f32]) -> Option<f64> {
     if left.is_empty() || left.len() != right.len() {
         return None;
@@ -133,7 +133,7 @@ fn cosine(left: &[f32], right: &[f32]) -> Option<f64> {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 fn native_rank(
     query: &str,
     documents: &[String],
@@ -284,7 +284,7 @@ fn native_rank(
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 fn native_rank(
     _query: &str,
     documents: &[String],
@@ -339,7 +339,7 @@ mod tests {
             "input_or_budget_limit"
         );
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     #[tokio::test]
     #[ignore = "需本机已有 Apple 句向量；精确验证真实缓存复用，不下载资产"]
     async fn native_reuses_vectors_only_for_current_language_revision_and_dimensions() {
@@ -401,7 +401,7 @@ mod tests {
             "real local index: cold generated=1; warm hits=1/generated=0; language/revision/dimensions mismatches rebuilt"
         );
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     #[tokio::test]
     #[ignore = "需本机已有 Apple 中英文句向量；显式执行，不下载资产"]
     async fn native_chinese_and_english_rank_real_sentence_vectors() {

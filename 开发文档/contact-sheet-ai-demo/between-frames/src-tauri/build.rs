@@ -2,9 +2,13 @@ fn main() {
     // 迁移变化也必须触发重新构建，使内嵌 migration 与源码一致。
     println!("cargo:rerun-if-changed=migrations");
     println!("cargo:rerun-if-changed=native/sentence_embeddings.m");
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+    if matches!(
+        std::env::var("CARGO_CFG_TARGET_OS").as_deref(),
+        Ok("macos" | "ios")
+    ) {
         build_sentence_embeddings();
     }
+    #[cfg(feature = "desktop")]
     tauri_build::build()
 }
 
@@ -23,14 +27,40 @@ fn build_sentence_embeddings() {
     } else {
         "-mmacosx-version-min=10.13"
     };
-    let compile = Command::new("xcrun")
-        .args([
+    let mut compiler = Command::new("xcrun");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios") {
+        let target = std::env::var("TARGET").expect("TARGET");
+        let simulator = target.ends_with("-sim") || target.starts_with("x86_64");
+        let sdk = if simulator {
+            "iphonesimulator"
+        } else {
+            "iphoneos"
+        };
+        let sdk_path = Command::new("xcrun")
+            .args(["--sdk", sdk, "--show-sdk-path"])
+            .output()
+            .expect("iOS SDK");
+        assert!(sdk_path.status.success(), "无法读取 iOS SDK");
+        let triple = format!(
+            "{arch}-apple-ios17.0{}",
+            if simulator { "-simulator" } else { "" }
+        );
+        compiler.args([
+            "--sdk",
+            sdk,
             "clang",
+            "-target",
+            &triple,
+            "-isysroot",
+            String::from_utf8(sdk_path.stdout).expect("SDK 路径").trim(),
+        ]);
+    } else {
+        compiler.args(["clang", "-arch", arch, minimum]);
+    }
+    let compile = compiler
+        .args([
             "-fobjc-arc",
             "-O2",
-            "-arch",
-            arch,
-            minimum,
             "-c",
             "native/sentence_embeddings.m",
             "-o",

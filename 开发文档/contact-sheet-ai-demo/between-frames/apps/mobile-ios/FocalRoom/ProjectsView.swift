@@ -73,7 +73,13 @@ struct ProjectsView: View {
                     ForEach(archived) { project in
                         HStack(spacing: 12) {
                             projectCard(project, note: "已归档")
-                            Button("恢复") { Task { await model.archiveCloudProject(project.id, archive: false) } }
+                            Button("恢复") {
+                                Task {
+                                    guard let text = await model.archiveCloudProject(project.id, archive: false) else { return }
+                                    await model.reloadProjects()
+                                    model.notice = text
+                                }
+                            }
                                 .disabled(model.busy)
                                 .accessibilityIdentifier("project.unarchive.\(project.id)")
                         }
@@ -174,19 +180,29 @@ struct ProjectLibraryView: View {
         switch danger {
         case .archive:
             Button("归档（列表默认隐藏，可随时恢复）") {
-                Task { if await model.archiveCloudProject(projectID, archive: true) { dismiss() } }
+                Task { await applyProjectChange(await model.archiveCloudProject(projectID, archive: true)) }
             }.accessibilityIdentifier("project.archive.confirm")
         case .unarchive:
             Button("恢复为正常项目") {
-                Task { if await model.archiveCloudProject(projectID, archive: false) { dismiss() } }
+                Task { await applyProjectChange(await model.archiveCloudProject(projectID, archive: false)) }
             }.accessibilityIdentifier("project.unarchive.confirm")
         case .delete:
             Button("永久删除云端项目", role: .destructive) {
-                Task { if await model.deleteCloudProject(projectID) { dismiss() } }
+                Task { await applyProjectChange(await model.deleteCloudProject(projectID)) }
             }.accessibilityIdentifier("project.delete.confirm")
         case nil:
             EmptyView()
         }
+    }
+
+    /// 详情内的项目级变更：先退出本页，再刷新列表并弹提示。顺序不能反——列表一重建，
+    /// 这一格对应的导航条目就没了，之后的 dismiss 会被吞掉，用户停在「暂时无法打开项目」的死页。
+    @MainActor
+    private func applyProjectChange(_ noticeText: String?) async {
+        guard let noticeText else { return }
+        dismiss()
+        await model.reloadProjects()
+        model.notice = noticeText
     }
 
     private var photos: [Photo] {

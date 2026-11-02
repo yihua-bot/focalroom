@@ -15,16 +15,19 @@ struct FocalAIView: View {
     @State private var scrollRequest = 0
     @State private var streamStartedHere = false
     @State private var streamProject: ProjectReference?
-    @State private var draftOwner: ProjectReference?
     @State private var projectDrafts: [ProjectReference?: String] = [:]
+    @State private var legacyMessages: [AIChatMessage] = []
     @FocusState private var inputFocused: Bool
 
     private enum ActiveSheet: Identifiable {
-        case photos, tasks, vision(PreparedVision)
+        case photos, tasks, legacy, vision(PreparedVision), draft(NativeAIDraft), board(NativeAIBoard)
         var id: String {
             switch self {
             case .photos: "photos"
             case .tasks: "tasks"
+            case .legacy: "legacy"
+            case .draft(let draft): "draft-" + draft.id
+            case .board(let board): "board-" + board.id
             case .vision(let prepared): "vision-\(prepared.id)"
             }
         }
@@ -42,7 +45,17 @@ struct FocalAIView: View {
     var body: some View {
         VStack(spacing: 0) {
             ProjectContext(model: model)
+            Picker("AI 功能", selection: Binding(get: { model.aiMode }, set: { model.aiMode = $0 })) {
+                ForEach(AppModel.AIMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
+            }.pickerStyle(.segmented).padding(.horizontal, 18).padding(.vertical, 8)
+                .disabled(model.aiSending || preparingVision)
+                .accessibilityIdentifier("ai.mode")
             statusBar
+            if let receipt = model.nativeReviewReceipt {
+                Text(receipt).font(.footnote).foregroundStyle(.green)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.vertical, 8)
+                    .accessibilityIdentifier("ai.review.receipt")
+            }
             conversation
             inputBar
         }
@@ -55,6 +68,13 @@ struct FocalAIView: View {
             await model.loadChat()
             await model.aiResolvePending()
             await loadTasks()
+            while !Task.isCancelled {
+                await model.refreshNativeTasks()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        .onChange(of: model.aiMode) { _, _ in
+            clearPhotos()
         }
         .onChange(of: model.currentProject) { old, new in
             projectDrafts[old] = draft
@@ -72,6 +92,12 @@ struct FocalAIView: View {
                 photoPicker
             case .tasks:
                 tasksSheet
+            case .legacy:
+                legacySheet
+            case .draft(let draft):
+                NativeDraftReviewView(model: model, draft: draft)
+            case .board(let board):
+                NativeBoardReviewView(model: model, board: board)
             case .vision(let prepared):
                 VisionConsentView(draft: prepared) {
                     // 授权只消费一次；发送任务先消费授权，再主动收起确认页。
@@ -109,7 +135,7 @@ struct FocalAIView: View {
                     } else if model.offline {
                         Label("当前离线", systemImage: "wifi.slash")
                     } else {
-                        Label("\(account.available.formatted()) \(account.unit) 可用", systemImage: "sparkle")
+                        Label("可用额度 \(account.available.formatted())", systemImage: "sparkle")
                     }
                 }
                 .accessibilityIdentifier("ai.balance")
@@ -155,11 +181,15 @@ struct FocalAIView: View {
         ScrollViewReader { scroll in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
-                    if model.chatMessages.isEmpty && !showingThinking && visibleStreamingText == nil {
+                    if (model.aiMode == .chat ? model.chatMessages.isEmpty : model.nativeProjection?.tasks.isEmpty != false) && !showingThinking && visibleStreamingText == nil {
                         welcome
                     }
-                    ForEach(model.chatMessages) { message in
-                        messageRow(message).id(message.id)
+                    if model.aiMode == .chat {
+                        ForEach(model.chatMessages) { message in
+                            messageRow(message).id(message.id)
+                        }
+                    } else {
+                        nativeTaskRows
                     }
                     if let streaming = visibleStreamingText {
                         // 内容长度进入标识：增量到达时让 LazyVStack 用新身份重建该行，
@@ -171,7 +201,7 @@ struct FocalAIView: View {
                             .id("ai.streaming")
                     }
                     draftSection
-                    if hasPending { pendingNotice }
+                    if model.aiMode == .chat && hasPending { pendingNotice }
                     Color.clear.frame(height: 1).id("ai.bottom")
                         .onAppear { follow(bottomVisible: true) }
                         .onDisappear { follow(bottomVisible: false) }
@@ -181,7 +211,7 @@ struct FocalAIView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .overlay(alignment: .bottomTrailing) {
-                if !followingConversation && !model.chatMessages.isEmpty {
+                if !followingConversation && (model.aiMode == .chat ? !model.chatMessages.isEmpty : model.nativeProjection?.tasks.isEmpty == false) {
                     Button {
                         followSettledAt = Date()
                         followingConversation = true
@@ -203,6 +233,9 @@ struct FocalAIView: View {
             }
             .onChange(of: visibleStreamingText) { _, _ in
                 if followingConversation { scroll.scrollTo("ai.bottom", anchor: .bottom) }
+            }
+            .onChange(of: model.nativeProjection?.tasks.first?.messages.last?.id) { _, _ in
+                if followingConversation { withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo("ai.bottom", anchor: .bottom) } }
             }
             .onChange(of: scrollRequest) { _, _ in
                 withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo("ai.bottom", anchor: .bottom) }
@@ -308,69 +341,102 @@ struct FocalAIView: View {
                         Text("正在思考…").font(.subheadline).foregroundStyle(.secondary)
                     }
                 } else {
-                    Text(text).font(.body).lineSpacing(4).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    AIResponseText(text: text)
                     if streaming { Text("正在输入…").font(.caption2).foregroundStyle(.secondary) }
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    // 草案卡：模型建议先展示为可读清单，用户显式确认后才创建权威提案（可部分采纳）。
-    @ViewBuilder
-    private var draftSection: some View {
-        if let draft = model.lastDraft, let owner = draftOwner, owner == model.currentProject {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("选片草案", systemImage: "sparkles")
-                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("ai.draft.card")
-                Text(draft.title).font(.headline)
-                ForEach(draft.operations) { op in
-                    Text("\(opTitle(op.op)) · \(op.photoFilename)\(op.toIndex.map { " · 第 \($0 + 1) 位" } ?? "")")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-                Text("提交后可在项目中逐项审阅。")
-                    .font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 18) {
-                    Button { Task { await model.submitDraftAsProposal() } } label: {
-                        Text("提交为提案").font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.black).padding(.horizontal, 16).frame(minHeight: 44)
-                            .background(.white, in: Capsule())
-                    }
-                        .buttonStyle(.plain)
-                        .disabled(model.busy || model.offline)
-                        .opacity(model.busy || model.offline ? 0.4 : 1)
-                        .accessibilityIdentifier("ai.draft.submit")
-                    Button("放弃草案") { model.lastDraft = nil }
-                        .font(.subheadline).foregroundStyle(.secondary).frame(minHeight: 44)
-                        .disabled(model.busy)
-                        .accessibilityIdentifier("ai.draft.discard")
-                }
+    @ViewBuilder private var draftSection: some View {
+        if model.aiMode == .task {
+            if let error = model.nativeTaskError {
+                Text(error).font(.footnote).foregroundStyle(.secondary)
             }
-            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
-        } else if model.selectedProjectID != nil, model.snapshot?.snapshot.photos.isEmpty == false, !model.offline {
-            Button {
-                draftOwner = model.currentProject
-                model.lastDraft = nil
-                beginFollowingRequest()
-                Task { await model.requestDraft() }
-            } label: {
-                Label("生成选片草案", systemImage: "sparkles")
-                    .font(.subheadline).foregroundStyle(.secondary).frame(minHeight: 44)
+            ForEach(model.nativeProjection?.drafts ?? []) { draft in
+                let applied = model.selectedLocalProject?.appliedAIDraftIDs?.contains(where: { $0.hasPrefix(draft.id + ":") }) == true
+                Button { activeSheet = .draft(draft) } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("选片草案 · " + (applied ? "已采纳建议" : draft.stale ? "来源已更新" : "等待审阅"), systemImage: "sparkles")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text(draft.title).font(.headline)
+                        Text(draft.summary).font(.subheadline).foregroundStyle(.secondary)
+                        Text("查看 \(draft.items.count) 项建议").font(.subheadline.weight(.semibold))
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                        .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
+                }.buttonStyle(.plain).accessibilityIdentifier("ai.shared.draft.\(draft.id)")
             }
-                .buttonStyle(.plain)
-                .disabled(model.aiSending || !model.canSendAI)
-                .accessibilityIdentifier("ai.draft.request")
+            ForEach((model.nativeProjection?.tasks ?? []).flatMap(\.boardDrafts)) { board in
+                Button { activeSheet = .board(board) } label: {
+                    Label("查看画布草案 · " + board.title, systemImage: "rectangle.3.group")
+                        .font(.subheadline).frame(minHeight: 44)
+                }.buttonStyle(.plain)
+            }
         }
     }
 
-    private func opTitle(_ op: String) -> String {
-        switch op {
-        case "add": return "加入序列"
-        case "remove": return "移出序列"
-        case "move": return "调整顺序"
-        default: return op
+    @ViewBuilder private var nativeTaskRows: some View {
+        ForEach(Array((model.nativeProjection?.tasks ?? []).reversed())) { task in
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(task.messages) { message in
+                    if message.role == "user" {
+                        Text(message.content).font(.body).padding(12)
+                            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                    } else { assistantRow(text: message.content, streaming: false) }
+                }
+                HStack {
+                    if task.isActive { ProgressView().controlSize(.mini) }
+                    Text(taskStatus(task.state)).font(.caption.weight(.semibold))
+                }.foregroundStyle(.secondary)
+                if !task.reason.isEmpty && !task.isActive {
+                    Text(task.reason.contains("AI_RESULT_UNKNOWN") ? "结果尚未确认，请先核对，避免重复提交。" : task.reason)
+                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                if let question = task.question, task.state == "needs_input" {
+                    Text(question).font(.subheadline)
+                    Text("在下方输入你的答复，继续这次任务。").font(.caption).foregroundStyle(.secondary)
+                }
+                if !task.inspectedPhotos.isEmpty {
+                    DisclosureGroup("已实际观察 \(task.inspectedPhotos.count) 张照片") {
+                        ForEach(task.inspectedPhotos) { observation in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(model.nativePhotoName(observation.photo_id)).font(.subheadline.weight(.semibold))
+                                Text(observation.visible_facts.joined(separator: "；")).font(.footnote)
+                                Text("编辑解读：" + observation.interpretation).font(.footnote).foregroundStyle(.secondary)
+                                Text("不确定性：" + observation.uncertainty).font(.caption).foregroundStyle(.secondary)
+                            }.padding(.vertical, 8)
+                        }
+                    }.font(.subheadline)
+                }
+                ForEach(task.preferenceProposals) { preference in
+                    NativePreferenceView(model: model, task: task, preference: preference)
+                }
+                HStack(spacing: 18) {
+                    if task.isActive {
+                        Button("暂停") { Task { await model.controlNativeTask(task, action: "PauseTask") } }
+                        Button("取消任务") { Task { await model.controlNativeTask(task, action: "CancelTask") } }
+                    } else if task.state == "paused" {
+                        Button("核对结果") { Task { await model.controlNativeTask(task, action: "query") } }
+                        Button("继续") { Task { await model.controlNativeTask(task, action: "ResumeTask") } }
+                        Button("取消任务") { Task { await model.controlNativeTask(task, action: "CancelTask") } }
+                    }
+                }.font(.subheadline).buttonStyle(.borderless).disabled(model.aiSending)
+            }.accessibilityIdentifier("ai.shared.task.\(task.id)")
+        }
+    }
+
+    private func taskStatus(_ state: String) -> String {
+        switch state {
+        case "queued": "排队中"
+        case "planning", "running": "正在处理"
+        case "paused": "已暂停"
+        case "needs_input": "等待你的答复"
+        case "review_ready": "草案等待审阅"
+        case "completed": "已完成"
+        case "cancelled": "已取消"
+        case "failed": "任务已停止"
+        case "stale": "来源已更新"
+        default: "状态待核对"
         }
     }
 
@@ -394,7 +460,7 @@ struct FocalAIView: View {
             ForEach(jobs) { job in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(job.kind).font(.subheadline.weight(.semibold))
+                        Text(job.kind == "summarize_disagreement" ? "评论分歧分析" : "项目评论分析").font(.subheadline.weight(.semibold))
                         Spacer()
                         Text(jobStatus(job.status)).font(.caption)
                             .foregroundStyle(job.isActive ? Color.orange : Color.secondary)
@@ -419,6 +485,9 @@ struct FocalAIView: View {
         NavigationStack {
             List {
                 tasksSection
+                Section {
+                    Button("查看旧版对话存档") { activeSheet = .legacy }
+                }
                 if let account = model.aiAccountState {
                     Section("AI 服务") {
                         LabeledContent("服务", value: "FocalRoom AI")
@@ -436,8 +505,32 @@ struct FocalAIView: View {
         }
     }
 
+    private var legacySheet: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    Text("这些旧消息没有可核对的项目归属，仅保留阅读，不会自动转为任务或发送给模型。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    ForEach(legacyMessages) { message in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(message.role == "user" ? "你" : "Focal AI").font(.caption).foregroundStyle(.secondary)
+                            AIResponseText(text: message.text)
+                        }
+                    }
+                    if legacyMessages.isEmpty { Text("还没有旧版对话存档。").foregroundStyle(.secondary) }
+                }.padding(20)
+            }.navigationTitle("旧版对话存档").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { activeSheet = nil } } }
+                .task { legacyMessages = await model.legacyAIChat() }
+        }
+    }
+
     private var inputBar: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if model.aiMode == .task {
+                Stepper("参考张数：\(model.aiTargetCount)", value: Binding(get: { model.aiTargetCount }, set: { model.aiTargetCount = $0 }), in: 1...500)
+                    .font(.caption).foregroundStyle(.secondary).disabled(model.aiSending)
+            }
             if !selectedPhotos.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -468,7 +561,7 @@ struct FocalAIView: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .disabled(model.observationPhotos.isEmpty || !model.canSendAI || model.aiSending || preparingVision)
+                .disabled(model.aiMode == .chat || model.observationPhotos.isEmpty || !model.canSendAI || model.aiSending || preparingVision)
                 .opacity(model.observationPhotos.isEmpty || !model.canSendAI || model.aiSending || preparingVision ? 0.35 : 1)
                 .accessibilityLabel("选择照片")
                 .accessibilityIdentifier("ai.attach")
@@ -510,7 +603,9 @@ struct FocalAIView: View {
     }
 
     private var canSendNow: Bool {
-        model.canSendAI && !model.aiSending && !preparingVision && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        model.canSendAI && !model.aiSending && !preparingVision &&
+            !(model.aiMode == .task && model.nativeProjection?.tasks.contains(where: \.isActive) == true) &&
+            !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // 键盘「发送」不经按钮，会绕过 disabled；被挡住时必须说明原因，否则像点了没反应。
@@ -518,6 +613,7 @@ struct FocalAIView: View {
         if preparingVision { return "正在准备照片授权，请稍候。" }
         if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请输入消息内容。" }
         if model.aiSending { return "上一条请求仍在处理，稍后再发送。" }
+        if model.aiMode == .task && model.nativeProjection?.tasks.contains(where: \.isActive) == true { return "这个项目已有任务执行中，请先暂停或取消。" }
         if model.offline { return "当前离线，无法发送消息。" }
         guard let account = model.aiAccountState else {
             return model.aiAccountError != nil ? "AI 服务状态读取失败，请点按状态栏重试。" : "正在读取 AI 服务状态，请稍候。"
@@ -689,8 +785,51 @@ struct FocalAIView: View {
         case "RUNNING": return "运行中"
         case "CANCELLED": return "已取消"
         case "DONE", "COMPLETED": return "已完成"
-        default: return status
+        default: return "状态待核对"
         }
+    }
+}
+
+// 按行处理常见 Markdown 块，正文和流式回复共用同一呈现方式。
+private struct AIResponseText: View {
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(text.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+                responseLine(line)
+            }
+        }
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder private func responseLine(_ line: String) -> some View {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty {
+            Color.clear.frame(height: 10)
+        } else if let heading = headingText(trimmed) {
+            formatted(heading).font(.headline).padding(.top, 8).padding(.bottom, 4)
+        } else if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
+            HStack(alignment: .top, spacing: 8) {
+                Text("•")
+                formatted(String(trimmed.dropFirst(2)))
+            }.font(.body).padding(.vertical, 2)
+        } else {
+            formatted(line).font(.body).padding(.vertical, 2)
+        }
+    }
+
+    private func headingText(_ line: String) -> String? {
+        let marks = line.prefix(while: { $0 == "#" }).count
+        guard (1...6).contains(marks), line.dropFirst(marks).first == " " else { return nil }
+        return String(line.dropFirst(marks + 1))
+    }
+
+    private func formatted(_ value: String) -> some View {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return Text((try? AttributedString(markdown: value, options: options)) ?? AttributedString(value))
+            .lineSpacing(4)
     }
 }
 

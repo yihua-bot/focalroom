@@ -25,9 +25,7 @@ struct RootView: View {
                 .sheet(isPresented: $accountPresented) { AccountView(model: model) }
             }
         }
-        .alert("提示", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
-            Button("知道了", role: .cancel) { model.notice = nil }
-        } message: { Text(model.notice ?? "") }
+        .noticeAlert(model.notice, onDismiss: { model.notice = nil })
     }
 
     // 账户入口只保留在消息页；画布/项目/AI 页不再重复放置账户按钮。

@@ -27,7 +27,7 @@ struct VisionConsentView: View {
             List {
                 Section("本次照片观察") {
                     Text(draft.text)
-                    Text("仅将下面 \(draft.photos.count) 张派生预览发送给 FocalRoom 与 DeepSeek，用于本次问题。每张最长边 1400 像素，已去除 GPS 和来源备注；原片不发送。")
+                    Text("仅将下面 \(draft.photos.count) 张照片的 JPEG 预览发送给 FocalRoom 与 DeepSeek，用于本次问题。发送前压缩至最长边 512 像素，并去除位置信息和来源备注；原片保留本机。")
                     Text("按账户实际额度计量；本次同意仅使用一次。取消不会发送照片。结果未确认时只查询原请求，不自动重发图片。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }

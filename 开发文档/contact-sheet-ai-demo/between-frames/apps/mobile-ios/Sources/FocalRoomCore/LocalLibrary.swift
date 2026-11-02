@@ -88,6 +88,8 @@ public struct LocalProject: Codable, Sendable, Identifiable, Equatable {
     public fileprivate(set) var photos: [LocalPhoto]
     public fileprivate(set) var migration: LocalMigration?
     public fileprivate(set) var canvas: LocalCanvas?
+    public fileprivate(set) var sequencePhotoIDs: [String]?
+    public fileprivate(set) var appliedAIDraftIDs: [String]?
 }
 
 public enum LocalImportResult: Sendable {
@@ -298,6 +300,12 @@ public actor LocalLibrary {
         }
         guard document.projects[project].migration == nil else { throw LocalLibraryError.projectFrozen }
         document.projects[project].photos[photo].selection = selection
+        if var order = document.projects[project].sequencePhotoIDs {
+            if selection == .KEEP {
+                if !order.contains(photoID) { order.append(photoID) }
+            } else { order.removeAll { $0 == photoID } }
+            document.projects[project].sequencePhotoIDs = order
+        }
         document.projects[project].updatedAt = Date()
         try write(document)
     }
@@ -311,6 +319,49 @@ public actor LocalLibrary {
         return try Data(contentsOf: url)
     }
 
+    // 审阅后一次原子写回，版本不符时整份拒绝；应用编号使迟到回执/重复点按保持幂等。
+    public func applyAISelection(projectID: String, expectedUpdatedAt: Date, applicationID: String,
+                                 decisions: [String: Selection], orderedPhotoIDs: [String]) throws {
+        var document = try read()
+        guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else { throw LocalLibraryError.invalidProject }
+        var project = document.projects[index]
+        if project.appliedAIDraftIDs?.contains(applicationID) == true { return }
+        guard project.migration == nil else { throw LocalLibraryError.projectFrozen }
+        guard project.updatedAt == expectedUpdatedAt, !decisions.isEmpty, !applicationID.isEmpty, applicationID.count <= 500,
+              (project.appliedAIDraftIDs?.count ?? 0) < 1000,
+              Set(decisions.keys).isSubset(of: Set(project.photos.map(\.id))),
+              Set(orderedPhotoIDs).count == orderedPhotoIDs.count,
+              orderedPhotoIDs.allSatisfy({ decisions[$0] == .KEEP }) else { throw LocalLibraryError.invalidProject }
+        for photo in project.photos.indices {
+            if let value = decisions[project.photos[photo].id] { project.photos[photo].selection = value }
+        }
+        let kept = Set(project.photos.filter { $0.selection == .KEEP }.map(\.id))
+        let prior = project.sequencePhotoIDs ?? project.photos.map(\.id)
+        project.sequencePhotoIDs = orderedPhotoIDs + prior.filter { kept.contains($0) && !orderedPhotoIDs.contains($0) }
+        project.appliedAIDraftIDs = (project.appliedAIDraftIDs ?? []) + [applicationID]
+        project.updatedAt = Date()
+        document.projects[index] = project
+        try write(document)
+    }
+
+    public func applyAICanvas(projectID: String, expectedUpdatedAt: Date, applicationID: String, nodes: [LocalCanvasNode]) throws {
+        var document = try read()
+        guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else { throw LocalLibraryError.invalidProject }
+        var project = document.projects[index]
+        if project.appliedAIDraftIDs?.contains(applicationID) == true { return }
+        guard project.migration == nil else { throw LocalLibraryError.projectFrozen }
+        guard project.updatedAt == expectedUpdatedAt, !nodes.isEmpty, !applicationID.isEmpty, applicationID.count <= 500,
+              (project.appliedAIDraftIDs?.count ?? 0) < 1000 else { throw LocalLibraryError.invalidProject }
+        var canvas = project.canvas ?? LocalCanvas()
+        canvas.nodes += nodes
+        try canvas.validated(photoIDs: Set(project.photos.map(\.id)))
+        project.canvas = canvas
+        project.appliedAIDraftIDs = (project.appliedAIDraftIDs ?? []) + [applicationID]
+        project.updatedAt = Date()
+        document.projects[index] = project
+        try write(document)
+    }
+
     public func beginMigration(projectID: String, workspaceID: String, privateSync: Bool = false) throws -> LocalMigration {
         var document = try read()
         guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else { throw LocalLibraryError.invalidProject }
@@ -320,7 +371,8 @@ public actor LocalLibrary {
               project.photos.allSatisfy({ !$0.filename.isEmpty })
         else { throw LocalLibraryError.invalidProject }
         let promotionID = UUID().uuidString.lowercased()
-        let kept = project.photos.filter { $0.selection == .KEEP }
+        let kept = (project.sequencePhotoIDs ?? project.photos.filter { $0.selection == .KEEP }.map(\.id))
+            .compactMap { id in project.photos.first { $0.id == id && $0.selection == .KEEP } }
         let manifest = PromotionManifest(
             workspaceID: workspaceID,
             localProjectID: project.id,
@@ -403,6 +455,19 @@ public actor LocalLibrary {
         let inverse: LocalCanvasOperation
 
         switch operation {
+        case .removeNodes(let ids):
+            let wanted = Set(ids)
+            guard !ids.isEmpty, wanted.count == ids.count, wanted.isSubset(of: Set(canvas.nodes.map(\.id))) else { throw LocalLibraryError.invalidProject }
+            let removed = canvas.nodes.filter { wanted.contains($0.id) }
+            let notes = canvas.annotations.filter { $0.nodeID.map(wanted.contains) == true }
+            canvas.nodes.removeAll { wanted.contains($0.id) }
+            canvas.annotations.removeAll { $0.nodeID.map(wanted.contains) == true }
+            inverse = .restoreNodes(removed, annotations: notes)
+        case .restoreNodes(let nodes, let annotations):
+            guard Set(nodes.map(\.id)).isDisjoint(with: Set(canvas.nodes.map(\.id))) else { throw LocalLibraryError.invalidProject }
+            canvas.nodes += nodes
+            canvas.annotations += annotations
+            inverse = .removeNodes(ids: nodes.map(\.id))
         case .createNode(let node):
             guard !canvas.nodes.contains(where: { $0.id == node.id }),
                   canvas.nodes.count < LocalCanvas.nodeLimit else { throw LocalLibraryError.invalidProject }
@@ -626,6 +691,13 @@ public actor LocalLibrary {
               })
         else { throw LocalLibraryError.corruptLibrary }
         for project in document.projects {
+            if let sequence = project.sequencePhotoIDs {
+                let kept = Set(project.photos.filter { $0.selection == .KEEP }.map(\.id))
+                guard Set(sequence).count == sequence.count, Set(sequence) == kept else { throw LocalLibraryError.corruptLibrary }
+            }
+            if let receipts = project.appliedAIDraftIDs {
+                guard receipts.count <= 1000, Set(receipts).count == receipts.count, receipts.allSatisfy({ !$0.isEmpty && $0.count <= 500 }) else { throw LocalLibraryError.corruptLibrary }
+            }
             if let canvas = project.canvas {
                 try canvas.validated(photoIDs: Set(project.photos.map(\.id)))
             }

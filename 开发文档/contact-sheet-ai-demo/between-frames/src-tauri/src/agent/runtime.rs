@@ -31,8 +31,22 @@ pub struct AgentEngine {
 impl AgentEngine {
     /// 聊天模式单轮对话：不上传照片、不创建任务、不写草案；托管账户按普通文字请求在服务端计量。
     pub async fn chat_turn(&self, turns: &[ChatTurn]) -> Result<String> {
+        self.chat_turn_inner(turns, None).await
+    }
+    /// 原生客户端保留持久请求编号；结果不明时只读查询，不重新提交。
+    pub async fn chat_turn_with_id(&self, turns: &[ChatTurn], request_id: &str) -> Result<String> {
+        self.chat_turn_inner(turns, Some(request_id)).await
+    }
+    async fn chat_turn_inner(
+        &self,
+        turns: &[ChatTurn],
+        request_id: Option<&str>,
+    ) -> Result<String> {
         let (bound, refs) = self.chat_bound(turns).await?;
-        bound.chat_text(&refs, 1024).await
+        match request_id {
+            Some(id) => bound.chat_text_with_id(&refs, 1024, id).await,
+            None => bound.chat_text(&refs, 1024).await,
+        }
     }
     /// 桌面聊天走流式：模型每产出一段就交给回调上屏，最终文字仍以服务端回执为准。
     /// 校验与账户冻结和一次性路径完全共用一套，两条路不允许各定各的门槛。
@@ -95,6 +109,14 @@ impl AgentEngine {
     }
     /// 正式 IPC 通过冻结引擎身份创建任务；模型密钥存在与否不能让账户服务降级为 Mock。
     pub async fn request(&self, request: AgentRequest) -> Result<Task> {
+        self.request_with_canvas_access(request, true).await
+    }
+    /// 宿主可收紧只读来源的画布权限，不能扩大核心项目本身的写入权限；恢复沿用冻结授权。
+    pub async fn request_with_canvas_access(
+        &self,
+        request: AgentRequest,
+        canvas_access: bool,
+    ) -> Result<Task> {
         let queues = matches!(
             request.command,
             TaskCommand::StartConversation { .. }
@@ -116,8 +138,13 @@ impl AgentEngine {
                 bound.validate_hosted_options(allow).await?;
             }
             let cancel = matches!(&request.command, TaskCommand::CancelTask { .. });
-            let task =
-                super::lifecycle::request_bound(&self.db, request, Some(&bound.identity())).await?;
+            let task = super::lifecycle::request_bound_with_canvas(
+                &self.db,
+                request,
+                Some(&bound.identity()),
+                canvas_access,
+            )
+            .await?;
             if cancel {
                 // 本地取消先落盘。网关不确定时保留真实状态，不恢复工具或重传图片。
                 super::vision_recovery::cancel_for_task(&self.db, &bound, &task).await?;
@@ -128,14 +155,19 @@ impl AgentEngine {
             && self.openai.is_some()
             && self.native.is_none()
         {
-            return super::lifecycle::request_bound(
+            return super::lifecycle::request_bound_with_canvas(
                 &self.db,
                 request,
                 Some(&self.model_binding()?),
+                canvas_access,
             )
             .await;
         }
-        CommandHandler::new(&self.db).agent_request(request).await
+        if canvas_access {
+            CommandHandler::new(&self.db).agent_request(request).await
+        } else {
+            super::lifecycle::request_bound_with_canvas(&self.db, request, None, false).await
+        }
     }
     pub fn hosted(db: Store, auth: Arc<crate::cloud_auth::CloudAuth>) -> Self {
         let mut engine = Self::with_providers(

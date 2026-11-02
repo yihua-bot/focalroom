@@ -16,6 +16,14 @@ pub(crate) async fn request_bound(
     r: AgentRequest,
     identity: Option<&super::model_binding::ModelIdentity>,
 ) -> Result<Task> {
+    request_bound_with_canvas(db, r, identity, true).await
+}
+pub(crate) async fn request_bound_with_canvas(
+    db: &Store,
+    r: AgentRequest,
+    identity: Option<&super::model_binding::ModelIdentity>,
+    canvas_access: bool,
+) -> Result<Task> {
     if let TaskCommand::StartConversation {
         expected_account_id,
         ..
@@ -82,8 +90,9 @@ pub(crate) async fn request_bound(
         t
     } else {
         let conversation = matches!(r.command, TaskCommand::StartConversation { .. });
-        let local = super::promotion::local_state(&mut tx, &r.project_id).await?
-            == betweenframes_local_domain::LocalState::LOCAL;
+        let local = canvas_access
+            && super::promotion::local_state(&mut tx, &r.project_id).await?
+                == betweenframes_local_domain::LocalState::LOCAL;
         let (goal, selected_photo_ids, target_count, budget, consent_id, canvas, source) =
             match &r.command {
                 TaskCommand::StartConversation {

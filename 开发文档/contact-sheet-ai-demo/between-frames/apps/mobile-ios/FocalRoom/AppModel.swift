@@ -4,16 +4,12 @@ import Observation
 import ImageIO
 import UIKit
 import FocalRoomCore
+import CryptoKit
 
 // 本机与云端编号属于不同身份域，不能把本机编号传入云端项目接口。
 enum ProjectReference: Equatable, Hashable {
     case local(String)
     case cloud(String)
-}
-
-@MainActor private final class AIStreamCapture {
-    var reply: AIReply?
-    var invalidRequest = false
 }
 
 // 设备身份：每次安装生成一次的稳定 UUID，存于 UserDefaults（非机密），配合服务端幂等注册。
@@ -36,6 +32,16 @@ enum ProjectReference: Equatable, Hashable {
 
 @MainActor @Observable
 final class AppModel {
+    enum AIMode: String, CaseIterable { case task = "选片任务", chat = "聊天" }
+    var aiMode: AIMode = .task
+    var aiTargetCount = 12
+    private(set) var nativeProjection: NativeAIProjection?
+    private(set) var nativeContext: NativeAIContext?
+    private(set) var nativeTaskError: String?
+    private(set) var nativeReviewReceipt: String?
+    private var nativeOwner: ProjectReference?
+    private var nativeSyncedStamp: String?
+    @ObservationIgnored private var nativeAI: NativeAIClient?
     private(set) var credentials: Credentials?
     private(set) var projects: [ProjectSummary] = []
     private(set) var snapshot: ProjectSnapshot?
@@ -218,6 +224,9 @@ final class AppModel {
     }
 
     private func activate(_ value: Credentials, configuration: APIConfiguration) {
+        let previousAI = nativeAI
+        nativeAI = NativeAIClient()
+        Task { await previousAI?.close() }
         stopAutoResolve()
         epoch = UUID()
         credentials = value
@@ -242,49 +251,46 @@ final class AppModel {
         migration = migrationModel
     }
 
-    /// 云端项目归档/取消归档：成功返回 true，调用方据此退出项目详情页。
-    @discardableResult
-    func archiveCloudProject(_ projectID: String, archive: Bool) async -> Bool {
+    /// 云端项目归档/取消归档：成功返回给用户看的文案，失败返回 nil（原因已写进 notice）。
+    /// 列表刷新交给调用方，且必须排在退出项目详情之后：列表一重建，正在显示的详情页
+    /// 对应的那条导航就没了，之后再 dismiss 会被吞掉，用户被留在「暂时无法打开项目」的死页。
+    func archiveCloudProject(_ projectID: String, archive: Bool) async -> String? {
         guard let api, let credentials else {
             notice = "当前离线，无法修改项目归档状态。"
-            return false
+            return nil
         }
         let generation = epoch
         busy = true
         defer { if generation == epoch { busy = false } }
         do {
             try await api.archiveProject(projectID: projectID, archive: archive, token: credentials.token)
-            guard generation == epoch else { return false }
-            notice = archive ? "项目已归档，可在项目列表的「已归档」分组中恢复。" : "项目已恢复为正常项目。"
-            await reloadProjects()
+            guard generation == epoch else { return nil }
             if selectedProjectID == projectID { resetProject() }
-            return true
+            return archive ? "项目已归档，可在项目列表的「已归档」分组中恢复。" : "项目已恢复为正常项目。"
         } catch {
             if generation == epoch { notice = message(error) }
-            return false
+            return nil
         }
     }
 
     /// 云端项目删除：仅所有者；含审计记录或共享协作时服务端按规则拒绝并说明原因。
-    @discardableResult
-    func deleteCloudProject(_ projectID: String) async -> Bool {
+    /// 与归档一样，成功只返回文案，列表刷新留给调用方在退出详情之后执行。
+    func deleteCloudProject(_ projectID: String) async -> String? {
         guard let api, let credentials else {
             notice = "当前离线，无法删除云端项目。"
-            return false
+            return nil
         }
         let generation = epoch
         busy = true
         defer { if generation == epoch { busy = false } }
         do {
             try await api.deleteCloudProject(projectID: projectID, token: credentials.token)
-            guard generation == epoch else { return false }
-            notice = "云端项目已删除。"
-            await reloadProjects()
+            guard generation == epoch else { return nil }
             if selectedProjectID == projectID { resetProject() }
-            return true
+            return "云端项目已删除。"
         } catch {
             if generation == epoch { notice = message(error) }
-            return false
+            return nil
         }
     }
 
@@ -583,13 +589,13 @@ final class AppModel {
         scheduleAutoResolve()
         guard let chat else { return }
         let generation = epoch, project = currentProject
-        let messages = (try? await chat.messages(localProjectID: selectedLocalProjectID)) ?? []
+        let messages = (try? await chat.messages(localProjectID: selectedLocalProjectID, cloudProjectID: selectedProjectID)) ?? []
         guard generation == epoch, project == currentProject else { return }
         chatMessages = messages
     }
 
     func prepareVision(text: String, photoIDs: Set<String>) async throws -> PreparedVision {
-        guard let api, let credentials, let project = currentProject, !offline, !aiSending,
+        guard aiMode == .task, let api, let credentials, let project = currentProject, !offline, !aiSending,
               !photoIDs.isEmpty, photoIDs.count <= 4 else { throw APIError.permissionDenied }
         let generation = epoch
         visionDraftID = nil
@@ -636,11 +642,15 @@ final class AppModel {
             notice = "请先确认 AI 服务已开放、邮箱已验证且账户额度可用，再发送消息。"
             return false
         }
+        if aiMode == .task, nativeProjection?.tasks.contains(where: \.isActive) == true {
+            notice = "这个项目已有任务执行中，请先暂停或取消。"; return false
+        }
         let generation = epoch
         let project = currentProject
         let localProjectID = selectedLocalProjectID
+        let cloudProjectID = selectedProjectID
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= 8000 else {
+        guard !trimmed.isEmpty, trimmed.count <= 4000 else {
             notice = trimmed.isEmpty ? "请输入消息内容。" : "消息过长，请分段发送。"
             return false
         }
@@ -676,82 +686,38 @@ final class AppModel {
             } catch { if generation == epoch { notice = message(error) }; return false }
         }
         guard generation == epoch, project == currentProject else { return false }
-        let requestID = UUID().uuidString.lowercased()
-        // 先按待确认持久化：响应丢失时凭原编号查询回执，不重复发送、不重复计费。
-        let storedText = trimmed + (vision.map { "\n（本次授权观察：" + $0.photos.map(\.filename).joined(separator: "、") + "）" } ?? "")
-        let userMessage = AIChatMessage(id: UUID().uuidString.lowercased(), role: "user", text: storedText,
-                                        requestID: requestID, state: .unknown, localProjectID: localProjectID)
-        do { try await chat.append(userMessage) }
-        catch { notice = "无法保存消息，请重试。"; return false }
-        guard generation == epoch, project == currentProject else { return false }
-        chatMessages.append(userMessage)
-        let history = chatMessages.filter { $0.state == .sent || $0.id == userMessage.id }.suffix(20).map { ($0.role, $0.text) }
-        let conversation = AIConversationInput(history: Array(history), images: vision?.photos.map(\.preview) ?? [])
-        // 流式内容只是临时展示；仅服务端的完成回执能转为已完成消息。
-        let stream = AIStreamCapture()
-        var streamed = false
-        var streamRouteMissing = false
         do {
-            try await api.aiStream(input: conversation, requestID: requestID, token: credentials.token, imageConsent: vision != nil) { [weak self] event in
-                guard let self, self.epoch == generation else { return }
-                switch event {
-                case .start(let id):
-                    if id != requestID { stream.invalidRequest = true; self.streamingText = nil }
-                case .delta(let text):
-                    if !stream.invalidRequest { self.streamingText = (self.streamingText ?? "") + text }
-                case .done(let reply):
-                    if !stream.invalidRequest { stream.reply = reply }
-                case .failure(_, let message):
-                    // 服务端已把这次请求结算为结果不明；不吭声就只是「点了没反应」。
-                    if self.currentProject == project { self.notice = message }
-                }
+            let client = try await sharedAIClient()
+            guard generation == epoch, project == currentProject else { return false }
+            if aiMode == .task || vision != nil {
+                try await startNativeTask(text: trimmed, vision: vision, client: client)
+                await refreshNativeTasks()
+                return true
             }
-            guard generation == epoch else { return false }
-            if let reply = stream.reply {
-                try await chat.complete(userMessage, text: reply.text.isEmpty ? "（模型未返回文本）" : reply.text)
-                streamingText = nil
-                streamed = true
-                await loadChat()
-                await loadAIAccount()
-            } else {
-                streamingText = nil
-            }
-        } catch {
-            guard generation == epoch else { return false }
-            streamingText = nil
-            // 只有服务端明确没有此路由，才转用旧的异步入口；其他情况只查询原编号。
-            if let apiError = error as? APIError, case .server(let status, _) = apiError, status == 404 {
-                streamRouteMissing = true
-            }
-        }
-        guard generation == epoch else { return false }
-        if !streamed {
+            let requestID = UUID().uuidString.lowercased()
+            let userMessage = AIChatMessage(id: UUID().uuidString.lowercased(), role: "user", text: trimmed,
+                                            requestID: requestID, state: .unknown, localProjectID: localProjectID, cloudProjectID: cloudProjectID)
+            try await chat.append(userMessage)
+            chatMessages.append(userMessage)
+            let history = chatMessages.filter { $0.state == .sent || $0.id == userMessage.id }.suffix(20)
+                .map { ["role": $0.role, "content": String($0.text.prefix(4000))] }
             do {
-                if streamRouteMissing {
-                    _ = try await api.aiSubmit(input: conversation, requestID: requestID, token: credentials.token, imageConsent: vision != nil)
-                }
-                guard generation == epoch else { return false }
-                let job = try await pollAIJob(requestID: requestID, api: api, token: credentials.token, generation: generation)
-                guard generation == epoch else { return false }
-                if job.state == "COMPLETED", let result = job.result {
-                    try? await chat.complete(userMessage, text: result.text.isEmpty ? "（模型未返回文本）" : result.text)
-                    await loadChat()
-                } else if job.state == "REJECTED" {
-                    try? await replaceMessage(userMessage, state: .failed, failure: "模型服务拒绝了请求，额度已释放。", in: chat)
-                    await loadChat()
-                    if project == currentProject { notice = "模型服务拒绝了请求，额度已释放。" }
-                } else {
-                    // 回退轮询未出结果：自动后台核对直至完成，不需要用户手动点。
-                    scheduleAutoResolve()
-                }
-                await loadAIAccount()
+                let bytes = try await client.perform("chat", payload: aiPayload(["turns": history, "requestID": requestID]))
+                let reply = try JSONSerialization.jsonObject(with: bytes) as? [String: Any]
+                guard let text = reply?["text"] as? String, !text.isEmpty else { throw APIError.invalidResponse }
+                // 迟到回复写回原账户/项目存储；只有当前上下文会刷新界面。
+                try await chat.complete(userMessage, text: text)
             } catch {
-                // 网络中断等：消息保留待确认状态，凭原编号可恢复。
                 if generation == epoch, project == currentProject { notice = message(error) }
+                // 持久编号已保存，后续只读核对现有网关回执，不再次提交模型请求。
+                if generation == epoch { scheduleAutoResolve() }
             }
+            if generation == epoch, project == currentProject { await loadChat(); await loadAIAccount() }
+            return true
+        } catch {
+            if generation == epoch, project == currentProject { notice = message(error) }
+            return false
         }
-        // 走到这里说明消息已入库（已发送或待确认），草稿可以清空。
-        return true
     }
 
     /// 核对「结果待确认」的 AI 消息。manual 为用户主动点按，失败必须给出提示；自动核对保持安静。
@@ -865,99 +831,11 @@ final class AppModel {
         notice = "账号已关闭，回执：\(receipt.receipt_id)。本机原片仍保留，可在登录页离线导出；共享协作与财务审计按说明保留。"
     }
 
-    private func pollAIJob(requestID: String, api: APIClient, token: String, generation: UUID) async throws -> AIJob {
-        var job = try await api.aiJob(requestID: requestID, token: token)
-        var attempts = 0
-        while job.state == "PENDING" && attempts < 120 {
-            try await Task.sleep(nanoseconds: 500_000_000)
-            guard generation == epoch else { throw CancellationError() }
-            job = try await api.aiJob(requestID: requestID, token: token)
-            attempts += 1
-        }
-        return job
-    }
-
     private func replaceMessage(_ original: AIChatMessage, state: AIChatMessage.State, failure: String?, in chat: AIChatStore) async throws {
         var updated = original
         updated.state = state
         updated.failure = failure
         try await chat.replace(updated)
-    }
-
-    // MARK: - AI 草案闭环（模型建议 → 人工确认 → 权威提案 → 部分采纳）
-
-    var lastDraft: AIDraftProposal?
-
-    func requestDraft() async {
-        guard !aiSending, let api, let credentials, let chat else { return }
-        guard let snapshot, currentProject == .cloud(snapshot.project_id), !snapshot.snapshot.photos.isEmpty else {
-            notice = currentProject == nil ? "请先在项目页打开一个云端项目。" : "当前项目没有照片。"
-            return
-        }
-        aiSending = true
-        defer { aiSending = false }
-        lastDraft = nil
-        let requestID = UUID().uuidString.lowercased()
-        let instruction = "请从本项目的照片中给出选片与排序建议。只返回一个 JSON 代码块，格式："
-            + "```json {\"title\":\"...\",\"operations\":[{\"op\":\"add|remove|move\",\"photo\":\"文件名\",\"to_index\":0}]}```"
-            + " photo 必须精确使用下列文件名之一："
-            + snapshot.snapshot.photos.map(\.filename).joined(separator: "、")
-        let userMessage = AIChatMessage(id: UUID().uuidString.lowercased(), role: "user",
-                                        text: "请根据当前项目生成选片草案", requestID: requestID, state: .unknown)
-        do { try await chat.append(userMessage) }
-        catch { notice = "无法保存消息，请重试。"; return }
-        chatMessages.append(userMessage)
-        let generation = epoch
-        do {
-            _ = try await api.aiSubmit(input: AIConversationInput(history: [("user", instruction)],
-                                                                  instructions: "你是摄影编辑助手，只输出规定格式的 JSON。"),
-                                       requestID: requestID, token: credentials.token)
-            let job = try await pollAIJob(requestID: requestID, api: api, token: credentials.token, generation: generation)
-            try? await replaceMessage(userMessage, state: .sent, failure: nil, in: chat)
-            let text = job.result?.text ?? ""
-            try? await chat.append(AIChatMessage(id: UUID().uuidString.lowercased(), role: "assistant",
-                                                 text: text.isEmpty ? "（模型未返回文本）" : text,
-                                                 requestID: requestID, state: .sent))
-            chatMessages = (try? await chat.messages()) ?? chatMessages
-            if let draft = AIDraftProposal.parse(text, photos: snapshot.snapshot.photos) {
-                lastDraft = draft
-            } else {
-                notice = "模型未返回可识别的草案格式，请重试。"
-            }
-            await loadAIAccount()
-        } catch {
-            notice = message(error)
-        }
-    }
-
-    func submitDraftAsProposal() async {
-        guard !busy, let draft = lastDraft, let snapshot,
-              let api, let credentials, currentProject == .cloud(snapshot.project_id), !offline else { return }
-        let generation = epoch
-        busy = true
-        defer { if generation == epoch { busy = false } }
-        do {
-            let photoIDs = Dictionary(uniqueKeysWithValues: snapshot.snapshot.photos.map { ($0.filename, $0.id) })
-            let operations = draft.operations.enumerated().map { index, op in
-                ProposalCreateCommand.DraftOperation(op: op.op,
-                                                     operation_id: "draft-\(index)-\(UUID().uuidString.prefix(8).lowercased())",
-                                                     photo_id: photoIDs[op.photoFilename] ?? op.photoFilename,
-                                                     to_index: op.toIndex)
-            }
-            let create = try ProposalCreateCommand(snapshot: snapshot, title: draft.title, operations: operations)
-            try await projectRead(snapshot.project_id) {
-                try await api.createProposal(create, token: credentials.token)
-            }
-            let submit = ProposalSubmitCommand(snapshot: snapshot, proposalID: create.command_id)
-            try await projectRead(snapshot.project_id) {
-                try await api.submitProposal(submit, token: credentials.token)
-            }
-            lastDraft = nil
-            notice = "草案已提交为提案，可在项目的“提案”中逐项采纳。"
-            await reloadSnapshot()
-        } catch {
-            notice = message(error)
-        }
     }
 
     // MARK: - 评论协作（发送回复 / 解决 / 重开）
@@ -1307,6 +1185,12 @@ final class AppModel {
     }
 
     private func resetProject() {
+        nativeProjection = nil
+        nativeContext = nil
+        nativeOwner = nil
+        nativeSyncedStamp = nil
+        nativeTaskError = nil
+        nativeReviewReceipt = nil
         projectRequest = UUID()
         currentProject = nil
         chatMessages = []
@@ -1318,6 +1202,9 @@ final class AppModel {
     }
 
     private func clearMemory() {
+        let previousAI = nativeAI
+        nativeAI = nil
+        Task { await previousAI?.close() }
         epoch = UUID()
         resetProject()
         credentials = nil
@@ -1331,7 +1218,6 @@ final class AppModel {
         aiAccountError = nil
         aiSending = false
         streamingText = nil
-        lastDraft = nil
         visionDraftID = nil
         canvasSending = false
         pendingBoards = []
@@ -1357,5 +1243,366 @@ final class AppModel {
     private func message(_ error: Error) -> String {
         if let value = error as? LocalizedError, let description = value.errorDescription { return description }
         return "暂时无法完成请求，请检查网络后重试。"
+    }
+}
+
+extension AppModel {
+    private func aiPayload(_ value: [String: Any]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
+    }
+
+    private func sharedAIClient() async throws -> NativeAIClient {
+        guard let credentials, let client = nativeAI, !offline else { throw APIError.permissionDenied }
+        let user = try JSONSerialization.jsonObject(with: JSONEncoder().encode(credentials.user))
+        let directory = try privateAIDirectory(root.appendingPathComponent("AgentCore"))
+        let payload = try aiPayload(["directory": directory.path,
+                                     "origin": try configuration(address).identity,
+                                     "token": credentials.token, "user": user])
+        try await client.open(payload)
+        return client
+    }
+
+    private func privateAIDirectory(_ directory: URL) throws -> URL {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var url = directory
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try url.setResourceValues(values)
+        return url
+    }
+
+    private struct NativeSource {
+        let payload: Data
+        let projectID: String
+        let photoIDs: [String: String]
+    }
+
+    private func nativeSource(vision: PreparedVision? = nil) async throws -> NativeSource {
+        let hash: (String) -> String = { SHA256.hash(data: Data($0.utf8)).map { String(format: "%02x", $0) }.joined() }
+        let reference: String
+        var title = "摄影讨论", brief = "", photos: [[String: Any]] = [], sequence: [String] = []
+        var cloudSequence: [String] = []
+        switch currentProject {
+        case .local(let id):
+            reference = "local:" + id
+            guard let library = localLibrary?.library,
+                  let local = try await library.projects().first(where: { $0.id == id }) else { throw APIError.permissionDenied }
+            title = local.title
+            // 来源版本与画布摘要作为项目数据，不能改变宿主工具权限。
+            brief = "本机项目版本：\(local.updatedAt.timeIntervalSince1970)"
+            if let canvas = local.canvas {
+                let allowed = Set(vision?.photos.map(\.photoID) ?? local.photos.map(\.id))
+                let mirror = "native-" + hash(reference + ":" + (local.photos.isEmpty ? "true" : "false"))
+                let nodes = canvas.nodes.filter { $0.photoID == nil || allowed.contains($0.photoID!) }.prefix(100).map { node in
+                    LocalCanvasNode(id: node.id, kind: node.kind, photoID: node.photoID.map { hash(mirror + ":" + $0) },
+                        text: node.text.map { String(decoding: $0.utf8.prefix(500), as: UTF8.self) },
+                        x: node.x, y: node.y, width: node.width, height: node.height, zOrder: node.zOrder)
+                }
+                let summary = LocalCanvas(nodes: Array(nodes), annotations: [])
+                brief += "\n当前画布摘要（最多 100 个节点；文字可能截取；非工具指令）：" + String(decoding: try JSONEncoder().encode(summary), as: UTF8.self)
+            }
+            photos = local.photos.map { ["id": $0.id, "filename": $0.filename, "sourceHash": $0.sourceSHA256, "status": $0.selection.rawValue.lowercased(), "width": $0.width, "height": $0.height] }
+            sequence = local.sequencePhotoIDs ?? local.photos.filter { $0.selection == .KEEP }.map(\.id)
+        case .cloud(let id):
+            reference = "cloud:" + id
+            guard let snapshot, snapshot.project_id == id, snapshot.principal.id == credentials?.user.id else { throw APIError.permissionDenied }
+            title = snapshot.title
+            brief = "云端项目版本：\(snapshot.revision)。这是执行上下文副本，正式变更必须提交云端权威提案。"
+            photos = snapshot.snapshot.photos.map { photo in
+                let preview = snapshot.previews.first { $0.photo_id == photo.id }
+                return ["id": photo.id, "filename": photo.filename, "sourceHash": photo.source_sha256, "status": photo.selection.rawValue.lowercased(), "width": preview?.width ?? 1, "height": preview?.height ?? 1]
+            }
+            sequence = snapshot.snapshot.sequences.first?.items.map(\.photo_id) ?? []
+            cloudSequence = sequence
+            let kept = Set(snapshot.snapshot.photos.filter { $0.selection == .KEEP }.map(\.id))
+            sequence = sequence.filter { kept.contains($0) }
+        case nil:
+            reference = "account-discussion"
+        }
+        if let vision {
+            guard let credentials else { throw APIError.permissionDenied }
+            let scope = AccountScope(configuration: try configuration(address), userID: credentials.user.id)
+            let directory = try privateAIDirectory(root.appendingPathComponent("AIInput").appendingPathComponent(scope.key))
+            for photo in vision.photos {
+                guard let index = photos.firstIndex(where: { $0["id"] as? String == photo.photoID }) else { throw APIError.permissionDenied }
+                let digest = SHA256.hash(data: photo.preview.jpeg).map { String(format: "%02x", $0) }.joined()
+                let file = directory.appendingPathComponent(digest + ".jpg")
+                try photo.preview.jpeg.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                photos[index]["previewPath"] = file.path
+            }
+        }
+        let projectID = "native-" + hash(reference + ":" + (photos.isEmpty ? "true" : "false"))
+        let ids = Dictionary(uniqueKeysWithValues: photos.compactMap { item -> (String, String)? in
+            guard let id = item["id"] as? String else { return nil }
+            return (id, hash(projectID + ":" + id))
+        })
+        if !cloudSequence.isEmpty {
+            let allowed = Set(vision?.photos.map(\.photoID) ?? Array(ids.keys))
+            let actual = cloudSequence.filter { allowed.contains($0) }.compactMap { ids[$0] }
+            brief += "\n云端本次范围的实际序列（执行副本仅将已保留照片放入本地序列表）：" + String(decoding: try JSONEncoder().encode(actual), as: UTF8.self)
+        }
+        return NativeSource(payload: try aiPayload(["context": ["reference": reference, "title": title, "brief": brief,
+                                                                  "photos": photos, "sequence": sequence]]),
+                            projectID: projectID, photoIDs: ids)
+    }
+
+    private func startNativeTask(text: String, vision: PreparedVision?, client: NativeAIClient) async throws {
+        let generation = epoch, owner = currentProject
+        if case .cloud(let id) = owner, let api, let credentials {
+            let fresh = try await projectRead(id) { try await api.snapshot(projectID: id, credentials: credentials) }
+            guard generation == epoch, currentProject == owner else { throw CancellationError() }
+            snapshot = fresh
+        }
+        let source = try await nativeSource(vision: vision)
+        if source.photoIDs.count > 500 && vision == nil { throw NativeAIError(code: "SCOPE_TOO_LARGE", message: "项目超过 500 张，请先选择本次讨论的照片。") }
+        let bytes = try await client.perform("syncContext", payload: source.payload)
+        let context = try JSONDecoder().decode(NativeAIContext.self, from: bytes)
+        guard generation == epoch, currentProject == owner else { throw CancellationError() }
+        nativeContext = context; nativeOwner = owner; nativeSyncedStamp = nativeSourceStamp
+        var consent: Any = NSNull()
+        if let vision {
+            let config = try await client.perform("configuration", payload: aiPayload([:]))
+            let value = try JSONSerialization.jsonObject(with: config) as? [String: Any]
+            guard let provider = value?["consentProvider"] as? String else { throw APIError.permissionDenied }
+            let result = try await client.perform("consent", payload: aiPayload(["request": ["requestId": UUID().uuidString.lowercased(),
+                "projectId": context.projectId, "provider": provider, "mode": "task", "quota": vision.photos.count]]))
+            let value2 = try JSONSerialization.jsonObject(with: result) as? [String: Any]
+            guard let id = value2?["id"] as? Int else { throw APIError.invalidResponse }
+            consent = id
+        }
+        guard generation == epoch, currentProject == owner else { throw CancellationError() }
+        let scope = vision?.photos.compactMap { context.photoIDs[$0.photoID] } ?? Array(context.photoIDs.values).sorted()
+        let budget = try JSONSerialization.jsonObject(with: JSONEncoder().encode(NativeAIBudget(images: vision?.photos.count ?? 0)))
+        var command: [String: Any] = ["type": "StartConversation", "expectedAccountId": credentials?.user.id ?? "", "goal": text,
+            "selectedPhotoIds": scope, "focusPhotoIds": vision == nil ? [] : scope, "targetCount": max(1, min(aiTargetCount, max(1, scope.count))),
+            "budget": budget, "consentId": consent, "sourceBoard": NSNull()]
+        if vision == nil, let task = nativeProjection?.tasks.first(where: { $0.state == "needs_input" }) {
+            command = ["type": "SubmitFeedback", "taskId": task.id, "answer": text]
+        }
+        var canvasAccess = false
+        if case .local(let id) = owner, let library = localLibrary?.library,
+           let local = try await library.projects().first(where: { $0.id == id }) { canvasAccess = local.migration == nil }
+        guard generation == epoch, currentProject == owner else { throw CancellationError() }
+        _ = try await client.perform("agentRequest", payload: aiPayload(["canvasAccess": canvasAccess, "request": ["requestId": UUID().uuidString.lowercased(),
+                                                                                     "projectId": context.projectId, "command": command]]))
+    }
+
+    func refreshNativeTasks() async {
+        let generation = epoch, owner = currentProject
+        guard credentials != nil, !offline, !aiSending, !busy else { return }
+        do {
+            let client = try await sharedAIClient()
+            let context: NativeAIContext
+            let stamp = nativeSourceStamp
+            if let existing = nativeContext, nativeOwner == owner, nativeSyncedStamp == stamp {
+                context = existing
+            } else {
+                let source = try await nativeSource()
+                let contextBytes: Data
+                do {
+                    contextBytes = try await client.perform("syncContext", payload: source.payload)
+                    if generation == epoch, owner == currentProject { nativeSyncedStamp = stamp }
+                } catch let error as NativeAIError where error.code == "TASK_ACTIVE" {
+                    let project = try await client.perform("getProject", payload: aiPayload(["project": source.projectID]))
+                    let object = try JSONSerialization.jsonObject(with: project) as? [String: Any]
+                    contextBytes = try aiPayload(["projectId": source.projectID, "photoIDs": source.photoIDs, "revision": object?["revision"] ?? 0])
+                }
+                context = try JSONDecoder().decode(NativeAIContext.self, from: contextBytes)
+            }
+            let bytes = try await client.perform("projection", payload: aiPayload(["project": context.projectId]))
+            let projection = try JSONDecoder().decode(NativeAIProjection.self, from: bytes)
+            guard generation == epoch, owner == currentProject else { return }
+            nativeOwner = owner; nativeContext = context; nativeProjection = projection; nativeTaskError = nil
+        } catch {
+            if generation == epoch, owner == currentProject { nativeTaskError = message(error) }
+        }
+    }
+
+    private var nativeSourceStamp: String {
+        switch currentProject {
+        case .local(let id): "local:\(id):\(selectedLocalProject?.updatedAt.timeIntervalSince1970 ?? -1)"
+        case .cloud(let id): "cloud:\(id):\(snapshot?.revision ?? -1)"
+        case nil: "account"
+        }
+    }
+
+    func controlNativeTask(_ task: NativeAITask, action: String) async {
+        guard let context = nativeContext, nativeOwner == currentProject, !aiSending else { return }
+        let generation = epoch, owner = currentProject
+        do {
+            let client = try await sharedAIClient()
+            if action == "query" {
+                _ = try await client.perform("queryVisionResult", payload: aiPayload(["project": context.projectId, "task": task.id]))
+            } else {
+                var command: [String: Any] = ["type": action, "taskId": task.id]
+                if action == "ResumeTask" { command["budget"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(task.budget)) }
+                _ = try await client.perform("agentRequest", payload: aiPayload(["request": ["requestId": UUID().uuidString.lowercased(), "projectId": context.projectId, "command": command]]))
+            }
+            if generation == epoch, owner == currentProject { await refreshNativeTasks(); await loadAIAccount() }
+        } catch { if generation == epoch, owner == currentProject { notice = message(error) } }
+    }
+
+    func nativePhotoName(_ coreID: String) -> String {
+        guard let id = nativeContext?.photoIDs.first(where: { $0.value == coreID })?.key else { return "原照片已移出当前项目" }
+        return observationPhotos.first(where: { $0.id == id })?.filename ?? id
+    }
+    func legacyAIChat() async -> [AIChatMessage] {
+        guard let chat else { return [] }
+        let generation = epoch
+        let result = (try? await chat.messages(localProjectID: nil, cloudProjectID: nil)) ?? []
+        return generation == epoch ? result : []
+    }
+
+    func saveNativePreference(_ preference: NativeAIPreference, task: NativeAITask, statement: String?) async {
+        guard let context = nativeContext, nativeOwner == currentProject, !busy else { return }
+        let generation = epoch, owner = currentProject
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            let client = try await sharedAIClient()
+            _ = try await client.perform("preference", payload: aiPayload(["project": context.projectId, "task": task.id,
+                                                                         "proposal": preference.id, "statement": statement as Any? ?? NSNull()]))
+            if generation == epoch, currentProject == owner {
+                busy = false; await refreshNativeTasks()
+                notice = statement == nil ? "已忽略这条建议。" : "已保存为当前项目的偏好。"
+            }
+        } catch { if generation == epoch, currentProject == owner { notice = message(error) } }
+    }
+
+    func applyNativeDraft(_ draft: NativeAIDraft, selectedIDs: Set<String>) async -> Bool {
+        guard !busy, !aiSending, let credentials, !selectedIDs.isEmpty, let owner = currentProject,
+              nativeOwner == owner, nativeContext?.projectId == draft.projectId,
+              selectedIDs.isSubset(of: Set(draft.items.map(\.photo_id))) else { return false }
+        let generation = epoch
+        let applicationID = draft.id + ":" + String(draft.revision) + ":" + SHA256.hash(data: Data(selectedIDs.sorted().joined(separator: ",").utf8)).map { String(format: "%02x", $0) }.joined()
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            let scope = AccountScope(configuration: try configuration(address), userID: credentials.user.id)
+            let reviews = NativeAIReviewStore(root: root.appendingPathComponent("AIReviews"), scope: scope)
+            let previous = try await reviews.record(applicationID: applicationID)
+            if previous?.completed == true { nativeReviewReceipt = "这份提案已提交。"; return true }
+            if case .local(let id) = owner, let library = localLibrary?.library,
+               let local = try await library.projects().first(where: { $0.id == id }),
+               local.appliedAIDraftIDs?.contains(applicationID) == true { nativeReviewReceipt = "这些建议已采纳。"; return true }
+            if case .cloud(let id) = owner, let api {
+                let fresh = try await projectRead(id) { try await api.snapshot(projectID: id, credentials: credentials) }
+                guard generation == epoch, currentProject == owner else { throw CancellationError() }
+                snapshot = fresh
+            }
+            let client = try await sharedAIClient()
+            let source = try await nativeSource()
+            let bytes = try await client.perform("syncContext", payload: source.payload)
+            let context = try JSONDecoder().decode(NativeAIContext.self, from: bytes)
+            // 已落盘的云端原命令可继续核对；新审批必须与原任务的基线相同。
+            guard previous != nil || (!draft.stale && draft.state == "pending" && context.revision == draft.baseRevision) else {
+                throw NativeAIError(code: "REVISION_CONFLICT", message: "项目已更新，请重新委托；这份草案已保留。")
+            }
+            let reverse = Dictionary(uniqueKeysWithValues: context.photoIDs.map { ($0.value, $0.key) })
+            let chosen = draft.items.filter { selectedIDs.contains($0.photo_id) }.sorted { $0.position < $1.position }
+            var decisions: [String: Selection] = [:], ordered: [String] = []
+            for item in chosen {
+                guard let id = reverse[item.photo_id], let selection = Selection(rawValue: item.proposed_action.uppercased()) else { throw APIError.invalidResponse }
+                decisions[id] = selection
+                if selection == .KEEP { ordered.append(id) }
+            }
+            guard generation == epoch, currentProject == owner else { throw CancellationError() }
+            switch owner {
+            case .local(let id):
+                guard let library = localLibrary?.library,
+                      let local = try await library.projects().first(where: { $0.id == id }) else { throw APIError.permissionDenied }
+                // 更新时间已进入上下文版本；再做一次比较，防止审阅与写回之间发生本机编辑。
+                let verify = try await nativeSource()
+                guard source.payload == verify.payload else { throw APIError.unconfirmedCommand }
+                try await library.applyAISelection(projectID: id, expectedUpdatedAt: local.updatedAt, applicationID: applicationID,
+                                                   decisions: decisions, orderedPhotoIDs: ordered)
+                if generation == epoch, currentProject == owner {
+                    await localLibrary?.reload()
+                    nativeReviewReceipt = "已采纳勾选的建议；保留列表按草案顺序排列。"
+                }
+            case .cloud(let id):
+                guard let api, let snapshot, snapshot.project_id == id else { throw APIError.permissionDenied }
+                let old = snapshot.snapshot.sequences.first?.items.map(\.photo_id) ?? []
+                var operations: [ProposalCreateCommand.DraftOperation] = []
+                for photo in old where decisions[photo] != nil && decisions[photo] != .KEEP {
+                    operations.append(.init(op: "remove", operation_id: "remove-" + photo, photo_id: photo, to_index: nil))
+                }
+                for (index, photo) in ordered.enumerated() {
+                    operations.append(.init(op: old.contains(photo) ? "move" : "add", operation_id: "place-" + photo, photo_id: photo, to_index: index))
+                }
+                let record = try await reviews.prepare(applicationID: applicationID, snapshot: snapshot, title: draft.title, operations: operations)
+                try await projectRead(id) { try await api.createProposal(record.create, token: credentials.token) }
+                try await projectRead(id) { try await api.submitProposal(record.submit, token: credentials.token) }
+                try await reviews.complete(applicationID: applicationID)
+                if generation == epoch, currentProject == owner { nativeReviewReceipt = "已提交云端提案，可在项目中逐项审批。"; await reloadSnapshot() }
+            }
+            if generation == epoch, currentProject == owner { busy = false; await refreshNativeTasks() }
+            return true
+        } catch {
+            if generation == epoch, currentProject == owner { notice = message(error) }
+            return false
+        }
+    }
+
+    func nativeBoardNodes(_ board: NativeAIBoard) async throws -> [NativeAINode] {
+        guard let context = nativeContext, nativeOwner == currentProject else { throw APIError.permissionDenied }
+        let client = try await sharedAIClient()
+        return try JSONDecoder().decode([NativeAINode].self, from: await client.perform("boardNodes", payload: aiPayload(["project": context.projectId, "board": board.id, "revision": board.revision])))
+    }
+
+    func applyNativeBoard(_ board: NativeAIBoard, nodes: [NativeAINode]) async -> Bool {
+        guard !busy, !aiSending, case .local(let projectID) = currentProject,
+              let library = localLibrary?.library, let context = nativeContext,
+              nativeProjection?.tasks.contains(where: { $0.needsReview && $0.boardDrafts.contains(where: { $0.id == board.id }) }) == true else { return false }
+        let generation = epoch, owner = currentProject
+        busy = true
+        defer { if generation == epoch { busy = false } }
+        do {
+            let applicationID = "board:" + board.id + ":" + String(board.revision)
+            guard let local = try await library.projects().first(where: { $0.id == projectID }) else { throw APIError.permissionDenied }
+            if local.appliedAIDraftIDs?.contains(applicationID) == true { nativeReviewReceipt = "这份画布草案已添加。"; return true }
+            let client = try await sharedAIClient()
+            let source = try await nativeSource()
+            let synced = try JSONDecoder().decode(NativeAIContext.self, from: await client.perform("syncContext", payload: source.payload))
+            guard synced.revision == context.revision else { throw APIError.unconfirmedCommand }
+            // 再取核心权威节点，审阅页的入参不能替换模型执行结果。
+            let authoritative = try await nativeBoardNodes(board)
+            guard nodes == authoritative else { throw APIError.unconfirmedCommand }
+            let reverse = Dictionary(uniqueKeysWithValues: context.photoIDs.map { ($0.value, $0.key) })
+            let top = local.canvas?.nodes.map(\.y).max() ?? -200
+            var accepted: [LocalCanvasNode] = []
+            for node in authoritative {
+                guard node.visible, node.rotation == 0 else { throw APIError.permissionDenied }
+                let newID = UUID().uuidString.lowercased()
+                if node.nodeType == "photo", let asset = node.assetId, let id = reverse[asset] {
+                    accepted.append(.init(id: newID, kind: .photo, photoID: id, x: node.x, y: node.y + top + 500,
+                                          width: node.width, height: node.height, zOrder: node.zOrder))
+                } else if node.nodeType == "text", let raw = node.contentJson,
+                          let value = try? JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any], let text = value["text"] as? String {
+                    accepted.append(.init(id: newID, kind: .note, text: text, x: node.x, y: node.y + top + 500,
+                                          width: node.width, height: node.height, zOrder: node.zOrder))
+                } else { throw NativeAIError(code: "UNSUPPORTED_NODE", message: "此草案包含手机画布暂不支持的节点，当前只能预览。") }
+            }
+            guard generation == epoch, currentProject == owner else { throw CancellationError() }
+            try await library.applyAICanvas(projectID: projectID, expectedUpdatedAt: local.updatedAt, applicationID: applicationID, nodes: accepted)
+            if generation == epoch {
+                await localLibrary?.canvasModel(projectID: projectID).recordAIAddition(accepted.map(\.id))
+            }
+            if generation == epoch, currentProject == owner {
+                await localLibrary?.reload(); nativeReviewReceipt = "已将草案添加到本机画布。"; busy = false; await refreshNativeTasks()
+            }
+            return true
+        } catch { if generation == epoch, currentProject == owner { notice = message(error) }; return false }
+    }
+
+    func nativePhotoImage(_ coreID: String) async throws -> UIImage {
+        let owner = currentProject
+        guard let id = nativeContext?.photoIDs.first(where: { $0.value == coreID })?.key else { throw APIError.permissionDenied }
+        let result: UIImage
+        if case .local(let projectID) = owner, let library = localLibrary {
+            result = try await library.image(projectID: projectID, photoID: id)
+        } else { result = try await image(photoID: id) }
+        guard currentProject == owner else { throw CancellationError() }
+        return result
     }
 }

@@ -65,9 +65,7 @@ struct CreateLocalProjectView: View {
                             .accessibilityIdentifier("local.create.confirm")
                     }
                 }
-                .alert("提示", isPresented: Binding(get: { library.notice != nil }, set: { if !$0 { library.notice = nil } })) {
-                    Button("知道了", role: .cancel) { library.notice = nil }
-                } message: { Text(library.notice ?? "") }
+                .noticeAlert(library.notice, onDismiss: { library.notice = nil })
         }
     }
 }
@@ -172,9 +170,7 @@ struct LocalProjectView: View {
             case .failure(let error): library.reportPickerFailure(error)
             }
         }
-        .alert("提示", isPresented: Binding(get: { library.notice != nil }, set: { if !$0 { library.notice = nil } })) {
-            Button("知道了", role: .cancel) { library.notice = nil }
-        } message: { Text(library.notice ?? "") }
+        .noticeAlert(library.notice, onDismiss: { library.notice = nil })
         .onChange(of: library.exportTarget?.staging) { _, path in
             if path != nil { layer = .export } else if case .export = layer { layer = nil }
         }
@@ -224,7 +220,11 @@ struct LocalProjectView: View {
     }
 
     private var visiblePhotos: [LocalPhoto] {
-        project?.photos.filter { filter == nil || $0.selection == filter } ?? []
+        guard let project else { return [] }
+        if filter == .KEEP, let order = project.sequencePhotoIDs {
+            return order.compactMap { id in project.photos.first { $0.id == id && $0.selection == .KEEP } }
+        }
+        return project.photos.filter { filter == nil || $0.selection == filter }
     }
 
     private func sharePicked() {
@@ -256,7 +256,7 @@ struct LocalProjectView: View {
                 EmptyWorkspace(title: "导入第一组照片", detail: "从相册或文件选择照片，原文件保持不变。", symbol: "photo.on.rectangle.angled")
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
-                    ForEach(project?.photos.filter { filter == nil || $0.selection == filter } ?? []) { photo in
+                    ForEach(visiblePhotos) { photo in
                         photoCell(photo)
                     }
                 }
@@ -523,9 +523,7 @@ private struct LocalPhotoViewer: View {
             }.padding(18)
         }
         .background(.black).navigationBarTitleDisplayMode(.inline)
-        .alert("提示", isPresented: Binding(get: { library.notice != nil }, set: { if !$0 { library.notice = nil } })) {
-            Button("知道了", role: .cancel) { library.notice = nil }
-        } message: { Text(library.notice ?? "") }
+        .noticeAlert(library.notice, onDismiss: { library.notice = nil })
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { compare = true } label: { Image(systemName: "rectangle.split.2x1") }

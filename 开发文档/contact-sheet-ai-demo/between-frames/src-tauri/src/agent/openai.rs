@@ -16,7 +16,7 @@ pub const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 pub const IMAGE_COST_MINOR_USD: u32 = 1;
 pub const TEXT_COST_MINOR_PER_K_TOKENS: u32 = 1;
 /// 聊天模式系统提示：纯文字对话，不上传照片、不创建任务、不写草案。
-const CHAT_PROMPT: &str = include_str!("../../../prompts/focal-chat-v1.md");
+const CHAT_PROMPT: &str = include_str!("../../../prompts/focal-chat-v2.md");
 
 pub struct OpenAiProvider {
     client: reqwest::Client,
@@ -407,8 +407,31 @@ impl OpenAiProvider {
         turns: &[(&str, &str)],
         max_output_tokens: u32,
     ) -> Result<String> {
+        self.chat_text_inner(turns, max_output_tokens, None).await
+    }
+    pub async fn chat_text_with_id(
+        &self,
+        turns: &[(&str, &str)],
+        max_output_tokens: u32,
+        request_id: &str,
+    ) -> Result<String> {
+        self.chat_text_inner(turns, max_output_tokens, Some(request_id))
+            .await
+    }
+    async fn chat_text_inner(
+        &self,
+        turns: &[(&str, &str)],
+        max_output_tokens: u32,
+        request_id: Option<&str>,
+    ) -> Result<String> {
         let body = self.chat_body(turns, max_output_tokens);
-        let response = self.post(&body).await?;
+        let response = match request_id {
+            Some(id) if self.is_hosted() => {
+                hosted_async::post_with_id(self, &body, id, false, std::future::ready(Ok(())))
+                    .await?
+            }
+            _ => self.post(&body).await?,
+        };
         let text = output_text(&response);
         if text.trim().is_empty() {
             return Err(AppError::new(

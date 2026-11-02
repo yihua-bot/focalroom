@@ -201,7 +201,11 @@ final class FocalRoomUITests: XCTestCase {
         app.textFields["ai.input"].tap()
         let longDraft = String(repeating: "photo ", count: 12)
         app.textFields["ai.input"].typeText(longDraft)
-        XCTAssertGreaterThan(app.textFields["ai.input"].frame.height, 44, "长消息应自然扩展输入区")
+        let inputField = app.textFields["ai.input"]
+        let typedValue = (inputField.value as? String) ?? "<nil>"
+        XCTAssertEqual(typedValue, longDraft, "取证：输入区实际收到的内容")
+        XCTAssertGreaterThan(inputField.frame.height, 44,
+                             "长消息应自然扩展输入区（取证 frame=\(inputField.frame) 内容长度=\(typedValue.count) 发送可用=\(app.buttons["ai.send"].isEnabled)）")
         attachScreenshot(app, name: "Focal AI 长消息输入")
         app.textFields["ai.input"].typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: longDraft.count))
         app.textFields["ai.input"].typeText("本机甲问题")
@@ -272,7 +276,8 @@ final class FocalRoomUITests: XCTestCase {
         XCTAssertTrue(archiveItem.waitForExistence(timeout: 5), "工具菜单应含归档入口")
         XCTAssertTrue(archiveItem.isEnabled)
         archiveItem.tap()
-        let archiveConfirm = app.buttons["project.archive.confirm"]
+        // 确认对话框会把动作渲染成「单元格套按钮」，同一标识出现两个元素，只能按首个匹配点击。
+        let archiveConfirm = app.buttons["project.archive.confirm"].firstMatch
         XCTAssertTrue(archiveConfirm.waitForExistence(timeout: 5), "归档应有二次确认，不能一键生效")
         archiveConfirm.tap()
         XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 15), "归档应有结果提示")
@@ -1046,6 +1051,71 @@ final class FocalRoomUITests: XCTestCase {
         let open = app.buttons.matching(NSPredicate(format: "label == '打开' OR label == 'Open'")).firstMatch
         if open.waitForExistence(timeout: 3), open.isEnabled { open.tap() }
     }
+    @MainActor
+    func testSharedAIEngineJourney() throws {
+        continueAfterFailure = false
+        let environment = ProcessInfo.processInfo.environment
+        guard let base = environment["FOCALROOM_IOS_TEST_BASE_URL"],
+              let projectID = environment["FOCALROOM_IOS_SHARED_PROJECT_ID"],
+              let photoID = environment["FOCALROOM_IOS_SHARED_PHOTO_ID"] else { throw XCTSkip("需要共享核心的隔离夹具") }
+        let app = XCUIApplication()
+        app.launchEnvironment["FOCALROOM_IOS_REVIEW_URL"] = base
+        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launch()
+        watchPasswordPrompt()
+        XCTAssertTrue(app.textFields["login.email"].waitForExistence(timeout: 10))
+        app.textFields["login.email"].tap(); app.textFields["login.email"].typeText("shared-ai@fr.test")
+        app.secureTextFields["login.password"].tap(); app.secureTextFields["login.password"].typeText("iphone-local-test-2026")
+        app.buttons["login.submit"].tap()
+        dismissPasswordPrompt(app)
+        XCTAssertTrue(app.tabBars.buttons["Focal AI"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Focal AI"].tap()
+        selectLocalProject(app, id: projectID, title: "共享 AI 本机项目")
+        let modes = app.segmentedControls["ai.mode"]
+        XCTAssertTrue(modes.waitForExistence(timeout: 10))
+        modes.buttons["聊天"].tap()
+        app.textFields["ai.input"].tap(); app.textFields["ai.input"].typeText("怎样观察画面里的光线？")
+        dismissKeyboardTutorial(app)
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: app.buttons["ai.send"])
+        XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 15), .completed)
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.staticTexts["从光线开始"].waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertFalse(app.staticTexts["## 从光线开始"].exists, "标题标记应转为可读排版")
+        attachScreenshot(app, name: "共享核心-中文聊天排版")
+        modes.buttons["选片任务"].tap()
+        app.buttons["ai.attach"].tap()
+        let photo = app.buttons["ai.attach.photo.\(photoID)"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 10)); photo.tap()
+        app.buttons["完成"].firstMatch.tap()
+        app.textFields["ai.input"].tap(); app.textFields["ai.input"].typeText("请观察照片并创建选片草案")
+        app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.buttons["ai.vision.confirm"].waitForExistence(timeout: 10))
+        app.buttons["取消"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["ai.send"].waitForExistence(timeout: 5)); app.buttons["ai.send"].tap()
+        XCTAssertTrue(app.buttons["ai.vision.confirm"].waitForExistence(timeout: 10))
+        app.buttons["ai.vision.confirm"].tap()
+        let draft = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'ai.shared.draft.'")).firstMatch
+        XCTAssertTrue(draft.waitForExistence(timeout: 45), app.debugDescription)
+        if !draft.isHittable { app.swipeUp() }
+        attachScreenshot(app, name: "共享核心-实际观察与草案")
+        draft.tap()
+        XCTAssertTrue(app.buttons["ai.review.apply"].waitForExistence(timeout: 10))
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: app.buttons["ai.review.apply"])
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 20), .completed, app.debugDescription)
+        attachScreenshot(app, name: "共享核心-草案人工审阅")
+        app.buttons["ai.review.apply"].tap()
+        XCTAssertTrue(app.buttons["采纳到本机项目"].waitForExistence(timeout: 5))
+        app.buttons["采纳到本机项目"].tap()
+        XCTAssertTrue(app.staticTexts["ai.review.receipt"].waitForExistence(timeout: 15), app.debugDescription)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Focal AI"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Focal AI"].tap()
+        selectLocalProject(app, id: projectID, title: "共享 AI 本机项目")
+        let restored = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'ai.shared.draft.'")).firstMatch
+        XCTAssertTrue(restored.waitForExistence(timeout: 20), app.debugDescription)
+        attachScreenshot(app, name: "共享核心-重启后保留草案")
+    }
+
     // 四语冒烟：英文环境下主 Tab 与登录文案应为英文（词表命中验证）。
     @MainActor
     func testEnglishLocalizationSmoke() throws {

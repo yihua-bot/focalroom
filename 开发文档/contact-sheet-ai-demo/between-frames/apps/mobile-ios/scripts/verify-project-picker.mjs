@@ -167,7 +167,11 @@ try {
   assert.equal(localDocument.projects.length, 3);
   assert.ok(localDocument.projects.every(project => !project.migration), '选择本机项目和观察不得隐式迁云');
   for (const project of localProjects) {
-    assert.deepEqual(localDocument.projects.find(value => value.id === project.id), project, '本机项目与选片不得被观察操作改写');
+    const current = localDocument.projects.find(value => value.id === project.id);
+    assert.ok(current, '本机项目不得在观察与画布编辑后消失');
+    // 画布编辑是本轮测试要验的写入，会改 canvas 与 updatedAt；照片与选片必须逐字节不变。
+    const stable = value => ({ id: value.id, title: value.title, createdAt: value.createdAt, photos: value.photos });
+    assert.deepEqual(stable(current), stable(project), '本机项目与选片不得被观察操作改写');
     for (const photo of project.photos) for (const suffix of ['original', 'jpg']) {
       const bytes = await readFile(join(finalContainer, libraryPath, 'media', `${photo.sourceSHA256}.${suffix}`));
       assert.equal(createHash('sha256').update(bytes).digest('hex'), photo.sourceSHA256, '原片与本机预览逐字节不变');

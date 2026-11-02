@@ -1,4 +1,5 @@
 pub mod agent;
+#[cfg(feature = "desktop")]
 pub mod billing;
 pub mod canvas;
 pub mod canvas_commands;
@@ -8,6 +9,7 @@ pub mod cloud_credentials;
 pub mod color_engine;
 mod command_audit;
 pub mod command_handler;
+#[cfg(feature = "desktop")]
 mod commands;
 pub mod commands_generated;
 mod cr2_preview;
@@ -24,8 +26,10 @@ pub mod image_pipeline;
 pub mod importer;
 pub mod keychain;
 pub mod login_guard;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "desktop"))]
 mod macos_menu;
+#[cfg(feature = "native-agent")]
+pub mod native_agent;
 pub mod photo_inspection;
 pub mod product_links;
 pub mod publication_commands;
@@ -37,7 +41,9 @@ pub mod seed_demo;
 pub mod shared_cloud;
 pub mod shared_export;
 pub mod v2_bridge;
+#[cfg(feature = "desktop")]
 use tauri::Manager;
+#[cfg(feature = "desktop")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -234,6 +240,7 @@ pub fn run() {
         .expect("无法启动 FocalRoom 桌面应用");
 }
 
+#[cfg(feature = "desktop")]
 #[tauri::command]
 fn set_native_menu_locale(
     app: tauri::AppHandle,

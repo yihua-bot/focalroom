@@ -18,7 +18,7 @@ impl ProductLink {
         }
     }
 }
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn open_product_link(link: ProductLink) -> Result<()> {
     open_system_url(link.url()).await
 }

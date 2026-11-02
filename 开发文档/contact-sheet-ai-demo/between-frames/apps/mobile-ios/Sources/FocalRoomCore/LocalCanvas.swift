@@ -88,6 +88,8 @@ public struct LocalCanvas: Codable, Sendable, Equatable {
 
 // 画布操作：applyCanvasOperation 应用后返回其逆操作，调用方以逆操作驱动撤销/重做。
 public enum LocalCanvasOperation: Sendable, Equatable {
+    case removeNodes(ids: [String])
+    case restoreNodes([LocalCanvasNode], annotations: [LocalCanvasAnnotation])
     case createNode(LocalCanvasNode)
     case removeNode(id: String)
     case restoreNode(LocalCanvasNode, annotations: [LocalCanvasAnnotation])

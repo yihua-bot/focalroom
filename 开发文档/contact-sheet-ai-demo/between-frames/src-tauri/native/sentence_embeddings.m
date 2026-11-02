@@ -28,7 +28,7 @@ void bf_sentence_embeddings(const char *const *texts, size_t count,
     if (!texts || !vectors || !available || count == 0 || count > 501 || budgetMs == 0) return;
     @autoreleasepool {
         @try {
-            if (@available(macOS 11.0, *)) {
+            if (@available(macOS 11.0, iOS 13.0, *)) {
                 const double deadline = monotonicSeconds() + MIN(budgetMs, 3000) / 1000.0;
                 NSString *query = [NSString stringWithUTF8String:texts[0]];
                 NLLanguage detected = [NLLanguageRecognizer dominantLanguageForString:query];

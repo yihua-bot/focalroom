@@ -276,6 +276,7 @@ pub async fn list_versions(
     }
     Ok(versions)
 }
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn import_editor_results(
     app: tauri::AppHandle,
@@ -303,6 +304,7 @@ pub async fn import_editor_results(
         .await
         .map(Some)
 }
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn list_editor_versions(
     app: tauri::AppHandle,
