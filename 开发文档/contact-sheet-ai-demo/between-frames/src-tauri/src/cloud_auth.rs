@@ -44,7 +44,17 @@ pub struct CloudAuth {
     avatar_cache: std::sync::Mutex<Option<std::path::PathBuf>>,
     device_file: std::sync::Mutex<Option<std::path::PathBuf>>,
     bound_session: std::sync::Mutex<Option<String>>,
+    /// 已通过 /auth/me 校验的 (token, 账户ID, 校验时刻)。
+    identity: std::sync::Mutex<Option<(String, String, std::time::Instant)>>,
+    /// 已取回的 /ai/account 快照 (账户ID, 响应, 取回时刻)。
+    account_snapshot: std::sync::Mutex<Option<(String, Value, std::time::Instant)>>,
 }
+/// 身份校验的复用窗口。一次聊天发送会连续三次索要 token（配置刷新、账户校验、
+/// 模型请求），窗口只需覆盖这一次突发；撤权仍由后续真实请求的 401 兜底。
+const IDENTITY_REUSE: std::time::Duration = std::time::Duration::from_secs(20);
+/// 账户快照的复用窗口，刻意短于前端 AI 配置的 staleTime（10s），只吸收同一次
+/// 发送内的重复读取。额度与策略仍由服务端对每次真实请求权威判定。
+const ACCOUNT_REUSE: std::time::Duration = std::time::Duration::from_secs(5);
 fn valid_billing_price_id(value: &str) -> bool {
     !value.is_empty()
         && value.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -61,8 +71,28 @@ impl CloudAuth {
             .ok_or_else(|| AppError::new("AUTH_REQUIRED", "请先登录 FocalRoom"))
     }
     pub async fn ai_account(&self) -> Result<Value> {
+        // 账户 ID 每次从钥匙串会话现读：换号即失配，不会把上一个账户的快照
+        // 当成当前账户的策略与额度。
+        let account = self.account_id()?;
+        let cached = self
+            .account_snapshot
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        if let Some((id, value, at)) = cached
+            && id == account
+            && at.elapsed() < ACCOUNT_REUSE
+        {
+            return Ok(value);
+        }
         let token = self.bearer(&self.origin).await?;
-        self.request("/ai/account", None, Some(&token)).await
+        let value = self.request("/ai/account", None, Some(&token)).await?;
+        *self
+            .account_snapshot
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) =
+            Some((account, value.clone(), std::time::Instant::now()));
+        Ok(value)
     }
     pub async fn billing_catalog(&self) -> Result<Value> {
         self.request("/billing/catalog", None, None).await
@@ -113,6 +143,8 @@ impl CloudAuth {
             avatar_cache: Default::default(),
             device_file: Default::default(),
             bound_session: Default::default(),
+            identity: Default::default(),
+            account_snapshot: Default::default(),
         })
     }
     fn read(&self) -> Result<Record> {
@@ -193,6 +225,9 @@ impl CloudAuth {
         Ok(())
     }
     fn save(&self, r: &Record) -> Result<()> {
+        // 会话记录一有改写（登录、兑换、撤权清空、资料更新）就作废复用快照，
+        // 避免把上一个会话的身份或账户策略带进新会话。
+        self.drop_reuse();
         if r.pending.is_none() && r.session.is_none() {
             self.vault.delete(&self.service)
         } else {
@@ -202,6 +237,14 @@ impl CloudAuth {
                     .map_err(|_| AppError::new("KEYCHAIN_ERROR", "无法保存登录状态"))?,
             )
         }
+    }
+    /// 作废身份与账户快照的复用。只做本地清理，不发任何请求。
+    fn drop_reuse(&self) {
+        *self.identity.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *self
+            .account_snapshot
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = None;
     }
     async fn request(&self, path: &str, body: Option<Value>, token: Option<&str>) -> Result<Value> {
         let url = format!("{}/api/v2{path}", self.origin);
@@ -539,6 +582,21 @@ impl CloudAuth {
             .session
             .as_ref()
             .ok_or_else(|| AppError::new("AUTH_REQUIRED", "请先登录"))?;
+        // 复用只跳过 /auth/me 这趟无副作用的身份 GET，且要求缓存的 token 与账户 ID
+        // 跟当前钥匙串会话逐字节一致；不一致（换号、重新登录、会话改写）立即重校验。
+        // 这里不缓存任何授权、额度或同意决定，模型请求仍逐次带真实 token 发到服务端。
+        let reused = self
+            .identity
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        if let Some((token, user_id, at)) = reused
+            && token == s.token
+            && user_id == s.user.id
+            && at.elapsed() < IDENTITY_REUSE
+        {
+            return Ok(token);
+        }
         // 这里只重试无副作用的身份 GET；尚未向 AI 网关发送任何请求。
         // 401、协议错误不重试；模型/图片 POST 的结果不明仍由 Provider 保持不可重放。
         let response = match self.request("/auth/me", None, Some(&s.token)).await {
@@ -550,8 +608,14 @@ impl CloudAuth {
         };
         let user = Self::user(response)?;
         if user.id != s.user.id {
+            self.drop_reuse();
             return Err(AppError::new("AUTH_REVOKED", "账户校验已失效"));
         }
+        *self.identity.lock().unwrap_or_else(|p| p.into_inner()) = Some((
+            s.token.clone(),
+            s.user.id.clone(),
+            std::time::Instant::now(),
+        ));
         Ok(s.token.clone())
     }
     /// 修改昵称/头像（PATCH /auth/profile）；成功后刷新本地会话并返回最新状态。
@@ -602,6 +666,8 @@ impl CloudAuth {
             true
         };
         self.vault.delete(&self.service)?;
+        // 登出绕过 save()，这里同样要作废复用快照，防止退出后短暂窗口内仍拿旧 token。
+        self.drop_reuse();
         *self.error.lock().unwrap_or_else(|p| p.into_inner()) = None;
         Ok(revoked)
     }
