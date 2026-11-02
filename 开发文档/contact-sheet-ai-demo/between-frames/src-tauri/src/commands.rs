@@ -663,8 +663,27 @@ pub async fn set_hypothesis_enabled(
     crate::agent::memory::set_enabled(&state.store, &project_id, hypothesis_id, enabled).await
 }
 #[tauri::command]
-pub async fn agent_chat(state: State<'_, Backend>, turns: Vec<crate::agent::types::ChatTurn>) -> Result<String> {
+pub async fn agent_chat(
+    state: State<'_, Backend>,
+    turns: Vec<crate::agent::types::ChatTurn>,
+) -> Result<String> {
     state.agent.chat_turn(&turns).await
+}
+/// 聊天流式命令：增量经 IPC channel 逐段送到前端，命令返回值仍是服务端的最终回执正文。
+/// channel 只活在这次 invoke 里，不经过全局事件总线，切换项目或窗口关闭都不会串台。
+#[tauri::command]
+pub async fn agent_chat_stream(
+    state: State<'_, Backend>,
+    turns: Vec<crate::agent::types::ChatTurn>,
+    on_delta: tauri::ipc::Channel<String>,
+) -> Result<String> {
+    state
+        .agent
+        .chat_turn_stream(&turns, |fragment| {
+            // 前端已断开时 send 失败：继续读完服务端回执，不中断、也不重发。
+            let _ = on_delta.send(fragment.to_owned());
+        })
+        .await
 }
 #[tauri::command]
 pub async fn query_vision_result(

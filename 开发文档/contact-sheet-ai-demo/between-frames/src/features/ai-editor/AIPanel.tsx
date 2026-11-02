@@ -51,6 +51,9 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  const setAiMode = useUIStore(state => state.setAiMode);
  const chatTurns = useUIStore(state => state.aiChat[project.id] ?? NO_TURNS);
  const pushChat = useUIStore(state => state.pushChat);
+ const popChat = useUIStore(state => state.popChat);
+ const appendChat = useUIStore(state => state.appendChat);
+ const settleChat = useUIStore(state => state.settleChat);
  const chatMode = aiMode === 'chat';
  const [message, setMessage] = useState(initialRevision?.message ?? saved?.goal ?? initialGoal ?? '');
  const [count, setCount] = useState(initialRevision?.count ?? saved?.count ?? initialCount ?? 20);
@@ -147,7 +150,19 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
   if (!repository || sending.current || blocked || !message.trim()) return;
   if (!/[\p{L}\p{N}]/u.test(message)) { setError(zh.chatClarifyMessage); return; }
   const prompt = message.trim();
+  const sent = { role: 'user' as const, content: prompt };
   sending.current = true; setBusy(true); setError('');
+  // 乐观上屏：气泡和清空输入框都放在任何 await 之前。此前是先 await 配置刷新
+  // （/auth/me + /ai/account 两趟云端请求）才 push，用户看到的是"点了没反应"。
+  pushChat(project.id, sent);
+  updateMessage('');
+  // 逐字上屏的本地缓存：只在仍是本次上下文时写气泡，失败时凭它精确撤回那条半成品气泡。
+  let streamed = '';
+  const onDelta = (fragment: string) => {
+   if (currentContext.current !== contextKey) return;
+   streamed += fragment;
+   appendChat(project.id, fragment);
+  };
   try {
    const fresh = await configQuery.refetch();
    if (fresh.isError || !fresh.data) throw new Error(zh.aiConnectionFailed);
@@ -155,12 +170,19 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
    const reason = unavailable(fresh.data);
    if (reason) throw new Error(reason);
    if (currentContext.current !== contextKey) return;
-   pushChat(project.id, { role: 'user', content: prompt });
-   const reply = await repository.agent.chat([...chatTurns, { role: 'user', content: prompt }]);
+   // 传了 onDelta 就走流式命令：模型每产出一段就先进气泡，用户不必等整条回复拼完。
+   const reply = await repository.agent.chat([...chatTurns, sent], onDelta);
    if (currentContext.current !== contextKey) return;
-   pushChat(project.id, { role: 'assistant', content: reply });
-   updateMessage('');
-  } catch (cause) { if (currentContext.current === contextKey) setError(userFacingError(cause)); }
+   // 最终以服务端回执正文为准：有增量就整条覆盖逐字拼出来的气泡，
+   // 没有增量（自备密钥、或网关没有流式路由）时等价于原来的追加一条回复。
+   settleChat(project.id, reply);
+  } catch (cause) {
+   // 发送失败撤回气泡并把原文还回输入框，用户可以直接重试，不必重打一遍。
+   if (currentContext.current === contextKey) {
+    if (streamed) popChat(project.id, { role: 'assistant', content: streamed });
+    popChat(project.id, sent); updateMessage(prompt); setError(userFacingError(cause));
+   }
+  }
   finally { sending.current = false; setBusy(false); }
  };
  const send = async () => {
@@ -236,7 +258,8 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
     {!chatTurns.length && <div className="ai-chat-welcome"><span className="chat-welcome-mark"><Sparkles size={27} /></span><h3>{zh.chatModeChatTitle}</h3><p>{zh.chatModeChatHint}</p></div>}
     {chatTurns.map((turn, index) => <div key={index} className={turn.role === 'user' ? 'chat-user-message' : 'chat-assistant-message'}>
      {turn.role === 'assistant' && <span className="chat-assistant-icon"><Sparkles size={15} /></span>}
-     <p className="focal-message-text">{turn.content}</p>
+     {/* 流式期间最后一条助手消息带光标，回执落地后 busy 结束、光标随之消失。 */}
+     <p className={`focal-message-text${busy && turn.role === 'assistant' && index === chatTurns.length - 1 ? ' streaming' : ''}`}>{turn.content}</p>
     </div>)}
     {running && <p className="chat-footnote">{zh.chatModeTaskRunning}</p>}
    </> : <>

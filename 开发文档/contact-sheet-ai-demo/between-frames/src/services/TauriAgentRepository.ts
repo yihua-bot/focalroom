@@ -1,5 +1,5 @@
 import { selectionRevisionSchema, withLocalRevisionPreviews } from './revisionContextSchemas';
-import { invoke } from '@tauri-apps/api/core';
+import { Channel, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { z } from 'zod';
 import { canvasBoardRecordSchema } from '@betweenframes/contracts';
@@ -25,7 +25,14 @@ const aiConfigSchema = z.object({
  consent: consentView.nullable(),
 });
 export class TauriAgentRepository implements AgentRepository {
- async chat(turns: import('../domain/agent').ChatTurn[]) { return z.string().parse(await invoke('agent_chat', { turns })); }
+ async chat(turns: import('../domain/agent').ChatTurn[], onDelta?: (fragment: string) => void) {
+  if (!onDelta) return z.string().parse(await invoke('agent_chat', { turns }));
+  // 传了回调就走流式命令：Rust 每读到一段增量就经这条 channel 送回，channel 只活在这次 invoke 内。
+  // 网关没有流式路由时 Rust 内部退回一次性请求，这里只会收到 0 段增量和同一个最终结果。
+  const channel = new Channel<string>();
+  channel.onmessage = onDelta;
+  return z.string().parse(await invoke('agent_chat_stream', { turns, onDelta: channel }));
+ }
  async selectionRevisionContext(projectId: string, draftId: string, offset = 0) {
   const result = selectionRevisionSchema.nullable().parse(await invoke('selection_revision_context', {projectId,draftId,offset}));
   if (result && (result.draftId !== draftId || result.parent.id === draftId || (result.nextOffset !== null && result.nextOffset !== offset+30) || result.items.length > result.totalItems || result.reviews.some(review => review.photoNames.length !== review.photoIds.length || (review.kind === 'apply' && review.mode === null)))) throw new Error('修订依据与方案不一致。');

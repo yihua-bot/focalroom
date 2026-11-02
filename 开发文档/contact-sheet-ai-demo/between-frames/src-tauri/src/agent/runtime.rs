@@ -31,16 +31,39 @@ pub struct AgentEngine {
 impl AgentEngine {
     /// 聊天模式单轮对话：不上传照片、不创建任务、不写草案；托管账户按普通文字请求在服务端计量。
     pub async fn chat_turn(&self, turns: &[ChatTurn]) -> Result<String> {
+        let (bound, refs) = self.chat_bound(turns).await?;
+        bound.chat_text(&refs, 1024).await
+    }
+    /// 桌面聊天走流式：模型每产出一段就交给回调上屏，最终文字仍以服务端回执为准。
+    /// 校验与账户冻结和一次性路径完全共用一套，两条路不允许各定各的门槛。
+    pub async fn chat_turn_stream(
+        &self,
+        turns: &[ChatTurn],
+        on_delta: impl FnMut(&str) + Send,
+    ) -> Result<String> {
+        let (bound, refs) = self.chat_bound(turns).await?;
+        bound.chat_text_stream(&refs, 1024, on_delta).await
+    }
+    /// 聊天前置：历史合法性校验 + 托管账户冻结与逐次核实，返回可直接发送的正文引用。
+    async fn chat_bound<'a>(
+        &self,
+        turns: &'a [ChatTurn],
+    ) -> Result<(OpenAiProvider, Vec<(&'a str, &'a str)>)> {
         if turns.is_empty() || turns.len() > 40 {
             return Err(AppError::new("VALIDATION_ERROR", "聊天历史长度不合法"));
         }
         for turn in turns {
-            if turn.content.chars().count() > 4000 || !matches!(turn.role.as_str(), "user" | "assistant") {
+            if turn.content.chars().count() > 4000
+                || !matches!(turn.role.as_str(), "user" | "assistant")
+            {
                 return Err(AppError::new("VALIDATION_ERROR", "聊天内容不合法"));
             }
         }
         let provider = self.openai.as_ref().ok_or_else(|| {
-            AppError::new("AI_NOT_CONFIGURED", "Focal AI 暂未开放，请先登录或检查服务配置")
+            AppError::new(
+                "AI_NOT_CONFIGURED",
+                "Focal AI 暂未开放，请先登录或检查服务配置",
+            )
         })?;
         let bound = if provider.is_hosted() {
             let bound = provider.bind_account()?;
@@ -53,7 +76,7 @@ impl AgentEngine {
             .iter()
             .map(|turn| (turn.role.as_str(), turn.content.as_str()))
             .collect();
-        bound.chat_text(&refs, 1024).await
+        Ok((bound, refs))
     }
     /// 只查询已持久记录的原请求；不会排队任务、调用模型或重新发送图片。
     pub async fn query_vision_result(

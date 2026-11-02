@@ -41,6 +41,8 @@ struct Server {
     origin: String,
     calls: Arc<AtomicU32>,
     auth_calls: Arc<AtomicU32>,
+    account_calls: Arc<AtomicU32>,
+    stream_calls: Arc<AtomicU32>,
     polls: Arc<AtomicU32>,
     mode: Arc<AtomicU32>,
     stop: Arc<AtomicBool>,
@@ -54,6 +56,10 @@ impl Server {
         let calls = Arc::new(AtomicU32::new(0));
         let auth_calls = Arc::new(AtomicU32::new(0));
         let auth_count = auth_calls.clone();
+        let account_calls = Arc::new(AtomicU32::new(0));
+        let account_count = account_calls.clone();
+        let stream_calls = Arc::new(AtomicU32::new(0));
+        let stream_count = stream_calls.clone();
         let polls = Arc::new(AtomicU32::new(0));
         let poll_count = polls.clone();
         let mode = Arc::new(AtomicU32::new(0));
@@ -174,6 +180,54 @@ impl Server {
                             json!({"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"fixture"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}),
                         ),
                     }
+                } else if headers.starts_with("post /api/v2/ai/deepseek-flash-v1/responses/stream ")
+                {
+                    assert!(headers.contains("x-focalroom-ai-policy: deepseek-flash-v1"));
+                    assert!(headers.contains("x-focalroom-image-consent: granted"));
+                    let request_id = headers
+                        .lines()
+                        .find_map(|line| line.strip_prefix("x-focalroom-request-id: "))
+                        .unwrap()
+                        .to_owned();
+                    let body: Value =
+                        serde_json::from_slice(&bytes[boundary..boundary + len]).unwrap();
+                    assert_eq!(body["model"], "deepseek-flash");
+                    assert!(body["tools"].as_array().unwrap().is_empty());
+                    assert!(!body.to_string().contains("input_image"));
+                    stream_count.fetch_add(1, Ordering::SeqCst);
+                    let frame = |payload: Value| format!("data: {}\n\n", payload);
+                    let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nConnection: close\r\n\r\n";
+                    let opening = frame(json!({"type": "start", "request_id": request_id}));
+                    match status.load(Ordering::SeqCst) {
+                        // 网关没有这条路由：客户端据此退回一次性请求，且只算一次模型调用。
+                        21 => {
+                            write!(stream,"HTTP/1.1 404 Not Found\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
+                        }
+                        // 半截断流：增量已经到手但没有 done 回执，结果不明，客户端不得重发。
+                        22 => {
+                            write!(
+                                stream,
+                                "{head}{opening}{}",
+                                frame(json!({"type":"delta","text":"逆光"}))
+                            )
+                            .unwrap();
+                            let _ = stream.flush();
+                        }
+                        // 正常：两段增量后给出服务端结算的正式回执。
+                        _ => {
+                            let reply = json!({"id":"stream-1","status":"completed","model":"deepseek-flash","error":null,"output":[{"type":"message","content":[{"type":"output_text","text":"逆光更好看"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}});
+                            write!(
+                                stream,
+                                "{head}{opening}{}{}{}",
+                                frame(json!({"type":"delta","text":"逆光"})),
+                                frame(json!({"type":"delta","text":"更好看"})),
+                                frame(json!({"type":"done","reply":reply}))
+                            )
+                            .unwrap();
+                            let _ = stream.flush();
+                        }
+                    }
+                    continue;
                 } else if headers.starts_with("post /api/v2/ai/deepseek-flash-v1/responses/async/")
                     && headers.contains("/cancel ")
                 {
@@ -216,6 +270,7 @@ impl Server {
                         json!({"jobId":job_id,"state":if mode == 9 {"UNKNOWN"} else {"COMPLETED"},"error":if mode == 9 {json!("AI_RESULT_UNKNOWN")} else {Value::Null},"result":{"status":"completed","model":"deepseek-flash","output":[{"type":"message","content":[{"type":"output_text","text":observation}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}),
                     )
                 } else if headers.starts_with("get /api/v2/ai/account ") {
+                    account_count.fetch_add(1, Ordering::SeqCst);
                     (
                         200,
                         json!({"policy":"deepseek-flash-v1","enabled":true,"verified":true,"available":250000,"recovery":if queue_enabled.load(Ordering::SeqCst){json!({"enabled":true,"policy":"encrypted-queue-v1","maxQueueSeconds":600})}else{json!({"enabled":false})}}),
@@ -253,6 +308,8 @@ impl Server {
             origin,
             calls,
             auth_calls,
+            account_calls,
+            stream_calls,
             polls,
             mode,
             stop,
@@ -400,6 +457,102 @@ async fn only_readonly_authentication_connection_failure_is_retried_once() {
             if mode == 5 { 1 } else { 2 }
         );
     }
+}
+#[tokio::test]
+async fn hosted_chat_send_burst_validates_identity_and_account_once_each() {
+    // 一次聊天发送原本有三处都要"已校验的当前身份"：前端刷新配置走 ai_account、
+    // 引擎账户校验走 ai_account、模型请求走 bearer。过去是 3 趟 /auth/me 加
+    // 2 趟 /ai/account 串在模型请求前面，用户看到的就是"文字卡几秒才发出去"。
+    let server = Server::new();
+    let vault = Arc::new(Vault::default());
+    vault.write("", &session("user-a")).unwrap();
+    let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap());
+    assert_eq!(auth.ai_account().await.unwrap()["available"], 250000);
+    let bound = OpenAiProvider::hosted(auth.clone()).bind_account().unwrap();
+    bound.validate_hosted_account().await.unwrap();
+    assert_eq!(
+        bound.chat_text(&[("user", "你好")], 64).await.unwrap(),
+        "fixture"
+    );
+    // 复用把两次账户读取和第三次身份读取都吸收掉了，只剩模型请求本身。
+    assert_eq!(server.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(server.auth_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(server.account_calls.load(Ordering::SeqCst), 1);
+    // 复用不跨越会话改写：token 与账户 ID 必须逐字对上当前钥匙串会话。
+    // 夹具的 /auth/me 恒返回 user-a，因此切到 user-b 后必须重新真实校验并拒绝，
+    // 不能让已经通过校验的旧账户 token 顶到新账户上（换号不能续跑）。
+    vault.write("", &session("user-b")).unwrap();
+    assert_eq!(
+        auth.bearer(auth.origin()).await.unwrap_err().code,
+        "AUTH_REVOKED"
+    );
+    assert_eq!(server.auth_calls.load(Ordering::SeqCst), 2);
+}
+#[tokio::test]
+async fn hosted_chat_stream_forwards_deltas_and_returns_the_settled_reply() {
+    let server = Server::new();
+    let vault = Arc::new(Vault::default());
+    vault.write("", &session("user-a")).unwrap();
+    let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap());
+    let bound = OpenAiProvider::hosted(auth.clone()).bind_account().unwrap();
+    let mut fragments: Vec<String> = Vec::new();
+    let reply = bound
+        .chat_text_stream(&[("user", "逆光怎么拍")], 64, |fragment| {
+            fragments.push(fragment.to_owned())
+        })
+        .await
+        .unwrap();
+    // 到一段交一段，不等整条回复拼完；最终正文以服务端结算过的 done 回执为准。
+    assert_eq!(fragments, ["逆光", "更好看"]);
+    assert_eq!(reply, "逆光更好看");
+    assert_eq!(server.stream_calls.load(Ordering::SeqCst), 1);
+    // 流式成功时不该再补一趟一次性请求。
+    assert_eq!(server.calls.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn hosted_chat_stream_falls_back_when_the_gateway_has_no_route() {
+    // 网关未部署 /responses/stream：这种请求在路由匹配阶段就被拒，服务端没有预留额度，
+    // 退回一次性路径不构成重复计量。
+    let server = Server::new();
+    server.mode.store(21, Ordering::SeqCst);
+    let vault = Arc::new(Vault::default());
+    vault.write("", &session("user-a")).unwrap();
+    let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap());
+    let bound = OpenAiProvider::hosted(auth.clone()).bind_account().unwrap();
+    let mut fragments: Vec<String> = Vec::new();
+    let reply = bound
+        .chat_text_stream(&[("user", "你好")], 64, |fragment| {
+            fragments.push(fragment.to_owned())
+        })
+        .await
+        .unwrap();
+    assert_eq!(reply, "fixture");
+    assert!(fragments.is_empty());
+    assert_eq!(server.stream_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(server.calls.load(Ordering::SeqCst), 1);
+}
+#[tokio::test]
+async fn hosted_chat_stream_broken_midway_is_unknown_and_never_resent() {
+    // 已经收到 200 与增量后断流：服务端可能已把这趟记成计量结果，
+    // 客户端只能报"结果不明"，不能改编号重发，也不能退回一次性路径。
+    let server = Server::new();
+    server.mode.store(22, Ordering::SeqCst);
+    let vault = Arc::new(Vault::default());
+    vault.write("", &session("user-a")).unwrap();
+    let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap());
+    let bound = OpenAiProvider::hosted(auth.clone()).bind_account().unwrap();
+    let mut fragments: Vec<String> = Vec::new();
+    let error = bound
+        .chat_text_stream(&[("user", "你好")], 64, |fragment| {
+            fragments.push(fragment.to_owned())
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "AI_RESULT_UNKNOWN");
+    assert!(!error.retriable);
+    assert_eq!(fragments, ["逆光"]);
+    assert_eq!(server.stream_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(server.calls.load(Ordering::SeqCst), 0);
 }
 #[tokio::test]
 async fn hosted_calls_use_account_bearer_and_fixed_policy_without_a_provider_key() {

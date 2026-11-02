@@ -23,6 +23,9 @@ interface UIState {
   setAiMode: (mode: 'chat' | 'task') => void;
   aiChat: Record<string, import('../domain/agent').ChatTurn[]>;
   pushChat: (projectId: string, turn: import('../domain/agent').ChatTurn) => void;
+  popChat: (projectId: string, turn: import('../domain/agent').ChatTurn) => void;
+  appendChat: (projectId: string, fragment: string) => void;
+  settleChat: (projectId: string, content: string) => void;
   clearChat: (projectId: string) => void;
   activeId: string | null;
   selectedIds: string[];
@@ -53,6 +56,16 @@ interface UIState {
   reset: () => void;
 }
 const initial = { canvasBoardRequest: 0, canvasTaskSource: null as import('../domain/agent').CanvasTaskSource | null, canvasBoardId: null as string | null, aiOpen: false, aiMemoryOpen: false, activeId: null as string | null, selectedIds: [] as string[], anchorId: null as string | null, search: '', filmstripOpen: true, sidebarOpen: true, filter: 'all' as PhotoFilter, grouping: 'none' as GridGrouping, view: 'grid' as WorkspaceView, panel: 'photo' as InspectorPanel, dense: false, inspectorOpen: true };
+type ChatTurns = import('../domain/agent').ChatTurn[];
+// 流式增量和最终回执都只作用在末条助手气泡上：末条不是助手就先新开一条，
+// 用户刚发出的原文永远不会被改写。历史上限与 pushChat 同为 40 条。
+const mapLastAssistant = (turns: ChatTurns, write: (previous: string | null) => string): ChatTurns => {
+  const last = turns[turns.length - 1];
+  const next = last?.role === 'assistant'
+    ? [...turns.slice(0, -1), { ...last, content: write(last.content) }]
+    : [...turns, { role: 'assistant' as const, content: write(null) }];
+  return next.slice(-40);
+};
 export const useUIStore = create<UIState>(set => ({
   draftRevisionRequest: null,
   openDraftRevision: (projectId, reference, title, message, count) => set({ aiOpen: true, aiMemoryOpen: false, canvasTaskSource: null, view: 'canvas', panel: 'photo', draftRevisionRequest: { id: crypto.randomUUID(), projectId, reference, title, message, count } }),
@@ -63,6 +76,16 @@ export const useUIStore = create<UIState>(set => ({
   setAiMode: aiMode => set({ aiMode }),
   aiChat: {},
   pushChat: (projectId, turn) => set(state => ({ aiChat: { ...state.aiChat, [projectId]: [...(state.aiChat[projectId] ?? []), turn].slice(-40) } })),
+  // 只在末条与传入的乐观消息逐字相符时才撤回，避免误删已经到达的助手回复。
+  popChat: (projectId, turn) => set(state => {
+   const turns = state.aiChat[projectId] ?? [];
+   const last = turns[turns.length - 1];
+   return last && last.role === turn.role && last.content === turn.content ? { aiChat: { ...state.aiChat, [projectId]: turns.slice(0, -1) } } : {};
+  }),
+  // 流式增量：把刚到的一段文字追加到末条助手气泡（末条不是助手则新开一条）。
+  appendChat: (projectId, fragment) => set(state => ({ aiChat: { ...state.aiChat, [projectId]: mapLastAssistant(state.aiChat[projectId] ?? [], previous => (previous ?? '') + fragment) } })),
+  // 服务端回执是权威正文：整条覆盖末条助手气泡，避免增量拼接与最终结果不一致时留下半句。
+  settleChat: (projectId, content) => set(state => ({ aiChat: { ...state.aiChat, [projectId]: mapLastAssistant(state.aiChat[projectId] ?? [], () => content) } })),
   clearChat: projectId => set(state => ({ aiChat: { ...state.aiChat, [projectId]: [] } })),
   ...initial, filter: 'all', grouping: 'none', view: 'grid', panel: 'photo',
   select: activeId => set({ activeId, selectedIds: activeId ? [activeId] : [], anchorId: activeId }),

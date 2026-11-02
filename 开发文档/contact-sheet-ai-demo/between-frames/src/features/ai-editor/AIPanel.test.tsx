@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -254,7 +254,7 @@ it('切到聊天模式后走纯文字对话，不上传照片也不进任务管�
  await userEvent.clear(box);
  await userEvent.type(box, '逆光怎么拍更好看');
  await userEvent.click(send());
- await waitFor(() => expect(repo.agent.chat).toHaveBeenCalledWith([{ role: 'user', content: '逆光怎么拍更好看' }]));
+ await waitFor(() => expect(repo.agent.chat).toHaveBeenCalledWith([{ role: 'user', content: '逆光怎么拍更好看' }], expect.any(Function)));
  expect(repo.agent.request).not.toHaveBeenCalled();
  expect(repo.agent.setConsent).not.toHaveBeenCalled();
  expect(await screen.findByText('逆光怎么拍更好看')).toBeInTheDocument();
@@ -270,6 +270,87 @@ it('聊天模式发送失败时把错误显示出来，不留半截回复', asyn
  await userEvent.click(send());
  expect(await screen.findByRole('alert')).toBeInTheDocument();
  expect(screen.queryByText('聊天模式回复')).not.toBeInTheDocument();
+});
+
+it('聊天模式消息先上屏，不等配置刷新返回', async () => {
+ const repo = fixture();
+ mount(repo); await ready();
+ await userEvent.click(screen.getByRole('tab', { name: '聊天模式' }));
+ // 让配置刷新一直挂起，等价于云端 /auth/me + /ai/account 还没回来。
+ repo.agent.aiConfig.mockReturnValue(new Promise(() => {}));
+ const box = screen.getByRole('textbox', { name: '消息' });
+ await userEvent.clear(box);
+ await userEvent.type(box, '逆光怎么拍');
+ await userEvent.click(send());
+ expect(await screen.findByText('逆光怎么拍')).toBeInTheDocument();
+ expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('');
+ // 配置没回来之前不能把消息发给模型。
+ expect(repo.agent.chat).not.toHaveBeenCalled();
+ expect(repo.agent.request).not.toHaveBeenCalled();
+});
+
+it('聊天模式发送失败会撤回气泡并把原文还回输入框', async () => {
+ const repo = fixture();
+ repo.agent.chat.mockRejectedValueOnce(new Error('boom'));
+ mount(repo); await ready();
+ await userEvent.click(screen.getByRole('tab', { name: '聊天模式' }));
+ const box = screen.getByRole('textbox', { name: '消息' });
+ await userEvent.clear(box);
+ await userEvent.type(box, '你好');
+ await userEvent.click(send());
+ expect(await screen.findByRole('alert')).toBeInTheDocument();
+ // 不留没有回复的孤立气泡，原文回到输入框可以直接重试。
+ // 只在消息流里找气泡：输入框本身也含这段文字，不受 role="log" 覆盖。
+ expect(within(screen.getByRole('log')).queryByText('你好')).not.toBeInTheDocument();
+ expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('你好');
+ expect(repo.agent.chat).toHaveBeenCalledTimes(1);
+});
+
+// 最后一条气泡的文字：流式用例要在增量到达的那一刻直接读 store，不等 React 重渲染。
+const lastBubble = () => {
+ const turns = useUIStore.getState().aiChat[project.id] ?? [];
+ return turns[turns.length - 1]?.content ?? '';
+};
+
+it('聊天流式增量先进气泡，最终回执再整条覆盖', async () => {
+ const repo = fixture();
+ const snapshots: string[] = [];
+ repo.agent.chat.mockImplementation(async (_turns: unknown, onDelta?: (fragment: string) => void) => {
+  onDelta?.('逆光');
+  snapshots.push(lastBubble());
+  onDelta?.('更稳');
+  snapshots.push(lastBubble());
+  return '逆光更稳。';
+ });
+ mount(repo); await ready();
+ await userEvent.click(screen.getByRole('tab', { name: '聊天模式' }));
+ const box = screen.getByRole('textbox', { name: '消息' });
+ await userEvent.clear(box);
+ await userEvent.type(box, '怎么拍');
+ await userEvent.click(send());
+ // 回执之前用户就该看到已到达的文字，而不是整段空白等到结束。
+ expect(snapshots).toEqual(['逆光', '逆光更稳']);
+ expect(await within(screen.getByRole('log')).findByText('逆光更稳。')).toBeInTheDocument();
+ expect(repo.agent.chat).toHaveBeenCalledTimes(1);
+});
+
+it('聊天流式中途断开只撤回半截气泡，不自动重发', async () => {
+ const repo = fixture();
+ repo.agent.chat.mockImplementation(async (_turns: unknown, onDelta?: (fragment: string) => void) => {
+  onDelta?.('半截');
+  throw new Error('boom');
+ });
+ mount(repo); await ready();
+ await userEvent.click(screen.getByRole('tab', { name: '聊天模式' }));
+ const box = screen.getByRole('textbox', { name: '消息' });
+ await userEvent.clear(box);
+ await userEvent.type(box, '你好');
+ await userEvent.click(send());
+ expect(await screen.findByRole('alert')).toBeInTheDocument();
+ // 服务端可能已经计量，界面不猜结果：半截文字撤掉、原文还回输入框，且不自动补发。
+ expect(within(screen.getByRole('log')).queryByText('半截')).not.toBeInTheDocument();
+ expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('你好');
+ expect(repo.agent.chat).toHaveBeenCalledTimes(1);
 });
 
 it('默认任务模式，切换开关不改变任务发送路径', async () => {

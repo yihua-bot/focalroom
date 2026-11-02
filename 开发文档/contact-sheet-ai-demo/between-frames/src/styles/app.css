@@ -742,6 +742,10 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .focal-chat-meta .clear:hover{color:var(--text,#e8e8f0)}
 
 .focal-message-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+/* 流式回复的落点光标：只在最后一条助手消息边到边上传时闪动；
+   全局 prefers-reduced-motion 规则会把它一并停掉。 */
+.focal-message-text.streaming::after { content: ''; display: inline-block; width: 5px; height: 13px; margin-left: 4px; vertical-align: -2px; border-radius: 1px; background: #7f9db5; animation: focal-stream-caret 1s steps(1) infinite; }
+@keyframes focal-stream-caret { 50% { opacity: 0; } }
 .chat-count-options { color: #a6b4c1; font-size: 11px; }
 .chat-count-options summary, .chat-inspection summary { cursor: pointer; padding: 5px 0; }
 .chat-count-options[open] .chat-count { padding-top: 8px; }

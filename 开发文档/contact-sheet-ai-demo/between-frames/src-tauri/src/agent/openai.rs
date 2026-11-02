@@ -3,6 +3,7 @@ use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 use std::{future::Future, pin::Pin};
 pub(crate) mod hosted_async;
+mod hosted_stream;
 
 /// API key 只经环境变量进入进程内存：不写 SQLite、不进日志、不回传前端（仅脱敏尾号）。
 pub const KEY_ENV: &str = "BETWEEN_FRAMES_OPENAI_API_KEY";
@@ -401,23 +402,63 @@ impl OpenAiProvider {
         })
     }
     /// 聊天模式单轮纯文字请求：不传照片、不挂工具、不创建任务；托管计量由账户服务在服务端完成。
-    pub async fn chat_text(&self, turns: &[(&str, &str)], max_output_tokens: u32) -> Result<String> {
+    pub async fn chat_text(
+        &self,
+        turns: &[(&str, &str)],
+        max_output_tokens: u32,
+    ) -> Result<String> {
+        let body = self.chat_body(turns, max_output_tokens);
+        let response = self.post(&body).await?;
+        let text = output_text(&response);
+        if text.trim().is_empty() {
+            return Err(AppError::new(
+                "MODEL_UNAVAILABLE",
+                "模型没有返回文字，请重试",
+            ));
+        }
+        Ok(text)
+    }
+    /// 聊天请求正文：固定系统提示 + 纯文字历史，不挂工具、不带图片。
+    fn chat_body(&self, turns: &[(&str, &str)], max_output_tokens: u32) -> Value {
         let input: Vec<Value> = turns
             .iter()
             .map(|(role, text)| json!({"role": role, "content": [{"type": "input_text", "text": text}]}))
             .collect();
-        let body = json!({
+        json!({
             "model": self.model,
             "instructions": CHAT_PROMPT,
             "input": input,
             "tools": [],
             "max_output_tokens": max_output_tokens,
             "store": false,
-        });
-        let response = self.post(&body).await?;
+        })
+    }
+    /// 托管聊天的流式版本：增量交给回调逐字上屏，最终文字仍以服务端 done 回执为准。
+    /// 只有网关没有 /stream 路由（请求未进鉴权与额度预留）才退回一次性路径；
+    /// 其余失败一律不重发，因为服务端可能已经预留了额度。自备密钥模式保持一次性请求。
+    pub async fn chat_text_stream(
+        &self,
+        turns: &[(&str, &str)],
+        max_output_tokens: u32,
+        mut on_delta: impl FnMut(&str),
+    ) -> Result<String> {
+        if !self.is_hosted() {
+            return self.chat_text(turns, max_output_tokens).await;
+        }
+        let body = self.chat_body(turns, max_output_tokens);
+        let response = match hosted_stream::chat_stream(self, &body, &mut on_delta).await {
+            Ok(response) => response,
+            Err(hosted_stream::StreamFailure::RouteMissing) => {
+                return self.chat_text(turns, max_output_tokens).await;
+            }
+            Err(hosted_stream::StreamFailure::Failed(error)) => return Err(error),
+        };
         let text = output_text(&response);
         if text.trim().is_empty() {
-            return Err(AppError::new("MODEL_UNAVAILABLE", "模型没有返回文字，请重试"));
+            return Err(AppError::new(
+                "MODEL_UNAVAILABLE",
+                "模型没有返回文字，请重试",
+            ));
         }
         Ok(text)
     }
