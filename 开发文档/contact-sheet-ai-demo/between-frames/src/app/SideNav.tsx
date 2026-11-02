@@ -17,23 +17,23 @@ export function SideNav({ project, page, view, onView, onProjects, onHelp, local
 }) {
   const ui = useUIStore();
   const [settingsPage, setSettingsPage] = useState<'general' | 'contact' | null>(null);
-  const projectKind = !local ? '演示项目'
-    : authority === 'shared' ? '共享项目 · 只读'
-    : authority === 'local-promoting' ? '正在准备共享 · 暂停编辑'
-    : authority === 'local' ? '本地项目' : '状态待确认';
+  const projectKind = !local ? zh.demoProject
+    : authority === 'shared' ? zh.sharedReadonlyProject
+    : authority === 'local-promoting' ? zh.preparingShare
+    : authority === 'local' ? zh['sharing.status.local'] : zh.projectStatusUnknown;
   return <aside className="sidebar"><div className="logo"><img className="logo-symbol" src="/focalroom-mark.png" alt="FocalRoom 标志" /><div>
     <div className="brand">FocalRoom</div><div className="brand-sub">PHOTO STUDIO</div></div></div>
-    <button className="nav-fold" onClick={ui.toggleSidebar} aria-label={ui.sidebarOpen ? '收起导航' : '展开导航'}>{ui.sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}</button>
+    <button className="nav-fold" onClick={ui.toggleSidebar} aria-label={ui.sidebarOpen ? zh.collapseNav : zh.expandNav}>{ui.sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}</button>
     <nav aria-label={zh.projects}>
       <button className={`nav ${page === 'projects' ? 'current' : ''}`} aria-current={page === 'projects' ? 'page' : undefined} aria-label={zh.projects} onClick={onProjects}><FolderOpen size={17} /><span>{zh.projects}</span></button>
     </nav>
     {page === 'workspace' && project && <><div className="side-divider" /><div className="group-label">{zh.currentProject}</div>
-      <div className="project-link"><strong>{project.title}</strong><small>{project.photos.length} 张图像 · {project.sequence.length} 张入选<br />{projectKind}</small></div>
+      <div className="project-link"><strong>{project.title}</strong><small>{zh.projectStats.replace('{photos}', String(project.photos.length)).replace('{sequences}', String(project.sequence.length))}<br />{projectKind}</small></div>
       <nav aria-label={project.title}>
         <button className={`nav ${view === 'grid' ? 'current' : ''}`} aria-current={view === 'grid' ? 'page' : undefined} aria-label={zh.workspace} onClick={() => onView('grid')}><Grid2X2 size={17} /><span>{zh.workspace}</span></button>
         <button className={`nav ${view === 'sequence' ? 'current' : ''}`} aria-current={view === 'sequence' ? 'page' : undefined} aria-label={zh.sequence} onClick={() => onView('sequence')}><ListOrdered size={17} /><span>{zh.sequence}</span></button>
-        <button className={`nav ${view === 'canvas' ? 'current' : ''}`} aria-current={view === 'canvas' ? 'page' : undefined} aria-label="叙事画布" onClick={() => onView('canvas')}><LayoutGrid size={17} /><span>叙事画布</span></button>
-        <button className={`nav ${view === 'publication' ? 'current' : ''}`} aria-current={view === 'publication' ? 'page' : undefined} aria-label="出版物" onClick={() => onView('publication')}><BookOpen size={17} /><span>出版物</span></button>
+        <button className={`nav ${view === 'canvas' ? 'current' : ''}`} aria-current={view === 'canvas' ? 'page' : undefined} aria-label={zh.canvasSurface} onClick={() => onView('canvas')}><LayoutGrid size={17} /><span>{zh.canvasSurface}</span></button>
+        <button className={`nav ${view === 'publication' ? 'current' : ''}`} aria-current={view === 'publication' ? 'page' : undefined} aria-label={zh.publicationsView} onClick={() => onView('publication')}><BookOpen size={17} /><span>{zh.publicationsView}</span></button>
       </nav>
     </>}
     <div className="sidebar-bottom"><CloudAccount repository={cloudAuth} onSettings={() => setSettingsPage('general')} onHelp={onHelp} onContact={() => setSettingsPage('contact')} /></div>

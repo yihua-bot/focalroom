@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../components/shared/Modal';
+import { zh } from './copy';
 
 export interface CommandEntry {
   id: string;
@@ -29,12 +30,12 @@ export function CommandPalette({ commands, onClose }: { commands: CommandEntry[]
     onClose();
     command.run();
   };
-  return <Modal title="命令面板" description="输入关键词过滤，↑↓ 选择，Enter 执行。" onClose={onClose}>
+  return <Modal title={zh.commandPaletteTitle} description={zh.commandPaletteHint} onClose={onClose}>
     <input
       ref={inputRef}
       className="command-palette-input"
-      aria-label="搜索命令"
-      placeholder="搜索命令…"
+      aria-label={zh.searchCommands}
+      placeholder={zh.searchCommandsPlaceholder}
       value={query}
       autoFocus
       onChange={event => { setQuery(event.target.value); setActive(0); }}
@@ -44,7 +45,7 @@ export function CommandPalette({ commands, onClose }: { commands: CommandEntry[]
         if (event.key === 'Enter') { event.preventDefault(); execute(active); }
       }}
     />
-    <ul ref={listRef} className="command-palette-list" role="listbox" aria-label="命令列表">
+    <ul ref={listRef} className="command-palette-list" role="listbox" aria-label={zh.commandList}>
       {filtered.map((command, index) => <li key={command.id} role="option" aria-selected={index === active}
         onMouseEnter={() => setActive(index)}
         onClick={() => execute(index)}>
@@ -52,7 +53,7 @@ export function CommandPalette({ commands, onClose }: { commands: CommandEntry[]
         <span className="command-label">{command.label}</span>
         {command.hint && <kbd className="command-hint">{command.hint}</kbd>}
       </li>)}
-      {!filtered.length && <li className="command-empty" role="option" aria-selected="false" aria-disabled="true">没有匹配的命令</li>}
+      {!filtered.length && <li className="command-empty" role="option" aria-selected="false" aria-disabled="true">{zh.noMatchingCommands}</li>}
     </ul>
   </Modal>;
 }

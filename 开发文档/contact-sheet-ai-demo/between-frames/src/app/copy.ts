@@ -4,11 +4,30 @@ import enStrings from '../i18n/locales/en.json';
 import jaStrings from '../i18n/locales/ja.json';
 import koStrings from '../i18n/locales/ko.json';
 
-const bundles: Record<string, Record<string, unknown>> = {
+const SUPPORTED = ['zh', 'en', 'ja', 'ko'];
+export const STORAGE_KEY = 'focalroom-locale';
+
+/// 语言选择：本地保存优先，其次跟随系统语言，兜底英文。
+/// 文案代理与 Provider 必须用同一份判定，否则首屏会先渲染中文再翻成目标语言。
+export function detectLocale(): string {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (typeof saved === 'string' && SUPPORTED.includes(saved)) return saved;
+  } catch {
+    // 非浏览器环境（构建期、纯 Node 夹具）没有存储，直接走系统语言。
+  }
+  const browser = (typeof navigator === 'undefined' ? 'en' : navigator.language).toLowerCase();
+  if (browser.startsWith('ja')) return 'ja';
+  if (browser.startsWith('ko')) return 'ko';
+  if (browser.startsWith('zh')) return 'zh';
+  return 'en';
+}
+
+export const bundles: Record<string, Record<string, unknown>> = {
   zh: zhStrings, en: enStrings, ko: koStrings, ja: jaStrings,
 };
 
-let currentLocale = 'zh';
+let currentLocale = detectLocale();
 export function setCopyLocale(locale: string) { currentLocale = locale; }
 export function getCopyLocale() { return currentLocale; }
 
@@ -30,18 +49,21 @@ function pick(obj: Record<string, unknown>, key: string): unknown {
   return undefined;
 }
 
+/// 两条文案通道共用的唯一查找规则：目标语言缺键时回落中文，而不是回落键名。
+/// 回落成中文是"这屏还有中文"的可观测信号，回落成键名会直接变成乱码。
+export function resolveCopy(locale: string, key: string): string | undefined {
+  for (const source of [bundles[locale] ?? bundles.zh, bundles.zh]) {
+    const value = pick(source, key);
+    if (typeof value === 'string') return value;
+    if (value !== undefined && typeof value !== 'object') return String(value);
+  }
+  return undefined;
+}
+
 // 代理：zh.xxx 读当前语言的对应键；缺键回落中文原文。
 export const zh = new Proxy({} as Record<string, string>, {
   get(_, key: string) {
-    const bundle = bundles[currentLocale] ?? bundles.zh;
-    const value = pick(bundle, key);
-    if (typeof value === 'string') return value;
-    if (value !== undefined && typeof value !== 'object') return String(value);
-    // 回落到中文源。
-    const fallback = pick(bundles.zh, key);
-    if (typeof fallback === 'string') return fallback;
-    if (fallback !== undefined && typeof fallback !== 'object') return String(fallback);
-    return key;
+    return resolveCopy(currentLocale, key) ?? key;
   },
 });
 

@@ -41,50 +41,50 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   const gridTools = ui.view === 'grid';
   const readOnly = !!sharing && sharing.authority !== 'local';
   return <><ProjectHeader project={project} onEdit={onEdit} onImport={onImport} onAI={openAI} readOnly={readOnly} />
-    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? '共享项目 · 请在线继续审稿，本机项目仅供查看。' : '共享尚未完成 · 编辑已暂停，请在导出窗口继续或取消共享。'}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
-    {(ui.view === 'grid' || ui.view === 'sequence') && <div className="history-toolbar" role="group" aria-label="编辑历史">
-      <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">撤销</Button>
-      <Button size="small" disabled={busy || !project.history?.redoGroupId} onClick={onRedo} title="⌘ / Ctrl Shift Z">重做</Button>
-      <Button size="small" disabled={busy} onClick={onVersions}>作品版本{project.versions?.length ? ` · ${project.versions.length}` : ''}</Button>
+    {readOnly && <div className="preview-banner">{sharing?.authority === 'shared' ? zh.previewSharedProject : zh.previewSharePending}{sharing?.remote?.webUrl && <SharedReviewLink projectId={project.id} url={sharing.remote.webUrl} />}</div>}
+    {(ui.view === 'grid' || ui.view === 'sequence') && <div className="history-toolbar" role="group" aria-label={zh.editHistory}>
+      <Button size="small" disabled={busy || !project.history?.undoGroupId} onClick={onUndo} title="⌘ / Ctrl Z">{zh['common.undo']}</Button>
+      <Button size="small" disabled={busy || !project.history?.redoGroupId} onClick={onRedo} title="⌘ / Ctrl Shift Z">{zh['common.redo']}</Button>
+      <Button size="small" disabled={busy} onClick={onVersions}>{zh.workVersions}{project.versions?.length ? ` · ${project.versions.length}` : ''}</Button>
       {onEditorVersions && <Button size="small" onClick={onEditorVersions}>{t('editor.title', '调色版本')}</Button>}
-      <Button size="small" disabled={busy} onClick={onActivity}>操作历史{project.events.length ? ` · ${project.events.length}` : ''}</Button>
-      <span className="micro">{project.history?.undoCount ?? 0} 次可撤销编辑</span>
+      <Button size="small" disabled={busy} onClick={onActivity}>{zh.activityLog}{project.events.length ? ` · ${project.events.length}` : ''}</Button>
+      <span className="micro">{zh.undoableEdits.replace('{count}', String(project.history?.undoCount ?? 0))}</span>
     </div>}
-    <div className="toolbar">{gridTools && <div className="filter-tabs" aria-label="照片筛选">{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter}
+    <div className="toolbar">{gridTools && <div className="filter-tabs" aria-label={zh.photoFilters}>{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter}
       className={ui.filter === filter ? 'active' : ''} onClick={() => ui.setFilter(filter)}>{String(zh['filters.' + filter] ?? filter)}<span className="count">{filter === 'all' ? project.photos.length : project.photos.filter(photo => photo.status === filter).length}</span></button>)}</div>}
-      <div className="toolbar-actions">{gridTools && <Button size="small" onClick={ui.toggleDensity} aria-label="切换网格密度" aria-pressed={ui.dense}><Columns3 size={15} /></Button>}
+      <div className="toolbar-actions">{gridTools && <Button size="small" onClick={ui.toggleDensity} aria-label={zh.toggleGridDensity} aria-pressed={ui.dense}><Columns3 size={15} /></Button>}
         {photoTools && <Button size="small" disabled={project.photos.length < 2 || !active} onClick={onCompare}>{zh.compare}</Button>}<Button size="small" onClick={onExport}>{zh.export} ↗</Button>
-        {photoTools && <Button size="small" onClick={ui.toggleFilmstrip} aria-label={ui.filmstripOpen ? '收起序列带' : '展开序列带'} aria-pressed={ui.filmstripOpen}><Film size={15} /></Button>}
+        {photoTools && <Button size="small" onClick={ui.toggleFilmstrip} aria-label={ui.filmstripOpen ? zh.collapseFilmstrip : zh.expandFilmstrip} aria-pressed={ui.filmstripOpen}><Film size={15} /></Button>}
         <Button size="small" onClick={ui.toggleInspector} aria-label={ui.inspectorOpen ? zh.hidePanel : zh.showPanel}>{ui.inspectorOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}</Button></div>
-      {gridTools && <div className="workspace-tools"><label className="search-field" htmlFor="photo-search"><Search size={14} /><input id="photo-search" type="search" aria-label="搜索照片文件名或备注" placeholder="搜索文件名或备注 · ⌘F" value={ui.search} onChange={event => ui.setSearch(event.target.value)} /></label>
-        <label className="group-field">分组
-          <select aria-label="网格分组" value={ui.grouping} onChange={event => ui.setGrouping(event.target.value as GridGrouping)}>
-            <option value="none">不分组</option>
-            <option value="status">按选片状态</option>
-            <option value="rating">按人工评分</option>
-            <option value="prefix">按文件名前缀</option>
+      {gridTools && <div className="workspace-tools"><label className="search-field" htmlFor="photo-search"><Search size={14} /><input id="photo-search" type="search" aria-label={zh.searchPhotoAria} placeholder={zh.searchPhotoPlaceholder} value={ui.search} onChange={event => ui.setSearch(event.target.value)} /></label>
+        <label className="group-field">{zh.groupLabel}
+          <select aria-label={zh.gridGrouping} value={ui.grouping} onChange={event => ui.setGrouping(event.target.value as GridGrouping)}>
+            <option value="none">{zh.groupNone}</option>
+            <option value="status">{zh.groupByStatus}</option>
+            <option value="rating">{zh.groupByRating}</option>
+            <option value="prefix">{zh.groupByPrefix}</option>
           </select>
         </label>
-        <span className="micro">⌘ / Ctrl 点选 · Shift 连选</span></div>}
-      {photoTools && selectedIds.length > 1 && <div className="selection-tools" role="group" aria-label="批量选片"><span>已选 {selectedIds.length} 张</span>{(['keep', 'reject', 'undecided'] as const).map(status => <Button key={status} size="small" disabled={busy} onClick={() => onBatchDecide(status)}>{status === 'keep' ? '保留选区' : status === 'reject' ? '淘汰选区' : '选区待定'}</Button>)}
-        <select aria-label="批量人工评分" disabled={busy} value="" onChange={event => onBatchRate(Number(event.target.value))}><option value="" disabled>人工评分…</option>{[0, 1, 2, 3, 4, 5].map(rating => <option key={rating} value={rating}>{rating ? `${rating} 星` : '清除评分'}</option>)}</select>
-        {onAICompare && selectedIds.length === 2 && <Button size="small" disabled={busy} onClick={onAICompare} title="把两张选区照片交给Focal AI，比较叙事价值">AI 比较叙事价值</Button>}
-        {onAIOrder && <Button size="small" disabled={busy} onClick={onAIOrder} title="把选区交给Focal AI，生成两版顺序方案">生成两版顺序</Button>}
-        <Button size="small" variant="quiet" onClick={ui.clearSelection}>清除选区</Button></div>}
+        <span className="micro">{zh.selectionGestureHint}</span></div>}
+      {photoTools && selectedIds.length > 1 && <div className="selection-tools" role="group" aria-label={zh.batchCuration}><span>{zh.selectedCount.replace('{count}', String(selectedIds.length))}</span>{(['keep', 'reject', 'undecided'] as const).map(status => <Button key={status} size="small" disabled={busy} onClick={() => onBatchDecide(status)}>{status === 'keep' ? zh.keepSelection : status === 'reject' ? zh.rejectSelection : zh.undecidedSelection}</Button>)}
+        <select aria-label={zh.batchRatingAria} disabled={busy} value="" onChange={event => onBatchRate(Number(event.target.value))}><option value="" disabled>{zh.ratingMenuPlaceholder}</option>{[0, 1, 2, 3, 4, 5].map(rating => <option key={rating} value={rating}>{rating ? zh.starOption.replace('{count}', String(rating)) : zh.clearRating}</option>)}</select>
+        {onAICompare && selectedIds.length === 2 && <Button size="small" disabled={busy} onClick={onAICompare} title={zh.aiCompareTitle}>{zh.aiCompareLabel}</Button>}
+        {onAIOrder && <Button size="small" disabled={busy} onClick={onAIOrder} title={zh.aiOrderTitle}>{zh.aiOrderLabel}</Button>}
+        <Button size="small" variant="quiet" onClick={ui.clearSelection}>{zh.clearSelection}</Button></div>}
     </div>
     <div className="canvas-area"><div className="workspace-scroll"><div className="canvas-label"><span>{ui.view === 'grid' ? 'CONTACT SHEET' : ui.view === 'canvas' ? 'NARRATIVE CANVAS' : ui.view === 'publication' ? 'PUBLICATIONS' : 'SEQUENCE BOARD'}</span>
-      <span>{ui.view === 'grid' ? `${visible.length} 张` : `${kept.length} 张`}</span>
-      {ui.view === 'sequence' && kept.length > 0 && <Button size="small" disabled={busy} onClick={onCopyPlan} title="把当前作品序列保存为独立的方案副本，可在作品版本中对比与恢复"><Copy size={13} /> 复制序列方案</Button>}</div>
+      <span>{zh.photoCountShort.replace('{count}', String(ui.view === 'grid' ? visible.length : kept.length))}</span>
+      {ui.view === 'sequence' && kept.length > 0 && <Button size="small" disabled={busy} onClick={onCopyPlan} title={zh.copyPlanTitle}><Copy size={13} /> {zh.copyPlanLabel}</Button>}</div>
       {!local && <div className="preview-banner">{zh.preview}</div>}
       {ui.view === 'publication' && <PublicationPanel key={project.id} repository={publication} projectId={project.id} sequenceCount={kept.length} readOnly={readOnly} />}
       {ui.view === 'canvas' && <NarrativeCanvas key={project.id} repository={canvas} projectId={project.id} selectedPhotoIds={selectedIds} readOnly={readOnly} />}
             {ui.view === 'grid' ? (visible.length ? <div className="grid-groups">
-        {groupPhotos(visible, ui.grouping).map(group => group.label ? <section key={group.key} className="grid-group" aria-label={`分组 ${group.label}`}>
+        {groupPhotos(visible, ui.grouping).map(group => group.label ? <section key={group.key} className="grid-group" aria-label={zh.groupAriaLabel.replace('{label}', group.label)}>
           <h3 className="grid-group-head">{group.label}</h3>
           <ContactSheetGrid photos={group.photos} activeId={active?.id ?? null} selectedIds={selectedIds} dense={ui.dense} busy={busy} onSelect={onSelect} onDecide={onDecide} onEnlarge={onEnlarge} />
         </section> : <ContactSheetGrid key={group.key} photos={group.photos} activeId={active?.id ?? null} selectedIds={selectedIds} dense={ui.dense} busy={busy} onSelect={onSelect} onDecide={onDecide} onEnlarge={onEnlarge} />)}
       </div>
-        : <EmptyState title={project.photos.length ? zh.emptyFilter : zh.emptyTitle} hint={project.photos.length ? '更改筛选条件。' : local ? '导入照片或文件夹。' : zh.emptyHint}
+        : <EmptyState title={project.photos.length ? zh.emptyFilter : zh.emptyTitle} hint={project.photos.length ? zh.emptyFilterHint : local ? zh.emptyImportHint : zh.emptyHint}
           action={<Button onClick={project.photos.length ? () => { ui.setFilter('all'); ui.setSearch(''); } : onImport}>{project.photos.length ? zh.allPhotos : local ? zh.import : `${zh.import} · 桌面版`}</Button>} />)
         : ui.view === 'sequence' ? (kept.length ? <SequenceBoard photos={kept} activeId={active?.id ?? null} busy={busy} onSelect={ui.select} onOpen={onEnlarge} onReorder={onReorder} />
           : <EmptyState title={zh.emptySequence} hint={zh.sequenceHint} action={<Button onClick={() => { ui.setFilter('all'); ui.setView('grid'); }}>{zh.toWorkspace}</Button>} />) : null}
