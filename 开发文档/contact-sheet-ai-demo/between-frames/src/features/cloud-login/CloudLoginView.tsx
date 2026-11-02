@@ -136,7 +136,7 @@ function CloudAuthBody({ repository, copy: text, onClose, onSettings, onHelp, on
       <button type="button" className="fr-text" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? text.waiting : text.chooseFile}</button><span className="cloud-account-hint">{text.avatarHint}</span><button type="button" className="fr-text" onClick={() => setEditing(null)}>{text.cancel}</button>
     </div></Modal>}
     {notice && <span role="status" className="cloud-account-notice">{notice}</span>}
-    {(error || (!menuOpen && status?.error)) && <p role="alert" className="error-message">{error || '暂时无法连接，请稍后重试。'}</p>}
+    {(error || (!menuOpen && status?.error)) && <p role="alert" className="error-message">{error || zh.cloudConnectionRetry}</p>}
     {loginOpen && <LoginDialog repository={repository} status={status} reason="account" onClose={() => setLoginOpen(false)} onStarted={refresh} />}
   </div>;
 }

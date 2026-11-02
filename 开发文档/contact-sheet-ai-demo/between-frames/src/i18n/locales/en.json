@@ -108,6 +108,9 @@
   "common.version": "Version",
   "common.settings": "Settings",
   "copy": {
+    "loadingProjects": "Loading projects…",
+    "projectsLoadFailed": "Projects could not be loaded",
+    "cloudConnectionRetry": "Cannot connect right now. Please try again later.",
     "publicationStudio": "Layout and versions",
     "publicationVersion": "Version",
     "publicationVersions": "Version history",

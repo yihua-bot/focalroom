@@ -198,7 +198,7 @@ export function AppController({ repository }: { repository: ProjectRepository })
   return <><AppShell inspector={panel} collapsed={!ui.sidebarOpen} nav={<SideNav cloudAuth={local ? repository.cloudAuth : undefined} project={route.page === 'workspace' ? project : undefined} page={route.page} view={ui.view} local={local} authority={sharing.data?.authority}
     diagnostics={local ? repository.diagnostics : undefined} onView={ui.setView}
     onProjects={() => { setArchived(false); navigate(null); }} onHelp={() => setDialog({ kind: 'help' })} />}>
-    {query.isPending ? <p role="status" className="page-message">正在加载项目…</p> : query.isError ? <EmptyState title="项目加载失败" hint={query.error.message} action={<Button onClick={() => { void query.refetch(); }}>重试</Button>} />
+    {query.isPending ? <p role="status" className="page-message">{zh.loadingProjects}</p> : query.isError ? <EmptyState title={zh.projectsLoadFailed} hint={query.error.message} action={<Button onClick={() => { void query.refetch(); }}>{zh['common.retry']}</Button>} />
       : route.page === 'projects' ? <ProjectList projects={projects} onOpen={openProject} onCreate={() => { setArchived(false); setPendingGoal(null); setDialog({ kind: 'create' }); }} onQuickStart={local ? () => { setArchived(false); setDialog({ kind: 'quickStart' }); } : undefined} local={local} archived={archived}
         onToggleArchive={() => setArchived(value => !value)} onArchive={item => setDialog({ kind: 'archive', project: item })} onDelete={item => setDialog({ kind: 'delete', project: item })}
         onRestore={item => { if (local) act(() => repository.restore(item.id), '项目已恢复', false, () => { setArchived(false); refresh(); }); }} />

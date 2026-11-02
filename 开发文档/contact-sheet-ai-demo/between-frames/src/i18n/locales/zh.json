@@ -108,6 +108,9 @@
   "common.version": "版本",
   "common.settings": "设置",
   "copy": {
+    "loadingProjects": "正在加载项目…",
+    "projectsLoadFailed": "项目加载失败",
+    "cloudConnectionRetry": "暂时无法连接，请稍后重试。",
     "publicationStudio": "版面与版本",
     "publicationVersion": "版本",
     "publicationVersions": "版本记录",

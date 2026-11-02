@@ -108,6 +108,9 @@
   "common.version": "バージョン",
   "common.settings": "設定",
   "copy": {
+    "loadingProjects": "プロジェクトを読み込んでいます…",
+    "projectsLoadFailed": "プロジェクトを読み込めませんでした",
+    "cloudConnectionRetry": "現在接続できません。しばらくしてから再試行してください。",
     "publicationStudio": "レイアウトとバージョン",
     "publicationVersion": "バージョン",
     "publicationVersions": "バージョン履歴",

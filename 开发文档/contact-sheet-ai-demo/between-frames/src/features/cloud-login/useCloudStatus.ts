@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CloudAuthRepository, CloudStatus } from '../../domain/cloud-auth';
+import { zh } from '../../app/copy';
 
 export function useCloudStatus(repository?: CloudAuthRepository) {
   const [status, setStatus] = useState<CloudStatus | null>(null);
@@ -11,7 +12,7 @@ export function useCloudStatus(repository?: CloudAuthRepository) {
       if (ticket === sequence.current) setStatus(value);
       return value;
     }).catch(() => {
-      if (ticket === sequence.current) setStatus({ authenticated: false, waiting: false, origin: '', user: null, error: '暂时无法连接，请稍后重试。' });
+      if (ticket === sequence.current) setStatus({ authenticated: false, waiting: false, origin: '', user: null, error: zh.cloudConnectionRetry });
       return null;
     });
   }, [repository]);

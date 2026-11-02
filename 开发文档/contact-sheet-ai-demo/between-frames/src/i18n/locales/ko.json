@@ -108,6 +108,9 @@
   "common.version": "버전",
   "common.settings": "설정",
   "copy": {
+    "loadingProjects": "프로젝트 불러오는 중…",
+    "projectsLoadFailed": "프로젝트를 불러올 수 없습니다",
+    "cloudConnectionRetry": "현재 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
     "publicationStudio": "레이아웃과 버전",
     "publicationVersion": "버전",
     "publicationVersions": "버전 기록",
