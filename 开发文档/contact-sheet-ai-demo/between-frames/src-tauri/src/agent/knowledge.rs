@@ -106,10 +106,12 @@ impl KnowledgeClient {
             self.auth.origin(),
             utf8_percent_encode(query)
         );
-        if let Some(kind) = kind {
+        // 严格工具契约要求每次都带流派字段，模型不做筛选时送的是空串；空串必须当成"不筛选"，
+        // 否则服务端参数校验会拒绝整次检索，把一次正常查询报成异常。
+        if let Some(kind) = kind.filter(|value| !value.trim().is_empty()) {
             url.push_str(&format!("&kind={}", utf8_percent_encode(kind)));
         }
-        if let Some(movement) = movement {
+        if let Some(movement) = movement.filter(|value| !value.trim().is_empty()) {
             url.push_str(&format!("&movement={}", utf8_percent_encode(movement)));
         }
         let client = reqwest::Client::builder()

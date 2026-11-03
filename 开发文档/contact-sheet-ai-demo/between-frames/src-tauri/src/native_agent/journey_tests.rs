@@ -269,3 +269,171 @@ async fn readonly_host_cannot_upgrade_frozen_canvas_grants_by_replaying() {
             .any(|tool| tool == "place_photos_on_board")
     );
 }
+
+/// iPhone 侧真实链路验收：应用把已登录令牌交给共享核心的 C ABI 入口之后，知识工具用的就是桌面同一套代码。
+/// 由 `node apps/api/test/run.mjs apps/api/test/knowledge-desktop.mjs` 在隔离服务与临时 PostgreSQL 上显式驱动。
+#[test]
+#[ignore = "需要 FOCALROOM_KNOWLEDGE_ACCEPTANCE_ORIGIN 指向隔离回环 API 与已播种知识数据"]
+fn real_pg_knowledge_session_over_native_iphone_entry() {
+    use agent::{
+        execution, lifecycle,
+        openai::OpenAiProvider,
+        types::{AgentRequest, Budget, TaskCommand, ToolCall},
+    };
+    use std::collections::HashMap;
+
+    let origin = std::env::var("FOCALROOM_KNOWLEDGE_ACCEPTANCE_ORIGIN")
+        .expect("原生知识验收只接受隔离回环 API 来源");
+    let endpoint = reqwest::Url::parse(&origin).unwrap();
+    assert_eq!(endpoint.scheme(), "http");
+    assert_eq!(endpoint.host_str(), Some("127.0.0.1"));
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let http = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+
+    // 会话袋与 iPhone 上一致：令牌只留在进程内存里，持久化由应用侧的钥匙串负责。
+    let vault = Arc::new(SessionVault::default());
+    let auth = Arc::new(
+        CloudAuth::new(
+            &origin,
+            &format!("native-knowledge-{}", uuid::Uuid::new_v4()),
+            vault.clone(),
+        )
+        .unwrap(),
+    );
+    let email = format!("native-knowledge-{}@fixture.test", uuid::Uuid::new_v4());
+    let (token, user): (String, Value) = runtime.block_on(async {
+        let registered: Value = http
+            .post(format!("{origin}/api/v2/auth/register"))
+            .json(&json!({"email":email,"display_name":"原生验收","password":"isolated-acceptance-password"}))
+            .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+        let login = reqwest::Url::parse(&auth.begin().await.unwrap()).unwrap();
+        let query: HashMap<String, String> = login
+            .query_pairs()
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect();
+        let approved: Value = http
+            .post(format!("{origin}/api/v2/auth/desktop/authorize"))
+            .bearer_auth(registered["token"].as_str().unwrap())
+            .json(&json!({"request_id":query["request"],"state":query["state"]}))
+            .send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+        auth.complete(&format!(
+            "focalroom://callback?code={}&state={}",
+            approved["code"].as_str().unwrap(),
+            query["state"]
+        ))
+        .await
+        .unwrap();
+        let record: Value = serde_json::from_str(&vault.read("").unwrap().unwrap()).unwrap();
+        (
+            record["session"]["token"].as_str().unwrap().to_owned(),
+            record["session"]["user"].clone(),
+        )
+    });
+    let account = user["id"].as_str().unwrap().to_owned();
+
+    // 打开会话即由服务核实令牌；账户与工作目录一一对应，与桌面共用同一实现。
+    let root = tempfile::tempdir().unwrap();
+    let handle = ffi(
+        json!({"operation":"open","directory":root.path(),"origin":origin,"token":token,"user":user}),
+    )["handle"]
+        .as_u64()
+        .unwrap();
+    let client = client(handle).unwrap();
+    assert_eq!(client.auth.account_id().unwrap(), account);
+
+    let provider = OpenAiProvider::hosted(client.auth.clone());
+    let identity = provider.identity();
+    let knowledge = provider
+        .knowledge_client()
+        .expect("已登录会话应能提供知识客户端");
+    let project = runtime
+        .block_on(client.db.create("原生知识验收", "只用公开摄影史条目"))
+        .unwrap()
+        .id;
+    let task = runtime
+        .block_on(lifecycle::request_bound(
+            &client.db,
+            AgentRequest {
+                request_id: domain::id(),
+                project_id: project.clone(),
+                command: TaskCommand::StartConversation {
+                    allow_queued_recovery: false,
+                    expected_account_id: Some(account.clone()),
+                    goal: "核对公开摄影史条目".into(),
+                    selected_photo_ids: vec![],
+                    focus_photo_ids: vec![],
+                    target_count: 1,
+                    budget: Budget::default(),
+                    consent_id: None,
+                    source_board: None,
+                    continuation: None,
+                },
+            },
+            Some(&identity),
+        ))
+        .unwrap();
+    runtime
+        .block_on(execution::state(&client.db, &task.id, "planning", "test"))
+        .unwrap();
+    runtime
+        .block_on(execution::state(&client.db, &task.id, "running", "test"))
+        .unwrap();
+    let search = |call_id: &str, query: &str| {
+        ToolCall {
+            call_id: call_id.into(),
+            name: "search_photographers".into(),
+            // 严格契约要求三个参数都齐；模型不筛选流派时送的是空串，必须当成"不筛选"。
+            args: json!({"project_id":project,"query":query,"movement":""}),
+        }
+    };
+    let call = |call_id: &str, query: &str| {
+        runtime
+            .block_on(execution::tool_with_knowledge(
+                &client.db,
+                &task.id,
+                &search(call_id, query),
+                None,
+                Some(&knowledge),
+            ))
+            .unwrap()
+    };
+
+    let hit = call("native-knowledge-1", "川内");
+    assert!(hit.ok, "{:?}", hit.error);
+    let found = hit.result.as_ref().unwrap();
+    assert_eq!(found["available"], true, "{found}");
+    assert_eq!(found["photographers"][0]["name"], "Rinko Kawauchi");
+
+    // 无结果是服务正常应答后的空列表，不是异常。
+    let absent = call("native-knowledge-2", "这条知识根本不存在zzz");
+    assert!(absent.ok, "{:?}", absent.error);
+    assert_eq!(absent.result.as_ref().unwrap()["available"], true);
+    assert_eq!(absent.result.as_ref().unwrap()["photographers"], json!([]));
+
+    // 真实服务注销同一会话之后，同一条工具链必须报异常码，且不带出令牌。
+    runtime.block_on(async {
+        http.post(format!("{origin}/api/v2/auth/logout"))
+            .bearer_auth(&token)
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+    });
+    let revoked = call("native-knowledge-3", "川内");
+    assert!(revoked.ok, "{:?}", revoked.error);
+    let failed = revoked.result.as_ref().unwrap();
+    assert_eq!(failed["available"], false, "{failed}");
+    assert_eq!(failed["error"]["code"], "AUTH_REVOKED");
+    assert!(
+        !failed.to_string().contains(&token),
+        "结果里不得出现会话令牌"
+    );
+
+    ffi(json!({"operation":"close","handle":handle}));
+}

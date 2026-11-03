@@ -143,6 +143,29 @@ async fn injected_session_authenticates_all_four_tools_and_encodes_queries() {
     assert_eq!(pairs["movement"], "New Color & 日本");
 }
 #[tokio::test]
+async fn blank_genre_filter_omits_the_parameter_instead_of_failing_validation() {
+    let server = Server::new();
+    let (client, _) = server.client();
+    *server.reply.lock().unwrap() = (
+        200,
+        json!([{"id":"one","title":"Rinko Kawauchi","kind":"photographer","reviewStatus":"verified"}])
+            .to_string(),
+    );
+    // 工具契约是严格模式：不筛选流派时模型送空串，而不是省略字段。
+    let result = execute(
+        Some(&client),
+        "search_photographers",
+        &json!({"query":"川内","movement":""}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result["available"], true, "{result}");
+    let request = server.requests.lock().unwrap().last().unwrap().clone();
+    let target = request.split_whitespace().nth(1).unwrap();
+    assert!(!target.contains("movement="), "{target}");
+    assert!(target.contains("q=%E5%B7%9D%E5%86%85"), "{target}");
+}
+#[tokio::test]
 async fn distinguishes_empty_auth_http_protocol_and_size_failures_without_redirects() {
     let server = Server::new();
     let (client, _) = server.client();
@@ -315,4 +338,240 @@ async fn real_tool_pipeline_enforces_scope_and_replays_without_network() {
         "AUTH_CHANGED"
     );
     assert_eq!(server.requests.lock().unwrap().len(), count);
+}
+
+/// 真实链路验收：macOS 系统钥匙串里的桌面会话 → 隔离回环 API → 已播种的 PostgreSQL 知识表。
+/// 由 `node apps/api/test/run.mjs apps/api/test/knowledge-desktop.mjs` 显式驱动，不进离线 CI。
+#[cfg(target_os = "macos")]
+#[tokio::test]
+#[ignore = "需要 FOCALROOM_KNOWLEDGE_ACCEPTANCE_ORIGIN 指向隔离回环 API，并写入真实系统钥匙串"]
+async fn real_pg_knowledge_session_over_macos_keychain() {
+    use crate::cloud_credentials::SystemCredentials;
+    use std::collections::HashMap;
+
+    let origin = std::env::var("FOCALROOM_KNOWLEDGE_ACCEPTANCE_ORIGIN")
+        .expect("真实知识验收只接受隔离回环 API 来源");
+    let endpoint = reqwest::Url::parse(&origin).unwrap();
+    assert_eq!(endpoint.scheme(), "http");
+    assert_eq!(endpoint.host_str(), Some("127.0.0.1"));
+
+    // 随机命名空间：验收只写自己这一条新条目，绝不读取或改写用户已有的登录条目。
+    let namespace = format!(
+        "studio.focalroom.knowledge-acceptance.{}",
+        uuid::Uuid::new_v4()
+    );
+    let service = format!("{namespace}.cloud-session");
+    struct Cleanup(String);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = SystemCredentials.delete(&self.0);
+        }
+    }
+    let _cleanup = Cleanup(service.clone());
+    assert!(SystemCredentials.read(&service).unwrap().is_none());
+
+    let http = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let email = format!("knowledge-acceptance-{}@fixture.test", uuid::Uuid::new_v4());
+    let registered: serde_json::Value = json_request(
+        &http,
+        &format!("{origin}/api/v2/auth/register"),
+        &json!({"email":email,"display_name":"知识验收","password":"isolated-acceptance-password"}),
+        None,
+    )
+    .await;
+
+    // 桌面登录协议全程走原生实现：PKCE 发起 → 浏览器侧授权 → 深链兑换 → 系统钥匙串。
+    let auth = Arc::new(
+        CloudAuth::new(&origin, &namespace, Arc::new(SystemCredentials)).expect("隔离验收来源"),
+    );
+    let login = reqwest::Url::parse(&auth.begin().await.unwrap()).unwrap();
+    let query: HashMap<String, String> = login
+        .query_pairs()
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    let approved = json_request(
+        &http,
+        &format!("{origin}/api/v2/auth/desktop/authorize"),
+        &json!({"request_id":query["request"],"state":query["state"]}),
+        Some(registered["token"].as_str().unwrap()),
+    )
+    .await;
+    assert!(
+        approved.get("token").is_none(),
+        "桌面授权不得把会话令牌交给浏览器侧"
+    );
+    auth.complete(&format!(
+        "focalroom://callback?code={}&state={}",
+        approved["code"].as_str().unwrap(),
+        query["state"]
+    ))
+    .await
+    .unwrap();
+
+    let stored: serde_json::Value = serde_json::from_str(
+        &SystemCredentials
+            .read(&service)
+            .unwrap()
+            .expect("桌面会话必须落在系统钥匙串"),
+    )
+    .unwrap();
+    assert_eq!(
+        stored["session"]["user"]["email"].as_str(),
+        Some(email.as_str())
+    );
+    let token = stored["session"]["token"].as_str().unwrap().to_owned();
+
+    let client = crate::agent::openai::OpenAiProvider::hosted(auth.clone())
+        .knowledge_client()
+        .expect("已登录会话应能提供知识客户端");
+
+    // 命中：真实 PostgreSQL 里的中文姓名与流派数组过滤。
+    let hit = cloud(Some(&client), "肖尔", Some("photographer"), None).await;
+    assert_eq!(hit["available"], true, "{hit}");
+    assert!(
+        hit["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["title"] == "Stephen Shore" && entry["reviewStatus"] == "verified"),
+        "{hit}"
+    );
+    let filtered = cloud(
+        Some(&client),
+        "肖尔",
+        Some("photographer"),
+        Some("New Color"),
+    )
+    .await;
+    assert_eq!(filtered["available"], true);
+    assert!(!filtered["results"].as_array().unwrap().is_empty());
+    // 严格契约下模型总带流派字段，不筛选时是空串：等同不筛选，不能被服务拒掉。
+    let blank = cloud(Some(&client), "肖尔", Some("photographer"), Some("")).await;
+    assert_eq!(blank["available"], true, "{blank}");
+    assert_eq!(blank["results"], hit["results"]);
+
+    // 无结果：服务端正常应答但确实没有匹配资料，绝不能报成异常。
+    for (query, kind, movement) in [
+        ("肖尔", Some("photographer"), Some("北欧极简")),
+        ("这条知识根本不存在zzz", None, None),
+    ] {
+        let absent = cloud(Some(&client), query, kind, movement).await;
+        assert_eq!(absent["available"], true, "{absent}");
+        assert_eq!(absent["results"], json!([]), "{absent}");
+        assert!(absent.get("error").is_none(), "{absent}");
+    }
+
+    // 四个工具在真实服务上的形状：摘要可追溯，但不算视觉事实、也不当指令。
+    for (name, args) in [
+        ("search_photography_knowledge", json!({"query":"川内伦子"})),
+        (
+            "search_photographers",
+            json!({"query":"川内","movement":"Contemporary Japanese Photography"}),
+        ),
+        (
+            "get_photobook_structure",
+            json!({"title":"Uncommon Places"}),
+        ),
+        (
+            "compare_photography_series",
+            json!({"seriesA":"美国表面","seriesB":"假寐"}),
+        ),
+    ] {
+        let result = execute(Some(&client), name, &args).await.unwrap();
+        assert_eq!(result["trustedAsInstructions"], false, "{result}");
+        assert_eq!(result["visualEvidence"], false, "{result}");
+        assert!(
+            !result.to_string().contains(&token),
+            "结果里不得出现会话令牌"
+        );
+    }
+    let photographers = execute(
+        Some(&client),
+        "search_photographers",
+        &json!({"query":"川内"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(photographers["available"], true, "{photographers}");
+    assert_eq!(
+        photographers["photographers"][0]["name"].as_str(),
+        Some("Rinko Kawauchi")
+    );
+    let mixed = execute(
+        Some(&client),
+        "search_photography_knowledge",
+        &json!({"query":"川内伦子"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(mixed["cloudAvailable"], true, "{mixed}");
+    assert!(
+        mixed["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["title"] == "Rinko Kawauchi"),
+        "云端记录必须真的进入合并结果：{mixed}"
+    );
+    let compared = execute(
+        Some(&client),
+        "compare_photography_series",
+        &json!({"seriesA":"美国表面","seriesB":"假寐"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(compared["available"], true, "{compared}");
+    assert_eq!(
+        compared["seriesA"]["title"].as_str(),
+        Some("American Surfaces")
+    );
+    assert_eq!(compared["seriesB"]["title"].as_str(), Some("Utatane"));
+
+    // 异常：另一处注销同一会话后，真实 401 必须报成不可用，而不是「没有资料」。
+    json_request(
+        &http,
+        &format!("{origin}/api/v2/auth/logout"),
+        &json!({}),
+        Some(&token),
+    )
+    .await;
+    let revoked = cloud(Some(&client), "肖尔", Some("photographer"), None).await;
+    assert_eq!(revoked["available"], false, "{revoked}");
+    assert_eq!(revoked["error"]["code"], "AUTH_REVOKED");
+    assert_eq!(revoked["results"], json!([]));
+    assert!(!revoked.to_string().contains(&token));
+
+    // 本地登出之后，凭据当场消失，检索不再发出网络请求。
+    assert!(auth.logout().await.unwrap());
+    assert!(SystemCredentials.read(&service).unwrap().is_none());
+    assert_eq!(
+        cloud(Some(&client), "肖尔", None, None).await["error"]["code"],
+        "AUTH_REQUIRED"
+    );
+}
+
+#[cfg(target_os = "macos")]
+async fn json_request(
+    http: &reqwest::Client,
+    url: &str,
+    body: &serde_json::Value,
+    token: Option<&str>,
+) -> serde_json::Value {
+    let mut request = http.post(url).json(body);
+    if let Some(token) = token {
+        request = request.bearer_auth(token);
+    }
+    request
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
 }
