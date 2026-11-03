@@ -1540,6 +1540,16 @@ impl crate::agent::provider::ModelProvider for ThreeThreads {
                     }],
                 })
             };
+            if !records
+                .iter()
+                .any(|r| r.body["name"] == "search_photography_knowledge")
+                && !input.layers["creative"]["portfolio_method"].is_object()
+            {
+                return call(
+                    "search_photography_knowledge",
+                    json!({"query":"portfolio-curation-v1","limit":1}),
+                );
+            }
             let pages: Vec<_> = records
                 .iter()
                 .filter(|r| r.body["name"] == "list_photos")

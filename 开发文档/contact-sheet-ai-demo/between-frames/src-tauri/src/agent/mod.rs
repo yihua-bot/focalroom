@@ -149,7 +149,7 @@ pub const MODEL_ID: &str = "metadata-mock-1";
 pub const PROVIDER_OPENAI: &str = "openai";
 pub fn prompt_version(provider: &str) -> &'static str {
     if provider == PROVIDER_OPENAI {
-        "m3-openai-9"
+        "m3-openai-12"
     } else {
         PROMPT_VERSION
     }

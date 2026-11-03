@@ -222,9 +222,9 @@ impl ContextBuilder {
         }
         tx.commit().await?;
         let prompt_version = if conversation.is_some() {
-            format!("{}+focal-2.1", super::prompt_version(&task.provider_id))
+            format!("{}+focal-2.4", super::prompt_version(&task.provider_id))
         } else if grant.canvas {
-            format!("{}+canvas-1", super::prompt_version(&task.provider_id))
+            format!("{}+canvas-2", super::prompt_version(&task.provider_id))
         } else {
             super::prompt_version(&task.provider_id).into()
         };
@@ -280,6 +280,64 @@ impl ContextBuilder {
                     );
                 }
             }
+        }
+        // 方法全文保存在不可变回执中；大任务仅压缩发送副本，保留规则摘要与回查入口。
+        if Self::input_estimate(request) > limit {
+            for message in &mut request.protocol {
+                if message.kind != "tool" || message.body["name"] != "search_photography_knowledge"
+                {
+                    continue;
+                }
+                if let Some(results) = message.body["result"]["result"]["results"].as_array_mut() {
+                    for entry in results {
+                        if entry["citationId"] == "FR-METHOD-PORTFOLIO-1"
+                            && entry["source"] == "focalroom://methods/portfolio-curation-v1"
+                        {
+                            entry["passage"] = json!(super::knowledge::PORTFOLIO_CONTEXT_SUMMARY);
+                            entry["passage_omitted"] = json!(true);
+                            entry["read_full_receipt_with"] = json!(
+                                "read_creative_context section=tool_receipt object_id=callId"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        // 方法已读后保留紧凑引用；整对移出旧的单工具批次，全文仍可按 callId 回查。
+        if Self::input_estimate(request) > limit {
+            let mut removed = std::collections::BTreeSet::new();
+            for (index, message) in request.protocol.iter().enumerate() {
+                if message.kind != "tool"
+                    || message.body["name"] != "search_photography_knowledge"
+                    || message.body["result"]["result"]["results"][0]["citationId"]
+                        != "FR-METHOD-PORTFOLIO-1"
+                {
+                    continue;
+                }
+                let call_id = &message.body["result"]["callId"];
+                let model = request.protocol.iter().position(|model| {
+                    model.kind == "model"
+                        && model.body["calls"]
+                            .as_array()
+                            .is_some_and(|calls| calls.len() == 1 && calls[0]["callId"] == *call_id)
+                });
+                if let Some(model) = model {
+                    removed.extend([index, model]);
+                    request.layers["creative"]["portfolio_method"] = json!({
+                        "version":"portfolio-curation-1",
+                        "summary":"按已读取方法明确用途，以观察证据兼顾单张与组内作用；比较编排、说明缺口，只提交草案。机构条件不泛化，不凑数、不强制多版。",
+                        "receipt_call_id":call_id,
+                        "read_full_receipt_with":"read_creative_context section=tool_receipt object_id=receipt_call_id",
+                        "trusted_as_instructions":false
+                    });
+                }
+            }
+            request.protocol = std::mem::take(&mut request.protocol)
+                .into_iter()
+                .enumerate()
+                .filter(|(index, _)| !removed.contains(index))
+                .map(|(_, message)| message)
+                .collect();
         }
         // 已完成批次可以作为有出处的数据放入上下文，避免重复携带大批布局参数。
         // 整批移除模型调用及对应结果；未完成批次与最近一批保持协议配对，原记录不变。

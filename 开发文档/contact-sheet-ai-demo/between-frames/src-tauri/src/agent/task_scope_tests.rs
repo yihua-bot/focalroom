@@ -101,7 +101,7 @@ async fn words_and_feedback_do_not_grant_canvas_tools_and_legacy_tasks_stay_sele
         !context.layers["system"]
             .as_str()
             .unwrap()
-            .contains("画布编排任务 · canvas-1")
+            .contains("画布编排任务 · canvas-2")
     );
     for name in CANVAS_TOOLS {
         assert!(
@@ -206,7 +206,7 @@ async fn grant_source_and_checkpoint_survive_reopen_and_cannot_be_escalated() {
             .unwrap()
             .contains("finish_canvas_task")
     );
-    assert!(context.prompt_version.ends_with("+canvas-1"));
+    assert!(context.prompt_version.ends_with("+canvas-2"));
     let initial = context.tool_specs;
     assert!(
         initial

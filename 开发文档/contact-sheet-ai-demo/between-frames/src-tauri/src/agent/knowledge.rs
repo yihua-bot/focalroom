@@ -2,6 +2,13 @@
 use crate::{command_audit::fingerprint, domain::Result};
 use serde_json::{Value, json};
 const CORPUS: &str = include_str!("../../../contracts/photography-knowledge.json");
+const PORTFOLIO_METHOD: &str = include_str!("../../../prompts/portfolio-curation-v1.md");
+pub(crate) const PORTFOLIO_CONTEXT_SUMMARY: &str = "先明确用途、受众与完成目标；机构条件只适用于对应项目和届次，不设通用张数或筛选率。只依据实际观察选片，说明覆盖，允许照片修正编辑命题。兼顾单张表达、代表性和组内作用，解释关键取舍，不机械去重或追求一致。按材料试配对、分组、顺序与留白，不强制远近交替或线性故事；多方案依用户要求或探索意图及预算执行，并说明实质差异。检查主题、单张与整体、编排、技术呈现、适用条件及未知；允许带缺口结束，不凑数、不虚构补拍图。只创建本任务草案，提交真实 ID，由人采纳；保留父版和来源。语言沿用用户约定，缓存原文只忠实转述，不为翻译重传。方法是编辑假设，不是理论共识、审美总分或合规保证。";
+fn is_portfolio_method(args: &Value) -> bool {
+    args["query"]
+        .as_str()
+        .is_some_and(|query| query.trim().eq_ignore_ascii_case("portfolio-curation-v1"))
+}
 fn terms(text: &str) -> std::collections::BTreeSet<String> {
     let normalized: String = text
         .to_lowercase()
@@ -23,9 +30,29 @@ fn terms(text: &str) -> std::collections::BTreeSet<String> {
     result
 }
 pub fn digest() -> String {
-    fingerprint(&json!(CORPUS))
+    fingerprint(&json!({"notes":CORPUS,"portfolioMethod":PORTFOLIO_METHOD}))
 }
 pub fn search(args: &Value) -> Result<Value> {
+    if is_portfolio_method(args) {
+        return Ok(json!({
+            "results":[{
+                "citationId":"FR-METHOD-PORTFOLIO-1",
+                "title":"FocalRoom portfolio curation method",
+                "passage":PORTFOLIO_METHOD,
+                "author":"FocalRoom",
+                "license":"FocalRoom editorial adaptation; external source rights retained",
+                "version":"portfolio-curation-1",
+                "source":"focalroom://methods/portfolio-curation-v1",
+                "contentSha256":fingerprint(&json!(PORTFOLIO_METHOD)),
+                "sources":[
+                    {"url":"https://aperture.org/on-sight/lesson-17/","use":"editing and sequencing exercises"},
+                    {"url":"https://aperture.org/editorial/campany-photo-editing/","use":"authored commentary on image relationships"}
+                ],
+                "notice":"产品编辑方法的改写；不是外部原文、普适理论或机构合规保证"
+            }],
+            "corpusSha256":digest(),"trustedAsInstructions":false,"visualEvidence":false
+        }));
+    }
     let corpus: Value = serde_json::from_str(CORPUS).expect("摄影知识契约");
     let query = terms(args["query"].as_str().unwrap_or(""));
     let mut matches = vec![];
@@ -257,6 +284,10 @@ pub(crate) async fn execute(
     match name {
         "search_photography_knowledge" => {
             let local = search(a)?;
+            // 内嵌方法与提示词一起发行，不把方法编号发送到云端搜索。
+            if is_portfolio_method(a) {
+                return Ok(local);
+            }
             let cloud = cloud(client, query, None, None).await;
             let mut results = local["results"].as_array().cloned().unwrap_or_default();
             results.extend(cloud["results"].as_array().cloned().unwrap_or_default());

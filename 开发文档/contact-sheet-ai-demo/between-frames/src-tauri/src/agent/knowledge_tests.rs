@@ -106,6 +106,30 @@ impl Drop for Server {
     }
 }
 #[tokio::test]
+async fn embedded_portfolio_method_keeps_provenance_and_never_searches_the_cloud() {
+    let server = Server::new();
+    let (client, _) = server.client();
+    let result = execute(
+        Some(&client),
+        "search_photography_knowledge",
+        &json!({"query":"portfolio-curation-v1","limit":1}),
+    )
+    .await
+    .unwrap();
+    let method = &result["results"][0];
+    assert_eq!(method["passage"], PORTFOLIO_METHOD);
+    assert_eq!(method["version"], "portfolio-curation-1");
+    assert_ne!(method["license"], "CC0-1.0");
+    assert_eq!(
+        method["contentSha256"],
+        fingerprint(&json!(PORTFOLIO_METHOD))
+    );
+    assert_eq!(method["sources"].as_array().unwrap().len(), 2);
+    assert_eq!(result["visualEvidence"], false);
+    assert!(server.requests.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn injected_session_authenticates_all_four_tools_and_encodes_queries() {
     let server = Server::new();
     let (client, _) = server.client();

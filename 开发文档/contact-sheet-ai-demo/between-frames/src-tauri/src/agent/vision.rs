@@ -3,7 +3,7 @@ use crate::domain::{AppError, Result};
 use serde_json::{Value, json};
 
 // 观察缓存身份包含像素准备方式，不能复用旧 1400px 或未标记的 512px 观察。
-pub const VISION_PROMPT_VERSION: &str = "m3-vision-4-upload512-q75";
+pub const VISION_PROMPT_VERSION: &str = "m3-vision-5-upload512-q75";
 
 /// 一次视觉工具调用的预取结果：缓存命中零上传；未命中部分经 HTTP 观察取得。
 /// 预取只持读事务与网络，写事务在 tools::execute 内完成配额消耗与观察落库。
@@ -169,13 +169,14 @@ pub(crate) async fn prefetch(
         let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data);
         images.push((photo.0.clone(), encoded));
     }
-    let question = match call.name.as_str() {
-        "compare_photos" => format!(
-            "对照这几张照片与项目意图的差异与不确定性。{}",
-            call.args["brief"].as_str().unwrap_or_default()
-        ),
-        _ => "描述每张照片的可观察事实与它在项目中可能的编辑作用。".into(),
-    };
+    let language_reference = language_reference(db, task, &brief).await?;
+    // 用户原话决定表达语言；工具生成的比较要求与宿主包装不能覆盖它。
+    let question = json!({
+        "language_reference": language_reference,
+        "operation": call.name,
+        "comparison_focus": call.args.get("brief").and_then(Value::as_str),
+    })
+    .to_string();
     let uploaded = missing.len() as u32;
     let input_bound = (brief.len()
         + question.len()
@@ -353,4 +354,23 @@ async fn project_brief(db: &crate::db::Store, task: &Task) -> Result<String> {
             .await?
             .unwrap_or_default();
     Ok(brief)
+}
+
+async fn language_reference(db: &crate::db::Store, task: &Task, brief: &str) -> Result<String> {
+    // 只取当前任务的人工消息，不从助手回复、照片备注或其他项目猜测语言。
+    let latest: Option<String> = sqlx::query_scalar(
+        "SELECT body FROM task_messages WHERE task_id=? AND kind IN ('user_goal','clarification_answer') AND length(trim(body))>0 ORDER BY id DESC LIMIT 1",
+    )
+    .bind(&task.id)
+    .fetch_optional(&db.pool)
+    .await?;
+    Ok(latest
+        .as_deref()
+        .into_iter()
+        .chain(task.answer.as_deref())
+        .chain([task.goal.as_str(), brief])
+        .map(str::trim)
+        .find(|text| !text.is_empty())
+        .unwrap_or_default()
+        .to_owned())
 }

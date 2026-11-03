@@ -97,7 +97,7 @@ async fn empty_project_can_discuss_photography_without_granting_legacy_tasks_emp
     let t = start(&db, &p, None, vec![], vec![]).await.unwrap();
     let context = ContextBuilder::build(&db, &t.id).await.unwrap();
     assert_eq!(context.layers["project"]["scope_count"], 0);
-    assert!(context.prompt_version.ends_with("+focal-2.1"));
+    assert!(context.prompt_version.ends_with("+focal-2.4"));
     answer(
         &db,
         &t,

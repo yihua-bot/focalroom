@@ -944,6 +944,12 @@ fn main_response(body: &str, step: Option<String>) -> String {
         Some("tool:inspect_from_history") if history_ids.len() >= 2 => envelope(
             json!([{"type":"function_call","call_id":"call-inspect","name":"inspect_photos","arguments":json!({"project_id": project_id, "photo_ids": [history_ids[0], history_ids[1]]}).to_string()}]),
         ),
+        Some("tool:compare_from_history") if history_ids.len() >= 2 => envelope(
+            json!([{"type":"function_call","call_id":"call-compare","name":"compare_photos","arguments":json!({"project_id": project_id, "photo_ids": [history_ids[0], history_ids[1]], "brief":"比较空间关系与不确定性"}).to_string()}]),
+        ),
+        Some("tool:request_feedback") => envelope(
+            json!([{"type":"function_call","call_id":"call-feedback","name":"request_feedback","arguments":json!({"project_id":project_id,"question":"Which relationship should I compare?","options":[]}).to_string()}]),
+        ),
         _ => envelope(
             json!([{"type":"message","content":[{"type":"output_text","text":"观察完成，没有进一步操作。"}]}]),
         ),
@@ -1270,12 +1276,31 @@ async fn start_vision_task(
     cloud: u32,
     consent_id: Option<i64>,
 ) -> Task {
+    start_vision_task_with_goal(
+        db,
+        p,
+        photo_ids,
+        cloud,
+        consent_id,
+        "用视觉观察前两张并总结",
+    )
+    .await
+}
+
+async fn start_vision_task_with_goal(
+    db: &Store,
+    p: &Project,
+    photo_ids: Vec<String>,
+    cloud: u32,
+    consent_id: Option<i64>,
+    goal: &str,
+) -> Task {
     CommandHandler::new(db)
         .agent_request(AgentRequest {
             request_id: domain::id(),
             project_id: p.id.clone(),
             command: TaskCommand::StartTask {
-                goal: "用视觉观察前两张并总结".into(),
+                goal: goal.into(),
                 selected_photo_ids: photo_ids,
                 target_count: 2,
                 budget: Budget {
@@ -2604,6 +2629,191 @@ async fn consented_vision_uploads_once_then_cache_hits_without_reupload() {
         .unwrap()
         .used;
     assert_eq!(used2, 2);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+fn observation_question(request: &Value) -> Value {
+    let text = request["input"][0]["content"][0]["text"].as_str().unwrap();
+    let question = text.split_once("\n观察问题：").unwrap().1;
+    serde_json::from_str(question.lines().next().unwrap()).unwrap()
+}
+
+#[tokio::test]
+async fn observation_requests_use_user_language_instead_of_project_or_comparison_language() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    for goal in [
+        "Inspect these photographs and explain their relationship.",
+        "この写真の関係を観察して説明してください。",
+        "이 사진들의 관계를 관찰하고 설명해 주세요.",
+        "Please inspect these photographs and reply in French.",
+    ] {
+        for operation in ["inspect", "compare"] {
+            let temp = tempfile::tempdir().unwrap();
+            // 项目简介为中文，比较 brief 也由夹具故意写成中文。
+            let (db, p) = setup(temp.path(), 2).await;
+            let (base, state) = spawn_server(Script {
+                main: vec![
+                    "tool:list_photos".into(),
+                    format!("tool:{operation}_from_history"),
+                    "text".into(),
+                ],
+                vision: VisionReply::Valid,
+            });
+            let consent = grant(&db, &p, "project", &base).await;
+            let task = start_vision_task_with_goal(
+                &db,
+                &p,
+                p.photos.iter().map(|photo| photo.id.clone()).collect(),
+                2,
+                Some(consent.id),
+                goal,
+            )
+            .await;
+            engine(&db, &base).run(&task.id).await.unwrap();
+            let state = state.lock().unwrap();
+            let image_request = state
+                .requests
+                .iter()
+                .find(|request| request["text"]["format"].is_object())
+                .expect("必须实际发出观察请求");
+            let question = observation_question(image_request);
+            assert_eq!(question["language_reference"], goal);
+            assert_eq!(question["operation"], format!("{operation}_photos"));
+            if operation == "compare" {
+                assert_eq!(question["comparison_focus"], "比较空间关系与不确定性");
+            } else {
+                assert!(question["comparison_focus"].is_null());
+            }
+        }
+    }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn observation_language_follows_latest_human_feedback_after_resume() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: [
+            "tool:request_feedback",
+            "tool:list_photos",
+            "tool:compare_from_history",
+            "text",
+        ]
+        .map(String::from)
+        .to_vec(),
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+    let task = start_vision_task_with_goal(
+        &db,
+        &p,
+        p.photos.iter().map(|photo| photo.id.clone()).collect(),
+        2,
+        Some(consent.id),
+        "Compare the spatial relationships in these photographs.",
+    )
+    .await;
+    let runtime = engine(&db, &base);
+    runtime.run(&task.id).await.unwrap();
+    assert_eq!(
+        agent::projection(&db, &p.id).await.unwrap().tasks[0].state,
+        "needs_input"
+    );
+    let answer = "光と空間の関係を比べて、日本語で説明してください。";
+    CommandHandler::new(&db)
+        .agent_request(AgentRequest {
+            request_id: domain::id(),
+            project_id: p.id.clone(),
+            command: TaskCommand::SubmitFeedback {
+                task_id: task.id.clone(),
+                answer: answer.into(),
+            },
+        })
+        .await
+        .unwrap();
+    runtime.run(&task.id).await.unwrap();
+    let state = state.lock().unwrap();
+    let request = state
+        .requests
+        .iter()
+        .find(|request| request["text"]["format"].is_object())
+        .unwrap();
+    assert_eq!(observation_question(request)["language_reference"], answer);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn switching_user_language_preserves_cached_observations_without_another_upload() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: (0..2)
+            .flat_map(|_| {
+                ["tool:list_photos", "tool:inspect_from_history", "text"].map(String::from)
+            })
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+    let ids: Vec<_> = p.photos.iter().map(|photo| photo.id.clone()).collect();
+    let first = start_vision_task_with_goal(
+        &db,
+        &p,
+        ids.clone(),
+        2,
+        Some(consent.id),
+        "Inspect these photographs.",
+    )
+    .await;
+    engine(&db, &base).run(&first.id).await.unwrap();
+    let before: Vec<String> =
+        sqlx::query_scalar("SELECT observation_json FROM photo_observations ORDER BY id")
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    let second = start_vision_task_with_goal(
+        &db,
+        &p,
+        ids,
+        2,
+        Some(consent.id),
+        "同じ写真について日本語で説明してください。",
+    )
+    .await;
+    engine(&db, &base).run(&second.id).await.unwrap();
+    let after: Vec<String> =
+        sqlx::query_scalar("SELECT observation_json FROM photo_observations ORDER BY id")
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    assert!(after.starts_with(&before), "切换语言不能改写原始观察");
+    assert!(
+        after.iter().all(|value| before.contains(value)),
+        "允许为新任务追加相同观察的回执，不得翻译或替换事实记录"
+    );
+    assert_eq!(image_requests(&state.lock().unwrap()), 1);
+    let projection = agent::projection(&db, &p.id).await.unwrap();
+    let second = projection
+        .tasks
+        .iter()
+        .find(|task| task.id == second.id)
+        .unwrap();
+    assert_eq!(second.usage.cloud_images, 0);
+    assert_eq!(
+        consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
+            .await
+            .unwrap()
+            .unwrap()
+            .used,
+        2,
+        "语言变化不应消耗额外图片额度"
+    );
     unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
 }
 
