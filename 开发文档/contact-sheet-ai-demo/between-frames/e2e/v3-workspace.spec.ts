@@ -35,7 +35,7 @@ async function installDesktopBridge(page: Page) {
   });
 }
 
-test.fail('内置演示项目：创建画布、放照片、便签、撤销重做与重启恢复', async ({ page }) => {
+test('内置演示项目：创建画布、放照片、便签、撤销重做与重启恢复', async ({ page }) => {
   await rpc('test_seed_demo');
   const projectId = 'demo-first-walk';
   const project = await rpc<Project>('get_project', { projectId });
@@ -71,7 +71,7 @@ test.fail('内置演示项目：创建画布、放照片、便签、撤销重做
   await page.screenshot({ path: '../docs/v3/evidence/canvas-demo-fix-2026-10-22/demo-canvas.png' });
 });
 
-test.fail('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进程重启', async ({ page }) => {
+test('G3/G7 真实 Store：画布照片、便签、连接、出版生成与进程重启', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await installDesktopBridge(page);
@@ -111,8 +111,9 @@ test.fail('G3/G7 真实 Store：画布照片、便签、连接、出版生成与
   await page.getByRole('button', { name: '连接', exact: true }).click();
   await page.locator('.canvas-photo-node').click();
   await page.locator('.canvas-sticky-node').click();
-  await expect(page.locator('.canvas-board line')).toHaveCount(1);
-  expect(await page.locator('.canvas-board line').evaluate(line => (line as SVGElement).ownerSVGElement!.getBoundingClientRect().width)).toBeGreaterThan(0);
+  // 每个向量节点另有一条透明加粗命中线，断言只看可见的那条。
+  await expect(page.locator('.canvas-board line.canvas-arrow-line')).toHaveCount(1);
+  expect(await page.locator('.canvas-board line.canvas-arrow-line').evaluate(line => (line as SVGElement).ownerSVGElement!.getBoundingClientRect().width)).toBeGreaterThan(0);
   // 实际鼠标画线，验证持久笔迹具有可绘制视口，再撤销以继续原历史旅程。
   await page.getByRole('button', { name: '画笔', exact: true }).click();
   const drawArea = await page.locator('.canvas-surface').boundingBox();
@@ -121,22 +122,22 @@ test.fail('G3/G7 真实 Store：画布照片、便签、连接、出版生成与
   await page.mouse.down();
   await page.mouse.move(drawArea!.x + drawArea!.width - 60, drawArea!.y + 80, { steps: 5 });
   await page.mouse.up();
-  await expect(page.locator('.canvas-board path')).toHaveCount(1);
-  expect(await page.locator('.canvas-board path').evaluate(path => (path as SVGElement).ownerSVGElement!.getBoundingClientRect().width)).toBeGreaterThan(0);
+  await expect(page.locator('.canvas-board path.canvas-ink-path')).toHaveCount(1);
+  expect(await page.locator('.canvas-board path.canvas-ink-path').evaluate(path => (path as SVGElement).ownerSVGElement!.getBoundingClientRect().width)).toBeGreaterThan(0);
   await page.screenshot({ path: '../docs/v3/evidence/agent-canvas-scope-2026-10-22/vector-rendering.png' });
   await page.getByRole('button', { name: '画笔', exact: true }).click();
   await page.getByRole('button', { name: '撤销', exact: true }).click();
-  await expect(page.locator('.canvas-board path')).toHaveCount(0);
+  await expect(page.locator('.canvas-board path.canvas-ink-path')).toHaveCount(0);
   // 摄影师角色模拟：多步 Undo/Redo 必须恢复同一顺序，使用真实 Rust Store。
   await page.getByRole('button', { name: '撤销', exact: true }).click();
-  await expect(page.locator('.canvas-board line')).toHaveCount(0);
+  await expect(page.locator('.canvas-board line.canvas-arrow-line')).toHaveCount(0);
   await page.getByRole('button', { name: '撤销', exact: true }).click();
   await expect(page.locator('.canvas-sticky-node')).toHaveCount(0);
   await page.getByRole('button', { name: '重做', exact: true }).click();
   await expect(page.locator('.canvas-sticky-node')).toHaveCount(1);
-  await expect(page.locator('.canvas-board line')).toHaveCount(0);
+  await expect(page.locator('.canvas-board line.canvas-arrow-line')).toHaveCount(0);
   await page.getByRole('button', { name: '重做', exact: true }).click();
-  await expect(page.locator('.canvas-board line')).toHaveCount(1);
+  await expect(page.locator('.canvas-board line.canvas-arrow-line')).toHaveCount(1);
   const photo = page.locator('.canvas-photo-node');
   const previousWidth = await photo.evaluate(node => parseFloat((node as HTMLElement).style.width));
   const handle = await photo.locator('.canvas-resize-handle').boundingBox();
@@ -203,7 +204,7 @@ test.fail('G3/G7 真实 Store：画布照片、便签、连接、出版生成与
 });
 
 
-test.fail('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编辑冲突', async ({ page }) => {
+test('SIMULATED 保存确认：提交后丢失回执、重启恢复及过期编辑冲突', async ({ page }) => {
   await installDesktopBridge(page);
   await page.goto('/');
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
@@ -280,7 +281,7 @@ test.fail('SIMULATED 保存确认：提交后丢失回执、重启恢复及过�
   await page.screenshot({ path: '../docs/v3/evidence/canvas-commands-2026-10-22/recovered.png' });
 });
 
-test.fail('SIMULATED Agent 画布委托：真实权限、独立分支、原布局对照、人工采纳与重启', async ({ page }) => {
+test('SIMULATED Agent 画布委托：真实权限、独立分支、原布局对照、人工采纳与重启', async ({ page }) => {
   await installDesktopBridge(page);
   await installAccountFixture(page);
   const outside: string[] = [];

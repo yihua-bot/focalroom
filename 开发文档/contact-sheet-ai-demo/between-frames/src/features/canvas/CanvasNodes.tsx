@@ -41,17 +41,19 @@ export function CanvasNodes({ nodes, selected = new Set(), dragging, editable = 
       const points = content(node.contentJson).points as Array<{ x: number; y: number }> | undefined;
       if (!Array.isArray(points) || points.length < 2) return null;
       const d = points.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ');
-      path = <path d={d} fill="none" stroke={String(content(node.styleJson).color ?? '#ff6b6b')} strokeWidth={Number(content(node.styleJson).strokeWidth ?? 2)} strokeLinecap="round" strokeLinejoin="round" />;
+      path = <path className="canvas-ink-path" d={d} fill="none" stroke={String(content(node.styleJson).color ?? '#ff6b6b')} strokeWidth={Number(content(node.styleJson).strokeWidth ?? 2)} strokeLinecap="round" strokeLinejoin="round" />;
       // 墨迹只有 2px 宽，直接点几乎点不中；叠一条透明粗描边承载选中。
-      hit = <path d={d} fill="none" stroke="transparent" strokeWidth={16} strokeLinecap="round" style={{ pointerEvents: 'stroke' }} data-node-id={node.id} />;
+      hit = <path className="canvas-vector-hit" d={d} fill="none" stroke="transparent" strokeWidth={16} strokeLinecap="round" style={{ pointerEvents: 'stroke' }} data-node-id={node.id} />;
     } else if (node.nodeType === 'arrow') {
       let ids: string[]; try { ids = JSON.parse(node.childrenJson ?? '[]'); } catch { return null; }
       if (ids.length !== 2) return null;
       const from = nodes.find(n => n.id === ids[0]), to = nodes.find(n => n.id === ids[1]);
       if (!from || !to) return null;
-      path = <><defs><marker id={`ah-${node.id}`} markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6c5ce7" /></marker></defs><line x1={from.x + from.width / 2} y1={from.y + from.height / 2} x2={to.x + to.width / 2} y2={to.y + to.height / 2} stroke={selected.has(node.id) ? '#a29bfe' : '#6c5ce7'} strokeWidth={selected.has(node.id) ? 3 : 2} markerEnd={`url(#ah-${node.id})`} /></>;
-      hit = <line x1={from.x + from.width / 2} y1={from.y + from.height / 2} x2={to.x + to.width / 2} y2={to.y + to.height / 2} stroke="transparent" strokeWidth={16} style={{ pointerEvents: 'stroke' }} data-node-id={node.id} />;
+      path = <><defs><marker id={`ah-${node.id}`} markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6c5ce7" /></marker></defs><line className="canvas-arrow-line" x1={from.x + from.width / 2} y1={from.y + from.height / 2} x2={to.x + to.width / 2} y2={to.y + to.height / 2} stroke={selected.has(node.id) ? '#a29bfe' : '#6c5ce7'} strokeWidth={selected.has(node.id) ? 3 : 2} markerEnd={`url(#ah-${node.id})`} /></>;
+      hit = <line className="canvas-vector-hit" x1={from.x + from.width / 2} y1={from.y + from.height / 2} x2={to.x + to.width / 2} y2={to.y + to.height / 2} stroke="transparent" strokeWidth={16} style={{ pointerEvents: 'stroke' }} data-node-id={node.id} />;
     } else return null;
-    return <svg key={node.id} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: node.zOrder, overflow: 'visible' }}>{hit}{path}</svg>;
+    // 命中用的透明粗描边必须压在照片与便签之下：连接线的终点正好落在节点中心，
+    // 若按节点创建顺序叠放，连线会把落在自己阴影里的点击全部吞掉，便签就点不动了。
+    return <svg key={node.id} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: -1, overflow: 'visible' }}>{hit}{path}</svg>;
   })}</>;
 }

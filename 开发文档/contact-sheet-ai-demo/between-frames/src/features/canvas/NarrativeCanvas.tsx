@@ -274,12 +274,15 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
   const editSticky = (node: CanvasPhoto) => { if (editLocked) return; setStickyDraft({ nodeId: node.id, x: node.x, y: node.y, text: stickyText(node) }); };
 
   // 卸载聚焦中的 textarea 不会再派发 blur，所以按钮提交与失焦提交只会命中一条路径，无需额外去重。
+  // 命令真的落地之后才关编辑器：版本冲突时先关掉，会把刚打进去的字一起丢掉。
   const commitSticky = async (draft: StickyDraft) => {
-    setStickyDraft(null);
     if (!repository || !activeBoard || editLocked) return;
     const text = draft.text.trim();
     if (draft.nodeId === null) {
-      if (!text) return;
+      if (!text) {
+        setStickyDraft(null);
+        return;
+      }
       await repository.addText(projectId, activeBoard, 'sticky', draft.x, draft.y, 200, 120, text, '#ffe082');
     } else if (!text) {
       // 清空即丢弃：内容命令不接受空正文，留下一个看不见的节点只会挡住后面的点击。
@@ -287,6 +290,7 @@ export function NarrativeCanvas({ repository, projectId, selectedPhotoIds, readO
     } else if (text !== stickyText(nodes.find(node => node.id === draft.nodeId))) {
       await repository.setNodeText(projectId, activeBoard, draft.nodeId, text);
     }
+    setStickyDraft(null);
     await loadBoards();
   };
 
