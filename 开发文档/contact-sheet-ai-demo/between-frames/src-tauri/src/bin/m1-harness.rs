@@ -353,6 +353,8 @@ impl Harness {
             // 聊天模式在 harness 里不回真实模型：回一条固定文字，够 E2E 走通界面链路。
             // 流式命令同样只回这条文字，前端拿到最终回执后照常上屏。
             "agent_chat" | "agent_chat_stream" => json!("harness：聊天模式已收到，不会上传照片。"),
+            // 断流核对在 harness 里没有服务端可查：如实回"未确认"，绝不编造一段正文上屏。
+            "agent_chat_job" => json!({ "state": "unknown", "text": null }),
             "store_api_key" => {
                 let key = string(args, "key")?.to_owned();
                 between_frames_lib::keychain::store_api_key(&key)?;

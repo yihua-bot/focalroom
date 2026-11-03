@@ -11,7 +11,7 @@ const project = { id: 'p1', title: 't', brief: '', revision: 3, photos: [{ id: '
 const readyConfig: AiConfig = { observation: null, consentProvider: 'openai@' + 'a'.repeat(64), providerId: 'openai', modelId: 'test-model', ready: true, apiKeyTail: 'abcd', keySource: 'keychain', baseUrl: 'https://x', promptVersion: 'test', capabilities: ['vision', 'tool_calling', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null, consent: null };
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn().mockResolvedValue(() => {}) }));
 function fixture(config: Partial<AiConfig> = {}, projection: AgentProjection = { tasks: [], drafts: [] }) {
- const agent = { chat: vi.fn().mockResolvedValue('聊天模式回复'), queryVisionResult: vi.fn().mockResolvedValue({state:'pending',images:1}), query: vi.fn().mockResolvedValue(projection), request: vi.fn().mockResolvedValue('task-1'), subscribe: vi.fn().mockResolvedValue(() => {}), aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...config }), setConsent: vi.fn().mockResolvedValue({ id: 9 }) };
+ const agent = { chat: vi.fn().mockResolvedValue('聊天模式回复'), chatJob: vi.fn().mockResolvedValue({ state: 'completed', text: '核对到的回复' }), queryVisionResult: vi.fn().mockResolvedValue({state:'pending',images:1}), query: vi.fn().mockResolvedValue(projection), request: vi.fn().mockResolvedValue('task-1'), subscribe: vi.fn().mockResolvedValue(() => {}), aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...config }), setConsent: vi.fn().mockResolvedValue({ id: 9 }) };
  return { agent };
 }
 function mount(repository = fixture(), props: Partial<React.ComponentProps<typeof AIPanel>> = {}) {
@@ -254,7 +254,9 @@ it('切到聊天模式后走纯文字对话，不上传照片也不进任务管�
  await userEvent.clear(box);
  await userEvent.type(box, '逆光怎么拍更好看');
  await userEvent.click(send());
- await waitFor(() => expect(repo.agent.chat).toHaveBeenCalledWith([{ role: 'user', content: '逆光怎么拍更好看' }], expect.any(Function)));
+ await waitFor(() => expect(repo.agent.chat).toHaveBeenCalledWith([{ role: 'user', content: '逆光怎么拍更好看' }], expect.any(String), expect.any(Function)));
+ // 编号在发送前就生成：断流之后界面靠它核对，而不是再发一条。
+ expect(repo.agent.chat.mock.calls[0][1]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
  expect(repo.agent.request).not.toHaveBeenCalled();
  expect(repo.agent.setConsent).not.toHaveBeenCalled();
  expect(await screen.findByText('逆光怎么拍更好看')).toBeInTheDocument();
@@ -270,6 +272,56 @@ it('聊天模式发送失败时把错误显示出来，不留半截回复', asyn
  await userEvent.click(send());
  expect(await screen.findByRole('alert')).toBeInTheDocument();
  expect(screen.queryByText('聊天模式回复')).not.toBeInTheDocument();
+});
+
+it('断流结果不明时不撤回原文也不重发，只给核对入口', async () => {
+ const repo = fixture();
+ // 服务端可能已经记下这趟请求：这种失败等价于 AppError{code:'AI_RESULT_UNKNOWN'}。
+ repo.agent.chat.mockRejectedValueOnce(Object.assign(new Error('暂未取得回复，请勿重复提交'), { code: 'AI_RESULT_UNKNOWN' }));
+ mount(repo); await ready();
+ await userEvent.click(screen.getByRole('tab', { name: '聊天模式' }));
+ const box = screen.getByRole('textbox', { name: '消息' });
+ await userEvent.clear(box);
+ await userEvent.type(box, '逆光怎么拍');
+ await userEvent.click(send());
+ expect(await screen.findByRole('alert')).toHaveTextContent('不要重复发送');
+ // 原文留在对话里、输入框保持空——把文字塞回输入框就是在请用户盲重发一遍。
+ expect(screen.getByText('逆光怎么拍')).toBeInTheDocument();
+ expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('');
+ expect(repo.agent.chat).toHaveBeenCalledTimes(1);
+ // 核对只带那个发送前留存的编号，走只读查询，不再发一次聊天。
+ await userEvent.click(screen.getByRole('button', { name: '核对结果' }));
+ await waitFor(() => expect(repo.agent.chatJob).toHaveBeenCalledWith(repo.agent.chat.mock.calls[0][1]));
+ expect(repo.agent.chat).toHaveBeenCalledTimes(1);
+ expect(await screen.findByText('核对到的回复')).toBeInTheDocument();
+ expect(screen.queryByRole('button', { name: '核对结果' })).not.toBeInTheDocument();
+});
+
+it('核对到确认中与仍不明都保持未确认，只有服务端确认没受理才退还原文', async () => {
+ const repo = fixture();
+ repo.agent.chat.mockRejectedValueOnce(Object.assign(new Error('结果不明'), { code: 'AI_RESULT_UNKNOWN' }));
+ mount(repo); await ready();
+ await userEvent.click(screen.getByRole('tab', { name: '聊天模式' }));
+ const box = screen.getByRole('textbox', { name: '消息' });
+ await userEvent.clear(box);
+ await userEvent.type(box, '逆光怎么拍');
+ await userEvent.click(send());
+ const reconcile = () => screen.getByRole('button', { name: '核对结果' });
+ for (const [state, notice] of [['pending', '仍在处理'], ['unknown', '不要重复发送']] as const) {
+  repo.agent.chatJob.mockResolvedValueOnce({ state, text: null });
+  // 每次核对都先清空提示再重写，提示条会重新挂载，所以按钮要重新取。
+  await userEvent.click(reconcile());
+  expect(await screen.findByText(new RegExp(notice))).toBeInTheDocument();
+  expect(screen.getByText('逆光怎么拍')).toBeInTheDocument();
+  expect(repo.agent.chat).toHaveBeenCalledTimes(1);
+ }
+ // 被拒：这趟没计量，原文才该回到输入框，用户可以重打。
+ repo.agent.chatJob.mockResolvedValueOnce({ state: 'rejected', text: null });
+ await userEvent.click(reconcile());
+ expect(await screen.findByText(/没有受理/)).toBeInTheDocument();
+ expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('逆光怎么拍');
+ // 对话记录里那条原文已经不在了：文字只回到输入框，不会留下两条一样的消息。
+ expect(within(screen.getByRole('log')).queryByText('逆光怎么拍')).not.toBeInTheDocument();
 });
 
 it('聊天模式消息先上屏，不等配置刷新返回', async () => {
@@ -315,7 +367,7 @@ const lastBubble = () => {
 it('聊天流式增量先进气泡，最终回执再整条覆盖', async () => {
  const repo = fixture();
  const snapshots: string[] = [];
- repo.agent.chat.mockImplementation(async (_turns: unknown, onDelta?: (fragment: string) => void) => {
+ repo.agent.chat.mockImplementation(async (_turns: unknown, _requestId: string, onDelta?: (fragment: string) => void) => {
   onDelta?.('逆光');
   snapshots.push(lastBubble());
   onDelta?.('更稳');
@@ -336,7 +388,7 @@ it('聊天流式增量先进气泡，最终回执再整条覆盖', async () => {
 
 it('聊天流式中途断开只撤回半截气泡，不自动重发', async () => {
  const repo = fixture();
- repo.agent.chat.mockImplementation(async (_turns: unknown, onDelta?: (fragment: string) => void) => {
+ repo.agent.chat.mockImplementation(async (_turns: unknown, _requestId: string, onDelta?: (fragment: string) => void) => {
   onDelta?.('半截');
   throw new Error('boom');
  });

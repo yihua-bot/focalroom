@@ -83,8 +83,12 @@ fn handle_line(
 pub(super) async fn chat_stream(
     provider: &OpenAiProvider,
     body: &Value,
+    request_id: &str,
     mut on_delta: impl FnMut(&str),
 ) -> std::result::Result<Value, StreamFailure> {
+    // 编号由调用方在发送前生成并保存，断流后才有可能凭它只读核对；
+    // 在服务内部临时造一个再丢掉，等于回执查无此人。
+    hosted_async::validate_id(request_id).map_err(StreamFailure::Failed)?;
     let auth = provider.hosted.as_ref().ok_or_else(|| {
         StreamFailure::Failed(AppError::new("AI_NOT_CONFIGURED", "Focal AI 暂未开放"))
     })?;
@@ -93,7 +97,7 @@ pub(super) async fn chat_stream(
         .as_deref()
         .ok_or_else(|| AppError::new("AUTH_REQUIRED", "请先登录 FocalRoom"))
         .map_err(StreamFailure::Failed)?;
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = request_id.to_owned();
     let token = auth
         .bearer(auth.origin())
         .await

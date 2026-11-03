@@ -140,11 +140,19 @@ pub(crate) async fn request_bound_with_canvas(
                     target_count,
                     budget,
                     consent_id,
-                    true,
+                    local,
                     source_board.as_ref(),
                 ),
                 _ => unreachable!(),
             };
+        // 画布任务按定义要写画布：宿主收紧权限或项目不在本机可写状态时当场拒绝，
+        // 不能悄悄建出一个没有画布能力的"画布任务"让模型空跑一轮。
+        if matches!(r.command, TaskCommand::StartCanvasTask { .. }) && !canvas {
+            return Err(AppError::new(
+                "PERMISSION_DENIED",
+                "这个项目当前不能写画布，请改用讨论或在可编辑的设备上继续",
+            ));
+        }
         budget.validate()?;
         if goal.trim().is_empty() {
             return Err(AppError::new("VALIDATION_ERROR", "编辑目标不能为空"));

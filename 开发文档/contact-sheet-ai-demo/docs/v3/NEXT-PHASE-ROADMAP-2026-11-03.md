@@ -148,3 +148,76 @@ AI 请求恢复继续沿用已有持久回执与 UNKNOWN 边界：断流或结�
 - 修复空串流派之后，三条真实链路在同一次运行里全部重跑通过（`tests 3 / pass 3 / fail 0`，验收器汇总 `"passed":true`）：Mac 端真实钥匙串会话读已播种知识、手机侧原生入口同一链路、原生登录协议与钥匙串条目闭环。此前中断最后一轮的"磁盘写满"已随空间清理消失，该轮重跑不再依赖旧结果。
 - 本轮未提交、推送或部署。
 
+## 第五批增量：Sprint 2 入口现状核查与统一路由
+
+### 核查方式
+
+三路并行只读核查（桌面界面与命令层、iOS Swift 与原生入口、共享 Rust 核心），承重结论逐条回读代码确认，不以历史文档或代码注释为准。
+
+### 现状（2026-11-03 实测代码）
+
+- 桌面只有一个 AI 抽屉：`src/features/ai-editor/AIPanel.tsx` 由 `src/app/AppController.tsx:209` 挂载，项目头、选片快捷动作、画布"整理画板"、状态条与快捷键都汇入它，没有第二个界面级入口。
+- 但抽屉内部仍是两种模式，走两条不同的推理路。任务模式：`agent_request`（`src-tauri/src/commands.rs:703`）→ `AgentEngine::request`（`agent/runtime.rs:111`）→ `lifecycle::request_bound_with_canvas`，有任务行、回执、预算与账户核对。聊天模式：`agent_chat` / `agent_chat_stream`（`commands.rs:666,675`）→ `chat_turn` / `chat_turn_stream`（`runtime.rs:33,53`）→ 供应商 `chat_text*`，不建任务、不写回执、不占预算、不带项目范围与 `expectedAccountId`，聊天历史只存在前端 `uiStore.aiChat`。
+- iOS 同样只有一个入口 `FocalAIView`（`apps/mobile-ios/FocalRoom/RootView.swift:18`），内部 `.task` / `.chat` 分段。`.task` 经 FFI `agentRequest` 进共享核心（`AppModel.swift:693,1391`）；`.chat` 默认打远端流式端点 `POST api/v2/ai/.../responses/stream`（`AppModel.swift:713` → `Sources/FocalRoomCore/APIClient.swift:430-486`），仅当返回 404 且一个增量都没收到时才回退核心 `chat`（`AppModel.swift:738-744`）。也就是说手机上的"聊天"目前由另一套客户端规则执行：核心侧统一 1024 输出上限（`runtime.rs:47,48`），手机请求写的是 `maxOutputTokens: 2048`。
+- iOS 侧确认存在的孤儿与缺口：`api.aiSubmit` 只被测试引用；FFI 的 `createProject` Swift 从不调用；`sourceBoard` 恒为 null，`continuation` 与 `allowQueuedRecovery` 从不发送（`AppModel.swift:1418-1429`），因此跨轮接续、排队恢复、画布来源三项只有桌面能用。手机界面没有把知识工具的"查无结果"与"服务异常"分开呈现：观察区为空时整块隐藏，错误统一塌成一条字符串，只有 `AI_RESULT_UNKNOWN` 有专门文案（`FocalAIViews.swift:353,392,399`）。
+- 核心的权限口子：桌面 `request()` 硬编码 `canvas = true`（`runtime.rs:112`），原生宿主用 `request_with_canvas_access()` 收紧（`native_agent.rs:217`）。而 `TaskCommand::StartCanvasTask` 原本把画布授权写成恒定 `true`（`agent/lifecycle.rs:143`），于是 C ABI 的任何宿主都能靠"挑一个自带权限的命令"绕过 `canvasAccess=false`。
+- 已无生产调用方：`AgentEngine::run`（只由 `dispatch` 与测试触达）、`lifecycle::request`（仅 mock 分支）、`lifecycle::request_bound`（仅测试）、`agent::focal_chat` 是投影而非推理通道。
+
+### 已修
+
+- `StartCanvasTask` 不再自带权限：画布授权改为跟随宿主收紧后的同一判定（`canvas_access` 且项目本机可写）。无法授予画布时当场拒绝并返回权限错误，不留半个任务或已冻结的授权行。`e2e/editorial-review.spec.ts:47` 的非认证路径仍在用这个命令，其项目为本机可写，行为不变。
+- 桌面聊天的回复现在带一个"发送前就生成并留存"的请求编号（Sprint 2-1b/1c）：
+  - 编号由界面在第一次 `await` 之前用 `crypto.randomUUID()` 生成，随 `agent_chat` / `agent_chat_stream` 一起交给核心，核心不再自己临时造一个（`src-tauri/src/agent/openai/hosted_stream.rs:83`，此前在服务内部生成后即丢弃，回执查无此人）。
+  - 服务端确实按这个编号留回执：`apps/api/src/hosted-ai.ts:222` 把每一趟托管请求以 `x-focalroom-request-id` 记入 `fr_ai_requests`，一次性、异步与流式三条路共用同一张表，因此 `GET /responses/async/{编号}` 可以只读核对聊天请求。
+  - 网关没有流式路由（404/405/501）而退回提交路径时**沿用同一编号**（`agent/openai.rs` `chat_text_stream`），换编号会让手里那串永远查不到回执；除此之外一律不重发。
+  - 新增只读核对通道：`OpenAiProvider::chat_job` → `runtime::chat_job` → `agent_chat_job`（`commands.rs:692`），不要求视觉能力（聊天不挂工具也不带图），输出上限与提交路径同一常量 `CHAT_OUTPUT_TOKENS`（1024），避免发送与核对各定一个门槛。
+  - 界面不再邀请盲重发：`AI_RESULT_UNKNOWN` 时保留半成品气泡与原文、只出现"核对结果"按钮；核对到 `completed` 才用服务端正文整条覆盖，`pending`/`unknown` 维持未确认，只有服务端明确 `rejected`/`expired` 才把文字退回输入框。此前任何失败都撤回原文并塞回输入框，等价于请用户为同一条回复付两次。
+  - 编号不合法（非 UUID）在联网之前拒绝，四种界面状态各有断言；`m1-harness` 的核对桩如实回"未确认"，不编造正文。
+- 桌面聊天与原生聊天合并为同一个入口函数：`AgentEngine::chat_turn` 已删除，两条路都走 `chat_turn_with_id`（`agent/runtime.rs:33`），不存在"一条可核对一条不可核对"的并行实现。
+
+### 统一路由的决定
+
+1. 一个入口只有一个执行者：手机上的纯问答改由共享核心执行，并保持逐字上屏（需给原生入口增加增量回调），远端流式端点不再是手机的默认聊天通道；桌面的聊天模式并入同一生命周期核实（账户、输出上限、可核对回执）。理由是同一功能两套客户端各自定规矩时，计量、撤权与错误语义必然分叉。
+2. 权限只由宿主身份与项目状态决定，命令字面不能自带权限。
+3. 桌面能传而手机传不出来的字段（画布来源、跨轮接续、排队恢复）要么在手机上补齐，要么明确禁用并说明原因，不允许静默按桌面行为预期却实际丢失。
+
+### 验证结果
+
+- Rust 全量测试 393 passed / 0 failed / 20 ignored（默认特性），托管链路 `tests/hosted_ai.rs` 21 passed / 0 failed（`--features integration-harness`），共享原生核心 `--lib --no-default-features --features native-agent` 184 passed / 0 failed / 4 ignored，`cargo fmt --check` 通过。
+- 前端 Lint、类型检查、契约检查全部通过；`npm test` 59 个文件 / 418 个用例通过，含本轮新增的四条：`聊天两条发送路都带上发送前留存的编号，断流后凭它只读核对`、`聊天回执只在已完成时接受正文，其余状态必须空正文`、`断流结果不明时不撤回原文也不重发，只给核对入口`、`核对到确认中与仍不明都保持未确认，只有服务端确认没受理才退还原文`。
+- 覆盖到的是契约与界面逻辑：断流、核对、盲重发三类行为由离线夹具模拟服务端回执验证（`hosted_ai.rs` 的流分支按客户端编号记账，与真实网关 `fr_ai_requests` 的记账方式一致）。**没有**在真实托管网关上真的掐断一次流来核对回执，也**没有**装到本机 Make 上做过人工点击验证——这两项仍待办。
+- 权限口子（`StartCanvasTask`）的验证在原生宿主测试里：`readonly_host_cannot_open_a_canvas_task_without_canvas_grant` 断言拒绝时 `agent_tasks` 与 `agent_task_grants` 均为 0，即拒绝干净、不留半个任务或冻结授权。
+- 统一路由的三条决定只落了第 2 条与第 1 条的一半：桌面聊天已有可核对回执，手机聊天仍打远端流式端点、`maxOutputTokens: 2048` 与核心的 1024 不一致，第 3 条（手机缺失字段）尚未动。
+- 本轮未提交、推送或部署。
+
+
+## 第六批增量：iPhone 聊天接入共享流式与回执核对
+
+基于第五批的工作区继续开发；先重新读取实际 Swift/FFI/Rust 调用路径，未把粘贴的历史结果当作当前验证。
+
+### 实现
+
+- 增加同步回调 C ABI focalroom_agent_chat_stream，复用 AgentEngine::chat_turn_stream。回调仅传 UTF-8 增量，生命周期限定为函数返回前；Swift 复制字符串并通过 AsyncThrowingStream 顺序交付，不在主线程阻塞 Rust 调用。
+- 手机 aiSend 的纯聊天发送不再直接调用 APIClient.aiStream，也删除“手机判断 404 后再回退”的分支。请求编号先持久化，提示词、输出上限（1024）、流解析、路由缺失回退规则和账户核对均由共享核心执行。
+- 增加原生 chatJob 操作；手机待确认消息通过同一核心只读查询，不再自己调用 APIClient.aiJob 或按另一套输出上限解读回执。
+- Swift 仅在 completed 事件后保存正式回答；收到增量而没有最终回执时，原用户消息保留 unknown，不以半截文字冒充完成，也不自动重发。
+- 增加 NativeChatJob 严格解析：completed 必须包含非空正文，其余四种状态必须没有正文。expired 的提示独立于 rejected，不再错误声称已释放额度，补齐中英日韩文案。
+- Core 网络/身份逻辑、Swift 流事件适配和 UI 持久化各负其责；复用现有执行与计费通道，无新增依赖、数据库 schema 或第二套手机推理规则。
+
+### 本轮验证
+
+- 共享原生核心全库：185 passed / 0 failed / 4 ignored。
+- 新增 C ABI 本机网关回归：正常流得到增量和最终正文；截断流返回 AI_RESULT_UNKNOWN；使用相同编号读取完整回执，提交次数不增加；输出上限断言为 1024。
+- 原生核对夹具第一次缺少 jobId，被严格协议检查拒绝；补齐与真实服务一致的回执后通过，未削弱客户端校验。
+- Swift 核心原有全套：75 executed / 10 skipped / 0 failures，另有 Swift Testing 的 3 项通过；新增 NativeChatJobTests 1 项通过，覆盖五种状态与非法正文组合。
+- 共享原生严格 Clippy、Rust 格式、机器契约和 git diff 空白检查通过。
+- 首次通用模拟器双架构构建失败；arm64 编译发现调用 aiPayload 缺少 try，已修复并复验。构建日志仍包含既有未使用变量/不可达返回及 Swift driver 的异常诊断，最终状态见后续构建记录。
+
+### 仍需推进
+
+- 本轮保留聊天/任务模式选择；它们都接到共享核心，并不代表已经实现自动 Agent 工具路由。
+- 手机 sourceBoard、continuation、allowQueuedRecovery 的产品入口仍待补齐或明确限制。
+- 真实托管网关断流、真实手机手动点击、Mac 安装包验收尚未执行。本轮仅本机夹具和模拟器编译，不调用生产模型或扣减用户额度。
+- 生产调用属于用户要求显式确认的操作，应在确定测试账户、调用次数和费用边界后再执行。未提交、推送、部署或安装到用户设备。
+
+最终模拟器构建：arm64、Debug、CODE_SIGNING_ALLOWED=NO 复验返回 exit 0，并明确输出 BUILD SUCCEEDED。产物位于 /tmp/focalroom-sprint2-ios-build/Build/Products/Debug-iphonesimulator/FocalRoom.app；未启动或安装到设备。日志：/tmp/focalroom-sprint2-xcode-verify.log。前述通用构建失败与诊断保留，不以成功复验覆盖历史。

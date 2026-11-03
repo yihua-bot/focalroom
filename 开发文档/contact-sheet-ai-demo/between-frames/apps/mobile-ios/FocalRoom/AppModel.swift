@@ -701,57 +701,25 @@ final class AppModel {
             chatMessages.append(userMessage)
             let history = chatMessages.filter { $0.state == .sent || $0.id == userMessage.id }.suffix(20)
                 .map { ["role": $0.role, "content": String($0.text.prefix(4000))] }
-            // 流式优先：与桌面一致的逐字上屏。SSE 端点是本次请求的唯一执行方并落回执；
-            // 流中断不重发（服务端可能已计量结算），凭原编号走自动核对读回执。
-            final class StreamOutcome: @unchecked Sendable {
-                var received = false
-                var buffer = ""
-                var finalText: String?
-            }
-            let outcome = StreamOutcome()
+            // 发送、流式解析和只读核对均由共享核心负责；增量不是完成回执。
+            var buffer = ""
             do {
-                try await api.aiStream(input: AIConversationInput(history: history.map { (role: $0["role"] ?? "", text: $0["content"] ?? "") },
-                                                                    instructions: Self.chatInstructions,
-                                                                    maxOutputTokens: 2048),
-                                       requestID: requestID, token: credentials.token) { [weak self] event in
-                    guard let self else { return }
+                let events = await client.chatStream(payload: try aiPayload(["turns": history, "requestID": requestID]))
+                var completed = false
+                for try await event in events {
                     switch event {
-                    case .start: outcome.received = true
                     case .delta(let text):
-                        outcome.received = true
-                        outcome.buffer += text
-                        if self.epoch == generation, self.currentProject == project { self.streamingText = outcome.buffer }
-                    case .done(let reply):
-                        outcome.received = true
-                        outcome.finalText = reply.text
-                        if self.epoch == generation, self.currentProject == project { self.streamingText = reply.text }
-                    case .failure: break
+                        buffer += text
+                        if generation == epoch, project == currentProject { streamingText = buffer }
+                    case .completed(let text):
+                        try await chat.complete(userMessage, text: text)
+                        completed = true
                     }
                 }
-                guard let finalText = outcome.finalText ?? (outcome.buffer.isEmpty ? nil : outcome.buffer), !finalText.isEmpty else {
-                    throw APIError.invalidResponse
-                }
-                // 迟到回复写回原账户/项目存储；只有当前上下文会刷新界面。
-                try await chat.complete(userMessage, text: finalText)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch let error as APIError where !outcome.received && {
-                if case .server(let status, _) = error { return status == 404 }
-                return false
-            }() {
-                // 网关尚未部署流式路由且请求未执行：安全回退统一核心的一次性请求（同一编号）。
-                do {
-                    let bytes = try await client.perform("chat", payload: aiPayload(["turns": history, "requestID": requestID]))
-                    let reply = try JSONSerialization.jsonObject(with: bytes) as? [String: Any]
-                    guard let text = reply?["text"] as? String, !text.isEmpty else { throw APIError.invalidResponse }
-                    try await chat.complete(userMessage, text: text)
-                } catch {
-                    if generation == epoch, project == currentProject { notice = message(error) }
-                    if generation == epoch { scheduleAutoResolve() }
-                }
+                guard completed else { throw APIError.invalidResponse }
             } catch {
                 if generation == epoch, project == currentProject { notice = message(error) }
-                // 持久编号已保存，后续只读核对现有网关回执，不再次提交模型请求。
+                // 编号已经持久化；未知结果仅查询，不重发。迟到回执仍归原账户项目。
                 if generation == epoch { scheduleAutoResolve() }
             }
             if generation == epoch, project == currentProject { await loadChat(); await loadAIAccount() }
@@ -764,7 +732,7 @@ final class AppModel {
 
     /// 核对「结果待确认」的 AI 消息。manual 为用户主动点按，失败必须给出提示；自动核对保持安静。
     func aiResolvePending(manual: Bool = false) async {
-        guard let api, let credentials, let chat else {
+        guard credentials != nil, api != nil, let chat else {
             if manual { notice = offline ? String(localized: "当前离线，无法核对结果，请稍后重试。") : String(localized: "会话存储不可用，请重新登录后重试。") }
             return
         }
@@ -774,13 +742,15 @@ final class AppModel {
         for entry in chatMessages where entry.state == .unknown && entry.role == "user" {
             guard let requestID = entry.requestID else { continue }
             do {
-                let job = try await api.aiJob(requestID: requestID, token: credentials.token)
+                let client = try await sharedAIClient()
+                let data = try await client.perform("chatJob", payload: aiPayload(["requestID": requestID]))
+                let job = try JSONDecoder().decode(NativeChatJob.self, from: data)
                 guard generation == epoch else { return }
-                if job.state == "COMPLETED", let result = job.result {
-                    try? await chat.complete(entry, text: result.text.isEmpty ? String(localized: "（模型未返回文本）") : result.text)
+                if job.state == "completed", let text = job.text {
+                    try await chat.complete(entry, text: text.isEmpty ? String(localized: "（模型未返回文本）") : text)
                     changed = true
-                } else if job.state == "REJECTED" {
-                    try? await replaceMessage(entry, state: .failed, failure: String(localized: "模型服务拒绝了请求，额度已释放。"), in: chat)
+                } else if job.state == "rejected" || job.state == "expired" {
+                    try await replaceMessage(entry, state: .failed, failure: job.state == "expired" ? String(localized: "这条回复已过期，无法取回。不会自动重新发送。") : String(localized: "模型服务拒绝了请求，额度已释放。"), in: chat)
                     changed = true
                 }
             } catch {

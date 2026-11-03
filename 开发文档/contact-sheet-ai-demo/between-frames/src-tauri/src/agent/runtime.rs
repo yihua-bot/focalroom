@@ -30,33 +30,73 @@ pub struct AgentEngine {
 }
 impl AgentEngine {
     /// 聊天模式单轮对话：不上传照片、不创建任务、不写草案；托管账户按普通文字请求在服务端计量。
-    pub async fn chat_turn(&self, turns: &[ChatTurn]) -> Result<String> {
-        self.chat_turn_inner(turns, None).await
-    }
-    /// 原生客户端保留持久请求编号；结果不明时只读查询，不重新提交。
+    /// 桌面与原生都自带发送前留存的编号——结果不明时凭它只读查询，而不是重新提交一趟。
     pub async fn chat_turn_with_id(&self, turns: &[ChatTurn], request_id: &str) -> Result<String> {
-        self.chat_turn_inner(turns, Some(request_id)).await
-    }
-    async fn chat_turn_inner(
-        &self,
-        turns: &[ChatTurn],
-        request_id: Option<&str>,
-    ) -> Result<String> {
         let (bound, refs) = self.chat_bound(turns).await?;
-        match request_id {
-            Some(id) => bound.chat_text_with_id(&refs, 1024, id).await,
-            None => bound.chat_text(&refs, 1024).await,
-        }
+        bound
+            .chat_text_with_id(&refs, super::openai::CHAT_OUTPUT_TOKENS, request_id)
+            .await
     }
     /// 桌面聊天走流式：模型每产出一段就交给回调上屏，最终文字仍以服务端回执为准。
     /// 校验与账户冻结和一次性路径完全共用一套，两条路不允许各定各的门槛。
+    /// `request_id` 由界面在发送前生成并留存，断流后才能凭它只读核对；
+    /// 编号合法性由发送层在联网之前把关，这里不重复一套规则。
     pub async fn chat_turn_stream(
         &self,
         turns: &[ChatTurn],
+        request_id: &str,
         on_delta: impl FnMut(&str) + Send,
     ) -> Result<String> {
         let (bound, refs) = self.chat_bound(turns).await?;
-        bound.chat_text_stream(&refs, 1024, on_delta).await
+        bound
+            .chat_text_stream(
+                &refs,
+                super::openai::CHAT_OUTPUT_TOKENS,
+                request_id,
+                on_delta,
+            )
+            .await
+    }
+    /// 只读核对一次已发送的聊天请求：不重新提交、不排队、不计量，也不碰历史正文。
+    /// 断流时界面拿到的正是这个状态——确认中就等，被拒就退还输入，只有服务端回执
+    /// 才把正文正式上屏。
+    pub async fn chat_job(&self, request_id: &str) -> Result<ChatJobView> {
+        let provider = self.openai.as_ref().ok_or_else(|| {
+            AppError::new(
+                "AI_NOT_CONFIGURED",
+                "Focal AI 暂未开放，请先登录或检查服务配置",
+            )
+        })?;
+        if !provider.is_hosted() {
+            return Err(AppError::new(
+                "RECOVERY_ERROR",
+                "自备密钥的回复不经过服务端，无法核对",
+            ));
+        }
+        let bound = provider.bind_account()?;
+        let job = bound.chat_job(request_id).await?;
+        Ok(match job {
+            super::openai::ChatJob::Completed(text) => ChatJobView {
+                state: "completed".into(),
+                text: Some(text),
+            },
+            super::openai::ChatJob::Pending => ChatJobView {
+                state: "pending".into(),
+                text: None,
+            },
+            super::openai::ChatJob::Rejected => ChatJobView {
+                state: "rejected".into(),
+                text: None,
+            },
+            super::openai::ChatJob::Expired => ChatJobView {
+                state: "expired".into(),
+                text: None,
+            },
+            super::openai::ChatJob::Unknown => ChatJobView {
+                state: "unknown".into(),
+                text: None,
+            },
+        })
     }
     /// 聊天前置：历史合法性校验 + 托管账户冻结与逐次核实，返回可直接发送的正文引用。
     async fn chat_bound<'a>(

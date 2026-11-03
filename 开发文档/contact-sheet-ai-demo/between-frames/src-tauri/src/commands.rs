@@ -666,8 +666,10 @@ pub async fn set_hypothesis_enabled(
 pub async fn agent_chat(
     state: State<'_, Backend>,
     turns: Vec<crate::agent::types::ChatTurn>,
+    request_id: String,
 ) -> Result<String> {
-    state.agent.chat_turn(&turns).await
+    // 一次性路径同样带编号：回复在路上丢了才核得回来，两条发送路不能一条可核对一条不可。
+    state.agent.chat_turn_with_id(&turns, &request_id).await
 }
 /// 聊天流式命令：增量经 IPC channel 逐段送到前端，命令返回值仍是服务端的最终回执正文。
 /// channel 只活在这次 invoke 里，不经过全局事件总线，切换项目或窗口关闭都不会串台。
@@ -675,15 +677,26 @@ pub async fn agent_chat(
 pub async fn agent_chat_stream(
     state: State<'_, Backend>,
     turns: Vec<crate::agent::types::ChatTurn>,
+    request_id: String,
     on_delta: tauri::ipc::Channel<String>,
 ) -> Result<String> {
     state
         .agent
-        .chat_turn_stream(&turns, |fragment| {
+        .chat_turn_stream(&turns, &request_id, |fragment| {
             // 前端已断开时 send 失败：继续读完服务端回执，不中断、也不重发。
             let _ = on_delta.send(fragment.to_owned());
         })
         .await
+}
+/// 断流后的只读核对：只凭前端留存的那个请求编号向服务端查一次回执，绝不重新提交。
+/// 界面据此决定这条回复是上屏、继续等，还是承认"结果不明、请勿重复提交"。
+#[tauri::command]
+pub async fn agent_chat_job(
+    state: State<'_, Backend>,
+    request_id: String,
+) -> Result<serde_json::Value> {
+    serde_json::to_value(state.agent.chat_job(&request_id).await?)
+        .map_err(crate::command_audit::serialization)
 }
 #[tauri::command]
 pub async fn query_vision_result(

@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultAgentBudget } from '../domain/agent';
 const ipc = vi.hoisted(() => vi.fn());
-vi.mock('@tauri-apps/api/core', () => ({ invoke: ipc, convertFileSrc: (path: string) => `local:${path}` }));
+// 流式命令会 new Channel 并把 onmessage 接上去：夹具用内联的替身，避免 vi.mock 提升后引用未初始化的类。
+vi.mock('@tauri-apps/api/core', () => ({
+ invoke: ipc,
+ convertFileSrc: (path: string) => `local:${path}`,
+ Channel: class { onmessage?: (fragment: string) => void },
+}));
 import { TauriAgentRepository } from './TauriAgentRepository';
 
 const task = {
@@ -130,4 +135,38 @@ it('恢复能力必须与已知策略和期限匹配，缺少能力时保持旧�
  expect((await repo.aiConfig('p')).hostedAccount?.recovery).toEqual({enabled:true,policy:'encrypted-queue-v1',maxQueueSeconds:600});
  ipc.mockResolvedValue({...base,hostedAccount:{...base.hostedAccount,recovery:{enabled:true,policy:'other',maxQueueSeconds:600}}});
  await expect(repo.aiConfig('p')).rejects.toThrow();
+});
+
+it('聊天两条发送路都带上发送前留存的编号，断流后凭它只读核对', async () => {
+ const repo = new TauriAgentRepository();
+ const turns = [{ role: 'user' as const, content: '逆光怎么拍' }];
+ const id = '3f2a1b0c-9d8e-4f70-a1b2-c3d4e5f60718';
+ ipc.mockResolvedValueOnce('一次性回复');
+ expect(await repo.chat(turns, id)).toBe('一次性回复');
+ expect(ipc).toHaveBeenCalledWith('agent_chat', { turns, requestId: id });
+ // 流式命令把编号和 channel 一起交给 Rust，退回路径也沿用同一个编号。
+ ipc.mockResolvedValueOnce('流式回复');
+ const delta = vi.fn();
+ expect(await repo.chat(turns, id, delta)).toBe('流式回复');
+ const streamArgs = ipc.mock.calls[1][1] as { turns: unknown; requestId: string; onDelta: { onmessage?: (fragment: string) => void } };
+ expect(streamArgs.requestId).toBe(id);
+ streamArgs.onDelta.onmessage?.('逆光');
+ expect(delta).toHaveBeenCalledWith('逆光');
+ expect(ipc).toHaveBeenCalledWith('agent_chat_stream', expect.objectContaining({ turns, requestId: id }));
+});
+
+it('聊天回执只在已完成时接受正文，其余状态必须空正文', async () => {
+ const repo = new TauriAgentRepository();
+ ipc.mockResolvedValueOnce({ state: 'completed', text: '核对到的回复' });
+ expect(await repo.chatJob('3f2a1b0c-9d8e-4f70-a1b2-c3d4e5f60718')).toEqual({ state: 'completed', text: '核对到的回复' });
+ expect(ipc).toHaveBeenCalledWith('agent_chat_job', { requestId: '3f2a1b0c-9d8e-4f70-a1b2-c3d4e5f60718' });
+ for (const value of [{ state: 'pending', text: null }, { state: 'rejected', text: null }, { state: 'expired', text: null }, { state: 'unknown', text: null }]) {
+  ipc.mockResolvedValueOnce(value);
+  expect(await repo.chatJob('3f2a1b0c-9d8e-4f70-a1b2-c3d4e5f60718')).toEqual(value);
+ }
+ // 说"已完成"却给不出正文，或还在处理却塞来一段文字，都属于对不上账的回执。
+ for (const value of [{ state: 'completed', text: '' }, { state: 'completed' }, { state: 'pending', text: '半句' }, { state: 'settled', text: null }]) {
+  ipc.mockResolvedValueOnce(value);
+  await expect(repo.chatJob('3f2a1b0c-9d8e-4f70-a1b2-c3d4e5f60718')).rejects.toThrow();
+ }
 });

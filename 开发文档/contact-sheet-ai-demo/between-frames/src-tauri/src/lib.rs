@@ -169,6 +169,7 @@ pub fn run() {
             commands::canvas_photo_tile,
             commands::agent_chat,
             commands::agent_chat_stream,
+            commands::agent_chat_job,
             commands::query_vision_result,
             commands::get_agent_projection,
             commands::get_ai_config,

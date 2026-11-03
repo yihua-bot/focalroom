@@ -17,6 +17,24 @@ pub const IMAGE_COST_MINOR_USD: u32 = 1;
 pub const TEXT_COST_MINOR_PER_K_TOKENS: u32 = 1;
 /// 聊天模式系统提示：纯文字对话，不上传照片、不创建任务、不写草案。
 const CHAT_PROMPT: &str = include_str!("../../../prompts/focal-chat-v2.md");
+/// 聊天一次输出的上限：发送与回执核对必须用同一个数，核对时放宽会让服务端拒绝，
+/// 收紧会让正常回执被判定为不合法。
+pub(crate) const CHAT_OUTPUT_TOKENS: u32 = 1024;
+
+/// 一次已提交的托管聊天请求在服务端的最终下落。
+#[derive(Debug)]
+pub enum ChatJob {
+    /// 服务端仍在处理，回执还没有。
+    Pending,
+    /// 回执已确认，附带服务端结算后的正文。
+    Completed(String),
+    /// 服务端明确拒绝，这次请求没有计量。
+    Rejected,
+    /// 结果无法确认，既不算成功也不算失败。
+    Unknown,
+    /// 请求进过队列但已过期，回执不再可得。
+    Expired,
+}
 
 pub struct OpenAiProvider {
     client: reqwest::Client,
@@ -276,10 +294,19 @@ impl OpenAiProvider {
         }
         super::pricing::RateCard::for_endpoint(&self.base_url, &self.model)
     }
-    async fn post(&self, body: &Value) -> Result<Value> {
+    /// 一次性请求。`request_id` 为 `Some` 时用它作请求头编号：服务端把每趟托管请求
+    /// 按这个编号留回执，用调用方发送前就留存的那个，回复在路上丢了才查得回来。
+    async fn post(&self, body: &Value, request_id: Option<&str>) -> Result<Value> {
         if self.is_hosted() && hosted_async::has_images(body) {
             return hosted_async::post(self, body).await;
         }
+        let id = match request_id {
+            Some(id) => {
+                hosted_async::validate_id(id)?;
+                id.to_owned()
+            }
+            None => uuid::Uuid::new_v4().to_string(),
+        };
         let mut request = self
             .client
             .post(format!("{}/responses", self.base_url))
@@ -296,7 +323,7 @@ impl OpenAiProvider {
             request = request
                 .bearer_auth(token)
                 .header("x-focalroom-ai-policy", "deepseek-flash-v1")
-                .header("x-focalroom-request-id", uuid::Uuid::new_v4().to_string())
+                .header("x-focalroom-request-id", id)
                 .header("x-focalroom-image-consent", "granted");
         } else {
             request = request.bearer_auth(&self.api_key);
@@ -435,7 +462,7 @@ impl OpenAiProvider {
                 hosted_async::post_with_id(self, &body, id, false, std::future::ready(Ok(())))
                     .await?
             }
-            _ => self.post(&body).await?,
+            _ => self.post(&body, request_id).await?,
         };
         let text = output_text(&response);
         if text.trim().is_empty() {
@@ -462,25 +489,32 @@ impl OpenAiProvider {
         })
     }
     /// 托管聊天的流式版本：增量交给回调逐字上屏，最终文字仍以服务端 done 回执为准。
-    /// 只有网关没有 /stream 路由（请求未进鉴权与额度预留）才退回一次性路径；
+    /// 只有网关没有 /stream 路由（请求未进鉴权与额度预留）才退回一次性请求；
     /// 其余失败一律不重发，因为服务端可能已经预留了额度。自备密钥模式保持一次性请求。
+    /// `request_id` 由调用方在发送前生成并保存，断流后凭它只读核对回执。
     pub async fn chat_text_stream(
         &self,
         turns: &[(&str, &str)],
         max_output_tokens: u32,
+        request_id: &str,
         mut on_delta: impl FnMut(&str),
     ) -> Result<String> {
         if !self.is_hosted() {
             return self.chat_text(turns, max_output_tokens).await;
         }
         let body = self.chat_body(turns, max_output_tokens);
-        let response = match hosted_stream::chat_stream(self, &body, &mut on_delta).await {
-            Ok(response) => response,
-            Err(hosted_stream::StreamFailure::RouteMissing) => {
-                return self.chat_text(turns, max_output_tokens).await;
-            }
-            Err(hosted_stream::StreamFailure::Failed(error)) => return Err(error),
-        };
+        let response =
+            match hosted_stream::chat_stream(self, &body, request_id, &mut on_delta).await {
+                Ok(response) => response,
+                // 退回一次性路径时沿用同一编号：这条流式请求根本没进路由，重发不构成重复计量，
+                // 而换个新编号会让调用方手里那个编号永远查不到回执。
+                Err(hosted_stream::StreamFailure::RouteMissing) => {
+                    return self
+                        .chat_text_inner(turns, max_output_tokens, Some(request_id))
+                        .await;
+                }
+                Err(hosted_stream::StreamFailure::Failed(error)) => return Err(error),
+            };
         let text = output_text(&response);
         if text.trim().is_empty() {
             return Err(AppError::new(
@@ -499,7 +533,7 @@ impl OpenAiProvider {
         max_output_tokens: u32,
     ) -> Result<(Value, u32)> {
         let body = self.observation_body(brief, question, images, max_output_tokens)?;
-        self.parse_observation(&self.post(&body).await?)
+        self.parse_observation(&self.post(&body, None).await?)
     }
     pub(crate) fn observation_body(
         &self,
@@ -554,6 +588,21 @@ impl OpenAiProvider {
     ) -> Result<hosted_async::HostedJob> {
         self.require_capabilities(super::router::TaskType::VisionObserve)?;
         hosted_async::query(self, id, output_limit).await
+    }
+    /// 聊天回执只读核对：聊天请求不挂工具也不带图片，不能套视觉的能力门槛，
+    /// 但账户冻结、回执结构与输出上限校验与提交路径完全同一口径。
+    pub async fn chat_job(&self, id: &str) -> Result<ChatJob> {
+        Ok(
+            match hosted_async::query(self, id, CHAT_OUTPUT_TOKENS).await? {
+                hosted_async::HostedJob::Completed(result) => {
+                    ChatJob::Completed(output_text(&result))
+                }
+                hosted_async::HostedJob::Pending => ChatJob::Pending,
+                hosted_async::HostedJob::Rejected => ChatJob::Rejected,
+                hosted_async::HostedJob::Expired => ChatJob::Expired,
+                hosted_async::HostedJob::Unknown => ChatJob::Unknown,
+            },
+        )
     }
     pub(crate) fn parse_observation(&self, response: &Value) -> Result<(Value, u32)> {
         let usage_tokens = tokens_of(response);
@@ -674,7 +723,7 @@ impl ModelProvider for OpenAiProvider {
                 return Err(AppError::new("AUTH_CHANGED", "账户已改变，请重新委托"));
             }
             let body = self.turn_body(input);
-            let response = self.post(&body).await?;
+            let response = self.post(&body, None).await?;
             let usage = reported_usage(&response, &self.model)?;
             let invalid_call = || {
                 AppError::new(

@@ -188,7 +188,7 @@ pub(crate) enum HostedJob {
     Unknown,
     Expired,
 }
-fn validate_id(id: &str) -> Result<()> {
+pub(super) fn validate_id(id: &str) -> Result<()> {
     if uuid::Uuid::parse_str(id).is_ok_and(|uuid| uuid.to_string() == id) {
         Ok(())
     } else {

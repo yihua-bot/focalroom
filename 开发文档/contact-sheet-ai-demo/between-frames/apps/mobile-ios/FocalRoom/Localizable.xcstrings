@@ -18159,6 +18159,34 @@
           }
         }
       }
+    },
+    "这条回复已过期，无法取回。不会自动重新发送。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This reply has expired and can no longer be retrieved. It will not be sent again automatically."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この返信は有効期限が切れたため取得できません。自動で再送信されることはありません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 응답은 만료되어 가져올 수 없습니다. 자동으로 다시 전송되지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这条回复已过期，无法取回。不会自动重新发送。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

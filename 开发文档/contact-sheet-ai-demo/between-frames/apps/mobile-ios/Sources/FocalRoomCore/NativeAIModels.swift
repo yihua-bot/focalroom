@@ -91,3 +91,19 @@ public struct NativeAINode: Codable, Sendable, Identifiable, Equatable {
     public let rotation: Double
     public let visible: Bool
 }
+
+// 只有已完成回执携带正文；待确认状态不能用半截增量冒充结果。
+public struct NativeChatJob: Decodable, Sendable {
+    public let state: String
+    public let text: String?
+    private enum CodingKeys: String, CodingKey { case state, text }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        state = try values.decode(String.self, forKey: .state)
+        text = try values.decodeIfPresent(String.self, forKey: .text)
+        guard ["completed", "pending", "rejected", "expired", "unknown"].contains(state),
+              (state == "completed" ? text?.isEmpty == false : text == nil) else {
+            throw DecodingError.dataCorruptedError(forKey: .state, in: values, debugDescription: "Invalid chat receipt")
+        }
+    }
+}

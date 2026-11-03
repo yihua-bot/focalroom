@@ -69,12 +69,18 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  const [busy, setBusy] = useState(false);
  const sending = useRef(false);
  const [error, setError] = useState('');
+ // 断流后留下的"结果未确认"：记住发送前的编号、原文和已上屏的半句，
+ // 核对时既不用重发，也能精确撤回那条半成品气泡。context 用来让这条待核对记录
+ // 跟着项目/账户走——换了上下文就不认，免得把 A 项目的回复核到 B 项目头上。
+ const [unconfirmedChat, setUnconfirmedChat] = useState<{ context: string; requestId: string; prompt: string; streamed: string } | null>(null);
  const [draftId, setDraftId] = useState<string | null>(null);
  const [continuation, setContinuation] = useState<{ reference: DraftReference; title: string } | null>(initialRevision ? { reference: initialRevision.reference, title: initialRevision.title } : null);
  const last = useRef<HTMLDivElement>(null);
  const composer = useRef<HTMLTextAreaElement>(null);
  const consumedAction = useRef<string | null>(null);
  const contextKey = `${project.id}:${accountId}`;
+ // 待核对记录只在它所属的项目/账户里成立：换上下文之后不能再拿它去改当前对话。
+ const unconfirmed = unconfirmedChat?.context === contextKey ? unconfirmedChat : null;
  const currentContext = useRef(contextKey);
  useEffect(() => {
   currentContext.current = contextKey;
@@ -151,7 +157,10 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
   if (!/[\p{L}\p{N}]/u.test(message)) { setError(zh.chatClarifyMessage); return; }
   const prompt = message.trim();
   const sent = { role: 'user' as const, content: prompt };
-  sending.current = true; setBusy(true); setError('');
+  // 编号在任何 await 之前就生成并留存：这条请求一旦发出，核对它靠的是这里记住的一串，
+  // 而不是等回复回来再补——回复可能永远不回来。
+  const requestId = crypto.randomUUID();
+  sending.current = true; setBusy(true); setError(''); setUnconfirmedChat(null);
   // 乐观上屏：气泡和清空输入框都放在任何 await 之前。此前是先 await 配置刷新
   // （/auth/me + /ai/account 两趟云端请求）才 push，用户看到的是"点了没反应"。
   pushChat(project.id, sent);
@@ -171,18 +180,39 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
    if (reason) throw new Error(reason);
    if (currentContext.current !== contextKey) return;
    // 传了 onDelta 就走流式命令：模型每产出一段就先进气泡，用户不必等整条回复拼完。
-   const reply = await repository.agent.chat([...chatTurns, sent], onDelta);
+   const reply = await repository.agent.chat([...chatTurns, sent], requestId, onDelta);
    if (currentContext.current !== contextKey) return;
    // 最终以服务端回执正文为准：有增量就整条覆盖逐字拼出来的气泡，
    // 没有增量（自备密钥、或网关没有流式路由）时等价于原来的追加一条回复。
    settleChat(project.id, reply);
   } catch (cause) {
-   // 发送失败撤回气泡并把原文还回输入框，用户可以直接重试，不必重打一遍。
-   if (currentContext.current === contextKey) {
-    if (streamed) popChat(project.id, { role: 'assistant', content: streamed });
-    popChat(project.id, sent); updateMessage(prompt); setError(userFacingError(cause));
-   }
+   if (currentContext.current !== contextKey) return;
+   // 请求可能已经发出去了（AI_RESULT_UNKNOWN）：这时服务端或许已经记下这趟计量，
+   // 撤回原文、请用户再发一遍等于让他为同一条回复付两次。留气泡、给核对入口。
+   if ((cause as { code?: unknown })?.code === 'AI_RESULT_UNKNOWN') { setUnconfirmedChat({ context: contextKey, requestId, prompt, streamed }); setError(zh.chatUnconfirmedReply); return; }
+   // 发送前就失败（配置没取到、账户被拒、服务未开放）：什么都没花，原文照原样退回输入框。
+   if (streamed) popChat(project.id, { role: 'assistant', content: streamed });
+   popChat(project.id, sent); updateMessage(prompt); setError(userFacingError(cause));
   }
+  finally { sending.current = false; setBusy(false); }
+ };
+ // 只读核对：拿发送前留存的编号向服务端问一次结果，绝不重新提交这条请求。
+ const reconcileChat = async () => {
+  if (!repository || sending.current || !unconfirmed) return;
+  const { requestId, prompt, streamed } = unconfirmed;
+  sending.current = true; setBusy(true); setError('');
+  try {
+   const result = await repository.agent.chatJob(requestId);
+   if (currentContext.current !== contextKey) return;
+   // 服务端回执是权威正文：整条覆盖那条半句，用户看到的是确认过的结果。
+   if (result.state === 'completed') { settleChat(project.id, result.text ?? ''); setUnconfirmedChat(null); return; }
+   // 仍在处理、或结果依旧不明：维持"未确认"，既不编成功也不擅自重发。
+   if (result.state === 'pending' || result.state === 'unknown') { setError(result.state === 'pending' ? zh.chatStillProcessing : zh.chatUnconfirmedReply); return; }
+   // 被拒/已过期：服务端确认这趟没有受理，这时才把原文还给输入框，用户可以放心重发。
+   if (streamed) popChat(project.id, { role: 'assistant', content: streamed });
+   popChat(project.id, { role: 'user', content: prompt });
+   updateMessage(prompt); setUnconfirmedChat(null); setError(zh.chatRejectedRetry);
+  } catch (cause) { if (currentContext.current === contextKey) setError(userFacingError(cause)); }
   finally { sending.current = false; setBusy(false); }
  };
  const send = async () => {
@@ -311,7 +341,7 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
     </div></div>}
    </article>)}
    </>}
-   {(error || query.error) && <p role="alert" className="chat-error">{error || userFacingError(query.error)}</p>}
+   {(error || query.error) && <p role="alert" className="chat-error">{error || userFacingError(query.error)}{unconfirmed && <Button size="small" disabled={busy} onClick={() => { void reconcileChat(); }}>{zh.chatReconcile}</Button>}</p>}
    {children}
    <div ref={last} />
   </div>

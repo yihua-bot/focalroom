@@ -273,6 +273,14 @@ pub struct ChatTurn {
     pub role: String,
     pub content: String,
 }
+/// 断流后凭请求编号向服务端只读核对的结果：`text` 只在 `completed` 时有值，
+/// 其余状态一律不带正文，界面据此决定是上屏、等待还是承认"结果不明"。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatJobView {
+    pub state: String,
+    pub text: Option<String>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskView {

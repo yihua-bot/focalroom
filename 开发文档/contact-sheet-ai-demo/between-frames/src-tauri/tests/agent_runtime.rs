@@ -917,17 +917,21 @@ async fn chat_turn_validates_history_and_requires_a_text_service() {
     let temp = tempfile::tempdir().unwrap();
     let (db, _p) = setup(temp.path(), 0).await;
     let engine = AgentEngine::new(db.clone());
+    let id = "3f2a1b0c-9d8e-4f70-a1b2-c3d4e5f60718";
     // 空历史、越界角色、超长正文都在碰网络之前被拦下。
     assert_eq!(
-        engine.chat_turn(&[]).await.unwrap_err().code,
+        engine.chat_turn_with_id(&[], id).await.unwrap_err().code,
         "VALIDATION_ERROR"
     );
     assert_eq!(
         engine
-            .chat_turn(&[ChatTurn {
-                role: "system".into(),
-                content: "x".into()
-            }])
+            .chat_turn_with_id(
+                &[ChatTurn {
+                    role: "system".into(),
+                    content: "x".into()
+                }],
+                id
+            )
             .await
             .unwrap_err()
             .code,
@@ -935,10 +939,13 @@ async fn chat_turn_validates_history_and_requires_a_text_service() {
     );
     assert_eq!(
         engine
-            .chat_turn(&[ChatTurn {
-                role: "user".into(),
-                content: "长".repeat(4001)
-            }])
+            .chat_turn_with_id(
+                &[ChatTurn {
+                    role: "user".into(),
+                    content: "长".repeat(4001)
+                }],
+                id
+            )
             .await
             .unwrap_err()
             .code,
@@ -946,10 +953,13 @@ async fn chat_turn_validates_history_and_requires_a_text_service() {
     );
     // 只有 Mock 的引擎不能假装会聊天：明确报服务未开放，而不是回一条假答复。
     let err = engine
-        .chat_turn(&[ChatTurn {
-            role: "user".into(),
-            content: "威廉·艾格斯顿是什么风格？".into(),
-        }])
+        .chat_turn_with_id(
+            &[ChatTurn {
+                role: "user".into(),
+                content: "威廉·艾格斯顿是什么风格？".into(),
+            }],
+            id,
+        )
         .await
         .unwrap_err();
     assert_eq!(err.code, "AI_NOT_CONFIGURED", "{}", err.message);

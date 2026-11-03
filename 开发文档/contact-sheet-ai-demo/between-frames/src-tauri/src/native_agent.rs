@@ -98,6 +98,11 @@ enum Operation {
         #[serde(rename = "requestID")]
         request_id: String,
     },
+    ChatJob {
+        handle: u64,
+        #[serde(rename = "requestID")]
+        request_id: String,
+    },
     SyncContext {
         handle: u64,
         context: context::ContextInput,
@@ -253,6 +258,9 @@ async fn execute(request: Operation) -> Result<Value> {
         } => Ok(
             json!({"text": client(handle)?.engine.chat_turn_with_id(&turns, &request_id).await?}),
         ),
+        Operation::ChatJob { handle, request_id } => {
+            Ok(json!(client(handle)?.engine.chat_job(&request_id).await?))
+        }
         Operation::SyncContext { handle, context } => {
             context::sync(&client(handle)?.db, context).await
         }
@@ -320,6 +328,26 @@ fn account_directory(root: &std::path::Path, origin: &str, account: &str) -> Pat
 /// input 必须指向有效、以 NUL 结束的 UTF-8 字符串，调用期间不得修改。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn focalroom_agent_call(input: *const c_char) -> *mut c_char {
+    unsafe { call_with_delta(input, None, 0) }
+}
+
+/// # Safety
+/// input 为有效 UTF-8 JSON；callback 与 context 在调用返回前必须有效，回调不得展开栈。
+/// 增量指针只在回调期间有效；返回值仍由 focalroom_agent_free 释放。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn focalroom_agent_chat_stream(
+    input: *const c_char,
+    callback: Option<extern "C" fn(*const c_char, usize)>,
+    context: usize,
+) -> *mut c_char {
+    unsafe { call_with_delta(input, callback, context) }
+}
+
+unsafe fn call_with_delta(
+    input: *const c_char,
+    callback: Option<extern "C" fn(*const c_char, usize)>,
+    context: usize,
+) -> *mut c_char {
     let outcome = std::panic::catch_unwind(|| {
         if input.is_null() {
             return Err(AppError::new("VALIDATION_ERROR", "请求为空"));
@@ -337,7 +365,29 @@ pub unsafe extern "C" fn focalroom_agent_call(input: *const c_char) -> *mut c_ch
                 .build()
                 .expect("原生 Agent runtime")
         });
-        runtime.block_on(execute(request))
+        runtime.block_on(async {
+            if let Some(callback) = callback {
+                let Operation::Chat {
+                    handle,
+                    turns,
+                    request_id,
+                } = request
+                else {
+                    return Err(AppError::new("VALIDATION_ERROR", "流式入口仅接受聊天请求"));
+                };
+                let text = client(handle)?
+                    .engine
+                    .chat_turn_stream(&turns, &request_id, |delta| {
+                        if let Ok(delta) = CString::new(delta) {
+                            callback(delta.as_ptr(), context);
+                        }
+                    })
+                    .await?;
+                Ok(json!({"text":text}))
+            } else {
+                execute(request).await
+            }
+        })
     })
     .unwrap_or_else(|_| {
         Err(AppError::new(

@@ -7,6 +7,8 @@ import { AGENT_TASK_UPDATED_EVENT, DRAFT_UPDATED_EVENT } from '../domain/command
 import type { AgentRepository, TaskCommand } from '../domain/agent';
 const budget = z.object({ maxModelTurns: z.number().int(), maxToolCalls: z.number().int(), maxDurationSeconds: z.number().int(), maxCloudImages: z.number().int().min(0).max(100), maxCostMinorUsd: z.number().int(), maxContextTokens: z.number().int(), maxTotalTokens: z.number().int(), maxOutputTokens: z.number().int() });
 const visionRecovery = z.object({ state: z.enum(['pending','completed','unknown','rejected','expired']), images: z.number().int().min(1).max(100) });
+// 聊天回执只有 completed 才带正文；服务端把文字留在别处却回 completed，等于查无实据，按未确认处理。
+const chatJob = z.discriminatedUnion('state', [z.object({state:z.literal('completed'),text:z.string().min(1)}),z.object({state:z.enum(['pending','unknown','rejected','expired']),text:z.null()})]);
 const queuedRecoveryConfig = z.discriminatedUnion('enabled', [z.object({enabled:z.literal(false)}),z.object({enabled:z.literal(true),policy:z.literal('encrypted-queue-v1'),maxQueueSeconds:z.literal(600)})]);
 const projection = z.object({
  tasks: z.array(z.object({ queueCancellation: z.enum(['cancelled','already_sent','unconfirmed']).nullable().optional(), visionRecovery: visionRecovery.nullable().optional(), creativeReferences: z.array(z.object({ kind: z.enum(['knowledge','context']), label: z.string(), version: z.union([z.string(),z.number()]).nullable().optional(), citationId: z.string().optional(), passage: z.string().optional(), license: z.string().optional(), section: z.string().optional() })).default([]), draftLineage: z.array(z.object({ childId: z.string(), kind: z.string(), parent: z.object({ kind: z.enum(['board','selection']), id: z.string(), revision: z.number().int().positive() }), reason: z.string() })).default([]), preferenceProposals: z.array(z.object({ id: z.string(), statement: z.string(), applicability: z.string(), photoIds: z.array(z.string()), sources: z.array(z.object({ messageId: z.number().int(), text: z.string(), createdAt: z.string() })), state: z.enum(['pending','saved','removed','dismissed']), createdAt: z.string() })).default([]), inspectedPhotos: z.array(z.object({ photo_id: z.string(), visible_facts: z.array(z.string()), interpretation: z.string(), uncertainty: z.string() })).default([]), conversation: z.boolean().default(false), messages: z.array(z.object({ id: z.number().int(), role: z.enum(['user', 'assistant']), content: z.string(), createdAt: z.string() })).default([]), budgetIssue: z.object({ kind: z.enum(['images','cost','steps','time','rounds','context','tokens']), used: z.number().int().nonnegative(), requested: z.number().int().nonnegative(), limit: z.number().int().nonnegative(), stage: z.string(), requestNotSent: z.boolean() }).nullable().optional(), canvasTask: z.boolean().default(false), canvasSource: z.object({ boardId: z.string(), revision: z.number().int().positive(), selectedNodeIds: z.array(z.string()) }).nullable().default(null),
@@ -25,13 +27,17 @@ const aiConfigSchema = z.object({
  consent: consentView.nullable(),
 });
 export class TauriAgentRepository implements AgentRepository {
- async chat(turns: import('../domain/agent').ChatTurn[], onDelta?: (fragment: string) => void) {
-  if (!onDelta) return z.string().parse(await invoke('agent_chat', { turns }));
+ async chat(turns: import('../domain/agent').ChatTurn[], requestId: string, onDelta?: (fragment: string) => void) {
+  // 编号由调用方在发送前生成并留存：回复在路上丢了，才凭同一个编号向服务端只读核对。
+  if (!onDelta) return z.string().parse(await invoke('agent_chat', { turns, requestId }));
   // 传了回调就走流式命令：Rust 每读到一段增量就经这条 channel 送回，channel 只活在这次 invoke 内。
-  // 网关没有流式路由时 Rust 内部退回一次性请求，这里只会收到 0 段增量和同一个最终结果。
+  // 网关没有流式路由时 Rust 内部沿用同一编号退回提交路径，这里只会收到 0 段增量和同一个最终结果。
   const channel = new Channel<string>();
   channel.onmessage = onDelta;
-  return z.string().parse(await invoke('agent_chat_stream', { turns, onDelta: channel }));
+  return z.string().parse(await invoke('agent_chat_stream', { turns, requestId, onDelta: channel }));
+ }
+ async chatJob(requestId: string) {
+  return chatJob.parse(await invoke('agent_chat_job', { requestId }));
  }
  async selectionRevisionContext(projectId: string, draftId: string, offset = 0) {
   const result = selectionRevisionSchema.nullable().parse(await invoke('selection_revision_context', {projectId,draftId,offset}));

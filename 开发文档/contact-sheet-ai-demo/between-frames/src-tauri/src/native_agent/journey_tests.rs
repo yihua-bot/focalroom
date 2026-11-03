@@ -11,6 +11,7 @@ use std::{
 struct Gateway {
     origin: String,
     requests: Arc<Mutex<Vec<Value>>>,
+    cut_stream: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -23,6 +24,8 @@ impl Gateway {
         let captured = requests.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let stopping = stop.clone();
+        let cut_stream = Arc::new(AtomicBool::new(false));
+        let cut = cut_stream.clone();
         let thread = std::thread::spawn(move || {
             while !stopping.load(Ordering::SeqCst) {
                 let Ok((mut stream, _)) = listener.accept() else {
@@ -60,6 +63,15 @@ impl Gateway {
                     json!({"id":"fixture-user","email":"fixture@example.test","name":"测试"})
                 } else if headers.starts_with("get /api/v2/ai/account ") {
                     json!({"policy":"deepseek-flash-v1","enabled":true,"verified":true,"available":1000000,"recovery":{"enabled":false}})
+                } else if headers.starts_with("get /api/v2/ai/deepseek-flash-v1/responses/async/") {
+                    let id = headers
+                        .split_whitespace()
+                        .nth(1)
+                        .unwrap()
+                        .rsplit('/')
+                        .next()
+                        .unwrap();
+                    json!({"jobId":id,"state":"COMPLETED","result":{"status":"completed","model":"deepseek-flash","output":[{"type":"message","content":[{"type":"output_text","text":"先从光线与画面关系谈起。"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}})
                 } else {
                     assert!(headers.starts_with("post /api/v2/ai/deepseek-flash-v1/responses"));
                     let body: Value =
@@ -105,7 +117,27 @@ impl Gateway {
                         json!([{"type":"function_call","call_id":format!("native-{}",name),"name":name,"arguments":args.to_string(),"status":"completed"}])
                     };
                     let result = json!({"status":"completed","model":"deepseek-flash","output":output,"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}});
-                    if headers.starts_with("post /api/v2/ai/deepseek-flash-v1/responses/async ") {
+                    if headers.starts_with("post /api/v2/ai/deepseek-flash-v1/responses/stream ") {
+                        let id = headers
+                            .lines()
+                            .find_map(|l| l.strip_prefix("x-focalroom-request-id: "))
+                            .unwrap();
+                        let mut events = format!(
+                            "data: {}\n\ndata: {}\n\n",
+                            json!({"type":"start","request_id":id}),
+                            json!({"type":"delta","text":"先从光线"})
+                        );
+                        if !cut.load(Ordering::SeqCst) {
+                            events.push_str(&format!(
+                                "data: {}\n\n",
+                                json!({"type":"done","reply":result})
+                            ));
+                        }
+                        write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",events.len(),events).unwrap();
+                        continue;
+                    } else if headers
+                        .starts_with("post /api/v2/ai/deepseek-flash-v1/responses/async ")
+                    {
                         let id = headers
                             .lines()
                             .find_map(|l| l.strip_prefix("x-focalroom-request-id: "))
@@ -121,6 +153,7 @@ impl Gateway {
         });
         Self {
             origin,
+            cut_stream,
             requests,
             stop,
             thread: Some(thread),
@@ -217,6 +250,48 @@ fn c_abi_runs_shared_chat_and_real_tool_loop_and_recovers_saved_drafts() {
         "重开只能读记录，不重新请求模型"
     );
     ffi(json!({"operation":"close","handle":restored}));
+}
+
+/// 只读宿主不能靠挑一个"天生带画布权限"的命令绕过权限收紧。
+#[tokio::test]
+async fn readonly_host_cannot_open_a_canvas_task_without_canvas_grant() {
+    use agent::types::{AgentRequest, Budget, TaskCommand};
+    let temp = tempfile::tempdir().unwrap();
+    let db = Store::open(&temp.path().join("readonly-canvas.sqlite"))
+        .await
+        .unwrap();
+    let project = db.create("只读画布委托", "").await.unwrap();
+    let engine =
+        AgentEngine::with_providers(db.clone(), Arc::new(agent::provider::MockProvider), None);
+    let denied = engine
+        .request_with_canvas_access(
+            AgentRequest {
+                request_id: domain::id(),
+                project_id: project.id.clone(),
+                command: TaskCommand::StartCanvasTask {
+                    goal: "把这一组重排成新的叙事".into(),
+                    selected_photo_ids: vec![],
+                    target_count: 1,
+                    budget: Budget::default(),
+                    consent_id: None,
+                    source_board: None,
+                },
+            },
+            false,
+        )
+        .await
+        .expect_err("只读宿主请求画布任务必须被拒绝");
+    assert_eq!(denied.code, "PERMISSION_DENIED", "{denied:?}");
+    let tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM agent_tasks")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    let grants: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM agent_task_grants")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(tasks, 0, "拒绝要干净，不能留下半个任务");
+    assert_eq!(grants, 0, "拒绝要干净，不能留下冻结授权");
 }
 
 #[tokio::test]
@@ -435,5 +510,46 @@ fn real_pg_knowledge_session_over_native_iphone_entry() {
         "结果里不得出现会话令牌"
     );
 
+    ffi(json!({"operation":"close","handle":handle}));
+}
+
+#[test]
+fn native_stream_delivers_deltas_and_recovers_cutoff_without_a_second_submission() {
+    extern "C" fn delta(text: *const c_char, context: usize) {
+        let output = unsafe { &*(context as *const Mutex<String>) };
+        output
+            .lock()
+            .unwrap()
+            .push_str(unsafe { CStr::from_ptr(text) }.to_str().unwrap());
+    }
+    let gateway = Gateway::new();
+    let root = tempfile::tempdir().unwrap();
+    let handle=ffi(json!({"operation":"open","directory":root.path(),"origin":gateway.origin,"token":"f".repeat(64),"user":{"id":"fixture-user","email":"fixture@example.test","name":"测试"}}))["handle"].as_u64().unwrap();
+    for cut in [false, true] {
+        gateway.cut_stream.store(cut, Ordering::SeqCst);
+        let id = domain::id();
+        let input=CString::new(json!({"operation":"chat","handle":handle,"requestID":id,"turns":[{"role":"user","content":"谈谈光线"}]}).to_string()).unwrap();
+        let deltas = Mutex::new(String::new());
+        let output = unsafe {
+            focalroom_agent_chat_stream(input.as_ptr(), Some(delta), &deltas as *const _ as usize)
+        };
+        let result: Value =
+            serde_json::from_slice(unsafe { CStr::from_ptr(output) }.to_bytes()).unwrap();
+        unsafe { focalroom_agent_free(output) };
+        assert_eq!(*deltas.lock().unwrap(), "先从光线");
+        assert_eq!(result["ok"], !cut);
+        if cut {
+            assert_eq!(result["error"]["code"], "AI_RESULT_UNKNOWN");
+        }
+        let before = gateway.requests.lock().unwrap().len();
+        let job = ffi(json!({"operation":"chatJob","handle":handle,"requestID":id}));
+        assert_eq!(job["state"], "completed");
+        assert_eq!(job["text"], "先从光线与画面关系谈起。");
+        assert_eq!(gateway.requests.lock().unwrap().len(), before);
+        assert_eq!(
+            gateway.requests.lock().unwrap().last().unwrap()["max_output_tokens"],
+            1024
+        );
+    }
     ffi(json!({"operation":"close","handle":handle}));
 }

@@ -1,6 +1,11 @@
 #![cfg(feature = "integration-harness")]
 use between_frames_lib::{
-    agent::{context::ModelTurnRequest, openai::OpenAiProvider, provider::ModelProvider, types::*},
+    agent::{
+        context::ModelTurnRequest,
+        openai::{ChatJob, OpenAiProvider},
+        provider::ModelProvider,
+        types::*,
+    },
     cloud_auth::CloudAuth,
     cloud_credentials::CredentialStore,
     domain::Result,
@@ -43,12 +48,17 @@ struct Server {
     auth_calls: Arc<AtomicU32>,
     account_calls: Arc<AtomicU32>,
     stream_calls: Arc<AtomicU32>,
+    /// 网关实际收到的流式请求编号：用来断言客户端带的是发送前留存的那个，而不是临时造的。
+    stream_request_id: Arc<Mutex<String>>,
     polls: Arc<AtomicU32>,
     mode: Arc<AtomicU32>,
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 impl Server {
+    fn stream_request_id(&self) -> String {
+        self.stream_request_id.lock().unwrap().clone()
+    }
     fn new() -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -60,6 +70,8 @@ impl Server {
         let account_count = account_calls.clone();
         let stream_calls = Arc::new(AtomicU32::new(0));
         let stream_count = stream_calls.clone();
+        let stream_request_id = Arc::new(Mutex::new(String::new()));
+        let seen_stream_id = stream_request_id.clone();
         let polls = Arc::new(AtomicU32::new(0));
         let poll_count = polls.clone();
         let mode = Arc::new(AtomicU32::new(0));
@@ -73,6 +85,8 @@ impl Server {
         let cancel_reply = cancel_mode.clone();
         let main_reply = Arc::new(Mutex::new(None::<Value>));
         let next_reply = main_reply.clone();
+        // 异步作业最近一次提交的是聊天还是视觉：决定轮询回哪种回执。
+        let is_chat_job = Arc::new(AtomicBool::new(false));
         let stop = Arc::new(AtomicBool::new(false));
         let (count, status, stopping) = (calls.clone(), mode.clone(), stop.clone());
         let thread = std::thread::spawn(move || {
@@ -133,21 +147,20 @@ impl Server {
                         if headers.contains("x-focalroom-recovery-consent: encrypted-queue-v1") {
                             opted.fetch_add(1, Ordering::SeqCst);
                         }
-                        assert!(
-                            body["input"][0]["content"]
-                                .as_array()
-                                .unwrap()
-                                .iter()
-                                .any(|part| part["type"] == "input_image")
-                        );
+                        let parts = body["input"][0]["content"].as_array().unwrap();
+                        let with_images = parts.iter().any(|part| part["type"] == "input_image");
+                        // 聊天任务不挂图也不带工具，但仍走同一条"只提交一次、凭编号只读核对"的
+                        // 异步链路——所以这里按正文分流，而不是假定异步提交一定是视觉任务。
+                        is_chat_job.store(!with_images, Ordering::SeqCst);
+                        if !with_images {
+                            assert!(body["tools"].as_array().unwrap().is_empty());
+                        }
                         job_id = headers
                             .lines()
                             .find_map(|line| line.strip_prefix("x-focalroom-request-id: "))
                             .unwrap()
                             .to_owned();
-                        photo_id = body["input"][0]["content"]
-                            .as_array()
-                            .unwrap()
+                        photo_id = parts
                             .iter()
                             .filter_map(|v| v["text"].as_str())
                             .find_map(|s| s.strip_prefix("photo_id: "))
@@ -189,6 +202,7 @@ impl Server {
                         .find_map(|line| line.strip_prefix("x-focalroom-request-id: "))
                         .unwrap()
                         .to_owned();
+                    *seen_stream_id.lock().unwrap() = request_id.clone();
                     let body: Value =
                         serde_json::from_slice(&bytes[boundary..boundary + len]).unwrap();
                     assert_eq!(body["model"], "deepseek-flash");
@@ -199,12 +213,16 @@ impl Server {
                     let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nConnection: close\r\n\r\n";
                     let opening = frame(json!({"type": "start", "request_id": request_id}));
                     match status.load(Ordering::SeqCst) {
-                        // 网关没有这条路由：客户端据此退回一次性请求，且只算一次模型调用。
+                        // 网关没有这条路由：请求在路由匹配阶段就被拒，服务端没留任何回执，
+                        // 客户端据此退回一次性请求，且只算一次模型调用。
                         21 => {
                             write!(stream,"HTTP/1.1 404 Not Found\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
                         }
                         // 半截断流：增量已经到手但没有 done 回执，结果不明，客户端不得重发。
+                        // 服务端此刻已经按这个编号预留并记账，所以编号要留下来供核对。
                         22 => {
+                            job_id = request_id.clone();
+                            is_chat_job.store(true, Ordering::SeqCst);
                             write!(
                                 stream,
                                 "{head}{opening}{}",
@@ -215,6 +233,8 @@ impl Server {
                         }
                         // 正常：两段增量后给出服务端结算的正式回执。
                         _ => {
+                            job_id = request_id.clone();
+                            is_chat_job.store(true, Ordering::SeqCst);
                             let reply = json!({"id":"stream-1","status":"completed","model":"deepseek-flash","error":null,"output":[{"type":"message","content":[{"type":"output_text","text":"逆光更好看"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}});
                             write!(
                                 stream,
@@ -248,6 +268,21 @@ impl Server {
                     )));
                     let previous = poll_count.fetch_add(1, Ordering::SeqCst);
                     let mode = status.load(Ordering::SeqCst);
+                    // 聊天回执：正文是纯文字，且可以按测试要求停在"仍在处理"，
+                    // 用来验证客户端核对时拿到的是状态而不是又一趟模型调用。
+                    if is_chat_job.load(Ordering::SeqCst) {
+                        let reply = if mode == 24 {
+                            json!({"jobId":job_id,"state":"PENDING","result":null,"error":null})
+                        } else {
+                            json!({"jobId":job_id,"state":"COMPLETED","error":null,"result":{
+                                "status":"completed","model":"deepseek-flash","error":null,
+                                "output":[{"type":"message","content":[{"type":"output_text","text":"逆光更好看"}]}],
+                                "usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}})
+                        }
+                        .to_string();
+                        write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}",reply.len()).unwrap();
+                        continue;
+                    }
                     if mode == 11 && previous == 0 {
                         continue;
                     }
@@ -310,6 +345,7 @@ impl Server {
             auth_calls,
             account_calls,
             stream_calls,
+            stream_request_id,
             polls,
             mode,
             stop,
@@ -495,9 +531,10 @@ async fn hosted_chat_stream_forwards_deltas_and_returns_the_settled_reply() {
     vault.write("", &session("user-a")).unwrap();
     let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap());
     let bound = OpenAiProvider::hosted(auth.clone()).bind_account().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
     let mut fragments: Vec<String> = Vec::new();
     let reply = bound
-        .chat_text_stream(&[("user", "逆光怎么拍")], 64, |fragment| {
+        .chat_text_stream(&[("user", "逆光怎么拍")], 64, &id, |fragment| {
             fragments.push(fragment.to_owned())
         })
         .await
@@ -508,28 +545,40 @@ async fn hosted_chat_stream_forwards_deltas_and_returns_the_settled_reply() {
     assert_eq!(server.stream_calls.load(Ordering::SeqCst), 1);
     // 流式成功时不该再补一趟一次性请求。
     assert_eq!(server.calls.load(Ordering::SeqCst), 0);
+    // 编号是发送前那个：核对用的就是客户端手里留着的这一串，不是服务内部临时造的。
+    assert_eq!(
+        server.stream_request_id(),
+        id,
+        "流式请求必须携带调用方留存的编号"
+    );
 }
 #[tokio::test]
 async fn hosted_chat_stream_falls_back_when_the_gateway_has_no_route() {
     // 网关未部署 /responses/stream：这种请求在路由匹配阶段就被拒，服务端没有预留额度，
-    // 退回一次性路径不构成重复计量。
+    // 退回提交路径不构成重复计量，而且必须沿用同一个编号——换个编号就等于回执查无此人。
     let server = Server::new();
     server.mode.store(21, Ordering::SeqCst);
     let vault = Arc::new(Vault::default());
     vault.write("", &session("user-a")).unwrap();
     let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap());
     let bound = OpenAiProvider::hosted(auth.clone()).bind_account().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
     let mut fragments: Vec<String> = Vec::new();
     let reply = bound
-        .chat_text_stream(&[("user", "你好")], 64, |fragment| {
+        .chat_text_stream(&[("user", "你好")], 64, &id, |fragment| {
             fragments.push(fragment.to_owned())
         })
         .await
         .unwrap();
-    assert_eq!(reply, "fixture");
+    assert_eq!(reply, "逆光更好看");
     assert!(fragments.is_empty());
     assert_eq!(server.stream_calls.load(Ordering::SeqCst), 1);
     assert_eq!(server.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(server.stream_request_id(), id);
+    // 退回的路径同样是"提交一次、凭同一编号核对"，所以这条回复断在半路也查得回来。
+    assert!(
+        matches!(bound.chat_job(&id).await.unwrap(), ChatJob::Completed(text) if text == "逆光更好看")
+    );
 }
 #[tokio::test]
 async fn hosted_chat_stream_broken_midway_is_unknown_and_never_resent() {
@@ -541,9 +590,10 @@ async fn hosted_chat_stream_broken_midway_is_unknown_and_never_resent() {
     vault.write("", &session("user-a")).unwrap();
     let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap());
     let bound = OpenAiProvider::hosted(auth.clone()).bind_account().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
     let mut fragments: Vec<String> = Vec::new();
     let error = bound
-        .chat_text_stream(&[("user", "你好")], 64, |fragment| {
+        .chat_text_stream(&[("user", "你好")], 64, &id, |fragment| {
             fragments.push(fragment.to_owned())
         })
         .await
@@ -553,6 +603,61 @@ async fn hosted_chat_stream_broken_midway_is_unknown_and_never_resent() {
     assert_eq!(fragments, ["逆光"]);
     assert_eq!(server.stream_calls.load(Ordering::SeqCst), 1);
     assert_eq!(server.calls.load(Ordering::SeqCst), 0);
+    // 断流后不重发，只凭手里那个编号核对一次：拿到服务端结算过的正文才正式上屏。
+    server.mode.store(23, Ordering::SeqCst);
+    let polls = server.polls.load(Ordering::SeqCst);
+    match bound.chat_job(&id).await.unwrap() {
+        ChatJob::Completed(text) => assert_eq!(text, "逆光更好看"),
+        other => panic!("断流后应凭原编号核到已完成回执，实际 {other:?}"),
+    }
+    assert_eq!(server.polls.load(Ordering::SeqCst), polls + 1);
+    // 核对是只读的：既没有再提交一趟模型，也没有再开一条流。
+    assert_eq!(server.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(server.stream_calls.load(Ordering::SeqCst), 1);
+}
+#[tokio::test]
+async fn hosted_chat_reconcile_reports_pending_without_resenting() {
+    // 服务端还在处理：核对只能回"仍在处理"，界面据此继续等待，绝不能顺手再发一条。
+    let server = Server::new();
+    server.mode.store(22, Ordering::SeqCst);
+    let vault = Arc::new(Vault::default());
+    vault.write("", &session("user-a")).unwrap();
+    let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap());
+    let bound = OpenAiProvider::hosted(auth.clone()).bind_account().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let error = bound
+        .chat_text_stream(&[("user", "你好")], 64, &id, |_| {})
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "AI_RESULT_UNKNOWN");
+    server.mode.store(24, Ordering::SeqCst);
+    assert!(matches!(
+        bound.chat_job(&id).await.unwrap(),
+        ChatJob::Pending
+    ));
+    assert_eq!(server.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(server.stream_calls.load(Ordering::SeqCst), 1);
+}
+#[tokio::test]
+async fn hosted_chat_rejects_an_id_it_could_never_reconcile() {
+    // 编号不合法必须在联网之前拒绝：发出去的那条即使成功，客户端手里的编号也永远查不到回执。
+    let server = Server::new();
+    let vault = Arc::new(Vault::default());
+    vault.write("", &session("user-a")).unwrap();
+    let auth = Arc::new(CloudAuth::new(&server.origin, "fixture", vault.clone()).unwrap());
+    let bound = OpenAiProvider::hosted(auth.clone()).bind_account().unwrap();
+    for id in ["", "not-a-uuid", "00000000-0000-0000-0000-00000000000g"] {
+        let error = bound
+            .chat_text_stream(&[("user", "你好")], 64, id, |_| {})
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "RECOVERY_ERROR", "{id} 应在发送前被拒绝");
+        let error = bound.chat_job(id).await.unwrap_err();
+        assert_eq!(error.code, "RECOVERY_ERROR", "{id} 不应发起查询");
+    }
+    assert_eq!(server.stream_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(server.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(server.polls.load(Ordering::SeqCst), 0);
 }
 #[tokio::test]
 async fn hosted_calls_use_account_bearer_and_fixed_policy_without_a_provider_key() {
