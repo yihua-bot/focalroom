@@ -91,10 +91,47 @@ impl Store {
                 }
             }
         }
-        migrator
-            .run(&pool)
-            .await
-            .map_err(|error| AppError::new("MIGRATION", error.to_string()))?;
+        // 0037 要重建 photos 才能去掉表级内容唯一约束，而 SQLite 只允许在事务外关闭外键，
+        // 迁移执行器又把每个文件包进事务，所以这里在唯一那条连接上开一个窗口，跑完立刻恢复。
+        let ledger: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_sqlx_migrations'",
+        )
+        .fetch_one(&pool)
+        .await?;
+        let repeated: i64 = if ledger > 0 {
+            sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE version=37")
+                .fetch_one(&pool)
+                .await?
+        } else {
+            0
+        };
+        let unique_still_there: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='photos' AND sql LIKE '%UNIQUE(project_id, content_sha256)%'",
+        )
+        .fetch_one(&pool)
+        .await?;
+        let rebuilding = repeated == 0 || unique_still_there > 0;
+        if rebuilding {
+            sqlx::query("PRAGMA foreign_keys=OFF")
+                .execute(&pool)
+                .await?;
+        }
+        let migrated = migrator.run(&pool).await;
+        // 无论迁移成败都恢复外键强制，不让关闭状态泄漏到后续读写。
+        sqlx::query("PRAGMA foreign_keys=ON").execute(&pool).await?;
+        migrated.map_err(|error| AppError::new("MIGRATION", error.to_string()))?;
+        if rebuilding
+            && !sqlx::query("PRAGMA foreign_key_check")
+                .fetch_all(&pool)
+                .await?
+                .is_empty()
+        {
+            pool.close().await;
+            return Err(AppError::new(
+                "MIGRATION",
+                "照片表重建后存在悬挂引用；已保存备份，停止升级",
+            ));
+        }
         // G1 回填：photos → source_assets + alias + representations（幂等：已回填跳过）。
         Self::backfill_asset_domain(&pool).await?;
         Ok(Self { pool })
@@ -456,17 +493,16 @@ pub(crate) async fn write_sequence(
 
 impl Store {
     /// G1 expand→backfill：把 photos 行提取到资产域五张表。
-    /// 幂等：photo id 已在 source_assets 中则跳过；不修改 photos 任何列。
+    /// 幂等：照片已有资产别名则跳过；不修改 photos 任何列。
     async fn backfill_asset_domain(pool: &SqlitePool) -> Result<()> {
-        let migrated: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM source_assets")
-            .fetch_one(pool)
-            .await
-            .unwrap_or(0);
-        let photos: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photos")
-            .fetch_one(pool)
-            .await
-            .unwrap_or(0);
-        if migrated >= photos {
+        // 判据是"这张照片还没有资产别名"，不是行数比较：相同内容共用一个母版时照片数会多于资产数。
+        let pending: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM photos p WHERE NOT EXISTS(SELECT 1 FROM asset_aliases a WHERE a.photo_id=p.id)",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap_or(0);
+        if pending == 0 {
             return Ok(());
         }
         let rows = sqlx::query(
@@ -477,13 +513,13 @@ impl Store {
         let now = crate::domain::timestamp();
         for row in rows {
             let id: String = row.get("id");
-            // 已迁移（部分回填后重跑）
-            let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM source_assets WHERE id=?")
-                .bind(&id)
-                .fetch_one(pool)
-                .await
-                .unwrap_or(0);
-            if exists > 0 {
+            let aliased: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM asset_aliases WHERE photo_id=?")
+                    .bind(&id)
+                    .fetch_one(pool)
+                    .await
+                    .unwrap_or(0);
+            if aliased > 0 {
                 continue;
             }
             let project_id: String = row.get("project_id");
@@ -495,6 +531,23 @@ impl Store {
             let thumbnail: String = row.get("thumbnail_path");
             let preview: String = row.get("preview_path");
             let created_at: String = row.get("created_at");
+            // 同内容已有母版时只登记别名，不再新建资产行（source_assets 保持项目内内容唯一）。
+            let shared_asset: Option<String> = sqlx::query_scalar(
+                "SELECT id FROM source_assets WHERE project_id=? AND content_sha256=? AND id<>?",
+            )
+            .bind(&project_id)
+            .bind(&hash)
+            .bind(&id)
+            .fetch_optional(pool)
+            .await?;
+            if let Some(existing) = shared_asset {
+                sqlx::query("INSERT INTO asset_aliases(photo_id, asset_id) VALUES(?,?)")
+                    .bind(&id)
+                    .bind(&existing)
+                    .execute(pool)
+                    .await?;
+                continue;
+            }
             let locator = format!(
                 r#"[{{"path":{path},"kind":"file"}}]"#,
                 path = serde_json::json!(original_path)

@@ -59,6 +59,70 @@ final class LocalLibraryTests: XCTestCase {
         XCTAssertEqual(excluded.isExcludedFromBackup, true, "本机原片不能随系统备份自动外传")
     }
 
+    func testIdenticalContentFromSeparateFilesStaysTwoIndependentPhotos() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let bytes = try jpeg()
+        // 同一画面内容存在两个不同文件（重复保存到相册的原片就是这个形状）。
+        let firstFile = directory.appendingPathComponent("frame.jpg")
+        let secondFile = directory.appendingPathComponent("frame-copy.jpg")
+        try bytes.write(to: firstFile)
+        try bytes.write(to: secondFile)
+        let scope = AccountScope(configuration: try APIConfiguration("https://example.com"), userID: "one")
+        let root = directory.appendingPathComponent("library")
+        let library = LocalLibrary(root: root, scope: scope)
+        let project = try await library.createProject(title: "同图两份")
+        guard case .imported(let first) = try await library.importFile(firstFile, projectID: project.id, phAssetID: "asset-1"),
+              case .imported(let second) = try await library.importFile(secondFile, projectID: project.id, phAssetID: "asset-2") else {
+            return XCTFail("内容相同但来源不同必须各自成为独立照片")
+        }
+        XCTAssertNotEqual(first.id, second.id)
+        XCTAssertEqual(first.sourceSHA256, second.sourceSHA256)
+        // 同一份来源再次导入仍然跳过：相册里同一条资产，即使换了临时文件名。
+        let albumCopy = directory.appendingPathComponent("album-copy.jpg")
+        try bytes.write(to: albumCopy)
+        guard case .duplicate(let sameAsset) = try await library.importFile(albumCopy, projectID: project.id, phAssetID: "asset-1") else {
+            return XCTFail("相册同一条资产重复导入要识别为重复")
+        }
+        XCTAssertEqual(sameAsset.id, first.id)
+        guard case .duplicate(let again) = try await library.importFile(firstFile, projectID: project.id, phAssetID: "asset-9") else {
+            return XCTFail("同一个文件重复导入要识别为重复")
+        }
+        XCTAssertEqual(again.id, first.id)
+
+        try await library.select(projectID: project.id, photoID: first.id, selection: .KEEP)
+        try await library.select(projectID: project.id, photoID: second.id, selection: .KEEP)
+        // 显式倒序：两条相同内容的记录各自保留顺序，不合并成一个位置。
+        let listed = try await library.projects()
+        let before = try XCTUnwrap(listed.first { $0.id == project.id })
+        try await library.applyAISelection(projectID: project.id, expectedUpdatedAt: before.updatedAt,
+                                          applicationID: "同图排序", decisions: [first.id: .KEEP, second.id: .KEEP],
+                                          orderedPhotoIDs: [second.id, first.id])
+        var snapshot = try await library.projects()
+        var current = snapshot.first { $0.id == project.id }
+        XCTAssertEqual(current?.sequencePhotoIDs, [second.id, first.id])
+        try await library.select(projectID: project.id, photoID: second.id, selection: .REJECT)
+        snapshot = try await library.projects()
+        current = snapshot.first { $0.id == project.id }
+        XCTAssertEqual(current?.photos.first { $0.id == first.id }?.selection, .KEEP)
+        XCTAssertEqual(current?.photos.first { $0.id == second.id }?.selection, .REJECT)
+        XCTAssertEqual(current?.sequencePhotoIDs, [first.id])
+        let firstPreview = try await library.preview(projectID: project.id, photoID: first.id)
+        XCTAssertEqual(digest(firstPreview), first.previewSHA256)
+        let secondPreview = try await library.preview(projectID: project.id, photoID: second.id)
+        XCTAssertEqual(digest(secondPreview), second.previewSHA256)
+
+        let reopened = LocalLibrary(root: root, scope: scope)
+        let restored = try await reopened.projects()
+        let photos = restored.first { $0.id == project.id }?.photos ?? []
+        XCTAssertEqual(photos.count, 2, "重启后两份记录都要读回来")
+        XCTAssertEqual(Set(photos.map(\.id)), [first.id, second.id])
+        let archived = root.appendingPathComponent(scope.key).appendingPathComponent("media")
+            .appendingPathComponent(first.sourceSHA256 + ".original")
+        XCTAssertEqual(try Data(contentsOf: archived), bytes, "相同内容共用一份原片文件")
+        XCTAssertEqual(try Data(contentsOf: firstFile), bytes, "不能改写用户选择的原文件")
+    }
+
     func testProjectsKeepIndependentAssetIdentityAndAccountsRemainIsolated() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

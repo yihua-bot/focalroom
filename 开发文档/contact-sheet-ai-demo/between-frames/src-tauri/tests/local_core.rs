@@ -289,7 +289,7 @@ async fn rating_migration_upgrades_old_database_without_changing_legacy_data() {
             .fetch_one(&store.pool)
             .await
             .unwrap(),
-        36
+        37
     );
     store.pool.close().await;
     let reopened = Store::open(&database).await.unwrap();
@@ -489,6 +489,114 @@ async fn missing_source_keeps_cache_and_relink_requires_identical_content() {
     assert_eq!(
         restored.photos[0].content_sha256,
         missing.photos[0].content_sha256
+    );
+}
+
+#[tokio::test]
+async fn identical_content_from_different_files_stays_two_independent_photos() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Store::open(&directory.path().join("db.sqlite"))
+        .await
+        .unwrap();
+    let project = store.create("同图重排", "").await.unwrap();
+    let cache = directory.path().join("cache");
+    let first = fixture(directory.path(), 7, ImageFormat::Jpeg);
+    // 同一画面内容存在两个不同文件，重复保存到相册的原片就是这个形状。
+    let second = directory.path().join("frame-007-copy.jpg");
+    std::fs::copy(&first, &second).unwrap();
+    for path in [&first, &second] {
+        let prepared = image_pipeline::prepare(path, &cache).unwrap();
+        assert!(store.insert_photo(&project.id, &prepared).await.unwrap());
+    }
+    let mut project = store.get(&project.id).await.unwrap();
+    assert_eq!(project.photos.len(), 2);
+    assert_eq!(
+        project.photos[0].content_sha256,
+        project.photos[1].content_sha256
+    );
+    assert_ne!(project.photos[0].index, project.photos[1].index);
+    let ids: Vec<_> = project
+        .photos
+        .iter()
+        .map(|photo| photo.id.clone())
+        .collect();
+    // 两条记录各自保留决定与序列位置，不互相覆盖。
+    project = store
+        .decide_many(&project.id, &ids, "keep", project.revision)
+        .await
+        .unwrap();
+    project = store
+        .reorder(
+            &project.id,
+            &[ids[1].clone(), ids[0].clone()],
+            project.revision,
+        )
+        .await
+        .unwrap();
+    assert_eq!(project.sequence, vec![ids[1].clone(), ids[0].clone()]);
+    project = store
+        .decide(&project.id, &ids[1], "reject", project.revision)
+        .await
+        .unwrap();
+    let statuses: Vec<_> = project
+        .photos
+        .iter()
+        .map(|photo| photo.status.clone())
+        .collect();
+    assert_eq!(statuses, vec!["keep".to_owned(), "reject".to_owned()]);
+    // 同一来源文件重复导入仍跳过，不新增记录。
+    let prepared = image_pipeline::prepare(&first, &cache).unwrap();
+    assert!(!store.insert_photo(&project.id, &prepared).await.unwrap());
+    assert_eq!(store.get(&project.id).await.unwrap().photos.len(), 2);
+    // 相同内容只对应一个母版资产，两条照片记录共用它及其派生缓存。
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM source_assets WHERE project_id=? AND content_sha256=?",
+        )
+        .bind(&project.id)
+        .bind(&prepared.hash)
+        .fetch_one(&store.pool)
+        .await
+        .unwrap(),
+        1
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM asset_aliases")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(DISTINCT asset_id) FROM asset_aliases")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM asset_representations")
+            .fetch_one(&store.pool)
+            .await
+            .unwrap(),
+        2
+    );
+    // 重复照片 ID 仍被主键拒绝。
+    let duplicate = ids[0].clone();
+    assert!(
+        sqlx::query("INSERT INTO photos(id,project_id,import_index,original_path,filename,file_size,content_sha256,width,height,thumbnail_path,preview_path,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
+            .bind(&duplicate).bind(&project.id).bind(99).bind(&prepared.path.to_string_lossy().as_ref())
+            .bind(&prepared.filename).bind(prepared.size as i64).bind(&prepared.hash)
+            .bind(prepared.width as i64).bind(prepared.height as i64)
+            .bind(&prepared.thumbnail.to_string_lossy().as_ref()).bind(&prepared.preview.to_string_lossy().as_ref())
+            .bind("now").execute(&store.pool).await.is_err()
+    );
+    assert!(
+        sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&store.pool)
+            .await
+            .unwrap()
+            .is_empty()
     );
 }
 

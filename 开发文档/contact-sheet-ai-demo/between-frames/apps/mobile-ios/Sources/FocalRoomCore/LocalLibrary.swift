@@ -269,7 +269,13 @@ public actor LocalLibrary {
         let stage = media.appendingPathComponent(".ingest-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: stage) }
         let copied = try LocalMediaFiles.copyBounded(url, to: stage)
-        if let duplicate = document.projects[index].photos.first(where: { $0.sourceSHA256 == copied.sha }) {
+        // 判重看的是「同一份来源再次导入」：相册里同一条资产，或同名同内容的同一个文件。
+        // 画面内容相同但来源不同（连拍、同一底片的不同裁切副本）必须是两条独立记录。
+        let sourceName = String(url.lastPathComponent.prefix(240))
+        if let duplicate = document.projects[index].photos.first(where: {
+            $0.sourceSHA256 == copied.sha && $0.byteCount == copied.size &&
+                (($0.phAssetID != nil && $0.phAssetID == phAssetID) || $0.filename == sourceName)
+        }) {
             try LocalMediaFiles.verify(originalURL(duplicate), sha: copied.sha, limit: LocalMediaFiles.sourceLimit)
             try LocalMediaFiles.verify(previewURL(duplicate), sha: duplicate.previewSHA256, limit: LocalMediaFiles.previewLimit)
             return .duplicate(duplicate)
@@ -671,8 +677,7 @@ public actor LocalLibrary {
         guard document.version == 1, document.scope == scope, document.projects.count <= 500, photos.count <= 10_000,
               Set(document.projects.map(\.id)).count == document.projects.count,
               Set(photos.map(\.id)).count == photos.count,
-              document.projects.allSatisfy({ UUID(uuidString: $0.id) != nil && !$0.title.isEmpty && $0.title.count <= 120 &&
-                  Set($0.photos.map(\.sourceSHA256)).count == $0.photos.count }),
+              document.projects.allSatisfy({ UUID(uuidString: $0.id) != nil && !$0.title.isEmpty && $0.title.count <= 120 }),
               photos.allSatisfy({ UUID(uuidString: $0.id) != nil && hash($0.sourceSHA256) && hash($0.previewSHA256) &&
                   $0.byteCount > 0 && $0.byteCount <= LocalMediaFiles.sourceLimit && $0.width > 0 && $0.height > 0 &&
                   $0.width <= LocalMediaFiles.pixelLimit / $0.height && (1...8).contains($0.orientation) &&

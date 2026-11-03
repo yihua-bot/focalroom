@@ -17,11 +17,14 @@ impl CommandHandler<'_> {
                 .fetch_optional(&mut *tx)
                 .await?
                 .ok_or_else(|| AppError::new("NOT_FOUND", "项目不存在或已归档"))?;
+        // 判重看的是"同一份来源文件重复导入"，不是"画面内容相同"：
+        // 相同内容来自不同文件时各自保留独立记录，选片状态与序列位置互不影响。
         let exists: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM photos WHERE project_id=? AND content_sha256=?",
+            "SELECT COUNT(*) FROM photos WHERE project_id=? AND content_sha256=? AND original_path=?",
         )
         .bind(project)
         .bind(&prepared.hash)
+        .bind(prepared.path.to_string_lossy().as_ref())
         .fetch_one(&mut *tx)
         .await?;
         if exists > 0 {
@@ -69,40 +72,55 @@ impl CommandHandler<'_> {
             Some(p) => Some(format!("invalid:{}", p.diagnostic.as_str())),
             None => None,
         };
-        sqlx::query(
-            "INSERT INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,source_profile_digest,source_hash_verified_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,NULL,?)",
+        // 相同内容在本项目已有母版资产时复用同一资产，新记录只登记别名；资产表的项目内内容唯一性保持不变。
+        let shared_asset: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM source_assets WHERE project_id=? AND content_sha256=? AND id<>?",
         )
-        .bind(&id).bind(project).bind(&prepared.hash).bind(&locator)
-        .bind(prepared.size as i64).bind(prepared.width as i64).bind(prepared.height as i64)
-        .bind(&format).bind(&profile_digest).bind(&now)
-        .execute(&mut *tx).await?;
+        .bind(project)
+        .bind(&prepared.hash)
+        .bind(&id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let asset_id = match shared_asset {
+            Some(existing) => existing,
+            None => {
+                sqlx::query(
+                    "INSERT INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,source_profile_digest,source_hash_verified_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,NULL,?)",
+                )
+                .bind(&id).bind(project).bind(&prepared.hash).bind(&locator)
+                .bind(prepared.size as i64).bind(prepared.width as i64).bind(prepared.height as i64)
+                .bind(&format).bind(&profile_digest).bind(&now)
+                .execute(&mut *tx).await?;
+                let variant_id = domain::id();
+                sqlx::query(
+                    "INSERT INTO edit_variants(id,asset_id,name,external_software,external_variant_id,is_current,created_at) VALUES(?,?,?,NULL,NULL,1,?)",
+                )
+                .bind(&variant_id).bind(&id).bind("original").bind(&now)
+                .execute(&mut *tx).await?;
+                // G1 修复：读缓存文件真实尺寸（缩略图按宽高比适配 320px，不是 width/4）
+                for (kind, path) in [
+                    ("thumbnail", &prepared.thumbnail),
+                    ("display_proxy", &prepared.preview),
+                ] {
+                    let rep_size = std::fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
+                    let (w, h) = image::image_dimensions(path)
+                        .map(|(dw, dh)| (dw as i64, dh as i64))
+                        .unwrap_or((prepared.width as i64, prepared.height as i64));
+                    sqlx::query(
+                        "INSERT INTO asset_representations(id,asset_id,kind,algorithm,width,height,file_path,file_size,profile_digest,created_at) VALUES(?,?,?,?,?,?,?,?,NULL,?)",
+                    )
+                    .bind(domain::id()).bind(&id).bind(kind).bind("image_pipeline_v1")
+                    .bind(w).bind(h).bind(path.to_string_lossy().as_ref()).bind(rep_size).bind(&now)
+                    .execute(&mut *tx).await?;
+                }
+                id.clone()
+            }
+        };
         sqlx::query("INSERT INTO asset_aliases(photo_id,asset_id) VALUES(?,?)")
             .bind(&id)
-            .bind(&id)
+            .bind(&asset_id)
             .execute(&mut *tx)
             .await?;
-        let variant_id = domain::id();
-        sqlx::query(
-            "INSERT INTO edit_variants(id,asset_id,name,external_software,external_variant_id,is_current,created_at) VALUES(?,?,?,NULL,NULL,1,?)",
-        )
-        .bind(&variant_id).bind(&id).bind("original").bind(&now)
-        .execute(&mut *tx).await?;
-        // G1 修复：读缓存文件真实尺寸（缩略图按宽高比适配 320px，不是 width/4）
-        for (kind, path) in [
-            ("thumbnail", &prepared.thumbnail),
-            ("display_proxy", &prepared.preview),
-        ] {
-            let rep_size = std::fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
-            let (w, h) = image::image_dimensions(path)
-                .map(|(dw, dh)| (dw as i64, dh as i64))
-                .unwrap_or((prepared.width as i64, prepared.height as i64));
-            sqlx::query(
-                "INSERT INTO asset_representations(id,asset_id,kind,algorithm,width,height,file_path,file_size,profile_digest,created_at) VALUES(?,?,?,?,?,?,?,?,NULL,?)",
-            )
-            .bind(domain::id()).bind(&id).bind(kind).bind("image_pipeline_v1")
-            .bind(w).bind(h).bind(path.to_string_lossy().as_ref()).bind(rep_size).bind(&now)
-            .execute(&mut *tx).await?;
-        }
         sqlx::query("UPDATE projects SET revision=revision+1,updated_at=? WHERE id=?")
             .bind(&now)
             .bind(project)

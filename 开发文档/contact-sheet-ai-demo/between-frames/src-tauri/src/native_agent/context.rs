@@ -37,11 +37,6 @@ fn invalid() -> AppError {
 
 pub(super) async fn sync(db: &Store, input: ContextInput) -> Result<Value> {
     let native_ids: HashSet<_> = input.photos.iter().map(|p| p.id.as_str()).collect();
-    let hashes: HashSet<_> = input
-        .photos
-        .iter()
-        .map(|p| p.source_hash.as_str())
-        .collect();
     if input.reference.is_empty()
         || input.reference.len() > 300
         || input.title.is_empty()
@@ -49,7 +44,6 @@ pub(super) async fn sync(db: &Store, input: ContextInput) -> Result<Value> {
         || input.brief.len() > 100000
         || input.photos.len() > 10000
         || native_ids.len() != input.photos.len()
-        || hashes.len() != input.photos.len()
         || input.photos.iter().any(|p| {
             p.id.is_empty()
                 || p.id.len() > 300
@@ -175,14 +169,29 @@ pub(super) async fn sync(db: &Store, input: ContextInput) -> Result<Value> {
             .bind(id).bind(&project).bind(index as i64+1).bind(path).bind(&p.filename).bind(&p.source_hash).bind(i64::from(p.width)).bind(i64::from(p.height)).bind(path).bind(path).bind(&now).execute(&mut *tx).await?;
         sqlx::query("INSERT INTO photo_decisions(project_id,photo_id,status,updated_at) VALUES(?,?,?,?) ON CONFLICT(project_id,photo_id) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at")
             .bind(&project).bind(id).bind(&p.status).bind(&now).execute(&mut *tx).await?;
-        sqlx::query("INSERT INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,created_at) VALUES(?,?,?,'[]',0,?,?,'jpeg',?) ON CONFLICT(id) DO UPDATE SET content_sha256=excluded.content_sha256,width=excluded.width,height=excluded.height")
-            .bind(id).bind(&project).bind(&p.source_hash).bind(i64::from(p.width)).bind(i64::from(p.height)).bind(&now).execute(&mut *tx).await?;
+        // 相同内容在本项目已有母版资产时复用同一资产；资产表的项目内内容唯一性保持不变。
+        let shared_asset: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM source_assets WHERE project_id=? AND content_sha256=? AND id<>?",
+        )
+        .bind(&project)
+        .bind(&p.source_hash)
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let asset_id = match shared_asset {
+            Some(existing) => existing,
+            None => {
+                sqlx::query("INSERT INTO source_assets(id,project_id,content_sha256,original_locator,file_size,width,height,format,created_at) VALUES(?,?,?,'[]',0,?,?,'jpeg',?) ON CONFLICT(id) DO UPDATE SET content_sha256=excluded.content_sha256,width=excluded.width,height=excluded.height")
+                    .bind(id).bind(&project).bind(&p.source_hash).bind(i64::from(p.width)).bind(i64::from(p.height)).bind(&now).execute(&mut *tx).await?;
+                sqlx::query("INSERT OR IGNORE INTO edit_variants(id,asset_id,name,is_current,created_at) VALUES(?,?,'original',1,?)").bind(id).bind(id).bind(&now).execute(&mut *tx).await?;
+                id.clone()
+            }
+        };
         sqlx::query("INSERT OR IGNORE INTO asset_aliases(photo_id,asset_id) VALUES(?,?)")
             .bind(id)
-            .bind(id)
+            .bind(&asset_id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query("INSERT OR IGNORE INTO edit_variants(id,asset_id,name,is_current,created_at) VALUES(?,?,'original',1,?)").bind(id).bind(id).bind(&now).execute(&mut *tx).await?;
     }
     sqlx::query("DELETE FROM sequence_items WHERE project_id=?")
         .bind(&project)
