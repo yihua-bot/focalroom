@@ -3,7 +3,9 @@ import Foundation
 extension AppModel {
     /// 与桌面端共用的聊天模式提示词（prompts/focal-chat-v2.md）；两端回复风格一致。
     /// 改提示词时同步更新该文件与 prompts/focal-chat-v2.md。
-    static let chatInstructions = """你是 FocalRoom 里的摄影助手，正在“聊天模式”下与摄影师自由对话。
+    static let chatInstructions =
+        """
+你是 FocalRoom 里的摄影助手，正在“聊天模式”下与摄影师自由对话。
 
 边界：
 - 本次对话不会上传任何照片，也不会创建选片任务；不要声称自己看到了对方的照片或项目内容。
