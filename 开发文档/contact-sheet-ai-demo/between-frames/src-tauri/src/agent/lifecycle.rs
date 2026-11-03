@@ -235,7 +235,6 @@ pub(crate) async fn request_bound_with_canvas(
             .bind(&t.id)
             .execute(&mut *tx)
             .await?;
-        super::task_scope::bind_creative(&mut tx, &t, canvas, source, conversation).await?;
         if let Some(consent_id) = t.consent_id {
             sqlx::query("UPDATE privacy_consents SET task_id=? WHERE id=? AND mode='task' AND task_id IS NULL")
                 .bind(&t.id).bind(consent_id).execute(&mut *tx).await?;
@@ -253,6 +252,8 @@ pub(crate) async fn request_bound_with_canvas(
             super::model_binding::ensure(&mut tx, &t, identity).await?;
             super::consent::ensure_task_recipient(&mut tx, &t, identity).await?;
         }
+        // 先冻结宿主身份，再按该身份的能力生成工具授权。
+        super::task_scope::bind_creative(&mut tx, &t, canvas, source, conversation).await?;
         if let TaskCommand::StartConversation {
             allow_queued_recovery,
             focus_photo_ids,

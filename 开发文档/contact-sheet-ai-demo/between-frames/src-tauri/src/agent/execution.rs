@@ -216,13 +216,35 @@ pub(crate) async fn tool(
     call: &ToolCall,
     vision_data: Option<&VisionPrefetch>,
 ) -> Result<ToolResult> {
+    tool_with_knowledge(db, id, call, vision_data, None).await
+}
+pub(crate) async fn tool_with_knowledge(
+    db: &Store,
+    id: &str,
+    call: &ToolCall,
+    vision_data: Option<&VisionPrefetch>,
+    knowledge: Option<&super::knowledge::KnowledgeClient>,
+) -> Result<ToolResult> {
     let preparation_started = std::time::Instant::now();
     let semantic = super::photo_search::prepare(db, id, call).await?;
+    let knowledge_data = super::knowledge::prepare(db, id, call, knowledge).await?;
     let preparation_ms = preparation_started.elapsed().as_millis() as u64;
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, id).await?;
     super::memory_scope::validate(&mut tx, &t).await?;
     // 身份和 task scope 在回放前检查，指纹不允许同 call ID 更换参数。
+    if super::knowledge::is_tool(&call.name)
+        && let Some(client) = knowledge
+    {
+        client.check_account()?;
+        let binding = super::model_binding::load(&mut tx, id).await?;
+        if !binding
+            .as_ref()
+            .is_some_and(|binding| client.matches(binding))
+        {
+            return Err(AppError::new("AUTH_CHANGED", "知识服务身份与任务不匹配"));
+        }
+    }
     if call.call_id.is_empty() || call.call_id.len() > 160 {
         return Err(AppError::new("VALIDATION_ERROR", "call_id 不合法"));
     }
@@ -289,6 +311,16 @@ pub(crate) async fn tool(
     let validated = PolicyGate::validate(&mut tx, &t, call).await;
     let execution = if let Err(e) = validated {
         Err(e)
+    } else if super::knowledge::is_tool(&call.name) {
+        match knowledge_data {
+            Some(value) => {
+                if let Some(client) = knowledge {
+                    client.check_account()?;
+                }
+                Ok(value)
+            }
+            None => super::knowledge::execute(None, &call.name, &call.args).await,
+        }
     } else {
         tools::execute(&mut tx, &mut t, call, vision_data, semantic.as_ref()).await
     };

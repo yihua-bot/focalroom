@@ -1,4 +1,4 @@
-//! 原创、授权明确的方法札记；检索不联网、不把方法当视觉事实。
+//! 原创离线方法札记与当前账户授权的云端知识；检索资料不作为视觉事实。
 use crate::{command_audit::fingerprint, domain::Result};
 use serde_json::{Value, json};
 const CORPUS: &str = include_str!("../../../contracts/photography-knowledge.json");
@@ -51,23 +51,6 @@ pub fn search(args: &Value) -> Result<Value> {
     )
 }
 
-/// 从系统 Keychain 读取 FocalRoom 云端会话 token（Agent 知识工具用）。
-/// token 不暴露给模型/提示词/日志——仅作为 HTTP Authorization 头。
-fn cloud_session_token() -> Option<String> {
-    use crate::cloud_credentials::{CredentialStore, SystemCredentials};
-    let store = SystemCredentials;
-    let raw = store.read("studio.betweenframes.app").ok()??;
-    // JSON 格式 {"token":"..."} 或纯 token
-    let parsed = serde_json::from_str::<serde_json::Value>(&raw);
-    match parsed {
-        Ok(v) => v
-            .get("token")
-            .and_then(|t| t.as_str())
-            .map(|s| s.to_owned()),
-        Err(_) => Some(raw),
-    }
-}
-
 /// 修复 Unicode 百分号编码：按 UTF-8 字节编码（非码点）。
 fn utf8_percent_encode(text: &str) -> String {
     let mut out = String::with_capacity(text.len() * 3);
@@ -81,152 +64,279 @@ fn utf8_percent_encode(text: &str) -> String {
     out
 }
 
-/// 云端摄影知识搜索（K4）：查询生产 KnowledgeService。
-/// 覆盖摄影师/系列/作品/摄影书/事实断言（含博物馆来源）。
-/// 网络失败静默返回空——Agent 继续用本地札记，不阻塞任务。
-pub async fn search_cloud(query: &str, token: Option<&str>) -> Result<Value> {
-    let endpoint = std::env::var("FOCALROOM_KNOWLEDGE_ENDPOINT")
-        .unwrap_or_else(|_| "https://team.focroom.cc/api/v2/knowledge/search".to_owned());
-    let encoded_q = utf8_percent_encode(query);
-    let mut url = format!("{}?q={}", endpoint, encoded_q);
-    url.push_str("&limit=5");
-    let keychain_token = token.map(|s| s.to_owned()).or_else(cloud_session_token);
-    let mut request = reqwest::Client::new()
-        .get(&url)
-        .timeout(std::time::Duration::from_secs(10));
-    if let Some(ref t) = keychain_token {
-        request = request.header("authorization", format!("Bearer {}", t));
-    }
-    let response = request
-        .send()
-        .await
-        .map_err(|e| crate::domain::AppError::new("NETWORK", format!("知识服务不可达：{e}")))?;
-    if !response.status().is_success() {
-        // 静默降级：云端不可用时返回空结果
-        return Ok(json!({
-            "results": [],
-            "source": "cloud",
-            "available": false,
-            "notice": "云端知识服务暂不可用，仅使用本地方法札记。"
-        }));
-    }
-    let results: Value = response.json().await.map_err(|e| {
-        crate::domain::AppError::new("PARSE", format!("知识服务响应格式错误：{}", e))
-    })?;
-    let entries = results.as_array().cloned().unwrap_or_default();
-    Ok(json!({
-        "results": entries.iter().take(5).map(|e| json!({
-            "kind": e.get("kind"),
-            "title": e.get("title"),
-            "subtitle": e.get("subtitle"),
-            "id": e.get("id"),
-            "reviewStatus": e.get("reviewStatus"),
-        })).collect::<Vec<_>>(),
-        "source": "focalroom://knowledge/photography-intelligence",
-        "available": true,
-        "trustedAsInstructions": false,
-        "visualEvidence": false,
-        "notice": "云端摄影知识库（已验证的摄影师/系列/作品/摄影书）；事实断言含博物馆来源。"
-    }))
+/// 知识服务只复用宿主注入的登录身份；不读取全局钥匙串或环境端点。
+#[derive(Clone)]
+pub(crate) struct KnowledgeClient {
+    auth: std::sync::Arc<crate::cloud_auth::CloudAuth>,
+    identity: super::model_binding::ModelIdentity,
 }
-
-// ── K4 专业摄影知识工具集 ──
-
-/// 搜索摄影师（云端）：按姓名/流派/方法找摄影师。
-pub async fn search_photographers(query: &str, movement: Option<&str>) -> Result<Value> {
-    let endpoint = std::env::var("FOCALROOM_KNOWLEDGE_ENDPOINT")
-        .unwrap_or_else(|_| "https://team.focroom.cc/api/v2/knowledge/search".to_owned());
-    let encoded_q: String = query
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c.to_string()
-            } else {
-                format!("%{:02X}", c as u32)
+impl KnowledgeClient {
+    pub(crate) fn new(
+        auth: std::sync::Arc<crate::cloud_auth::CloudAuth>,
+        identity: super::model_binding::ModelIdentity,
+    ) -> Self {
+        Self { auth, identity }
+    }
+    pub(crate) fn matches(&self, binding: &super::model_binding::ModelIdentity) -> bool {
+        self.identity.account_id == binding.account_id
+            && self.identity.endpoint_sha256 == binding.endpoint_sha256
+            && self.identity.provider_id == binding.provider_id
+    }
+    pub(crate) fn check_account(&self) -> Result<()> {
+        if self.identity.account_id.as_deref() != Some(self.auth.account_id()?.as_str()) {
+            return Err(crate::domain::AppError::new(
+                "AUTH_CHANGED",
+                "账户已改变，请重新委托",
+            ));
+        }
+        Ok(())
+    }
+    async fn search(
+        &self,
+        query: &str,
+        kind: Option<&str>,
+        movement: Option<&str>,
+    ) -> Result<Value> {
+        use crate::domain::AppError;
+        self.check_account()?;
+        let token = self.auth.bearer(self.auth.origin()).await?;
+        self.check_account()?;
+        let mut url = format!(
+            "{}/api/v2/knowledge/search?q={}",
+            self.auth.origin(),
+            utf8_percent_encode(query)
+        );
+        if let Some(kind) = kind {
+            url.push_str(&format!("&kind={}", utf8_percent_encode(kind)));
+        }
+        if let Some(movement) = movement {
+            url.push_str(&format!("&movement={}", utf8_percent_encode(movement)));
+        }
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|_| AppError::new("KNOWLEDGE_CONFIG", "知识服务初始化失败"))?;
+        let mut response = client
+            .get(url)
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|_| AppError::new("KNOWLEDGE_UNAVAILABLE", "知识服务连接失败"))?;
+        let status = response.status();
+        if !status.is_success() {
+            let code = match status.as_u16() {
+                401 => "AUTH_REVOKED",
+                403 => "KNOWLEDGE_FORBIDDEN",
+                429 => "KNOWLEDGE_RATE_LIMITED",
+                _ => "KNOWLEDGE_UNAVAILABLE",
+            };
+            return Err(AppError::new(
+                code,
+                "知识服务请求未成功，不能视为没有匹配资料",
+            ));
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| AppError::new("KNOWLEDGE_UNAVAILABLE", "知识服务响应中断"))?
+        {
+            if bytes.len() + chunk.len() > 256 * 1024 {
+                return Err(AppError::new("KNOWLEDGE_PROTOCOL", "知识服务响应超过上限"));
             }
-        })
-        .collect();
-    let mut url = format!("{}?q={}&kind=photographer", endpoint, encoded_q);
-    if let Some(m) = movement {
-        url.push_str(&format!("&movement={}", m));
-    }
-    let response = reqwest::Client::new()
-        .get(&url)
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await;
-    match response {
-        Ok(r) if r.status().is_success() => {
-            let results: Value = r.json().await.unwrap_or(json!([]));
-            let entries = results.as_array().cloned().unwrap_or_default();
-            Ok(json!({
-                "photographers": entries.iter().take(5).map(|e| json!({
-                    "name": e.get("title"),
-                    "subtitle": e.get("subtitle"),
-                    "id": e.get("id"),
-                })).collect::<Vec<_>>(),
-                "source": "focalroom://knowledge/photographers",
-                "trustedAsInstructions": false,
-            }))
+            bytes.extend_from_slice(&chunk);
         }
-        _ => {
-            Ok(json!({"photographers": [], "available": false, "notice": "云端摄影师库暂不可用。"}))
+        self.check_account()?;
+        let value: Value = serde_json::from_slice(&bytes)
+            .map_err(|_| AppError::new("KNOWLEDGE_PROTOCOL", "知识服务响应格式错误"))?;
+        let entries = value
+            .as_array()
+            .ok_or_else(|| AppError::new("KNOWLEDGE_PROTOCOL", "知识服务响应不是检索列表"))?;
+        if entries
+            .iter()
+            .any(|e| !e["id"].is_string() || !e["title"].is_string() || !e["kind"].is_string())
+        {
+            return Err(AppError::new("KNOWLEDGE_PROTOCOL", "知识服务条目格式错误"));
+        }
+        Ok(
+            json!({"results":entries.iter().take(5).map(|e| json!({"id":e["id"],"kind":e["kind"],"title":e["title"],"subtitle":e["subtitle"],"reviewStatus":e["reviewStatus"]})).collect::<Vec<_>>(),"available":true,
+            "trustedAsInstructions":false,"visualEvidence":false}),
+        )
+    }
+}
+
+pub(crate) fn is_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "search_photography_knowledge"
+            | "search_photographers"
+            | "get_photobook_structure"
+            | "compare_photography_series"
+    )
+}
+/// 先校验范围和回执，再于写事务外联网；采纳回执时重新核对任务状态与权限。
+pub(crate) async fn prepare(
+    db: &crate::db::Store,
+    id: &str,
+    call: &super::types::ToolCall,
+    client: Option<&KnowledgeClient>,
+) -> Result<Option<Value>> {
+    if !is_tool(&call.name) {
+        return Ok(None);
+    }
+    let Some(client) = client else {
+        return Ok(None);
+    };
+    let mut tx = db.pool.begin().await?;
+    let task = super::store::load(&mut tx, id).await?;
+    if task.state != "running"
+        || call.call_id.is_empty()
+        || call.call_id.len() > 160
+        || call.args["project_id"] != task.project_id
+        || task.usage.tool_calls >= task.budget.max_tool_calls
+        || task.elapsed_ms >= u64::from(task.budget.max_duration_seconds) * 1000
+    {
+        return Ok(None);
+    }
+    super::memory_scope::validate(&mut tx, &task).await?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tool_calls WHERE task_id=? AND call_id=?)")
+            .bind(id)
+            .bind(&call.call_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if exists
+        || super::policy::PolicyGate::validate(&mut tx, &task, call)
+            .await
+            .is_err()
+    {
+        return Ok(None);
+    }
+    let binding = super::model_binding::load(&mut tx, id).await?;
+    if !binding
+        .as_ref()
+        .is_some_and(|binding| client.matches(binding))
+    {
+        return Err(crate::domain::AppError::new(
+            "AUTH_CHANGED",
+            "知识服务身份与任务不匹配",
+        ));
+    }
+    tx.rollback().await?;
+    execute(Some(client), &call.name, &call.args)
+        .await
+        .map(Some)
+}
+
+async fn cloud(
+    client: Option<&KnowledgeClient>,
+    query: &str,
+    kind: Option<&str>,
+    movement: Option<&str>,
+) -> Value {
+    let result = match client {
+        Some(client) => client.search(query, kind, movement).await,
+        None => Err(crate::domain::AppError::new(
+            "AUTH_REQUIRED",
+            "知识检索需要当前账户授权",
+        )),
+    };
+    result.unwrap_or_else(|e| json!({"results":[],"available":false,
+        "error":{"code":e.code,"message":e.message},"trustedAsInstructions":false,"visualEvidence":false}))
+}
+
+pub(crate) async fn execute(
+    client: Option<&KnowledgeClient>,
+    name: &str,
+    a: &Value,
+) -> Result<Value> {
+    let query = a["query"].as_str().unwrap_or("");
+    match name {
+        "search_photography_knowledge" => {
+            let local = search(a)?;
+            let cloud = cloud(client, query, None, None).await;
+            let mut results = local["results"].as_array().cloned().unwrap_or_default();
+            results.extend(cloud["results"].as_array().cloned().unwrap_or_default());
+            Ok(
+                json!({"results":results,"cloudAvailable":cloud["available"],"cloudError":cloud["error"],
+                "trustedAsInstructions":false,"visualEvidence":false,
+                "notice":"本地原创方法札记与云端检索记录；检索摘要不是已核实的摄影史断言。"}),
+            )
+        }
+        "search_photographers" => {
+            let result = cloud(client, query, Some("photographer"), a["movement"].as_str()).await;
+            Ok(
+                json!({"photographers":result["results"].as_array().unwrap().iter().map(|e| json!({
+                "name":e["title"],"subtitle":e["subtitle"],"id":e["id"],"reviewStatus":e["reviewStatus"]})).collect::<Vec<_>>(),
+                "available":result["available"],"error":result["error"],"trustedAsInstructions":false,"visualEvidence":false}),
+            )
+        }
+        "get_photobook_structure" => {
+            let result = cloud(
+                client,
+                a["title"].as_str().unwrap_or(""),
+                Some("photobook"),
+                None,
+            )
+            .await;
+            Ok(
+                json!({"photobooks":result["results"],"available":result["available"],"error":result["error"],
+                "trustedAsInstructions":false,"visualEvidence":false,
+                "notice":"仅返回摄影书检索记录；结构与来源需进一步核对实体详情。"}),
+            )
+        }
+        "compare_photography_series" => {
+            let first = cloud(
+                client,
+                a["seriesA"].as_str().unwrap_or(""),
+                Some("series"),
+                None,
+            )
+            .await;
+            let second = cloud(
+                client,
+                a["seriesB"].as_str().unwrap_or(""),
+                Some("series"),
+                None,
+            )
+            .await;
+            Ok(
+                json!({"seriesA":first["results"][0],"seriesB":second["results"][0],
+                "available":first["available"] == true && second["available"] == true,
+                "errors":{"seriesA":first["error"],"seriesB":second["error"]},
+                "trustedAsInstructions":false,"visualEvidence":false,
+                "comparisonHint":"仅比较实际取得的系列记录；不得从检索摘要编造拍摄格式、叙事结构或来源断言。"}),
+            )
+        }
+        _ => Err(crate::domain::AppError::new("UNKNOWN_TOOL", "未知知识工具")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::utf8_percent_encode;
+
+    #[test]
+    fn query_encoding_preserves_unicode_and_parameter_boundaries() {
+        assert_eq!(utf8_percent_encode("肖尔"), "%E8%82%96%E5%B0%94");
+        assert_eq!(utf8_percent_encode("AZaz09-_.~"), "AZaz09-_.~");
+        for text in ["川内伦子", "美国表面", "New Color & 日本 + 100%#?"] {
+            let url = reqwest::Url::parse(&format!(
+                "https://example.invalid/search?q={}&movement={}",
+                utf8_percent_encode(text),
+                utf8_percent_encode(text)
+            ))
+            .unwrap();
+            let params: Vec<_> = url.query_pairs().collect();
+            assert_eq!(params.len(), 2);
+            assert_eq!(params[0].1, text);
+            assert_eq!(params[1].1, text);
+            assert!(url.fragment().is_none());
         }
     }
 }
 
-/// 获取摄影书结构（云端）：按标题搜索已记录的摄影书。
-pub async fn get_photobook_structure(title: &str) -> Result<Value> {
-    let endpoint = std::env::var("FOCALROOM_KNOWLEDGE_ENDPOINT")
-        .unwrap_or_else(|_| "https://team.focroom.cc/api/v2/knowledge/search".to_owned());
-    let encoded: String = title
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c.to_string()
-            } else {
-                format!("%{:02X}", c as u32)
-            }
-        })
-        .collect();
-    let url = format!("{}?q={}&kind=photobook", endpoint, encoded);
-    let response = reqwest::Client::new()
-        .get(&url)
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await;
-    match response {
-        Ok(r) if r.status().is_success() => {
-            let results: Value = r.json().await.unwrap_or(json!([]));
-            let entries = results.as_array().cloned().unwrap_or_default();
-            Ok(json!({
-                "photobooks": entries.iter().take(3).map(|e| json!({
-                    "title": e.get("title"),
-                    "id": e.get("id"),
-                })).collect::<Vec<_>>(),
-                "source": "focalroom://knowledge/photobooks",
-                "trustedAsInstructions": false,
-                "notice": "摄影书结构与编排记录（含来源断言）。"
-            }))
-        }
-        _ => Ok(json!({"photobooks": [], "available": false})),
-    }
-}
-
-/// 对比摄影系列（云端+本地）：两个系列的方法/叙事差异。
-pub async fn compare_series(series_a: &str, series_b: &str) -> Result<Value> {
-    let a_results = search_cloud(series_a, None)
-        .await
-        .unwrap_or(json!({"results": []}));
-    let b_results = search_cloud(series_b, None)
-        .await
-        .unwrap_or(json!({"results": []}));
-    let a_series = a_results["results"].as_array().cloned().unwrap_or_default();
-    let b_series = b_results["results"].as_array().cloned().unwrap_or_default();
-    Ok(json!({
-        "seriesA": a_series.first().cloned().unwrap_or(json!(null)),
-        "seriesB": b_series.first().cloned().unwrap_or(json!(null)),
-        "comparisonHint": "对比两个系列的拍摄格式、观看方式、叙事结构差异；基于已验证的博物馆来源断言。",
-        "trustedAsInstructions": false,
-    }))
-}
+#[cfg(test)]
+#[path = "knowledge_tests.rs"]
+mod http_tests;

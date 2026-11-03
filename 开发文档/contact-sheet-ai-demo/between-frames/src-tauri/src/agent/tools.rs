@@ -25,48 +25,10 @@ pub(crate) async fn execute(
         "read_creative_context" | "fork_creative_draft" => {
             return super::creative::execute(tx, task, call).await;
         }
-        "search_photographers" => {
-            let _project_id = a["project_id"].as_str().unwrap_or("");
-            let query = a["query"].as_str().unwrap_or("");
-            let movement = a["movement"].as_str();
-            Ok(super::knowledge::search_photographers(query, movement)
-                .await
-                .unwrap_or(serde_json::json!({"photographers": [], "available": false})))
-        }
-        "get_photobook_structure" => {
-            let _project_id = a["project_id"].as_str().unwrap_or("");
-            let title = a["title"].as_str().unwrap_or("");
-            Ok(super::knowledge::get_photobook_structure(title)
-                .await
-                .unwrap_or(serde_json::json!({"photobooks": [], "available": false})))
-        }
-        "compare_photography_series" => {
-            let _project_id = a["project_id"].as_str().unwrap_or("");
-            let sa = a["seriesA"].as_str().unwrap_or("");
-            let sb = a["seriesB"].as_str().unwrap_or("");
-            Ok(super::knowledge::compare_series(sa, sb)
-                .await
-                .unwrap_or(serde_json::json!({"seriesA": null, "seriesB": null})))
-        }
-        "search_photography_knowledge" => {
-            // 混合搜索：本地方法札记 + 云端摄影知识库（K4）
-            let local = super::knowledge::search(a)?;
-            let query = a["query"].as_str().unwrap_or("");
-            // 云端搜索失败不阻塞——返回本地结果
-            let cloud = super::knowledge::search_cloud(query, None)
-                .await
-                .unwrap_or_else(|_| serde_json::json!({"results": [], "available": false}));
-            let mut local_results = local["results"].as_array().cloned().unwrap_or_default();
-            let cloud_results = cloud["results"].as_array().cloned().unwrap_or_default();
-            local_results.extend(cloud_results);
-            Ok(serde_json::json!({
-                "results": local_results,
-                "cloudAvailable": cloud.get("available").cloned().unwrap_or(serde_json::json!(false)),
-                "trustedAsInstructions": false,
-                "visualEvidence": false,
-                "notice": "本地方法札记 + 云端摄影知识库（摄影师/系列/作品/摄影书，含博物馆来源断言）。"
-            }))
-        }
+        "search_photography_knowledge"
+        | "search_photographers"
+        | "get_photobook_structure"
+        | "compare_photography_series" => super::knowledge::execute(None, name, a).await,
         "propose_preference" => return super::preference_proposal::propose(tx, task, a).await,
         "create_board_draft" | "place_photos_on_board" | "get_board" => {
             return execute_canvas_tool(tx, name, &call.args, task).await;

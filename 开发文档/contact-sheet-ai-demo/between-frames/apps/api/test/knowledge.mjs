@@ -149,6 +149,16 @@ test('K0 knowledge search filters by entity kind', async () => {
   assert.ok(onlyPhotographers.every(r => r.kind === 'photographer'), 'kind 过滤后只应有摄影师');
 });
 
+test('knowledge movement filter is independent from the Chinese name query', async () => {
+  const search = movement => call('/knowledge/search?' + new URLSearchParams({
+    q: '肖尔', kind: 'photographer', movement,
+  }));
+  const matching = await search('New Topographics');
+  assert.deepEqual(matching.map(item => item.title), ['Stephen Shore']);
+  assert.deepEqual(await search('Documentary'), []);
+  assert.deepEqual(await search('New Color & 日本'), []);
+});
+
 test('K0 photographer detail includes series, claims, and sources', async () => {
   const detail = await call('/knowledge/photographers/a1000000-0000-4000-8000-000000000001');
   assert.equal(detail.name_en, 'Stephen Shore');

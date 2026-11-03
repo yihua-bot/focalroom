@@ -566,7 +566,19 @@ impl AgentEngine {
                                 }
                                 None => None,
                             };
-                            handler.agent_tool(id, &call, prefetch.as_ref()).await?;
+                            let knowledge = self
+                                .openai
+                                .as_ref()
+                                .filter(|_| current_task.provider_id == super::PROVIDER_OPENAI)
+                                .and_then(|provider| provider.knowledge_client());
+                            super::execution::tool_with_knowledge(
+                                &self.db,
+                                id,
+                                &call,
+                                prefetch.as_ref(),
+                                knowledge.as_ref(),
+                            )
+                            .await?;
                             (self.notify)(&input.task.project_id);
                             let current = ContextBuilder::build(&self.db, id).await?;
                             if current.task.state != "running" {

@@ -40,11 +40,11 @@ export class KnowledgeService {
       const rows = (await this.pool.query(
         `SELECT id, name_en, name_zh, nationality, movements, review_status
          FROM fr_photographers
-         WHERE ($1::text IS NULL OR EXISTS (SELECT 1 FROM unnest(movements) m WHERE m ILIKE $2))
+         WHERE ($1::text IS NULL OR EXISTS (SELECT 1 FROM unnest(movements) m WHERE m ILIKE $3))
            AND (name_en ILIKE $2 OR coalesce(name_zh,'') ILIKE $2 OR coalesce(biography,'') ILIKE $2
                 OR array_to_string(movements, ' ') ILIKE $2)
          ORDER BY name_en LIMIT 20`,
-        [filterMovement ?? null, like],
+        [filterMovement ?? null, like, filterMovement ? `%${filterMovement}%` : null],
       )).rows;
       for (const row of rows) results.push({
         kind: 'photographer', id: row.id, title: row.name_en,

@@ -108,6 +108,11 @@ impl OpenAiProvider {
         provider.hosted = Some(auth);
         provider
     }
+    pub(crate) fn knowledge_client(&self) -> Option<super::knowledge::KnowledgeClient> {
+        self.hosted
+            .as_ref()
+            .map(|auth| super::knowledge::KnowledgeClient::new(auth.clone(), self.identity()))
+    }
     pub fn is_hosted(&self) -> bool {
         self.hosted.is_some()
     }

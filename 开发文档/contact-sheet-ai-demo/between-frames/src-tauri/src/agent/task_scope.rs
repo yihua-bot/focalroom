@@ -47,6 +47,9 @@ pub const CREATIVE_TOOLS: &[&str] = &[
     "read_creative_context",
     "fork_creative_draft",
     "search_photography_knowledge",
+    "search_photographers",
+    "get_photobook_structure",
+    "compare_photography_series",
     "propose_preference",
 ];
 
@@ -154,10 +157,23 @@ pub async fn bind_creative(
 ) -> Result<()> {
     let mut grant = defaults(task);
     if creative {
+        // 仅托管账户具备云端知识身份；离线会话仍可检索本地方法札记。
+        let cloud_knowledge = super::model_binding::load(tx, &task.id)
+            .await?
+            .is_some_and(|identity| identity.account_id.is_some());
         grant.tools.extend(
             CREATIVE_TOOLS
                 .iter()
                 .filter(|name| canvas || **name != "fork_creative_draft")
+                .filter(|name| {
+                    cloud_knowledge
+                        || !matches!(
+                            **name,
+                            "search_photographers"
+                                | "get_photobook_structure"
+                                | "compare_photography_series"
+                        )
+                })
                 .map(|name| name.to_string()),
         );
     }
