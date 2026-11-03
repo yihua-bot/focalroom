@@ -2,6 +2,7 @@
 // 挂载在项目列表底部；仅在管理员登录时渲染。
 import { useEffect, useState } from 'react';
 import { useAccount } from '../../features/cloud-login/AccountProvider';
+import { invokeCommand } from '../../services/tauriCommand';
 
 interface StatsData {
   registrations: { total: number; verified: number };
@@ -9,31 +10,24 @@ interface StatsData {
   downloadsTotal: number;
 }
 
-/** 从 Rust 后端拿云会话 token（不暴露给前端日志/模型）。 */
-async function cloudToken(): Promise<string | null> {
-  try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const token = await invoke<string | null>('cloud_session_token');
-    return token;
-  } catch { return null; }
-}
-
 export function AdminStats() {
   const account = useAccount();
   const isAdmin = account?.status?.user?.email === 'admin20251018@focroom.cc';
 
   const [data, setData] = useState<StatsData | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!isAdmin) return;
     let active = true;
     const load = async () => {
       try {
-        const token = await cloudToken();
-        const res = await fetch('https://team.focroom.cc/api/v2/stats/overview', {
-          headers: token ? { authorization: `Bearer ${token}` } : {},
-        });
-        if (res.ok && active) setData(await res.json());
-      } catch { /* 网络失败保持上次数据 */ }
+        const next = await invokeCommand<StatsData>('cloud_stats_overview');
+        if (!active) return;
+        setData(next);
+        setError(null);
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : String(e));
+      }
     };
     void load();
     const timer = setInterval(load, 30_000);
@@ -57,5 +51,6 @@ export function AdminStats() {
         <span className="stat-sub">DMG {d?.downloads?.dmg ?? '–'}</span>
       </div>
     </div>
+    {error && <p className="admin-stats-error">{error}</p>}
   </div>;
 }

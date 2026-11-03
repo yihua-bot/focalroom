@@ -768,6 +768,7 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .stat-number{font-size:24px;font-weight:700;color:var(--accent,#a29bfe);font-variant-numeric:tabular-nums}
 .stat-label{font-size:11px;color:var(--text,#e8e8f0)}
 .stat-sub{font-size:10px;color:var(--text2,#777)}
+.admin-stats-error{margin:8px 0 0;font-size:11px;color:var(--danger,#e57373)}
 
 /* 后台导入指示器 */
 .import-banner{position:fixed;bottom:0;left:0;right:0;z-index:900;background:var(--bg-secondary,#1a1a28);border-top:1px solid var(--border,#2a2a40);box-shadow:0 -4px 16px rgba(0,0,0,.3);animation:slide-up .25s ease}

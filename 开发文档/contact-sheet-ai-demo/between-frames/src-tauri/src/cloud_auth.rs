@@ -94,6 +94,10 @@ impl CloudAuth {
             Some((account, value.clone(), std::time::Instant::now()));
         Ok(value)
     }
+    pub async fn stats_overview(&self) -> Result<Value> {
+        let token = self.bearer(&self.origin).await?;
+        self.request("/stats/overview", None, Some(&token)).await
+    }
     pub async fn billing_catalog(&self) -> Result<Value> {
         self.request("/billing/catalog", None, None).await
     }
