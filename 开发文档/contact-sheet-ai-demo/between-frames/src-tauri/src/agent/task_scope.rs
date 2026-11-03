@@ -100,6 +100,25 @@ fn defaults(task: &Task) -> TaskGrant {
     grant
 }
 pub async fn load(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<TaskGrant> {
+    let grant = load_for_projection(tx, task).await?;
+    if grant.tool_contract_sha256 != fingerprint(&ToolRegistry::model_specs_for_grant(&grant))
+        || grant.canvas_prompt_sha256
+            != grant
+                .canvas
+                .then(|| fingerprint(&json!(CANVAS_SYSTEM_PROMPT)))
+    {
+        return Err(AppError::new(
+            "RECOVERY_ERROR",
+            "任务授权与当前范围不一致，请重新委托",
+        ));
+    }
+    Ok(grant)
+}
+/// 历史展示只读取冻结范围；当前提示词/工具兼容性仍由执行入口的 load 严格校验。
+pub(crate) async fn load_for_projection(
+    tx: &mut Transaction<'_, Sqlite>,
+    task: &Task,
+) -> Result<TaskGrant> {
     let row: Option<(String, String)> =
         sqlx::query_as("SELECT project_id,grant_json FROM agent_task_grants WHERE task_id=?")
             .bind(&task.id)
@@ -114,11 +133,6 @@ pub async fn load(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<TaskG
         || grant.photo_ids != task.allowed_photo_ids
         || grant.target_count != task.target_count
         || grant.version != 1
-        || grant.tool_contract_sha256 != fingerprint(&ToolRegistry::model_specs_for_grant(&grant))
-        || grant.canvas_prompt_sha256
-            != grant
-                .canvas
-                .then(|| fingerprint(&json!(CANVAS_SYSTEM_PROMPT)))
     {
         return Err(AppError::new(
             "RECOVERY_ERROR",

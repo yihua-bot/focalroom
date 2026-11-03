@@ -184,7 +184,7 @@ async fn projection_filtered(
                 continue;
             }
         }
-        let grant = super::task_scope::load(&mut tx, &t).await?;
+        let grant = super::task_scope::load_for_projection(&mut tx, &t).await?;
         let boards=sqlx::query_as("SELECT b.* FROM boards b JOIN board_draft_tasks d ON d.board_id=b.id WHERE b.project_id=? AND d.task_id=? ORDER BY b.created_at,b.rowid")
             .bind(&t.project_id).bind(&t.id).fetch_all(&mut *tx).await?;
         let steps = sqlx::query(

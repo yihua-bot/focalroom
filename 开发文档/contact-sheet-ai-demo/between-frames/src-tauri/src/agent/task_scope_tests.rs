@@ -93,6 +93,50 @@ async fn apply(db: &Store, t: &Task, name: &str, args: Value) -> ToolResult {
 }
 
 #[tokio::test]
+async fn historical_grants_remain_visible_after_prompt_or_contract_updates() {
+    let (_temp, db, p, _b, _n) = fixture().await;
+    let old = start(&db, &p, None, true).await;
+    execution::state(&db, &old.id, "cancelled", "历史任务")
+        .await
+        .unwrap();
+    // 在临时库中模拟旧发行版已冻结的授权，随即恢复不可变触发器。
+    let trigger: String = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='agent_grants_no_update'",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    sqlx::query("DROP TRIGGER agent_grants_no_update")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE agent_task_grants SET grant_json=json_set(grant_json,'$.canvasPromptSha256','previous-prompt','$.toolContractSha256','previous-contract') WHERE task_id=?")
+        .bind(&old.id).execute(&db.pool).await.unwrap();
+    sqlx::query(&trigger).execute(&db.pool).await.unwrap();
+    let fresh = start(&db, &p, None, false).await;
+    for _ in 0..2 {
+        let view = super::super::store::projection(&db, &p).await.unwrap();
+        assert!(view.tasks.iter().any(|t| t.id == old.id && t.canvas_task));
+        assert!(view.tasks.iter().any(|t| t.id == fresh.id));
+    }
+    let mut tx = db.pool.begin().await.unwrap();
+    assert_eq!(
+        load(&mut tx, &old).await.unwrap_err().code,
+        "RECOVERY_ERROR"
+    );
+    assert!(load(&mut tx, &fresh).await.is_ok());
+    tx.rollback().await.unwrap();
+    ContextBuilder::build(&db, &fresh.id).await.unwrap();
+    assert!(
+        sqlx::query("UPDATE agent_task_grants SET grant_json='{}' WHERE task_id=?")
+            .bind(&old.id)
+            .execute(&db.pool)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn words_and_feedback_do_not_grant_canvas_tools_and_legacy_tasks_stay_selection_only() {
     let (_temp, db, p, _b, _n) = fixture().await;
     let task = start(&db, &p, None, false).await;
