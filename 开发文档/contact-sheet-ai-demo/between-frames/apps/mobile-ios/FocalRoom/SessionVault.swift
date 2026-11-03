@@ -45,5 +45,5 @@ struct SessionVault {
 
 enum VaultError: LocalizedError {
     case unavailable
-    var errorDescription: String? { "无法访问安全登录凭据，请解锁设备后重试。" }
+    var errorDescription: String? { String(localized: "无法访问安全登录凭据，请解锁设备后重试。") }
 }

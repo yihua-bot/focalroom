@@ -201,11 +201,7 @@ final class FocalRoomUITests: XCTestCase {
         app.textFields["ai.input"].tap()
         let longDraft = String(repeating: "photo ", count: 12)
         app.textFields["ai.input"].typeText(longDraft)
-        let inputField = app.textFields["ai.input"]
-        let typedValue = (inputField.value as? String) ?? "<nil>"
-        XCTAssertEqual(typedValue, longDraft, "取证：输入区实际收到的内容")
-        XCTAssertGreaterThan(inputField.frame.height, 44,
-                             "长消息应自然扩展输入区（取证 frame=\(inputField.frame) 内容长度=\(typedValue.count) 发送可用=\(app.buttons["ai.send"].isEnabled)）")
+        XCTAssertGreaterThan(app.textFields["ai.input"].frame.height, 44, "长消息应自然扩展输入区")
         attachScreenshot(app, name: "Focal AI 长消息输入")
         app.textFields["ai.input"].typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: longDraft.count))
         app.textFields["ai.input"].typeText("本机甲问题")
@@ -228,11 +224,12 @@ final class FocalRoomUITests: XCTestCase {
         XCTAssertTrue(app.buttons["ai.vision.confirm"].waitForExistence(timeout: 10))
         app.buttons["ai.vision.confirm"].tap()
         let answerA = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "本机回复：本机甲问题"))
-        XCTAssertTrue(answerA.firstMatch.waitForExistence(timeout: 10), "流式片段应实时显示")
-        XCTAssertTrue(app.staticTexts["正在输入…"].exists)
+        XCTAssertTrue(app.staticTexts["正在处理"].waitForExistence(timeout: 10), "带照片的请求应以任务进行中的状态显示")
+        XCTAssertFalse(answerA.firstMatch.exists, "任务收尾前不应出现最终文字")
         selectLocalProject(app, id: localSecondID, title: "本机项目乙")
         XCTAssertFalse(answerA.firstMatch.exists, "甲的迟到结果不得进入乙的对话")
-        XCTAssertTrue(app.staticTexts["其他请求处理中"].exists, "切换项目时应说明暂时不能继续发送")
+        // 带照片只能走任务模式，纯文字提问要回到聊天模式才会阻塞等待回执。
+        app.segmentedControls["ai.mode"].buttons["聊天"].firstMatch.tap()
         let canSend = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: app.textFields["ai.input"])
         XCTAssertEqual(XCTWaiter.wait(for: [canSend], timeout: 15), .completed)
         app.textFields["ai.input"].tap()
@@ -240,13 +237,21 @@ final class FocalRoomUITests: XCTestCase {
         let sendReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: app.buttons["ai.send"])
         XCTAssertEqual(XCTWaiter.wait(for: [sendReady], timeout: 15), .completed)
         app.buttons["ai.send"].tap()
-        XCTAssertTrue(app.staticTexts["本机回复：本机乙问题"].waitForExistence(timeout: 20))
+        // 文字请求是阻塞等待回执的，趁它未结束时切回甲，同时核对进度提示与不串项目。
+        selectLocalProject(app, id: localFirstID, title: "本机项目甲")
+        XCTAssertTrue(app.staticTexts["其他请求处理中"].waitForExistence(timeout: 10), "切换项目时应说明暂时不能继续发送")
+        XCTAssertFalse(app.staticTexts["本机回复：本机乙问题"].exists, "乙的迟到结果不得进入甲的对话")
+        selectLocalProject(app, id: localSecondID, title: "本机项目乙")
+        XCTAssertTrue(app.staticTexts["本机回复：本机乙问题"].waitForExistence(timeout: 25))
         XCTAssertFalse(answerA.firstMatch.exists)
         selectLocalProject(app, id: localFirstID, title: "本机项目甲")
-        XCTAssertTrue(answerA.firstMatch.waitForExistence(timeout: 10))
+        // 两种模式是两份列表：任务卡片只在选片任务模式下出现。
+        app.segmentedControls["ai.mode"].buttons["选片任务"].firstMatch.tap()
+        XCTAssertTrue(answerA.firstMatch.waitForExistence(timeout: 20), "任务收尾后应显示完整回执")
         XCTAssertEqual(answerA.count, 1)
         XCTAssertFalse(app.staticTexts["本机回复：本机乙问题"].exists)
         attachScreenshot(app, name: "Focal AI 对话")
+        app.segmentedControls["ai.mode"].buttons["聊天"].firstMatch.tap()
         app.textFields["ai.input"].tap()
         app.textFields["ai.input"].typeText("模拟流中断")
         app.buttons["ai.send"].tap()
@@ -261,6 +266,8 @@ final class FocalRoomUITests: XCTestCase {
         selectLocalProject(app, id: localFirstID, title: "本机项目甲")
         XCTAssertTrue(answerA.firstMatch.waitForExistence(timeout: 10), "重启后本机项目对话须能恢复")
         XCTAssertEqual(answerA.count, 1)
+        // 待确认入口属于聊天模式，重启后模式回到默认的任务，需要先切回去。
+        app.segmentedControls["ai.mode"].buttons["聊天"].firstMatch.tap()
         XCTAssertFalse(app.staticTexts["本机回复：本机乙问题"].exists)
         XCTAssertTrue(app.buttons["ai.resolve"].waitForExistence(timeout: 10), "重启后仍应保留待确认状态")
         XCTAssertFalse(app.staticTexts["尚未完成的片段"].exists)
@@ -1130,5 +1137,221 @@ final class FocalRoomUITests: XCTestCase {
         } else {
             XCTAssertTrue(app.tabBars.buttons["Projects"].waitForExistence(timeout: 8), "英文环境 Tab 应为英文")
         }
+    }
+
+    // 日语/韩语实机走查：登录页、提示弹窗与离线本机资料页都必须跟随系统语言。
+    private struct LocalizationCopy {
+        let loginTitle: String
+        let passwordMode: String
+        let settings: String
+        let noticeTitle: String
+        let gotIt: String
+        let localEntry: String
+        let localTitle: String
+        let emptyProject: String
+        let projectsTitle: String
+        let locale: String
+    }
+
+    @MainActor
+    func testJapaneseLocalizationJourney() throws {
+        try runLocalizationJourney(language: "ja", copy: LocalizationCopy(
+            loginTitle: "ワークスペースにログイン",
+            passwordMode: "パスワードでログイン",
+            settings: "ワークスペース設定",
+            noticeTitle: "ヒント",
+            gotIt: "了解",
+            localEntry: "ローカル資料を見る（オフライン読み取り専用）",
+            localTitle: "本機データ",
+            emptyProject: "このアカウントに本機プロジェクトはありません", projectsTitle: "本機プロジェクト",
+            locale: "ja_JP"))
+    }
+
+    @MainActor
+    func testKoreanLocalizationJourney() throws {
+        try runLocalizationJourney(language: "ko", copy: LocalizationCopy(
+            loginTitle: "워크스페이스에 로그인",
+            passwordMode: "비밀번호 로그인",
+            settings: "워크스페이스 설정",
+            noticeTitle: "알림",
+            gotIt: "확인",
+            localEntry: "로컬 자료 보기(오프라인 읽기 전용)",
+            localTitle: "로컬 라이브러리",
+            emptyProject: "이 계정에 로컬 프로젝트가 없습니다", projectsTitle: "로컬 프로젝트",
+            locale: "ko_KR"))
+    }
+
+    @MainActor
+    private func runLocalizationJourney(language: String, copy: LocalizationCopy) throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", copy.locale]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts[copy.loginTitle].firstMatch.waitForExistence(timeout: 20),
+                      "\(language): 登录标题应使用当前语言")
+        let modeSegment = app.descendants(matching: .any)[copy.passwordMode].firstMatch
+        XCTAssertTrue(modeSegment.waitForExistence(timeout: 5),
+                      "\(language): 登录方式分段应使用当前语言")
+        captureLocalization(app, language: language, name: "1-login")
+
+        app.staticTexts[copy.settings].firstMatch.tap()
+        let server = app.textFields["login.server"]
+        XCTAssertTrue(server.waitForExistence(timeout: 5), "\(language): 服务地址输入框应出现")
+        server.tap()
+        server.typeText("http://127.0.0.1:9")
+        app.staticTexts[copy.loginTitle].firstMatch.tap()
+        let email = app.textFields["login.email"]
+        email.tap()
+        email.typeText("l10n@fr.test")
+        let password = app.secureTextFields["login.password"]
+        password.tap()
+        password.typeText("l10n-journey-2026")
+        app.staticTexts[copy.loginTitle].firstMatch.tap()
+        app.buttons["login.submit"].tap()
+
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 25), "\(language): 登录失败应弹出提示框")
+        XCTAssertEqual(alert.staticTexts.firstMatch.label, copy.noticeTitle,
+                       "\(language): 提示框标题应使用当前语言")
+        captureLocalization(app, language: language, name: "2-notice")
+        app.buttons[copy.gotIt].tap()
+
+        let localEntry = app.buttons["offline.library"]
+        guard localEntry.waitForExistence(timeout: 5) else {
+            captureLocalization(app, language: language, name: "3-no-offline-entry")
+            return
+        }
+        localEntry.tap()
+        XCTAssertTrue(app.navigationBars[copy.localTitle].waitForExistence(timeout: 10),
+                      "\(language): 离线资料页标题应使用当前语言")
+        captureLocalization(app, language: language, name: "3-offline-scopes")
+        let scope = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'offline.scope.'")).firstMatch
+        if scope.waitForExistence(timeout: 5) {
+            scope.tap()
+            // 本机库是否已有项目取决于夹具，两种状态都必须是当前语言。
+            XCTAssertTrue(app.staticTexts[copy.emptyProject].waitForExistence(timeout: 15)
+                          || app.navigationBars[copy.projectsTitle].waitForExistence(timeout: 5),
+                          "\(language): 项目列表应使用当前语言")
+            captureLocalization(app, language: language, name: "4-offline-library")
+        }
+    }
+
+    @MainActor
+    private func captureLocalization(_ app: XCUIApplication, language: String, name: String) {
+        let url = URL(fileURLWithPath: "/tmp/i18n-shots/\(language)-\(name).png")
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? app.screenshot().pngRepresentation.write(to: url)
+        attachScreenshot(app, name: "\(language)-\(name)")
+    }
+
+    // 离线本机资料的深层界面走查：项目列表、选片看板、工具菜单、照片浏览与照片信息。
+    // 这些界面承载了「字符串以 String 传入 Text 而绕过翻译表」的历史问题，需要逐屏留证。
+    private struct OfflineScreenCopy {
+        let localEntry: String
+        let projectsTitle: String
+        let deviceOnly: String
+        let filterAll: String
+        let exportItem: String
+        let undecided: String
+        let keep: String
+        let readOnlyNote: String
+        let infoButton: String
+        let infoTitle: String
+        let sizeRow: String
+        let locationRow: String
+    }
+
+    @MainActor
+    func testJapaneseOfflineLibraryScreens() throws {
+        try runOfflineLibraryScreens(language: "ja", copy: OfflineScreenCopy(
+            localEntry: "ローカル資料を見る（オフライン読み取り専用）",
+            projectsTitle: "本機プロジェクト", deviceOnly: "このiPhoneのみ", filterAll: "すべて", exportItem: "プロジェクトを書き出す…",
+            undecided: "未選択", keep: "保持",
+            readOnlyNote: "オフライン読み取り専用：原本と記録の閲覧・書き出し可。読み込みと選択はログインしてください",
+            infoButton: "写真情報", infoTitle: "端末内の写真情報",
+            sizeRow: "元のサイズ", locationRow: "保存先"), locale: "ja_JP")
+    }
+
+    @MainActor
+    func testEnglishOfflineLibraryScreens() throws {
+        try runOfflineLibraryScreens(language: "en", copy: OfflineScreenCopy(
+            localEntry: "Browse local library (offline read-only)",
+            projectsTitle: "Local projects", deviceOnly: "On this iPhone only", filterAll: "All", exportItem: "Export project…",
+            undecided: "Undecided", keep: "Keep",
+            readOnlyNote: "Offline read-only: browse and export originals and records; sign in to import or select",
+            infoButton: "Photo info", infoTitle: "Local photo details",
+            sizeRow: "Original size", locationRow: "Save location"), locale: "en_US")
+    }
+
+    @MainActor
+    func testKoreanOfflineLibraryScreens() throws {
+        try runOfflineLibraryScreens(language: "ko", copy: OfflineScreenCopy(
+            localEntry: "로컬 자료 보기(오프라인 읽기 전용)",
+            projectsTitle: "로컬 프로젝트",
+            deviceOnly: "이 iPhone에만", filterAll: "전체", exportItem: "프로젝트 내보내기…",
+            undecided: "미정", keep: "보류",
+            readOnlyNote: "오프라인 읽기 전용: 원본과 기록 열람·내보내기 가능. 가져오기와 선별은 로그인 후 이용하세요",
+            infoButton: "사진 정보", infoTitle: "기기 사진 정보",
+            sizeRow: "원본 크기", locationRow: "저장 위치"), locale: "ko_KR")
+    }
+
+    @MainActor
+    private func runOfflineLibraryScreens(language: String, copy: OfflineScreenCopy, locale: String) throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", locale]
+        app.launch()
+
+        let localEntry = app.buttons["offline.library"]
+        XCTAssertTrue(localEntry.waitForExistence(timeout: 20), "\(language): 离线入口应使用当前语言")
+        XCTAssertEqual(localEntry.label, copy.localEntry, "\(language): 离线入口文案未翻译")
+        localEntry.tap()
+
+        let scope = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'offline.scope.'")).firstMatch
+        XCTAssertTrue(scope.waitForExistence(timeout: 10), "\(language): 应列出已登记的本机账户")
+        scope.tap()
+
+        XCTAssertTrue(app.navigationBars[copy.projectsTitle].waitForExistence(timeout: 10),
+                      "\(language): 项目列表标题应使用当前语言且不被截断")
+        let deviceOnly = app.staticTexts[copy.deviceOnly].firstMatch
+        XCTAssertTrue(deviceOnly.waitForExistence(timeout: 15), "\(language): 项目列表分组标题应使用当前语言")
+        captureLocalization(app, language: language, name: "5-project-list")
+
+        let projectCell = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'local.project.'")).firstMatch
+        XCTAssertTrue(projectCell.waitForExistence(timeout: 5), "\(language): 本机项目单元格应存在")
+        projectCell.tap()
+
+        let filter = app.descendants(matching: .any)[copy.filterAll].firstMatch
+        XCTAssertTrue(filter.waitForExistence(timeout: 10), "\(language): 选片筛选分段应使用当前语言")
+        captureLocalization(app, language: language, name: "6-board")
+
+        app.buttons["local.import"].tap()
+        let exportItem = app.buttons[copy.exportItem].firstMatch
+        XCTAssertTrue(exportItem.waitForExistence(timeout: 5), "\(language): 工具菜单项应使用当前语言")
+        captureLocalization(app, language: language, name: "7-tools-menu")
+        // 菜单展开时源按钮不在层级里，用看板上的筛选项收起浮层。
+        app.descendants(matching: .any)[copy.filterAll].firstMatch.tap()
+        XCTAssertTrue(exportItem.waitForNonExistence(timeout: 10), "\(language): 菜单应能收起")
+
+        let photo = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'local.photo.'")).firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 10), "\(language): 照片单元格应存在")
+        photo.tap()
+        XCTAssertTrue(app.staticTexts[copy.readOnlyNote].firstMatch.waitForExistence(timeout: 10),
+                      "\(language): 离线只读提示应使用当前语言")
+        XCTAssertTrue(app.buttons[copy.undecided].firstMatch.waitForExistence(timeout: 5),
+                      "\(language): 选片按钮应使用当前语言")
+        XCTAssertTrue(app.buttons[copy.keep].firstMatch.waitForExistence(timeout: 5),
+                      "\(language): 选片按钮应使用当前语言")
+        captureLocalization(app, language: language, name: "9-viewer")
+
+        app.buttons[copy.infoButton].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars[copy.infoTitle].waitForExistence(timeout: 10),
+                      "\(language): 照片信息页标题应使用当前语言")
+        XCTAssertTrue(app.staticTexts[copy.sizeRow].firstMatch.waitForExistence(timeout: 5),
+                      "\(language): 照片信息字段名应使用当前语言")
+        XCTAssertTrue(app.staticTexts[copy.locationRow].firstMatch.waitForExistence(timeout: 5),
+                      "\(language): 照片信息字段名应使用当前语言")
+        captureLocalization(app, language: language, name: "10-photo-info")
     }
 }

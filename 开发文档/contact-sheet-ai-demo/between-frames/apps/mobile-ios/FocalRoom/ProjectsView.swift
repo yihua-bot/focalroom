@@ -19,8 +19,8 @@ struct ProjectsView: View {
     private var archived: [ProjectSummary] { filtered.filter { $0.state == .ARCHIVED } }
 
     private func projectLabel(_ project: ProjectSummary) -> String {
-        if project.sync_mode == .PRIVATE_SYNCED { return "私有同步" }
-        return project.state == .SHARED ? "可访问" : "准备中"
+        if project.sync_mode == .PRIVATE_SYNCED { return String(localized: "私有同步") }
+        return project.state == .SHARED ? String(localized: "可访问") : String(localized: "准备中")
     }
 
     private func projectCard(_ project: ProjectSummary, note: String) -> some View {
@@ -47,7 +47,7 @@ struct ProjectsView: View {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("继续创作").font(.system(.largeTitle, design: .serif).weight(.medium))
-                    Text(model.offline ? "离线缓存 · 联网后核实最新权限与版本" : "从一条线索，回到你的作品。")
+                    Text(model.offline ? String(localized: "离线缓存 · 联网后核实最新权限与版本") : String(localized: "从一条线索，回到你的作品。"))
                         .font(.subheadline).foregroundStyle(.secondary)
                 }.padding(.top, 20)
                 if let localLibrary = model.localLibrary {
@@ -55,8 +55,8 @@ struct ProjectsView: View {
                 }
                 Text("已同步项目").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 if active.isEmpty {
-                    EmptyWorkspace(title: query.isEmpty ? "还没有可访问的项目" : "未找到项目",
-                                   detail: "可在 Mac 开启项目共享，或使用已有邀请加入项目。")
+                    EmptyWorkspace(title: query.isEmpty ? String(localized: "还没有可访问的项目") : String(localized: "未找到项目"),
+                                   detail: String(localized: "可在 Mac 开启项目共享，或使用已有邀请加入项目。"))
                 }
                 ForEach(active) { project in
                     NavigationLink {
@@ -72,7 +72,7 @@ struct ProjectsView: View {
                     Text("已归档").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     ForEach(archived) { project in
                         HStack(spacing: 12) {
-                            projectCard(project, note: "已归档")
+                            projectCard(project, note: String(localized: "已归档"))
                             Button("恢复") {
                                 Task {
                                     guard let text = await model.archiveCloudProject(project.id, archive: false) else { return }
@@ -93,14 +93,14 @@ struct ProjectsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { sheet = .createLocal } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("新建本机项目").accessibilityIdentifier("local.create")
+                    .accessibilityLabel(String(localized: "新建本机项目")).accessibilityIdentifier("local.create")
                     .disabled(model.busy || model.localLibrary == nil)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { sheet = .syncCenter } label: {
                     Image(systemName: model.offline ? "wifi.slash" : "arrow.triangle.2.circlepath")
                 }
-                .accessibilityLabel("同步中心").accessibilityIdentifier("sync.center")
+                .accessibilityLabel(String(localized: "同步中心")).accessibilityIdentifier("sync.center")
             }
         }
         .sheet(item: $sheet) { value in
@@ -126,7 +126,7 @@ struct ProjectLibraryView: View {
             cloudPhotoCell(photo)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(photo.filename)，\(photo.selection.title)")
+        .accessibilityLabel("\(photo.filename)，\(localizedText(photo.selection.title))")
         .accessibilityIdentifier("photo.\(photo.id)")
     }
 
@@ -162,16 +162,16 @@ struct ProjectLibraryView: View {
     }
     private var dangerTitle: String {
         switch danger {
-        case .delete: return "删除云端项目"
-        case .unarchive: return "取消归档"
-        default: return "归档项目"
+        case .delete: return String(localized: "删除云端项目")
+        case .unarchive: return String(localized: "取消归档")
+        default: return String(localized: "归档项目")
         }
     }
     private var dangerMessage: String {
         switch danger {
-        case .delete: return "仅项目所有者可删除；含注销审计或共享协作的项目会被拒绝并说明原因。本机原片不受影响。"
-        case .unarchive: return "恢复后项目重新出现在默认列表，内容与协作记录不变。"
-        default: return "归档不影响项目内容与协作记录，只是从默认列表收起到「已归档」分组，可随时恢复。"
+        case .delete: return String(localized: "仅项目所有者可删除；含注销审计或共享协作的项目会被拒绝并说明原因。本机原片不受影响。")
+        case .unarchive: return String(localized: "恢复后项目重新出现在默认列表，内容与协作记录不变。")
+        default: return String(localized: "归档不影响项目内容与协作记录，只是从默认列表收起到「已归档」分组，可随时恢复。")
         }
     }
 
@@ -215,7 +215,7 @@ struct ProjectLibraryView: View {
     }
 
     private var unavailableState: some View {
-        EmptyWorkspace(title: "暂时无法打开项目", detail: "检查网络和项目权限后重试。")
+        EmptyWorkspace(title: String(localized: "暂时无法打开项目"), detail: String(localized: "检查网络和项目权限后重试。"))
             .safeAreaInset(edge: .bottom) {
                 Button("重新读取") { Task { await model.openProject(projectID) } }.padding()
             }
@@ -223,11 +223,11 @@ struct ProjectLibraryView: View {
 
     private var galleryHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(model.snapshot?.title ?? "图库").font(.title2.weight(.medium))
+            Text(model.snapshot?.title ?? String(localized: "图库")).font(.title2.weight(.medium))
             HStack {
                 Text("\(model.snapshot?.snapshot.photos.count ?? 0) 张照片")
                 Spacer()
-                Label(model.offline ? "离线缓存" : "已同步",
+                Label(model.offline ? String(localized: "离线缓存") : String(localized: "已同步"),
                       systemImage: model.offline ? "wifi.slash" : "checkmark.icloud")
             }.font(.caption).foregroundStyle(.secondary)
             if let date = model.cachedAt, model.offline {
@@ -246,7 +246,7 @@ struct ProjectLibraryView: View {
             VStack(alignment: .leading, spacing: 18) {
                 galleryHeader
                 PendingBanner(model: model)
-                if photos.isEmpty { EmptyWorkspace(title: "没有符合条件的照片", detail: "选择其他选片状态查看。", symbol: "photo") }
+                if photos.isEmpty { EmptyWorkspace(title: String(localized: "没有符合条件的照片"), detail: String(localized: "选择其他选片状态查看。"), symbol: "photo") }
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(photos) { photo in
                         cloudPhotoLink(photo)
@@ -268,7 +268,7 @@ struct ProjectLibraryView: View {
             Label("版本历史", systemImage: "clock.arrow.circlepath")
         }.accessibilityIdentifier("history.entry")
         Button { danger = model.snapshot?.state == .ARCHIVED ? .unarchive : .archive } label: {
-            Label(model.snapshot?.state == .ARCHIVED ? "取消归档…" : "归档项目…", systemImage: "archivebox")
+            Label(model.snapshot?.state == .ARCHIVED ? String(localized: "取消归档…") : String(localized: "归档项目…"), systemImage: "archivebox")
         }.disabled(!ready).accessibilityIdentifier("project.archive")
         Button(role: .destructive) { danger = .delete } label: {
             Label("删除云端项目…", systemImage: "trash")
@@ -296,15 +296,15 @@ struct ProjectLibraryView: View {
                     ProjectSyncView(model: model, projectID: projectID)
                 } label: { Image(systemName: "lock.icloud") }
                 .disabled(model.offline || model.snapshot?.project_id != projectID)
-                .accessibilityLabel("同步与共享").accessibilityIdentifier("project.sync.entry")
+                .accessibilityLabel(String(localized: "同步与共享")).accessibilityIdentifier("project.sync.entry")
                 Button { toolDestination = .research } label: {
                     Image(systemName: "text.book.closed")
                 }
                 .disabled(model.offline || model.snapshot?.project_id != projectID)
-                .accessibilityLabel("研究资料").accessibilityIdentifier("research.entry")
+                .accessibilityLabel(String(localized: "研究资料")).accessibilityIdentifier("research.entry")
                 // 提案/历史/授权收入菜单：五个直排在 iPhone 上溢出到"更多"导致入口不可达。
                 Menu { toolsMenuContent } label: { Image(systemName: "ellipsis.circle") }
-                .accessibilityLabel("更多工具").accessibilityIdentifier("project.tools.menu")
+                .accessibilityLabel(String(localized: "更多工具")).accessibilityIdentifier("project.tools.menu")
             }
         }
         .confirmationDialog(dangerTitle, isPresented: dangerPresented, titleVisibility: .visible) {
@@ -332,9 +332,9 @@ struct PendingBanner: View {
     var body: some View {
         if let pending = model.pending {
             VStack(alignment: .leading, spacing: 10) {
-                Label(pending.state == .queued ? "选片待提交" : pending.state == .rejected ? "选片未提交成功" : "选片结果待确认",
+                Label(pending.state == .queued ? String(localized: "选片待提交") : pending.state == .rejected ? String(localized: "选片未提交成功") : String(localized: "选片结果待确认"),
                       systemImage: "clock.arrow.circlepath").font(.subheadline.weight(.semibold))
-                Text("本机意图：\(pending.command.payload.selection_state.title)。当前显示仍为上次确认的正式版本。")
+                Text("本机意图：\(localizedText(pending.command.payload.selection_state.title))。当前显示仍为上次确认的正式版本。")
                     .font(.caption).foregroundStyle(.secondary)
                 if pending.state == .rejected {
                     Button("放弃这次未生效的选片并刷新") { Task { await model.discardRejected() } }
@@ -360,7 +360,7 @@ struct PhotoPreview: View {
 
     var body: some View {
         AsyncPhotoPreview(photoID: photoID, identity: identity, fit: fit,
-                          failureText: model.offline ? "联网后读取预览" : "点按重试") {
+                          failureText: model.offline ? String(localized: "联网后读取预览") : String(localized: "点按重试")) {
             try await model.image(photoID: photoID)
         }
     }
@@ -394,7 +394,7 @@ struct PhotoViewer: View {
     var body: some View {
         Group {
             if model.selectedProjectID != projectID {
-                EmptyWorkspace(title: "当前项目已切换", detail: "返回项目后继续查看照片。", symbol: "photo")
+                EmptyWorkspace(title: String(localized: "当前项目已切换"), detail: String(localized: "返回项目后继续查看照片。"), symbol: "photo")
             } else {
                 viewerContent
             }
@@ -417,7 +417,7 @@ struct PhotoViewer: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .onChange(of: currentID) { _, _ in transform = PhotoTransform() }
-            .accessibilityLabel("照片查看区。左滑排除，右滑保留，上滑待选；放大后可拖动查看细节")
+            .accessibilityLabel(String(localized: "照片查看区。左滑排除，右滑保留，上滑待选；放大后可拖动查看细节"))
             .accessibilityIdentifier("cloud.viewer.photo")
             .frame(maxWidth: .infinity)
             .aspectRatio(3 / 4, contentMode: .fit)
@@ -427,7 +427,7 @@ struct PhotoViewer: View {
             // 底部信息与选片区布局优先：防止上方页式容器膨胀把按钮挤出屏幕。
             VStack(spacing: 14) {
                 HStack {
-                    Text(photo?.filename ?? "照片").font(.caption).lineLimit(1)
+                    Text(photo?.filename ?? String(localized: "照片")).font(.caption).lineLimit(1)
                     Spacer()
                     Text("授权派生预览").font(.caption2).foregroundStyle(.secondary)
                 }
@@ -450,8 +450,8 @@ struct PhotoViewer: View {
                         }
                         .disabled(!model.canSelect)
                         .accessibilityIdentifier("selection.\(selection.rawValue)")
-                        .accessibilityValue(photo?.selection == selection ? "已选" : "未选")
-                        .accessibilityValue(photo?.selection == selection ? "已选" : "未选")
+                        .accessibilityValue(photo?.selection == selection ? String(localized: "已选") : String(localized: "未选"))
+                        .accessibilityValue(photo?.selection == selection ? String(localized: "已选") : String(localized: "未选"))
                     }
                 }
                 if model.snapshot?.principal.permitsSelection != true {
@@ -464,27 +464,27 @@ struct PhotoViewer: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { compare = true } label: { Image(systemName: "rectangle.split.2x1") }
                     .disabled((model.snapshot?.snapshot.photos.count ?? 0) < 2)
-                    .accessibilityLabel("双图比较").accessibilityIdentifier("photo.compare")
-                Button { info = true } label: { Image(systemName: "info.circle") }.accessibilityLabel("照片信息")
+                    .accessibilityLabel(String(localized: "双图比较")).accessibilityIdentifier("photo.compare")
+                Button { info = true } label: { Image(systemName: "info.circle") }.accessibilityLabel(String(localized: "照片信息"))
             }
         }
         .sheet(isPresented: $compare) {
             if model.snapshot?.project_id == projectID {
                 PhotoComparisonView(photos: model.snapshot?.snapshot.photos.map { ComparisonPhoto(id: $0.id, filename: $0.filename) } ?? [],
-                                    initialPhotoID: currentID, sourceLabel: "授权派生预览 · 非原片 100% 像素") { id in
+                                    initialPhotoID: currentID, sourceLabel: String(localized: "授权派生预览 · 非原片 100% 像素")) { id in
                     guard model.selectedProjectID == projectID else { throw APIError.permissionDenied }
                     return try await model.image(photoID: id)
                 }
-            } else { EmptyWorkspace(title: "项目访问已变化", detail: "关闭比较后重新打开项目。") }
+            } else { EmptyWorkspace(title: String(localized: "项目访问已变化"), detail: String(localized: "关闭比较后重新打开项目。")) }
         }
         .sheet(isPresented: $info) {
             NavigationStack {
                 List {
-                    LabeledContent("文件", value: photo?.filename ?? "")
-                    LabeledContent("选片", value: photo?.selection.title ?? "")
-                    LabeledContent("显示来源", value: "云端授权 JPEG 派生预览")
+                    LabeledContent(LocalizedStringKey("文件")) { Text(photo?.filename ?? "") }
+                    LabeledContent(LocalizedStringKey("选片")) { Text(LocalizedStringKey(photo?.selection.title ?? "")) }
+                    LabeledContent(LocalizedStringKey("显示来源")) { Text(String(localized: "云端授权 JPEG 派生预览")) }
                     if let descriptor = model.snapshot?.previews.first(where: { $0.photo_id == currentID }) {
-                        LabeledContent("预览尺寸", value: "\(descriptor.width) × \(descriptor.height)")
+                        LabeledContent(LocalizedStringKey("预览尺寸")) { Text(verbatim: "\(descriptor.width) × \(descriptor.height)") }
                     }
                     Text("此预览不代表原片 100% 像素或印前签样。专业色彩与原片检视请使用 Mac。")
                         .font(.footnote).foregroundStyle(.secondary)

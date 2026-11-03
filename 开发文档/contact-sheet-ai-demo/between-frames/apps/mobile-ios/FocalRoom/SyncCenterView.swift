@@ -10,8 +10,8 @@ struct SyncCenterView: View {
         NavigationStack {
             List {
                 Section {
-                    Label(model.offline ? "当前离线：以下缓存可继续浏览，待提交操作联网后核对"
-                                        : "在线：以下为本机缓存状态，打开项目时自动更新",
+                    Label(model.offline ? String(localized: "当前离线：以下缓存可继续浏览，待提交操作联网后核对")
+                                        : String(localized: "在线：以下为本机缓存状态，打开项目时自动更新"),
                           systemImage: model.offline ? "wifi.slash" : "checkmark.icloud")
                         .font(.subheadline).foregroundStyle(.secondary)
                         .accessibilityIdentifier("sync.status")
@@ -51,8 +51,8 @@ struct SyncCenterView: View {
                 }
             }
             Text(row.revision >= 0
-                 ? "缓存于 \(row.savedAt.formatted(date: .abbreviated, time: .shortened)) · 版本 \(row.revision)"
-                 : "有待提交操作，项目资料未缓存")
+                 ? String(localized: "缓存于 \(row.savedAt.formatted(date: .abbreviated, time: .shortened)) · 版本 \(row.revision)")
+                 : String(localized: "有待提交操作，项目资料未缓存"))
                 .font(.caption).foregroundStyle(.secondary)
             if let pending = row.pending {
                 HStack(spacing: 12) {
@@ -78,9 +78,9 @@ struct SyncCenterView: View {
 
     private func pendingBadge(_ state: PendingSelection.State) -> String {
         switch state {
-        case .queued: return "选片待提交"
-        case .unknown: return "结果待确认"
-        case .rejected: return "选片未提交成功"
+        case .queued: return String(localized: "选片待提交")
+        case .unknown: return String(localized: "结果待确认")
+        case .rejected: return String(localized: "选片未提交成功")
         }
     }
 }

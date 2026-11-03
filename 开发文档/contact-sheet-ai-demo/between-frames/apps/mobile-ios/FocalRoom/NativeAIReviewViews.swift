@@ -20,7 +20,7 @@ struct NativePreferenceView: View {
                 }.font(.subheadline).disabled(model.busy)
             } else {
                 Text(preference.statement).font(.subheadline)
-                Text(preference.state == "saved" ? "已保存" : "未用于当前偏好").font(.caption).foregroundStyle(.secondary)
+                Text(preference.state == "saved" ? String(localized: "已保存") : String(localized: "未用于当前偏好")).font(.caption).foregroundStyle(.secondary)
             }
         }.padding(14).background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
             .onAppear { statement = preference.statement }
@@ -45,7 +45,7 @@ struct NativeDraftReviewView: View {
                 Section {
                     Text(draft.title).font(.headline)
                     Text(draft.summary).font(.subheadline)
-                    Text(draft.stale ? "来源项目已更新。草案保留供参考，请重新委托后再采纳。" : "勾选要采纳的建议。确认后才会改变本机选片，或创建待审批的云端提案。")
+                    Text(draft.stale ? String(localized: "来源项目已更新。草案保留供参考，请重新委托后再采纳。") : String(localized: "勾选要采纳的建议。确认后才会改变本机选片，或创建待审批的云端提案。"))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if let reviewError { Section { Text(reviewError).font(.footnote).foregroundStyle(.red) } }
@@ -72,16 +72,16 @@ struct NativeDraftReviewView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(model.selectedLocalProjectID != nil ? "采纳勾选项" : "提交为提案") { confirming = true }
+                    Button(model.selectedLocalProjectID != nil ? String(localized: "采纳勾选项") : String(localized: "提交为提案")) { confirming = true }
                         .disabled(!canApply).accessibilityIdentifier("ai.review.apply")
                 }
             }
             .onAppear { selected = Set(draft.items.map(\.photo_id)) }
             .confirmationDialog("确认采纳 \(selected.count) 项建议？", isPresented: $confirming, titleVisibility: .visible) {
-                Button(model.selectedLocalProjectID != nil ? "采纳到本机项目" : "创建云端提案") {
+                Button(model.selectedLocalProjectID != nil ? String(localized: "采纳到本机项目") : String(localized: "创建云端提案")) {
                     Task {
                         if await model.applyNativeDraft(draft, selectedIDs: selected) { dismiss() }
-                        else { reviewError = model.notice ?? "尚未采纳，请刷新项目后重试。"; model.notice = nil }
+                        else { reviewError = model.notice ?? String(localized: "尚未采纳，请刷新项目后重试。"); model.notice = nil }
                     }
                 }
                 Button("取消", role: .cancel) {}
@@ -90,10 +90,10 @@ struct NativeDraftReviewView: View {
     }
     private func actionTitle(_ action: String, position: Int) -> String {
         switch action {
-        case "keep": model.selectedLocalProjectID != nil ? "保留 · 第 \(position + 1) 位" : "加入作品序列 · 第 \(position + 1) 位"
-        case "reject": model.selectedLocalProjectID != nil ? "排除" : "移出作品序列"
-        case "undecided": model.selectedLocalProjectID != nil ? "待选" : "移出作品序列"
-        default: "需要核对的建议"
+        case "keep": model.selectedLocalProjectID != nil ? String(localized: "保留 · 第 \(position + 1) 位") : String(localized: "加入作品序列 · 第 \(position + 1) 位")
+        case "reject": model.selectedLocalProjectID != nil ? String(localized: "排除") : String(localized: "移出作品序列")
+        case "undecided": model.selectedLocalProjectID != nil ? String(localized: "待选") : String(localized: "移出作品序列")
+        default: String(localized: "需要核对的建议")
         }
     }
 }
@@ -143,12 +143,12 @@ struct NativeBoardReviewView: View {
             }
             .task {
                 do { nodes = try await model.nativeBoardNodes(board) }
-                catch { self.error = "无法读取这份草案，可能已经更新，请关闭后刷新。" }
+                catch { self.error = String(localized: "无法读取这份草案，可能已经更新，请关闭后刷新。") }
             }
             .confirmationDialog("将草案作为新的一组内容添加到本机画布？", isPresented: $confirming, titleVisibility: .visible) {
                 Button("确认添加") { Task {
                     if await model.applyNativeBoard(board, nodes: nodes) { dismiss() }
-                    else { error = model.notice ?? "尚未添加，请刷新草案后重试。"; model.notice = nil }
+                    else { error = model.notice ?? String(localized: "尚未添加，请刷新草案后重试。"); model.notice = nil }
                 } }
                 Button("取消", role: .cancel) {}
             }
@@ -185,7 +185,7 @@ private struct NativeBoardLayout: View {
                             NativePhotoPreview(model: model, coreID: asset)
                         } else if node.nodeType == "text", let content = node.contentJson,
                                   let object = try? JSONSerialization.jsonObject(with: Data(content.utf8)) as? [String: Any] {
-                            Text(object["text"] as? String ?? "文字").font(.system(size: max(7, 14 * scale)))
+                            Text(object["text"] as? String ?? String(localized: "文字")).font(.system(size: max(7, 14 * scale)))
                         } else { Image(systemName: "square.dashed").foregroundStyle(.secondary) }
                     }
                     .frame(width: max(1, node.width * scale), height: max(1, node.height * scale))

@@ -24,11 +24,11 @@ struct GrantsView: View {
     var body: some View {
         Group {
             if model.snapshot == nil {
-                EmptyWorkspace(title: "选择一个项目", detail: "查看与管理项目成员的访问权限。", symbol: "person.crop.circle.badge.checkmark")
+                EmptyWorkspace(title: String(localized: "选择一个项目"), detail: String(localized: "查看与管理项目成员的访问权限。"), symbol: "person.crop.circle.badge.checkmark")
             } else if !canManage {
-                EmptyWorkspace(title: "仅所有者或管理员可管理权限", detail: "当前角色为只读。", symbol: "lock.shield")
+                EmptyWorkspace(title: String(localized: "仅所有者或管理员可管理权限"), detail: String(localized: "当前角色为只读。"), symbol: "lock.shield")
             } else if grants.isEmpty {
-                EmptyWorkspace(title: "还没有被授权的成员", detail: "通过账户页的邀请功能添加协作者后，在这里调整他们的项目权限。", symbol: "person.badge.plus")
+                EmptyWorkspace(title: String(localized: "还没有被授权的成员"), detail: String(localized: "通过账户页的邀请功能添加协作者后，在这里调整他们的项目权限。"), symbol: "person.badge.plus")
             } else {
                 List {
                     Section {
@@ -128,9 +128,9 @@ struct GrantsView: View {
 
     private func roleTitle(_ role: String) -> String {
         switch role {
-        case "EDITOR": return "编辑"
-        case "REVIEWER": return "审阅者"
-        case "VIEWER": return "观察者"
+        case "EDITOR": return String(localized: "编辑")
+        case "REVIEWER": return String(localized: "审阅者")
+        case "VIEWER": return String(localized: "观察者")
         default: return role
         }
     }
@@ -138,8 +138,8 @@ struct GrantsView: View {
     private func privilegeSuffix(_ grant: ProjectGrant) -> String {
         guard grant.role == "EDITOR" else { return "" }
         var parts: [String] = []
-        if grant.can_approve { parts.append("可审批") }
-        if grant.can_edit_formal { parts.append("可正式编辑") }
+        if grant.can_approve { parts.append(String(localized: "可审批")) }
+        if grant.can_edit_formal { parts.append(String(localized: "可正式编辑")) }
         return parts.isEmpty ? "" : " · " + parts.joined(separator: "、")
     }
 }

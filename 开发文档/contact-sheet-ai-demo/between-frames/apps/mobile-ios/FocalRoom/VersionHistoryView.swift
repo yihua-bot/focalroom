@@ -17,10 +17,10 @@ struct VersionHistoryView: View {
             if loading {
                 ProgressView("读取版本历史…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
-                EmptyWorkspace(title: "暂时无法读取", detail: error, symbol: "clock.arrow.circlepath")
+                EmptyWorkspace(title: String(localized: "暂时无法读取"), detail: error, symbol: "clock.arrow.circlepath")
                 Button("重试") { Task { await load() } }.padding()
             } else if versions.isEmpty {
-                EmptyWorkspace(title: "还没有版本记录", detail: "正式修改会推进项目版本。", symbol: "clock.arrow.circlepath")
+                EmptyWorkspace(title: String(localized: "还没有版本记录"), detail: String(localized: "正式修改会推进项目版本。"), symbol: "clock.arrow.circlepath")
             } else {
                 List {
                     Section("选择两个版本对比") {
@@ -56,8 +56,8 @@ struct VersionHistoryView: View {
 
     private func diffSection(_ diff: VersionDiff) -> some View {
         Section("版本 \(diff.from.revision) → \(diff.to.revision) 差异") {
-            entityRows("照片", diff.photos)
-            entityRows("序列", diff.sequences)
+            entityRows(String(localized: "照片"), diff.photos)
+            entityRows(String(localized: "序列"), diff.sequences)
         }
     }
 
@@ -67,11 +67,11 @@ struct VersionHistoryView: View {
             Text("\(title)：无变化").font(.footnote).foregroundStyle(.secondary)
         } else {
             if !entity.added.isEmpty {
-                LabeledContent("\(title) 新增", value: entity.added.joined(separator: "、"))
+                LabeledContent { Text(verbatim: entity.added.joined(separator: "、")) } label: { Text("\(title) 新增") }
                     .font(.footnote)
             }
             if !entity.removed.isEmpty {
-                LabeledContent("\(title) 移除", value: entity.removed.joined(separator: "、"))
+                LabeledContent { Text(verbatim: entity.removed.joined(separator: "、")) } label: { Text("\(title) 移除") }
                     .font(.footnote)
             }
             ForEach(entity.changed) { entity_ in
@@ -79,7 +79,7 @@ struct VersionHistoryView: View {
                     Text("\(title) \(entity_.id.prefix(12))").font(.footnote.weight(.semibold))
                     ForEach(entity_.fields.keys.sorted(), id: \.self) { field in
                         if let change = entity_.fields[field] {
-                            Text("\(field)：\(change.before?.displayText ?? "空") → \(change.after?.displayText ?? "空")")
+                            Text("\(field)：\(localizedText(change.before?.displayText ?? "空")) → \(localizedText(change.after?.displayText ?? "空"))")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -104,7 +104,7 @@ struct VersionHistoryView: View {
                 do {
                     diff = try await model.versionDiff(projectID: projectID, from: from, to: to)
                 } catch {
-                    diffError = "差异读取失败，请重试。"
+                    diffError = String(localized: "差异读取失败，请重试。")
                 }
             }
         }
@@ -118,7 +118,7 @@ struct VersionHistoryView: View {
             selected = []
             diff = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = localizedText(error.localizedDescription)
         }
     }
 }

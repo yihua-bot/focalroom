@@ -19,7 +19,9 @@ assert.ok(device);
 const devices = JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', '-j'], { encoding: 'utf8' }));
 assert.ok(Object.values(devices.devices).flat().some(item => item.udid === device && item.name.startsWith('FocalRoom Shared AI ')));
 let installed = false;
-try { execFileSync('xcrun', ['simctl', 'get_app_container', device, 'studio.focalroom.ios.development', 'data'], { stdio: 'ignore' }); installed = true; } catch {}
+try { execFileSync('xcrun', ['simctl', 'get_app_container', device, 'studio.focalroom.ios.development', 'data'], { stdio: 'ignore' }); installed = true; } catch {
+  // 新建的隔离模拟器尚未安装应用，查询失败是预期情况。
+}
 assert.equal(installed, false, '仅安装到本轮新建的独立模拟器');
 const root = fileURLToPath(new URL('..', import.meta.url));
 const evidence = join(directory, 'ai-unification-evidence');

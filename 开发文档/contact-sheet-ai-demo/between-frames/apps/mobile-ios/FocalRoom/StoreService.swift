@@ -36,7 +36,7 @@ final class StoreService {
 
     func loadProducts() async {
         guard !Self.productIDs.isEmpty else {
-            notice = "内购产品尚未在 App Store Connect 登记。"
+            notice = String(localized: "内购产品尚未在 App Store Connect 登记。")
             return
         }
         loading = true
@@ -44,9 +44,9 @@ final class StoreService {
         do {
             products = try await Product.products(for: Self.productIDs)
             await refreshPurchases()
-            if products.isEmpty { notice = "App Store 暂未返回产品，请稍后重试。" }
+            if products.isEmpty { notice = String(localized: "App Store 暂未返回产品，请稍后重试。") }
         } catch {
-            notice = "无法连接 App Store，请检查网络后重试。"
+            notice = String(localized: "无法连接 App Store，请检查网络后重试。")
         }
     }
 
@@ -60,19 +60,19 @@ final class StoreService {
                 if case .verified(let transaction) = verification {
                     purchasedProductIDs.insert(transaction.productID)
                     await transaction.finish()
-                    notice = "购买成功；权益以服务端核验为准。"
+                    notice = String(localized: "购买成功；权益以服务端核验为准。")
                 } else {
-                    notice = "购买凭据未能通过校验，未解锁权益。"
+                    notice = String(localized: "购买凭据未能通过校验，未解锁权益。")
                 }
             case .userCancelled:
                 break
             case .pending:
-                notice = "购买等待批准（如家长同意），完成后自动解锁。"
+                notice = String(localized: "购买等待批准（如家长同意），完成后自动解锁。")
             @unknown default:
-                notice = "未知的购买结果，未解锁权益。"
+                notice = String(localized: "未知的购买结果，未解锁权益。")
             }
         } catch {
-            notice = "购买未完成：\(error.localizedDescription)"
+            notice = String(localized: "购买未完成：\(localizedText(error.localizedDescription))")
         }
     }
 
@@ -82,9 +82,9 @@ final class StoreService {
         do {
             try await AppStore.sync()
             await refreshPurchases()
-            notice = purchasedProductIDs.isEmpty ? "没有可恢复的购买。" : "已恢复 \(purchasedProductIDs.count) 项购买。"
+            notice = purchasedProductIDs.isEmpty ? String(localized: "没有可恢复的购买。") : String(localized: "已恢复 \(purchasedProductIDs.count) 项购买。")
         } catch {
-            notice = "恢复失败，请稍后重试。"
+            notice = String(localized: "恢复失败，请稍后重试。")
         }
     }
 

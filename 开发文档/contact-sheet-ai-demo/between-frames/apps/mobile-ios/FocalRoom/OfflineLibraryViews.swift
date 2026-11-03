@@ -18,7 +18,7 @@ struct OfflineLibraryView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 22) {
                             if library.projects.isEmpty {
-                                EmptyWorkspace(title: "此账户没有本机项目", detail: "登录后导入的照片会保留在本机目录。", symbol: "internaldrive")
+                                EmptyWorkspace(title: String(localized: "此账户没有本机项目"), detail: String(localized: "登录后导入的照片会保留在本机目录。"), symbol: "internaldrive")
                             } else {
                                 LocalProjectsSection(library: library, model: model, query: "")
                             }
@@ -34,7 +34,7 @@ struct OfflineLibraryView: View {
                     }
                     .padding(24)
                 } else if scopes.isEmpty {
-                    EmptyWorkspace(title: "没有可离线访问的资料", detail: "登录过至少一次后，本机资料才可离线查看。", symbol: "internaldrive")
+                    EmptyWorkspace(title: String(localized: "没有可离线访问的资料"), detail: String(localized: "登录过至少一次后，本机资料才可离线查看。"), symbol: "internaldrive")
                 } else {
                     List {
                         ForEach(scopes) { scope in
@@ -51,7 +51,7 @@ struct OfflineLibraryView: View {
                     }
                 }
             }
-            .navigationTitle(library == nil ? "本机资料" : "离线本机项目")
+            .navigationTitle(library == nil ? String(localized: "本机资料") : String(localized: "离线本机项目"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -72,7 +72,7 @@ struct OfflineLibraryView: View {
         scopesError = nil
         switch LocalScopeIndex.load(root: root) {
         case .success(let entries): scopes = entries
-        case .failure: scopesError = "本机账户索引无法读取，可能是文件损坏或空间不足。重新登录一次可重建索引。"
+        case .failure: scopesError = String(localized: "本机账户索引无法读取，可能是文件损坏或空间不足。重新登录一次可重建索引。")
         }
     }
 

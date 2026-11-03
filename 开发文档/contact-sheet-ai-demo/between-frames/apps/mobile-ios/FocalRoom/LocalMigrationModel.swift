@@ -8,8 +8,8 @@ enum MigrationError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noWorkspace: "当前账户没有可发布项目的工作区权限。"
-        case .cannotAbandonCompleted: "云端已完成提交，不能取消；请继续完成迁云确认。"
+        case .noWorkspace: String(localized: "当前账户没有可发布项目的工作区权限。")
+        case .cannotAbandonCompleted: String(localized: "云端已完成提交，不能取消；请继续完成迁云确认。")
         }
     }
 }
@@ -155,8 +155,8 @@ final class LocalMigrationModel {
     }
 
     private func message(_ error: Error) -> String {
-        if let value = error as? LocalizedError, let description = value.errorDescription { return description }
-        return "迁云暂时无法继续，请检查网络后重试；已上传的部分不会重复。"
+        if let value = error as? LocalizedError, let description = value.errorDescription { return localizedText(description) }
+        return String(localized: "迁云暂时无法继续，请检查网络后重试；已上传的部分不会重复。")
     }
 
     func shutdown() {

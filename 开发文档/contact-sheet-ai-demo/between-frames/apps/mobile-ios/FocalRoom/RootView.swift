@@ -35,7 +35,7 @@ struct RootView: View {
                 if account {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { accountPresented = true } label: { Image(systemName: "person.crop.circle") }
-                            .accessibilityLabel("账户")
+                            .accessibilityLabel(String(localized: "账户"))
                     }
                 }
             }
@@ -115,7 +115,7 @@ private struct LoginView: View {
                 }
                 .padding(22).background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
 
-                DisclosureGroup("工作空间设置") {
+                DisclosureGroup(String(localized: "工作空间设置")) {
                     VStack(alignment: .leading, spacing: 8) {
                         TextField("https://你的服务地址", text: $model.address)
                             .textContentType(.URL).keyboardType(.URL)
@@ -130,7 +130,7 @@ private struct LoginView: View {
                 Button(action: submit) {
                     HStack {
                         Spacer()
-                        if model.busy { ProgressView().tint(.black) } else { Text(mode == .password ? "进入 FocalRoom" : "验证并进入").fontWeight(.semibold) }
+                        if model.busy { ProgressView().tint(.black) } else { Text(mode == .password ? String(localized: "进入 FocalRoom") : String(localized: "验证并进入")).fontWeight(.semibold) }
                         Spacer()
                     }.frame(minHeight: 52)
                 }
@@ -212,7 +212,7 @@ struct ProjectContext: View {
         Button { choosingProject = true } label: {
             HStack(spacing: 8) {
                 Image(systemName: "folder")
-                Text(model.currentProjectTitle ?? "选择项目").lineLimit(1)
+                Text(model.currentProjectTitle ?? String(localized: "选择项目")).lineLimit(1)
                 Image(systemName: "chevron.down").font(.caption)
                 Spacer()
                 if model.loadingProject { ProgressView() }
@@ -225,15 +225,15 @@ struct ProjectContext: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("project.context")
-        .accessibilityLabel("选择项目")
-        .accessibilityValue(model.currentProjectTitle ?? "尚未选择")
+        .accessibilityLabel(String(localized: "选择项目"))
+        .accessibilityValue(model.currentProjectTitle ?? String(localized: "尚未选择"))
         // 不在这里用 model.busy 整体禁用：请求进行中也要能打开选择面板浏览（列表项各自禁用）。
         .sheet(isPresented: $choosingProject) { ProjectChooser(model: model) }
         if let project = model.selectedLocalProject, let library = model.localLibrary {
             HStack {
                 Text("\(project.photos.count) 张本机照片").foregroundStyle(.secondary)
                 Spacer()
-                NavigationLink("打开本机图库") {
+                NavigationLink(String(localized: "打开本机图库")) {
                     LocalProjectView(library: library, migration: model.migration, model: model, projectID: project.id)
                 }.accessibilityIdentifier("project.context.local.library")
             }.font(.caption).padding(.horizontal).padding(.bottom, 10)
@@ -274,9 +274,9 @@ private struct ProjectChooser: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(project.title).foregroundStyle(.primary)
-                                    Text(project.state == .ARCHIVED ? "已归档，可在项目页恢复后打开"
-                                        : project.state != .SHARED ? "正在准备，暂不可打开"
-                                        : project.sync_mode == .PRIVATE_SYNCED ? "私有同步" : "已同步")
+                                    Text(project.state == .ARCHIVED ? String(localized: "已归档，可在项目页恢复后打开")
+                                        : project.state != .SHARED ? String(localized: "正在准备，暂不可打开")
+                                        : project.sync_mode == .PRIVATE_SYNCED ? String(localized: "私有同步") : String(localized: "已同步"))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
@@ -288,7 +288,7 @@ private struct ProjectChooser: View {
                         .accessibilityIdentifier("project.choose.\(project.id)")
                     }
                     if cloudProjects.isEmpty {
-                        Text(query.isEmpty ? "还没有已同步项目。可直接选择本机项目，或在项目页新建。" : "未找到匹配的已同步项目")
+                        Text(query.isEmpty ? String(localized: "还没有已同步项目。可直接选择本机项目，或在项目页新建。") : String(localized: "未找到匹配的已同步项目"))
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("project.choose.empty")
                     }
@@ -354,12 +354,12 @@ private struct AccountView: View {
                 Section("账户") {
                     Text(model.credentials?.user.name ?? "")
                     Text(model.credentials?.user.email ?? "").foregroundStyle(.secondary)
-                    NavigationLink("隐私与数据") { AccountDataView(model: model) }
+                    NavigationLink(String(localized: "隐私与数据")) { AccountDataView(model: model) }
                         .accessibilityIdentifier("account.data.entry")
                 }
                 Section("工作空间") {
                     Text(model.address).font(.footnote).textSelection(.enabled)
-                    Label(model.offline ? "离线缓存，权限待联网核实" : "在线", systemImage: model.offline ? "wifi.slash" : "checkmark.circle")
+                    Label(model.offline ? String(localized: "离线缓存，权限待联网核实") : String(localized: "在线"), systemImage: model.offline ? "wifi.slash" : "checkmark.circle")
                     Button("邀请成员加入工作区") { inviteSheet = true }
                         .disabled(model.offline || model.busy)
                         .accessibilityIdentifier("workspace.invite.entry")
@@ -376,7 +376,7 @@ private struct AccountView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(device.name)
-                                    Text(device.platform == "ios" ? "iPhone · \(device.current ? "当前设备" : "其他登录")" : "\(device.platform) · \(device.current ? "当前设备" : "其他登录")")
+                                    Text(device.platform == "ios" ? String(localized: "iPhone · \(device.current ? String(localized: "当前设备") : String(localized: "其他登录"))") : String(localized: "\(device.platform) · \(device.current ? String(localized: "当前设备") : String(localized: "其他登录"))"))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
@@ -394,7 +394,7 @@ private struct AccountView: View {
                 }
                 Section {
                     if let catalog = model.billingCatalogState {
-                        Text(catalog.salesAvailable ? "订阅服务已开放。" : "订阅暂未开放；以下为当前服务能力说明。")
+                        Text(catalog.salesAvailable ? String(localized: "订阅服务已开放。") : String(localized: "订阅暂未开放；以下为当前服务能力说明。"))
                             .font(.footnote).foregroundStyle(.secondary)
                         ForEach(catalog.plans) { plan in
                             VStack(alignment: .leading, spacing: 4) {
@@ -527,7 +527,7 @@ struct InviteSheet: View {
                             copied = false
                         }
                     } label: {
-                        if model.busy { ProgressView() } else { Text(inviteURL == nil ? "创建邀请链接" : "重新创建") }
+                        if model.busy { ProgressView() } else { Text(inviteURL == nil ? String(localized: "创建邀请链接") : String(localized: "重新创建")) }
                     }
                     .disabled(!email.contains("@") || model.busy)
                     .accessibilityIdentifier("workspace.invite.create")
@@ -540,7 +540,7 @@ struct InviteSheet: View {
                     Section("邀请链接") {
                         Text(url.absoluteString).font(.footnote).textSelection(.enabled)
                             .accessibilityIdentifier("workspace.invite.url")
-                        Button(copied ? "已复制" : "复制链接") {
+                        Button(copied ? String(localized: "已复制") : String(localized: "复制链接")) {
                             UIPasteboard.general.string = url.absoluteString
                             copied = true
                         }

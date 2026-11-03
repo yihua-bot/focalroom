@@ -98,7 +98,7 @@ final class LocalLibraryModel {
             await reload()
             onProjectDeleted?(projectID)
         } catch LocalLibraryError.projectFrozen {
-            notice = "迁云进行中的项目暂不能删除；请等迁云完成或放弃迁云后再试。"
+            notice = String(localized: "迁云进行中的项目暂不能删除；请等迁云完成或放弃迁云后再试。")
         } catch {
             if active { notice = message(error) }
         }
@@ -121,10 +121,10 @@ final class LocalLibraryModel {
 
     private func startImport(projectID: String, count: Int, source: @escaping (Int) async throws -> (URL, Bool, String?)) {
         guard active, !isImporting, count > 0, !readOnly else {
-            if readOnly { notice = "离线只读模式不能导入照片；请登录后操作。" }
+            if readOnly { notice = String(localized: "离线只读模式不能导入照片；请登录后操作。") }
             return
         }
-        guard count <= 20 else { notice = "每批最多导入 20 张照片。"; return }
+        guard count <= 20 else { notice = String(localized: "每批最多导入 20 张照片。"); return }
         isImporting = true
         importProjectID = projectID
         completed = 0; total = count; imported = 0; duplicates = 0; failures = []; wasCancelled = false
@@ -151,7 +151,7 @@ final class LocalLibraryModel {
                 } catch {
                     guard active else { return }
                     completed += 1
-                    failures.append("第 \(index + 1) 张：\(message(error))")
+                    failures.append(String(localized: "第 \(index + 1) 张：\(message(error))"))
                 }
             }
             if active { await reload() }
@@ -163,7 +163,7 @@ final class LocalLibraryModel {
     func prepareExport(projectID: String) async {
         guard active, !isExporting, exportTarget == nil else { return }
         guard let project = projects.first(where: { $0.id == projectID }), !project.photos.isEmpty else {
-            notice = "项目没有可导出的照片。"
+            notice = String(localized: "项目没有可导出的照片。")
             return
         }
         isExporting = true
@@ -202,10 +202,10 @@ final class LocalLibraryModel {
                 try? FileManager.default.removeItem(at: target.staging)
                 return destination
             }.value
-            notice = "已导出 \(target.count) 份原片与 manifest.json 到「\(destination.lastPathComponent)」。"
+            notice = String(localized: "已导出 \(target.count) 份原片与 manifest.json 到「\(destination.lastPathComponent)」。")
         } catch {
             try? FileManager.default.removeItem(at: target.staging)
-            notice = "导出未能完成，请重试并确认目标文件夹可写。"
+            notice = String(localized: "导出未能完成，请重试并确认目标文件夹可写。")
         }
     }
 
@@ -215,7 +215,7 @@ final class LocalLibraryModel {
         let cleaned = title.replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ":", with: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let base = "FocalRoom-" + (cleaned.isEmpty ? "项目" : String(cleaned.prefix(60))) + "-" + formatter.string(from: Date())
+        let base = "FocalRoom-" + (cleaned.isEmpty ? String(localized: "项目") : String(cleaned.prefix(60))) + "-" + formatter.string(from: Date())
         var candidate = folder.appendingPathComponent(base, isDirectory: true)
         var index = 2
         while FileManager.default.fileExists(atPath: candidate.path) {
@@ -229,7 +229,7 @@ final class LocalLibraryModel {
     @discardableResult
     func select(projectID: String, photoID: String, selection: Selection) async -> Bool {
         guard active, !isSaving else { return false }
-        if readOnly { notice = "离线只读模式不修改选片；请登录后操作。"; return false }
+        if readOnly { notice = String(localized: "离线只读模式不修改选片；请登录后操作。"); return false }
         isSaving = true
         defer { isSaving = false }
         do {
@@ -255,8 +255,8 @@ final class LocalLibraryModel {
     }
 
     private func message(_ error: Error) -> String {
-        if let error = error as? LocalLibraryError { return error.localizedDescription }
-        return "无法读写所选文件，请检查可用空间或重新选择；云端照片可先下载到设备后重试。"
+        if let error = error as? LocalLibraryError { return localizedText(error.localizedDescription) }
+        return String(localized: "无法读写所选文件，请检查可用空间或重新选择；云端照片可先下载到设备后重试。")
     }
 
     func image(projectID: String, photoID: String) async throws -> UIImage {

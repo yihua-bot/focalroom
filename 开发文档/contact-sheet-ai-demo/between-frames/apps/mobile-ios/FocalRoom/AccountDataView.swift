@@ -27,7 +27,7 @@ struct AccountDataView: View {
                     .accessibilityIdentifier("account.privacy.policy")
             }
             Section("账号安全") {
-                NavigationLink("设置密码") { SetPasswordView(model: model) }
+                NavigationLink(String(localized: "设置密码")) { SetPasswordView(model: model) }
                     .accessibilityIdentifier("account.password.entry")
             }
             Section("取回账号资料") {
@@ -38,7 +38,7 @@ struct AccountDataView: View {
                         busy = true
                         defer { busy = false }
                         do { bytes = try await model.exportAccountData(); exporting = true }
-                        catch { notice = error.localizedDescription }
+                        catch { notice = localizedText(error.localizedDescription) }
                     }
                 }.disabled(busy || model.offline).accessibilityIdentifier("account.data.export")
             }
@@ -63,9 +63,9 @@ struct AccountDataView: View {
                       defaultFilename: "FocalRoom-account-data") { result in
             bytes = Data()
             switch result {
-            case .success: notice = "账号资料已导出。"
+            case .success: notice = String(localized: "账号资料已导出。")
             case .failure(let error):
-                if (error as NSError).code != NSUserCancelledError { notice = "导出未完成，请重新选择保存位置。" }
+                if (error as NSError).code != NSUserCancelledError { notice = String(localized: "导出未完成，请重新选择保存位置。") }
             }
         }
         .alert("永久删除此账号？", isPresented: $confirming) {
@@ -76,7 +76,7 @@ struct AccountDataView: View {
                     busy = true
                     defer { busy = false }
                     do { try await model.eraseAccount(password: secret, email: email) }
-                    catch { notice = "未获得删除完成回执，请先核对状态，勿反复提交。\n" + error.localizedDescription }
+                    catch { notice = String(localized: "未获得删除完成回执，请先核对状态，勿反复提交。\n") + localizedText(error.localizedDescription) }
                 }
             }
         } message: { Text("账号将无法恢复。本机原片保留，共享协作与财务审计按上述说明保留。") }
@@ -120,7 +120,7 @@ struct SetPasswordView: View {
                 }
                 .disabled(!valid || model.busy)
                 .accessibilityIdentifier("password.save")
-                if saved, model.notice?.contains("已更新") == true {
+                if saved, model.notice?.contains(String(localized: "已更新")) == true {
                     Label("已保存", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                         .accessibilityIdentifier("password.saved")

@@ -115,11 +115,11 @@ struct LocalProjectView: View {
         switch danger {
         case .deleteProject:
             if project?.migration?.phase == .migrated {
-                return "该项目已迁云：云端副本保留，本机原片与预览将永久删除且不可恢复。"
+                return String(localized: "该项目已迁云：云端副本保留，本机原片与预览将永久删除且不可恢复。")
             }
-            return "将永久删除 \(project?.photos.count ?? 0) 张原片、预览与选片记录，且不可恢复。没有其他项目引用的照片文件会一并清除。"
+            return String(localized: "将永久删除 \(project?.photos.count ?? 0) 张原片、预览与选片记录，且不可恢复。没有其他项目引用的照片文件会一并清除。")
         default:
-            return "将上传每张照片的 2048 像素浏览预览（不含 GPS 与私密备注）到你的工作区，原片保留在本机。迁云期间本机写入冻结，完成后项目以云端为权威，可在 Mac 与其他设备续接。"
+            return String(localized: "将上传每张照片的 2048 像素浏览预览（不含 GPS 与私密备注）到你的工作区，原片保留在本机。迁云期间本机写入冻结，完成后项目以云端为权威，可在 Mac 与其他设备续接。")
         }
     }
 
@@ -137,7 +137,7 @@ struct LocalProjectView: View {
         }
         .navigationTitle("本机图库").navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
-        .confirmationDialog(danger == .deleteProject ? "删除项目" : "迁云到工作区",
+        .confirmationDialog(danger == .deleteProject ? String(localized: "删除项目") : String(localized: "迁云到工作区"),
                             isPresented: dangerPresented, titleVisibility: .visible) {
             if danger == .deleteProject {
                 Button("永久删除项目与原片", role: .destructive) {
@@ -190,7 +190,7 @@ struct LocalProjectView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(project?.title ?? "本机项目").font(.title2.weight(.medium))
+            Text(project?.title ?? String(localized: "本机项目")).font(.title2.weight(.medium))
             Label(statusLabel, systemImage: statusSymbol).font(.caption).foregroundStyle(.secondary)
                 .accessibilityIdentifier("local.project.status")
             Picker("选片筛选", selection: $filter) {
@@ -202,7 +202,7 @@ struct LocalProjectView: View {
                     Button {
                         let allSelected = visiblePhotos.allSatisfy { picked.contains($0.id) }
                         picked = allSelected ? [] : Set(visiblePhotos.map(\.id))
-                    } label: { Text(visiblePhotos.allSatisfy { picked.contains($0.id) } ? "取消全选" : "全选本组") }
+                    } label: { Text(visiblePhotos.allSatisfy { picked.contains($0.id) } ? String(localized: "取消全选") : String(localized: "全选本组")) }
                         .accessibilityIdentifier("local.share.selectall")
                     Spacer()
                     if sharing { ProgressView() }
@@ -245,7 +245,7 @@ struct LocalProjectView: View {
                 guard !images.isEmpty else { return }
                 layer = .share(SharePack(images: images))
             } catch {
-                library.notice = "部分照片读取失败，已停止分享。"
+                library.notice = String(localized: "部分照片读取失败，已停止分享。")
             }
         }
     }
@@ -253,7 +253,7 @@ struct LocalProjectView: View {
     private var photoGrid: some View {
         Group {
             if project?.photos.isEmpty != false {
-                EmptyWorkspace(title: "导入第一组照片", detail: "从相册或文件选择照片，原文件保持不变。", symbol: "photo.on.rectangle.angled")
+                EmptyWorkspace(title: String(localized: "导入第一组照片"), detail: String(localized: "从相册或文件选择照片，原文件保持不变。"), symbol: "photo.on.rectangle.angled")
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
                     ForEach(visiblePhotos) { photo in
@@ -286,8 +286,8 @@ struct LocalProjectView: View {
             }
         }
         .accessibilityLabel(selecting
-            ? "\(photo.filename)，\(picked.contains(photo.id) ? "已勾选" : "未勾选")"
-            : "\(photo.filename)，\(photo.selection.title)")
+            ? String(localized: "\(photo.filename)，\(picked.contains(photo.id) ? String(localized: "已勾选") : String(localized: "未勾选"))")
+            : String(localized: "\(photo.filename)，\(localizedText(photo.selection.title))"))
         .accessibilityIdentifier("local.photo.\(photo.id)")
     }
 
@@ -321,7 +321,7 @@ struct LocalProjectView: View {
                 Button("删除项目…", systemImage: "trash", role: .destructive) { danger = .deleteProject }
                     .disabled(library.isDeleting || library.readOnly)
                     .accessibilityIdentifier("local.delete")
-                Button(selecting ? "完成选择" : "选择并分享…", systemImage: "checkmark.circle") {
+                Button(selecting ? String(localized: "完成选择") : String(localized: "选择并分享…"), systemImage: "checkmark.circle") {
                     selecting.toggle()
                     if !selecting { picked = [] }
                 }
@@ -335,7 +335,7 @@ struct LocalProjectView: View {
                 }
             } label: { Image(systemName: "plus") }
                 .disabled(library.isImporting || library.isExporting)
-                .accessibilityLabel("导入照片").accessibilityIdentifier("local.import")
+                .accessibilityLabel(String(localized: "导入照片")).accessibilityIdentifier("local.import")
         }
     }
 
@@ -436,11 +436,11 @@ private struct ImportProgressView: View {
                 Button("取消剩余导入") { library.cancelImport() }
             }
             if library.isImporting || library.wasCancelled || !library.failures.isEmpty {
-                Text("\(library.wasCancelled ? "已取消，完成项已保留。" : "")已导入 \(library.imported) 张，跳过重复 \(library.duplicates) 张，失败 \(library.failures.count) 张。")
+                Text("\(library.wasCancelled ? String(localized: "已取消，完成项已保留。") : "")已导入 \(library.imported) 张，跳过重复 \(library.duplicates) 张，失败 \(library.failures.count) 张。")
                     .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("local.import.summary")
             }
             if !library.failures.isEmpty {
-                DisclosureGroup("查看失败原因") { ForEach(library.failures, id: \.self) { Text($0).font(.caption) } }
+                DisclosureGroup(String(localized: "查看失败原因")) { ForEach(library.failures, id: \.self) { Text($0).font(.caption) } }
             }
         }
     }
@@ -483,7 +483,7 @@ private struct LocalPhotoViewer: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .onChange(of: currentID) { _, _ in transform = PhotoTransform() }
-            .accessibilityLabel("照片查看区，左右滑动切换照片")
+            .accessibilityLabel(String(localized: "照片查看区，左右滑动切换照片"))
             .accessibilityIdentifier("local.viewer.photo")
             .frame(maxWidth: .infinity)
             .aspectRatio(3 / 4, contentMode: .fit)
@@ -492,7 +492,7 @@ private struct LocalPhotoViewer: View {
             .layoutPriority(1)
             VStack(spacing: 12) {
                 HStack {
-                    Text(photo?.filename ?? "照片").font(.caption).lineLimit(1)
+                    Text(photo?.filename ?? String(localized: "照片")).font(.caption).lineLimit(1)
                     Spacer()
                     Text("本机 sRGB 预览").font(.caption2).foregroundStyle(.secondary)
                 }
@@ -510,14 +510,14 @@ private struct LocalPhotoViewer: View {
                             .frame(maxWidth: .infinity, minHeight: 48)
                             .background(photo?.selection == selection ? .white.opacity(0.2) : .white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
                             .disabled(library.isSaving || project?.migration != nil || library.readOnly).accessibilityIdentifier("local.selection.\(selection.rawValue)")
-                            .accessibilityValue(photo?.selection == selection ? "已选" : "未选")
+                            .accessibilityValue(photo?.selection == selection ? String(localized: "已选") : String(localized: "未选"))
                     }
                 }
                 if library.readOnly {
                     Text("离线只读：原片与记录可浏览、可导出；导入与选片请登录后操作")
                         .font(.caption).foregroundStyle(.secondary)
                 } else if project?.migration != nil {
-                    Text(project?.migration?.phase == .migrated ? "已迁云：选片请在云端项目进行" : "迁云进行中：本机选片已冻结")
+                    Text(project?.migration?.phase == .migrated ? String(localized: "已迁云：选片请在云端项目进行") : String(localized: "迁云进行中：本机选片已冻结"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.padding(18)
@@ -527,13 +527,13 @@ private struct LocalPhotoViewer: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { compare = true } label: { Image(systemName: "rectangle.split.2x1") }
-                    .disabled((project?.photos.count ?? 0) < 2).accessibilityLabel("双图比较").accessibilityIdentifier("local.compare")
-                Button { info = true } label: { Image(systemName: "info.circle") }.accessibilityLabel("照片信息")
+                    .disabled((project?.photos.count ?? 0) < 2).accessibilityLabel(String(localized: "双图比较")).accessibilityIdentifier("local.compare")
+                Button { info = true } label: { Image(systemName: "info.circle") }.accessibilityLabel(String(localized: "照片信息"))
             }
         }
         .sheet(isPresented: $compare) {
             PhotoComparisonView(photos: project?.photos.map { ComparisonPhoto(id: $0.id, filename: $0.filename) } ?? [],
-                                initialPhotoID: currentID, sourceLabel: "本机 sRGB 派生预览 · 原片未改动") {
+                                initialPhotoID: currentID, sourceLabel: String(localized: "本机 sRGB 派生预览 · 原片未改动")) {
                 try await library.image(projectID: projectID, photoID: $0)
             }
         }
@@ -541,12 +541,12 @@ private struct LocalPhotoViewer: View {
             NavigationStack {
                 List {
                     if let photo {
-                        LabeledContent("文件", value: photo.filename)
-                        LabeledContent("原始尺寸", value: "\(photo.width) × \(photo.height)")
-                        LabeledContent("原始方向", value: "\(photo.orientation)")
-                        LabeledContent("格式", value: photo.format.uppercased())
-                        LabeledContent("源色彩配置", value: photo.profileName ?? "未标注")
-                        LabeledContent("保存位置", value: "仅此 iPhone")
+                        LabeledContent(LocalizedStringKey("文件")) { Text(photo.filename) }
+                        LabeledContent(LocalizedStringKey("原始尺寸")) { Text(verbatim: "\(photo.width) × \(photo.height)") }
+                        LabeledContent(LocalizedStringKey("原始方向")) { Text(verbatim: "\(photo.orientation)") }
+                        LabeledContent(LocalizedStringKey("格式")) { Text(photo.format.uppercased()) }
+                        LabeledContent(LocalizedStringKey("源色彩配置")) { Text(photo.profileName ?? String(localized: "未标注")) }
+                        LabeledContent(LocalizedStringKey("保存位置")) { Text(String(localized: "仅此 iPhone")) }
                         Text("原始 SHA256\n\(photo.sourceSHA256)").font(.caption.monospaced()).textSelection(.enabled)
                         Text("浏览预览为 sRGB JPEG，不代表原片像素或专业印前签样。")
                             .font(.footnote).foregroundStyle(.secondary)

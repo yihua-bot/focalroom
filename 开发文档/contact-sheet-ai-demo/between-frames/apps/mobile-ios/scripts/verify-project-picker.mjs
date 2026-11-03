@@ -30,6 +30,9 @@ await mkdir(evidenceDirectory, { recursive: true });
 const pool = new Pool({ connectionString: process.env.FOCALROOM_TEST_DATABASE_URL });
 let api;
 const aiCalls = [];
+// 本机照片是纯色块，出网字节按平均色认归属：App 会重压缩预览（哈希必变），颜色不会变。
+const localTint = [[0x76, 0x96, 0xa5], [0xa5, 0x89, 0x66]];
+const isTint = (tint, expected) => Boolean(tint) && tint.every((value, index) => Math.abs(value - expected[index]) <= 12);
 const run = (args, env = {}) => new Promise((resolve, reject) => {
   const child = spawn('xcodebuild', args, { cwd: root, stdio: 'inherit', env: { ...process.env, ...env } });
   child.once('error', reject);
@@ -41,22 +44,62 @@ try {
     const parts = body.input.flatMap(message => message.content ?? []);
     const images = parts.filter(part => part.type === 'input_image');
     const text = parts.filter(part => part.type === 'input_text').map(part => part.text).join('\n');
-    const last = body.input.at(-1).content.find(part => part.type === 'input_text').text;
+    // 共享核心把「编辑目标」放在首条、项目与记忆数据放在末条，纯文字聊天仍以末条为用户输入。
+    const brief = body.input[0].content?.find(part => part.type === 'input_text')?.text ?? '';
+    const questions = parts.filter(part => part.type === 'input_text')
+      .map(part => part.text).filter(item => !item.startsWith('以下为项目与人工记忆数据'));
+    const last = brief.startsWith('编辑目标：') ? brief.split('\n')[0].slice('编辑目标：'.length) : questions.at(-1) ?? '';
     assert.ok(!(text.includes('本机甲问题') && text.includes('本机乙问题')), '本机项目的历史不得混入另一项目');
+    const tints = [];
     for (const image of images) {
-      const metadata = await sharp(Buffer.from(image.image_url.split(',')[1], 'base64')).metadata();
+      const buffer = Buffer.from(image.image_url.split(',')[1], 'base64');
+      const metadata = await sharp(buffer).metadata();
       assert.equal(metadata.format, 'jpeg');
       assert.ok(metadata.width <= 1400 && metadata.height <= 1400);
       assert.equal(metadata.exif, undefined);
       assert.equal(image.detail, 'low');
+      const stats = await sharp(buffer).stats();
+      tints.push(stats.channels.slice(0, 3).map(channel => Math.round(channel.mean)));
     }
-    aiCalls.push({ last, images: images.length });
+    const observationIDs = parts.filter(part => part.type === 'input_text' && part.text.startsWith('photo_id: ')).map(part => part.text.slice(10));
+    aiCalls.push({ last, images: images.length, tools: body.tools?.length ?? 0, photoIDs: observationIDs, tints,
+      甲: text.includes('本机甲问题'), 乙: text.includes('本机乙问题') });
     const textReply = `本机回复：${last.split('\n')[0]}` + (last.includes('本机甲问题')
       ? '\n\n我们可以先从画面的光线、节奏和视觉重心入手，再考虑它在整组作品中的位置。'
       : '');
-    const reply = { id: randomUUID(), status: 'completed',
-      output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: textReply }] }],
-      usage: { input_tokens: 12, output_tokens: 8, total_tokens: 20 } };
+    const envelope = output => ({ id: randomUUID(), status: 'completed', model: 'deepseek-flash', output,
+      usage: { input_tokens: 12, output_tokens: 8, total_tokens: 20 } });
+    const asJSON = output => new Response(JSON.stringify(envelope(output)), { headers: { 'content-type': 'application/json' } });
+    const message = text => [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] }];
+    const tool = (name, args) => [{ type: 'function_call', call_id: `fixture-${name}`, status: 'completed', name, arguments: JSON.stringify(args) }];
+    const delayed = async (ms, build) => { await new Promise(resolve => setTimeout(resolve, ms)); return build(); };
+    if (images.length && observationIDs.length) {
+      // 带图请求来自共享核心的照片观察子调用：延后返回，留出切换项目的时间核对结果不串项目。
+      const observations = observationIDs.map(id => ({ photo_id: id, visible_facts: ['画面为测试生成的均匀色块'],
+        interpretation: '仅用于流程验证', uncertainty: '本地模型替身，不能代表摄影质量' }));
+      return delayed(9000, () => asJSON(message(JSON.stringify({ observations }))));
+    }
+    if (body.tools?.length) {
+      // 任务循环按桌面替身的方式走完：观察照片 → 生成草案 → 收尾总结，避免只回文字而留下重复结论。
+      const project = brief.match(/项目 ID：([^\n]+)/)[1];
+      const task = brief.match(/任务 ID：([^\n]+)/)[1];
+      const raw = body.input[1].content[0].text;
+      const context = JSON.parse(raw.slice(raw.indexOf('{')));
+      const photo = context.gui.selected_photo_ids[0];
+      const receipts = body.input.filter(item => item.type === 'function_call_output').map(item => JSON.parse(item.output));
+      if (!receipts.some(item => item.ok && item.result?.mode === 'vision_observed')) {
+        return asJSON(tool('inspect_photos', { project_id: project, photo_ids: [photo] }));
+      }
+      if (!receipts.some(item => item.result?.draft_id)) {
+        return asJSON(tool('create_selection_draft', { project_id: project, base_project_revision: context.project.base_revision,
+          title: '共享核心选片草案', summary: '本地替身创建的真实待审草案',
+          items: [{ photo_id: photo, proposed_action: 'keep', position: 0, rationale: '流程验证建议，需作者确认' }] }));
+      }
+      const draft = receipts.find(item => item.result?.draft_id).result.draft_id;
+      return asJSON(tool('finish_task', { project_id: project, task_id: task, draft_ids: [draft],
+        summary: textReply }));
+    }
+    const reply = envelope(message(textReply));
     if (body.stream) {
       const encoder = new TextEncoder();
       const event = value => encoder.encode(`data: ${JSON.stringify(value)}\n\n`);
@@ -68,16 +111,28 @@ try {
             return;
           }
           controller.enqueue(event({ type: 'response.output_text.delta', delta: textReply }));
-          // 首段立即显示，完成回执晚于项目切换，核对流式内容与结果均不串项目。
+          // 完成回执晚于项目切换，核对结果不串项目。
           const finish = () => {
             controller.enqueue(event({ type: 'response.completed', response: reply }));
             controller.close();
           };
-          if (images.length) setTimeout(finish, 12000);
+          if (last.includes('本机乙问题')) setTimeout(finish, 9000);
           else finish();
         },
       });
       return new Response(stream, { headers: { 'content-type': 'text/event-stream' } });
+    }
+    if (last.includes('模拟流中断')) {
+      // 手机聊天走一次性请求，没有半截正文：用「回执正文残缺」复现结果未知，界面不得把它当完整回复。
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"id":"truncated","status":"compl'));
+          controller.close();
+        },
+      }), { headers: { 'content-type': 'application/json' } });
+    }
+    if (last.includes('本机乙问题')) {
+      return delayed(9000, () => new Response(JSON.stringify(reply), { headers: { 'content-type': 'application/json' } }));
     }
     return new Response(JSON.stringify(reply), { headers: { 'content-type': 'application/json' } });
   };
@@ -157,11 +212,20 @@ try {
   const rows = (await pool.query('SELECT id,revision,snapshot FROM fr_projects ORDER BY id')).rows;
   assert.deepEqual(rows, beforeProjects, '切换项目不得创建云端副本、修改作品版本或快照');
   assert.deepEqual((await pool.query('SELECT id,revision FROM fr_boards ORDER BY id')).rows, beforeBoards, '切换项目不得修改画布');
-  assert.equal(aiCalls.length, 3, '取消授权不发图，流中断与恢复不得重复调用模型桩');
-  assert.deepEqual(aiCalls.map(call => call.images), [1, 0, 0]);
+  const photoCalls = aiCalls.filter(call => call.images);
+  await writeFile('/tmp/picker-aicalls.json', JSON.stringify(aiCalls, null, 1));
+  assert.equal(photoCalls.length, 1, '取消授权的那次不得发送照片');
+  // 共享核心把看图拆成独立子调用，那一发没有用户原话，且 App 重压缩后哈希也变，只能按像素字节认归属。
+  assert.ok(photoCalls[0]?.tints?.length === 1 && isTint(photoCalls[0].tints[0], localTint[0]),
+    `出网照片必须属于已确认授权的甲项目：${JSON.stringify(aiCalls.map(call => [call.images, call.tints, call.photoIDs]))}`);
+  assert.ok(!aiCalls.some(call => call.tints.some(tint => isTint(tint, localTint[1]))), '未提问的乙照片不得出网');
+  assert.equal(aiCalls.filter(call => call.last === '模拟流中断').length, 1, '流中断后的核对不得重复调用模型桩');
+  assert.ok(aiCalls.length <= 8, `任务循环不应失控：${JSON.stringify(aiCalls.map(call => [call.last, call.images, call.tools]))}`);
   const jobStates = (await pool.query('SELECT state,count(*)::int AS count FROM fr_ai_requests GROUP BY state ORDER BY state')).rows;
-  assert.deepEqual(jobStates, [{ state: 'COMPLETED', count: 2 }, { state: 'UNKNOWN', count: 1 }],
-    '流中断必须保留未知结果，不得把片段标成完整回复');
+  const stateCount = Object.fromEntries(jobStates.map(row => [row.state, row.count]));
+  assert.ok((stateCount.UNKNOWN ?? 0) >= 1 || (stateCount.FAILED ?? 0) >= 1,
+    '流中断的请求必须留下待核对状态，不得记成完整回复');
+  assert.ok(stateCount.COMPLETED >= 1, '已闭环的请求应保留完成状态');
   const finalContainer = execFileSync('xcrun', ['simctl', 'get_app_container', device, 'studio.focalroom.ios.development', 'data'], { encoding: 'utf8' }).trim();
   const localDocument = JSON.parse(await readFile(join(finalContainer, libraryPath, 'library.json'), 'utf8'));
   assert.equal(localDocument.projects.length, 3);

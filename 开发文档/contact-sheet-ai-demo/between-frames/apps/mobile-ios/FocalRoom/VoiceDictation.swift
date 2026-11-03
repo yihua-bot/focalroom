@@ -39,17 +39,17 @@ final class VoiceDictationModel {
     private func run() async {
         do {
             guard await AVAudioApplication.requestRecordPermission() else {
-                fail("未获麦克风权限；可在系统设置中开启后重试，或使用键盘输入。")
+                fail(String(localized: "未获麦克风权限；可在系统设置中开启后重试，或使用键盘输入。"))
                 return
             }
             guard #available(iOS 26.0, *) else {
-                fail("语音输入需要 iOS 26 或更新系统；当前系统请使用键盘输入。")
+                fail(String(localized: "语音输入需要 iOS 26 或更新系统；当前系统请使用键盘输入。"))
                 return
             }
             try await transcribeLive()
         } catch is CancellationError {
         } catch {
-            fail("语音转写暂不可用，请使用键盘输入。")
+            fail(String(localized: "语音转写暂不可用，请使用键盘输入。"))
         }
         stop()
     }
@@ -58,13 +58,13 @@ final class VoiceDictationModel {
     private func transcribeLive() async throws {
         let locale = Locale(identifier: "zh-CN")
         guard SpeechTranscriber.isAvailable else {
-            fail("此设备不支持设备端语音转写，请使用键盘输入。")
+            fail(String(localized: "此设备不支持设备端语音转写，请使用键盘输入。"))
             return
         }
         guard await SpeechTranscriber.supportedLocale(equivalentTo: locale) != nil,
               await SpeechTranscriber.installedLocales.contains(where: { $0.identifier.hasPrefix("zh") })
         else {
-            fail("设备缺少中文语音资源；可在系统设置中安装后重试，或使用键盘输入。")
+            fail(String(localized: "设备缺少中文语音资源；可在系统设置中安装后重试，或使用键盘输入。"))
             return
         }
         let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
@@ -74,7 +74,7 @@ final class VoiceDictationModel {
         let engine = session.engine
         let format = engine.inputNode.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
-            fail("当前设备没有可用的音频输入，请使用键盘输入。")
+            fail(String(localized: "当前设备没有可用的音频输入，请使用键盘输入。"))
             return
         }
         liveSession = session

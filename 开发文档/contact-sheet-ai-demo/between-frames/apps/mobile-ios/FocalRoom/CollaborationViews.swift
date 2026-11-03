@@ -10,12 +10,12 @@ struct CommentsView: View {
         VStack(spacing: 0) {
             ProjectContext(model: model)
             if model.selectedLocalProjectID != nil {
-                EmptyWorkspace(title: "本机项目暂无协作消息", detail: "此项目已选中，仅保存在这台 iPhone。云端评论和回复需在同步项目中查看。", symbol: "bubble.left")
+                EmptyWorkspace(title: String(localized: "本机项目暂无协作消息"), detail: String(localized: "此项目已选中，仅保存在这台 iPhone。云端评论和回复需在同步项目中查看。"), symbol: "bubble.left")
                     .accessibilityIdentifier("messages.local.project")
             } else if model.snapshot == nil {
-                EmptyWorkspace(title: "选择一个项目", detail: "查看项目中的评论与回复。", symbol: "bubble.left.and.bubble.right")
+                EmptyWorkspace(title: String(localized: "选择一个项目"), detail: String(localized: "查看项目中的评论与回复。"), symbol: "bubble.left.and.bubble.right")
             } else if model.snapshot?.comments.isEmpty == true {
-                EmptyWorkspace(title: "还没有评论", detail: "这里会显示当前项目已同步的评论。", symbol: "bubble.left")
+                EmptyWorkspace(title: String(localized: "还没有评论"), detail: String(localized: "这里会显示当前项目已同步的评论。"), symbol: "bubble.left")
             } else {
                 List(model.snapshot?.comments ?? []) { comment in
                     row(comment)
@@ -32,7 +32,7 @@ struct CommentsView: View {
             HStack {
                 Text(comment.reviewer).font(.subheadline.weight(.semibold))
                 Spacer()
-                Text(comment.state == "RESOLVED" ? "已解决" : "待处理").font(.caption).foregroundStyle(.secondary)
+                Text(comment.state == "RESOLVED" ? String(localized: "已解决") : String(localized: "待处理")).font(.caption).foregroundStyle(.secondary)
             }
             Text(comment.body).font(.body).textSelection(.enabled)
             if let photoID = comment.anchor.photo_id,
@@ -47,7 +47,7 @@ struct CommentsView: View {
                     Button("回复") { replyDraft = ""; replyTarget = comment }
                         .font(.caption)
                         .accessibilityIdentifier("comment.reply.\(comment.id)")
-                    Button(comment.state == "RESOLVED" ? "重新打开" : "标记解决") {
+                    Button(comment.state == "RESOLVED" ? String(localized: "重新打开") : String(localized: "标记解决")) {
                         Task { await model.resolveComment(threadID: comment.id, resolve: comment.state != "RESOLVED") }
                     }
                     .font(.caption)
@@ -107,27 +107,27 @@ struct BoardsView: View {
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("boards.local.project")
                 } else {
-                    EmptyWorkspace(title: "本机资料未就绪", detail: "请先在本机图库打开一次项目后返回。", symbol: "internaldrive")
+                    EmptyWorkspace(title: String(localized: "本机资料未就绪"), detail: String(localized: "请先在本机图库打开一次项目后返回。"), symbol: "internaldrive")
                         .accessibilityIdentifier("boards.local.project")
                 }
             } else if model.selectedProjectID == nil {
-                EmptyWorkspace(title: "选择一个项目", detail: "阅读已同步的项目画布。", symbol: "rectangle.3.group")
+                EmptyWorkspace(title: String(localized: "选择一个项目"), detail: String(localized: "阅读已同步的项目画布。"), symbol: "rectangle.3.group")
             } else if model.offline {
-                EmptyWorkspace(title: "画布需要联网读取", detail: "当前可在项目中查看已缓存的图库资料。", symbol: "wifi.slash")
+                EmptyWorkspace(title: String(localized: "画布需要联网读取"), detail: String(localized: "当前可在项目中查看已缓存的图库资料。"), symbol: "wifi.slash")
             } else if loading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if let error {
-                EmptyWorkspace(title: "暂时无法读取", detail: error)
+                EmptyWorkspace(title: String(localized: "暂时无法读取"), detail: localizedText(error))
                 Button("重试") { Task { await load() } }.padding()
             } else {
                 List {
                     if boards.isEmpty {
-                        EmptyWorkspace(title: "还没有共享画布", detail: "此处显示云端已保存的画布，Mac 本地画布需先同步。", symbol: "rectangle.3.group")
+                        EmptyWorkspace(title: String(localized: "还没有共享画布"), detail: String(localized: "此处显示云端已保存的画布，Mac 本地画布需先同步。"), symbol: "rectangle.3.group")
                     }
                     ForEach(boards) { board in
                         NavigationLink { BoardReader(model: model, board: board) } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(board.title).font(.headline)
-                                Text("\(board.state == "official" ? "正式画布" : "草案") · 阅读模式")
+                                Text("\(board.state == "official" ? String(localized: "正式画布") : String(localized: "草案")) · 阅读模式")
                                     .font(.caption).foregroundStyle(.secondary)
                             }.padding(.vertical, 12)
                         }
@@ -154,7 +154,7 @@ struct BoardsView: View {
         catch is CancellationError { }
         catch {
             if !Task.isCancelled, loadID == request, model.selectedProjectID == projectID {
-                self.error = error.localizedDescription
+                self.error = localizedText(error.localizedDescription)
             }
         }
     }
@@ -179,10 +179,10 @@ private struct BoardReader: View {
 
     var body: some View {
         Group {
-            if model.selectedProjectID != board.project_id { EmptyWorkspace(title: "当前项目已切换", detail: "返回项目后继续查看画布。") }
+            if model.selectedProjectID != board.project_id { EmptyWorkspace(title: String(localized: "当前项目已切换"), detail: String(localized: "返回项目后继续查看画布。")) }
             else if loading { ProgressView("读取画布…") }
-            else if let error { EmptyWorkspace(title: "暂时无法读取", detail: error) }
-            else if nodes.isEmpty { EmptyWorkspace(title: "画布为空", detail: "画布中还没有可显示的内容。", symbol: "rectangle.dashed") }
+            else if let error { EmptyWorkspace(title: String(localized: "暂时无法读取"), detail: localizedText(error)) }
+            else if nodes.isEmpty { EmptyWorkspace(title: String(localized: "画布为空"), detail: String(localized: "画布中还没有可显示的内容。"), symbol: "rectangle.dashed") }
             else {
                 GeometryReader { geometry in
                     let minX = nodes.map(\.x).min() ?? 0
@@ -214,7 +214,7 @@ private struct BoardReader: View {
                                 _ = try await model.resolveCanvas(boardID: board.id)
                                 notice = nil
                                 await refreshAfterConflict()
-                            } catch { notice = error.localizedDescription }
+                            } catch { notice = localizedText(error.localizedDescription) }
                         }
                     }.disabled(model.canvasSending || model.offline).accessibilityIdentifier("canvas.resolve")
                 }
@@ -265,7 +265,7 @@ private struct BoardReader: View {
         .rotationEffect(.degrees(node.rotation))
         .position(x: (node.x - minX + node.width / 2) * scale + 16 + offset.width,
                   y: (node.y - minY + node.height / 2) * scale + 16 + offset.height)
-        .accessibilityLabel(node.node_type == "photo" ? "画布照片" : "\(node.node_type) 节点")
+        .accessibilityLabel(node.node_type == "photo" ? String(localized: "画布照片") : String(localized: "\(node.node_type) 节点"))
         .accessibilityIdentifier("canvas.node.\(node.id)")
         .highPriorityGesture(editable && node.node_type == "photo" ? dragGesture(node, scale: scale) : nil)
     }
@@ -295,10 +295,10 @@ private struct BoardReader: View {
             }
             notice = nil
         } catch APIError.server(409, "REVISION_CONFLICT") {
-            notice = "画布已被其他设备修改，已刷新到最新。"
+            notice = String(localized: "画布已被其他设备修改，已刷新到最新。")
             await refreshAfterConflict()
         } catch {
-            notice = error.localizedDescription
+            notice = localizedText(error.localizedDescription)
         }
     }
 
@@ -307,7 +307,7 @@ private struct BoardReader: View {
             let boards = try await model.boards()
             if let fresh = boards.first(where: { $0.id == board.id }) { boardRevision = fresh.revision }
             await reloadNodes()
-        } catch { notice = "刷新失败，请重试。" }
+        } catch { notice = String(localized: "刷新失败，请重试。") }
     }
 
     private func reloadNodes() async {
@@ -315,7 +315,7 @@ private struct BoardReader: View {
             nodes = try await model.nodes(board: board)
             loading = false
         } catch {
-            self.error = error.localizedDescription
+            self.error = localizedText(error.localizedDescription)
             loading = false
         }
     }

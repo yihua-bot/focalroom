@@ -39,7 +39,7 @@ final class LocalCanvasModel {
             let canvas = try await library.canvas(projectID: projectID)
             nodes = canvas?.nodes ?? []
             annotations = canvas?.annotations ?? []
-        } catch { notice = "画布读取失败，请重试。" }
+        } catch { notice = String(localized: "画布读取失败，请重试。") }
     }
 
     func recordAIAddition(_ nodeIDs: [String]) async {
@@ -62,9 +62,9 @@ final class LocalCanvasModel {
             canRedo = false
             await load()
         } catch LocalLibraryError.projectFrozen {
-            notice = "项目已迁云，本机画布已冻结。"
+            notice = String(localized: "项目已迁云，本机画布已冻结。")
         } catch {
-            notice = "画布操作未生效，请重试。"
+            notice = String(localized: "画布操作未生效，请重试。")
         }
     }
 
@@ -79,7 +79,7 @@ final class LocalCanvasModel {
             canUndo = !undoStack.isEmpty
             canRedo = true
             await load()
-        } catch { notice = "撤销失败，请重试。" }
+        } catch { notice = String(localized: "撤销失败，请重试。") }
     }
 
     func redo() async {
@@ -93,7 +93,7 @@ final class LocalCanvasModel {
             canUndo = true
             canRedo = !redoStack.isEmpty
             await load()
-        } catch { notice = "重做失败，请重试。" }
+        } catch { notice = String(localized: "重做失败，请重试。") }
     }
 
     func addPhotoNode(photoID: String) async {
@@ -106,7 +106,7 @@ final class LocalCanvasModel {
 
     func addNote() async {
         let origin = visibleOrigin(width: 200, height: 120)
-        let node = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .note, text: "新便签",
+        let node = LocalCanvasNode(id: UUID().uuidString.lowercased(), kind: .note, text: String(localized: "新便签"),
                                    x: origin.x, y: origin.y, width: 200, height: 120, zOrder: nextZOrder)
         await perform(.createNode(node))
         selectedNodeID = node.id
@@ -269,7 +269,7 @@ struct LocalCanvasView: View {
         // 下面的标识会被丢弃（只有标签落到内部文本上），VoiceOver 与自动化都点不到"节点"。
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("local.canvas.node.\(node.id)")
-        .accessibilityLabel(node.kind == .photo ? "画布照片" : "便签：\(node.text ?? "")")
+        .accessibilityLabel(node.kind == .photo ? String(localized: "画布照片") : String(localized: "便签：\(node.text ?? "")"))
     }
 
     private func nodeDrag(_ node: LocalCanvasNode) -> some Gesture {
@@ -287,20 +287,20 @@ struct LocalCanvasView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             Button { activeSheet = .addPhoto } label: { Image(systemName: "photo.badge.plus") }
                 .disabled(model.busy)
-                .accessibilityLabel("添加照片").accessibilityIdentifier("canvas.add.photo")
+                .accessibilityLabel(String(localized: "添加照片")).accessibilityIdentifier("canvas.add.photo")
             Button { Task { await model.addNote() } } label: { Image(systemName: "note.text.badge.plus") }
                 .disabled(model.busy)
-                .accessibilityLabel("添加便签").accessibilityIdentifier("canvas.add.note")
+                .accessibilityLabel(String(localized: "添加便签")).accessibilityIdentifier("canvas.add.note")
             Button { Task { await model.undo() } } label: { Image(systemName: "arrow.uturn.backward") }
                 .disabled(!model.canUndo || model.busy)
-                .accessibilityLabel("撤销").accessibilityIdentifier("canvas.undo")
+                .accessibilityLabel(String(localized: "撤销")).accessibilityIdentifier("canvas.undo")
             Button { Task { await model.redo() } } label: { Image(systemName: "arrow.uturn.forward") }
                 .disabled(!model.canRedo || model.busy)
-                .accessibilityLabel("重做").accessibilityIdentifier("canvas.redo")
+                .accessibilityLabel(String(localized: "重做")).accessibilityIdentifier("canvas.redo")
             if model.selectedNode != nil {
                 Button { confirmDelete = true } label: { Image(systemName: "trash") }
                     .disabled(model.busy)
-                    .accessibilityLabel("删除所选").accessibilityIdentifier("canvas.delete")
+                    .accessibilityLabel(String(localized: "删除所选")).accessibilityIdentifier("canvas.delete")
             }
         }
     }

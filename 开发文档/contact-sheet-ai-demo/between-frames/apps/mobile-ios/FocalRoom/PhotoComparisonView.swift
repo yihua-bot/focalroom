@@ -5,7 +5,7 @@ struct AsyncPhotoPreview: View {
     let photoID: String
     let identity: String
     var fit = false
-    var failureText = "点按重试"
+    var failureText = String(localized: "点按重试")
     let load: () async throws -> UIImage
     @State private var image: UIImage?
     @State private var failed = false
@@ -23,7 +23,7 @@ struct AsyncPhotoPreview: View {
                     Button { attempt += 1 } label: {
                         VStack(spacing: 8) { Image(systemName: "photo"); Text(failureText).font(.caption) }
                             .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }.buttonStyle(.plain).accessibilityLabel("重新读取照片预览")
+                    }.buttonStyle(.plain).accessibilityLabel(String(localized: "重新读取照片预览"))
                 } else { ProgressView() }
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.contentShape(Rectangle())
@@ -109,9 +109,9 @@ struct PhotoComparisonView: View {
                 }
                 HStack {
                     Button { state.setLocked(!state.locked) } label: {
-                        Label(state.locked ? "已锁定缩放与位置" : "独立调整缩放与位置", systemImage: state.locked ? "lock.fill" : "lock.open")
+                        Label(state.locked ? String(localized: "已锁定缩放与位置") : String(localized: "独立调整缩放与位置"), systemImage: state.locked ? "lock.fill" : "lock.open")
                             .font(.subheadline).frame(minHeight: 44)
-                    }.accessibilityIdentifier("compare.lock").accessibilityValue(state.locked ? "已锁定" : "独立调整")
+                    }.accessibilityIdentifier("compare.lock").accessibilityValue(state.locked ? String(localized: "已锁定") : String(localized: "独立调整"))
                     Spacer()
                     Button("复位") { state.reset() }.frame(minWidth: 44, minHeight: 44)
                         .accessibilityIdentifier("compare.reset")
@@ -123,7 +123,7 @@ struct PhotoComparisonView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Button { swap(&leftID, &rightID); state.reset() } label: { Image(systemName: "arrow.left.arrow.right") }
-                        .accessibilityLabel("交换照片").accessibilityIdentifier("compare.swap")
+                        .accessibilityLabel(String(localized: "交换照片")).accessibilityIdentifier("compare.swap")
                 }
             }
             .onAppear {
@@ -150,7 +150,7 @@ struct PhotoComparisonView: View {
                         }
                     }
                 } label: {
-                    Text(photos.first(where: { $0.id == id })?.filename ?? "选择照片").lineLimit(1)
+                    Text(photos.first(where: { $0.id == id })?.filename ?? String(localized: "选择照片")).lineLimit(1)
                     Image(systemName: "chevron.down").font(.caption2)
                 }.frame(minHeight: 44).contentShape(Rectangle()).accessibilityIdentifier(prefix + ".choose")
                 Spacer()
@@ -160,7 +160,7 @@ struct PhotoComparisonView: View {
                     let value = transform(side).wrappedValue.magnified(by: 2)
                     state.update(side, transform: value)
                 } label: { Image(systemName: "plus.magnifyingglass").frame(minWidth: 44, minHeight: 44) }
-                    .accessibilityLabel("放大\(side == .left ? "第一张" : "第二张")")
+                    .accessibilityLabel(String(localized: "放大\(side == .left ? String(localized: "第一张") : String(localized: "第二张"))"))
                     .accessibilityIdentifier(prefix + ".zoomIn")
             }.font(.caption).padding(.horizontal, 12)
             PhotoViewport(transform: transform(side)) {

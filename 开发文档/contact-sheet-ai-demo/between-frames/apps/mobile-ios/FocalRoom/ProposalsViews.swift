@@ -17,11 +17,11 @@ struct ProposalsView: View {
     var body: some View {
         Group {
             if model.snapshot == nil {
-                EmptyWorkspace(title: "选择一个项目", detail: "查看该项目等待审阅的提案。", symbol: "checklist")
+                EmptyWorkspace(title: String(localized: "选择一个项目"), detail: String(localized: "查看该项目等待审阅的提案。"), symbol: "checklist")
             } else if model.offline {
-                EmptyWorkspace(title: "提案需要联网", detail: "离线时可查看图库与本机资料。", symbol: "wifi.slash")
+                EmptyWorkspace(title: String(localized: "提案需要联网"), detail: String(localized: "离线时可查看图库与本机资料。"), symbol: "wifi.slash")
             } else if submitted.isEmpty && decided.isEmpty {
-                EmptyWorkspace(title: "还没有提案", detail: "AI 或协作者提交的作品序列建议会显示在这里。", symbol: "checklist")
+                EmptyWorkspace(title: String(localized: "还没有提案"), detail: String(localized: "AI 或协作者提交的作品序列建议会显示在这里。"), symbol: "checklist")
             } else {
                 List {
                     if !submitted.isEmpty {
@@ -56,7 +56,7 @@ struct ProposalsView: View {
                 HStack {
                     Text(proposal.title).font(.headline).foregroundStyle(.primary)
                     Spacer()
-                    Text(proposal.isSubmitted ? "待审阅" : proposal.state == "APPLIED" ? "已采纳" : "已驳回")
+                    Text(proposal.isSubmitted ? String(localized: "待审阅") : proposal.state == "APPLIED" ? String(localized: "已采纳") : String(localized: "已驳回"))
                         .font(.caption).foregroundStyle(proposal.isSubmitted ? .orange : .secondary)
                 }
                 Text("\(proposal.author) · \(proposal.operations.count) 项操作 · 基线版本 \(proposal.base_revision)")
@@ -84,9 +84,9 @@ private struct ProposalDetailView: View {
         NavigationStack {
             Form {
                 Section("提案") {
-                    LabeledContent("标题", value: proposal.title)
-                    LabeledContent("作者", value: proposal.author)
-                    LabeledContent("基线版本", value: "\(proposal.base_revision)")
+                    LabeledContent(LocalizedStringKey("标题")) { Text(proposal.title) }
+                    LabeledContent(LocalizedStringKey("作者")) { Text(proposal.author) }
+                    LabeledContent(LocalizedStringKey("基线版本")) { Text(verbatim: "\(proposal.base_revision)") }
                 }
                 Section("操作（勾选要采纳的项）") {
                     ForEach(proposal.operations) { operation in
@@ -103,11 +103,11 @@ private struct ProposalDetailView: View {
                                     .foregroundStyle(selected.contains(operation.operation_id) ? Color.accentColor : Color.secondary)
                                 Text(operationPhotoTitle(operation))
                                 Spacer()
-                                Text(operation.title).font(.caption).foregroundStyle(.secondary)
+                                Text(localizedText(operation.title)).font(.caption).foregroundStyle(.secondary)
                             }
                         }
                         .accessibilityIdentifier("proposals.op.\(operation.operation_id)")
-                        .accessibilityValue(selected.contains(operation.operation_id) ? "已勾选" : "未勾选")
+                        .accessibilityValue(selected.contains(operation.operation_id) ? String(localized: "已勾选") : String(localized: "未勾选"))
                     }
                 }
                 if model.snapshot?.principal.can_approve != true {
@@ -158,11 +158,11 @@ private struct ProposalDetailView: View {
                         .font(.footnote).foregroundStyle(.orange)
                 } else if let change = projection.sequence {
                     if !change.added.isEmpty {
-                        LabeledContent("新增", value: change.added.map { photoFilename($0) }.joined(separator: "、"))
+                        LabeledContent(LocalizedStringKey("新增")) { Text(change.added.map { photoFilename($0) }.joined(separator: "、")) }
                             .font(.footnote)
                     }
                     if !change.removed.isEmpty {
-                        LabeledContent("移除", value: change.removed.map { photoFilename($0) }.joined(separator: "、"))
+                        LabeledContent(LocalizedStringKey("移除")) { Text(change.removed.map { photoFilename($0) }.joined(separator: "、")) }
                             .font(.footnote)
                     }
                     ForEach(change.moved, id: \.photo_id) { move in
@@ -199,7 +199,7 @@ private struct ProposalDetailView: View {
 
     private func operationPhotoTitle(_ operation: Proposal.Operation) -> String {
         let filename = model.snapshot?.snapshot.photos.first { $0.id == operation.photo_id }?.filename ?? operation.photo_id
-        return "\(operation.title) · \(filename)"
+        return "\(localizedText(operation.title)) · \(filename)"
     }
 
     private func apply(_ accepted: [String]) async {
@@ -210,7 +210,7 @@ private struct ProposalDetailView: View {
             try await model.applyProposal(proposal: proposal, acceptedOperationIDs: accepted)
             dismiss()
         } catch {
-            notice = error.localizedDescription
+            notice = localizedText(error.localizedDescription)
         }
     }
 }

@@ -20,7 +20,7 @@ actor NativeAIClient {
     }
 
     func perform(_ operation: String, payload: Data) throws -> Data {
-        guard let handle else { throw NativeAIError(code: "AUTH_REQUIRED", message: "请重新登录") }
+        guard let handle else { throw NativeAIError(code: "AUTH_REQUIRED", message: String(localized: "请重新登录")) }
         var request = try dictionary(payload)
         request["operation"] = operation
         request["handle"] = handle
@@ -43,7 +43,7 @@ actor NativeAIClient {
         guard envelope["ok"] as? Bool == true, let result = envelope["result"] else {
             let error = envelope["error"] as? [String: Any]
             throw NativeAIError(code: error?["code"] as? String ?? "INVALID_RESPONSE",
-                                message: error?["message"] as? String ?? "AI 返回的内容无法读取")
+                                message: error?["message"] as? String ?? String(localized: "AI 返回的内容无法读取"))
         }
         return try JSONSerialization.data(withJSONObject: result, options: [.fragmentsAllowed])
     }
@@ -52,5 +52,5 @@ actor NativeAIClient {
         guard let result = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw malformed() }
         return result
     }
-    private func malformed() -> NativeAIError { .init(code: "INVALID_RESPONSE", message: "AI 返回的内容无法读取") }
+    private func malformed() -> NativeAIError { .init(code: "INVALID_RESPONSE", message: String(localized: "AI 返回的内容无法读取")) }
 }

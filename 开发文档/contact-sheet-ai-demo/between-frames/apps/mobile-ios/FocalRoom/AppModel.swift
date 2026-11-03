@@ -201,11 +201,11 @@ final class AppModel {
     @discardableResult
     func setPassword(_ password: String, current: String?) async -> Bool {
         guard !busy else {
-            notice = "上一个请求仍在处理，请稍候再试。"
+            notice = String(localized: "上一个请求仍在处理，请稍候再试。")
             return false
         }
         guard let api else {
-            notice = "登录状态已失效，请重新登录后再设置密码。"
+            notice = String(localized: "登录状态已失效，请重新登录后再设置密码。")
             return false
         }
         busy = true
@@ -215,7 +215,7 @@ final class AppModel {
         do {
             try await api.setPassword(token: credentials?.token ?? "", password: password, current: current)
             guard generation == epoch else { return false }
-            notice = "密码已更新。下次登录可使用邮箱与新密码。"
+            notice = String(localized: "密码已更新。下次登录可使用邮箱与新密码。")
             return true
         } catch {
             if generation == epoch { notice = message(error) }
@@ -243,7 +243,7 @@ final class AppModel {
         libraryModel.onProjectDeleted = { [weak self] deletedID in
             guard let self, self.currentProject == .local(deletedID) else { return }
             self.resetProject()
-            self.notice = "本机项目已删除，已退出其画布与对话上下文。"
+            self.notice = String(localized: "本机项目已删除，已退出其画布与对话上下文。")
         }
         localLibrary = libraryModel
         let migrationModel = LocalMigrationModel(library: library, api: APIClient(configuration: configuration), credentials: value)
@@ -256,7 +256,7 @@ final class AppModel {
     /// 对应的那条导航就没了，之后再 dismiss 会被吞掉，用户被留在「暂时无法打开项目」的死页。
     func archiveCloudProject(_ projectID: String, archive: Bool) async -> String? {
         guard let api, let credentials else {
-            notice = "当前离线，无法修改项目归档状态。"
+            notice = String(localized: "当前离线，无法修改项目归档状态。")
             return nil
         }
         let generation = epoch
@@ -266,7 +266,7 @@ final class AppModel {
             try await api.archiveProject(projectID: projectID, archive: archive, token: credentials.token)
             guard generation == epoch else { return nil }
             if selectedProjectID == projectID { resetProject() }
-            return archive ? "项目已归档，可在项目列表的「已归档」分组中恢复。" : "项目已恢复为正常项目。"
+            return archive ? String(localized: "项目已归档，可在项目列表的「已归档」分组中恢复。") : String(localized: "项目已恢复为正常项目。")
         } catch {
             if generation == epoch { notice = message(error) }
             return nil
@@ -277,7 +277,7 @@ final class AppModel {
     /// 与归档一样，成功只返回文案，列表刷新留给调用方在退出详情之后执行。
     func deleteCloudProject(_ projectID: String) async -> String? {
         guard let api, let credentials else {
-            notice = "当前离线，无法删除云端项目。"
+            notice = String(localized: "当前离线，无法删除云端项目。")
             return nil
         }
         let generation = epoch
@@ -287,7 +287,7 @@ final class AppModel {
             try await api.deleteCloudProject(projectID: projectID, token: credentials.token)
             guard generation == epoch else { return nil }
             if selectedProjectID == projectID { resetProject() }
-            return "云端项目已删除。"
+            return String(localized: "云端项目已删除。")
         } catch {
             if generation == epoch { notice = message(error) }
             return nil
@@ -378,8 +378,8 @@ final class AppModel {
                     guard generation == epoch else { return }
                     projects = cached?.projects ?? []
                     offline = true
-                    if cached == nil { notice = "当前离线，尚无已缓存项目。" }
-                } catch { notice = "无法读取本机项目缓存，请联网后重试。" }
+                    if cached == nil { notice = String(localized: "当前离线，尚无已缓存项目。") }
+                } catch { notice = String(localized: "无法读取本机项目缓存，请联网后重试。") }
             } else { notice = message(error) }
         }
     }
@@ -392,7 +392,7 @@ final class AppModel {
         }
         guard projects.contains(where: { $0.id == id && $0.state == .SHARED }) else {
             // 静默返回会让「打开项目」看起来完全没反应；说明原因并给出下一步。
-            notice = "这个项目当前不可打开：可能仍在准备、已归档或权限已变化。请返回列表刷新后重试。"
+            notice = String(localized: "这个项目当前不可打开：可能仍在准备、已归档或权限已变化。请返回列表刷新后重试。")
             return
         }
         resetProject()
@@ -451,8 +451,8 @@ final class AppModel {
                     snapshot = cached?.snapshot
                     cachedAt = cached?.savedAt
                     offline = true
-                    if cached == nil { notice = "这个项目尚未缓存，请联网后打开。" }
-                } catch { notice = "无法读取本机项目缓存，请联网后重试。" }
+                    if cached == nil { notice = String(localized: "这个项目尚未缓存，请联网后打开。") }
+                } catch { notice = String(localized: "无法读取本机项目缓存，请联网后重试。") }
             } else { notice = message(error) }
         }
     }
@@ -473,7 +473,7 @@ final class AppModel {
             guard generation == epoch else { return }
             pending = value
             if offline {
-                notice = "已保存为待提交选片，联网后可核对并提交。"
+                notice = String(localized: "已保存为待提交选片，联网后可核对并提交。")
             } else { await transmit(value, projectID: value.command.project_id, generation: generation) }
         } catch { if generation == epoch { notice = message(error) } }
     }
@@ -532,10 +532,10 @@ final class AppModel {
             if await handleProject(error, id: value.command.project_id) { return }
             value.state = (error as? APIError)?.rejectsCommand == true ? .rejected : .unknown
             do { try await store.savePending(value) }
-            catch { notice = "待确认记录无法保存，请保持当前项目并重试。"; return }
+            catch { notice = String(localized: "待确认记录无法保存，请保持当前项目并重试。"); return }
             guard generation == epoch else { return }
             if selectedProjectID == projectID { pending = value }
-            notice = value.state == .rejected ? message(error) : "结果尚未确认。再次核对会沿用原操作编号，不会创建第二次选片。"
+            notice = value.state == .rejected ? message(error) : String(localized: "结果尚未确认。再次核对会沿用原操作编号，不会创建第二次选片。")
         }
     }
 
@@ -560,7 +560,7 @@ final class AppModel {
     func loadSyncOverview() async {
         guard let store else { return }
         do { syncOverview = try await store.overview() }
-        catch { notice = "无法读取本机同步状态，请稍后重试。" }
+        catch { notice = String(localized: "无法读取本机同步状态，请稍后重试。") }
     }
 
     // MARK: - Focal AI
@@ -634,16 +634,16 @@ final class AppModel {
     @discardableResult
     func aiSend(text: String, vision: PreparedVision? = nil, onVisionConsumed: () -> Void = {}) async -> Bool {
         guard !aiSending, let api, let credentials, let chat else {
-            if aiSending { notice = "上一条请求仍在处理，稍后再发送。" }
-            else { notice = offline ? "当前离线，无法发送消息。" : "会话存储不可用，请重新登录后重试。" }
+            if aiSending { notice = String(localized: "上一条请求仍在处理，稍后再发送。") }
+            else { notice = offline ? String(localized: "当前离线，无法发送消息。") : String(localized: "会话存储不可用，请重新登录后重试。") }
             return false
         }
         guard canSendAI else {
-            notice = "请先确认 AI 服务已开放、邮箱已验证且账户额度可用，再发送消息。"
+            notice = String(localized: "请先确认 AI 服务已开放、邮箱已验证且账户额度可用，再发送消息。")
             return false
         }
         if aiMode == .task, nativeProjection?.tasks.contains(where: \.isActive) == true {
-            notice = "这个项目已有任务执行中，请先暂停或取消。"; return false
+            notice = String(localized: "这个项目已有任务执行中，请先暂停或取消。"); return false
         }
         let generation = epoch
         let project = currentProject
@@ -651,7 +651,7 @@ final class AppModel {
         let cloudProjectID = selectedProjectID
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 4000 else {
-            notice = trimmed.isEmpty ? "请输入消息内容。" : "消息过长，请分段发送。"
+            notice = trimmed.isEmpty ? String(localized: "请输入消息内容。") : String(localized: "消息过长，请分段发送。")
             return false
         }
         aiSending = true
@@ -663,7 +663,7 @@ final class AppModel {
             guard vision.id == visionDraftID, vision.generation == generation,
                   vision.accountID == credentials.user.id, vision.project == project,
                   vision.text == text, Date().timeIntervalSince(vision.createdAt) < 300 else {
-                notice = "照片授权已失效，请重新选择照片并确认。"; return false
+                notice = String(localized: "照片授权已失效，请重新选择照片并确认。"); return false
             }
             // 授权消费一次；点击确认后重新核实项目权限与照片身份，失败不发送。
             visionDraftID = nil
@@ -723,7 +723,7 @@ final class AppModel {
     /// 核对「结果待确认」的 AI 消息。manual 为用户主动点按，失败必须给出提示；自动核对保持安静。
     func aiResolvePending(manual: Bool = false) async {
         guard let api, let credentials, let chat else {
-            if manual { notice = offline ? "当前离线，无法核对结果，请稍后重试。" : "会话存储不可用，请重新登录后重试。" }
+            if manual { notice = offline ? String(localized: "当前离线，无法核对结果，请稍后重试。") : String(localized: "会话存储不可用，请重新登录后重试。") }
             return
         }
         let generation = epoch
@@ -735,10 +735,10 @@ final class AppModel {
                 let job = try await api.aiJob(requestID: requestID, token: credentials.token)
                 guard generation == epoch else { return }
                 if job.state == "COMPLETED", let result = job.result {
-                    try? await chat.complete(entry, text: result.text.isEmpty ? "（模型未返回文本）" : result.text)
+                    try? await chat.complete(entry, text: result.text.isEmpty ? String(localized: "（模型未返回文本）") : result.text)
                     changed = true
                 } else if job.state == "REJECTED" {
-                    try? await replaceMessage(entry, state: .failed, failure: "模型服务拒绝了请求，额度已释放。", in: chat)
+                    try? await replaceMessage(entry, state: .failed, failure: String(localized: "模型服务拒绝了请求，额度已释放。"), in: chat)
                     changed = true
                 }
             } catch {
@@ -751,11 +751,11 @@ final class AppModel {
         if changed {
             await loadChat()
             await loadAIAccount()
-            if manual { notice = "已核对：待确认结果已更新。" }
+            if manual { notice = String(localized: "已核对：待确认结果已更新。") }
         } else if let failure {
-            notice = "未能核对结果：\(failure)"
+            notice = String(localized: "未能核对结果：\(failure)")
         } else if manual {
-            notice = "这些请求仍在处理中，结果确认后会自动显示，不会重复计费。"
+            notice = String(localized: "这些请求仍在处理中，结果确认后会自动显示，不会重复计费。")
         }
     }
 
@@ -828,7 +828,7 @@ final class AppModel {
         let receipt = try await api.eraseAccount(token: credentials.token, password: password, email: email)
         guard generation == epoch else { throw CancellationError() }
         _ = await handleSession(APIError.server(status: 401, code: "ACCOUNT_CLOSED"))
-        notice = "账号已关闭，回执：\(receipt.receipt_id)。本机原片仍保留，可在登录页离线导出；共享协作与财务审计按说明保留。"
+        notice = String(localized: "账号已关闭，回执：\(receipt.receipt_id)。本机原片仍保留，可在登录页离线导出；共享协作与财务审计按说明保留。")
     }
 
     private func replaceMessage(_ original: AIChatMessage, state: AIChatMessage.State, failure: String?, in chat: AIChatStore) async throws {
@@ -845,7 +845,7 @@ final class AppModel {
         guard !busy, let api, let credentials, !offline else { return nil }
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard trimmed.contains("@"), trimmed.count <= 254 else {
-            notice = "请输入有效的邮箱地址。"
+            notice = String(localized: "请输入有效的邮箱地址。")
             return nil
         }
         guard ["ADMIN", "EDITOR", "REVIEWER", "VIEWER"].contains(role) else { return nil }
@@ -855,7 +855,7 @@ final class AppModel {
         do {
             let workspaces = try await api.workspaces(token: credentials.token)
             guard let workspace = workspaces.first(where: { ["OWNER", "ADMIN"].contains($0.role) }) else {
-                notice = "只有工作区所有者或管理员可以邀请成员。"
+                notice = String(localized: "只有工作区所有者或管理员可以邀请成员。")
                 return nil
             }
             return try await api.createInvitation(workspaceID: workspace.id, email: trimmed,
@@ -870,7 +870,7 @@ final class AppModel {
         guard !busy, let snapshot, let api, let credentials,
               currentProject == .cloud(snapshot.project_id), !offline else { return }
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= 2000 else { notice = "评论内容为空或过长。"; return }
+        guard !trimmed.isEmpty, trimmed.count <= 2000 else { notice = String(localized: "评论内容为空或过长。"); return }
         let generation = epoch
         busy = true
         defer { if generation == epoch { busy = false } }
@@ -912,7 +912,7 @@ final class AppModel {
         }
         let input: GrantUpdateInput
         do { input = try GrantUpdateInput(role: role, canApprove: canApprove, canEditFormal: canEditFormal) }
-        catch { notice = "只有编辑角色可以持有审批或正式编辑权限。"; return }
+        catch { notice = String(localized: "只有编辑角色可以持有审批或正式编辑权限。"); return }
         let generation = epoch
         busy = true
         defer { if generation == epoch { busy = false } }
@@ -929,13 +929,13 @@ final class AppModel {
 
     // 成员权限操作的前置条件：静默返回会让「保存/撤销」看起来完全失灵，必须说明原因。
     private var grantBlockReason: String {
-        if busy { return "上一个请求仍在处理，请稍候再试。" }
-        if offline { return "当前离线，无法修改成员权限。" }
-        if api == nil || credentials == nil { return "登录状态已失效，请重新登录。" }
+        if busy { return String(localized: "上一个请求仍在处理，请稍候再试。") }
+        if offline { return String(localized: "当前离线，无法修改成员权限。") }
+        if api == nil || credentials == nil { return String(localized: "登录状态已失效，请重新登录。") }
         guard let snapshot, currentProject == .cloud(snapshot.project_id) else {
-            return "项目上下文已变化，请返回项目页重新进入后再试。"
+            return String(localized: "项目上下文已变化，请返回项目页重新进入后再试。")
         }
-        return "无法修改成员权限，请返回项目页重试。"
+        return String(localized: "无法修改成员权限，请返回项目页重试。")
     }
 
     func revokeGrant(userID: String) async {
@@ -1149,11 +1149,11 @@ final class AppModel {
         clearMemory()
         let generation = epoch
         do { try await oldStore?.clear() }
-        catch { notice = "已退出登录；部分本机缓存未能清理，请重新打开应用后处理。" }
+        catch { notice = String(localized: "已退出登录；部分本机缓存未能清理，请重新打开应用后处理。") }
         await oldPreviewCache?.clear()
         try? await oldChat?.clear()
         do { try await api.logout(token: credentials.token) }
-        catch { if generation == epoch { notice = "本机已退出。远端注销未确认，可在账户中撤销此会话。" } }
+        catch { if generation == epoch { notice = String(localized: "本机已退出。远端注销未确认，可在账户中撤销此会话。") } }
     }
 
     private func handleSession(_ error: Error) async -> Bool {
@@ -1165,10 +1165,10 @@ final class AppModel {
         catch { notice = message(error); clearMemory(); return true }
         clearMemory()
         do { try await oldStore?.clear() }
-        catch { notice = "登录已失效；部分本机缓存未能清理。"; return true }
+        catch { notice = String(localized: "登录已失效；部分本机缓存未能清理。"); return true }
         await oldPreviewCache?.clear()
         try? await oldChat?.clear()
-        notice = "登录已失效，请重新登录。"
+        notice = String(localized: "登录已失效，请重新登录。")
         return true
     }
 
@@ -1179,8 +1179,8 @@ final class AppModel {
         if selectedProjectID == id { resetProject() }
         projects.removeAll { $0.id == id }
         do { try await store?.revokeProject(id) }
-        catch { notice = "访问已停止，但本机缓存清理失败。"; return true }
-        notice = "项目访问权限已变化，已停止读取和提交。"
+        catch { notice = String(localized: "访问已停止，但本机缓存清理失败。"); return true }
+        notice = String(localized: "项目访问权限已变化，已停止读取和提交。")
         return true
     }
 
@@ -1241,8 +1241,8 @@ final class AppModel {
     }
 
     private func message(_ error: Error) -> String {
-        if let value = error as? LocalizedError, let description = value.errorDescription { return description }
-        return "暂时无法完成请求，请检查网络后重试。"
+        if let value = error as? LocalizedError, let description = value.errorDescription { return localizedText(description) }
+        return String(localized: "暂时无法完成请求，请检查网络后重试。")
     }
 }
 
@@ -1354,7 +1354,7 @@ extension AppModel {
             snapshot = fresh
         }
         let source = try await nativeSource(vision: vision)
-        if source.photoIDs.count > 500 && vision == nil { throw NativeAIError(code: "SCOPE_TOO_LARGE", message: "项目超过 500 张，请先选择本次讨论的照片。") }
+        if source.photoIDs.count > 500 && vision == nil { throw NativeAIError(code: "SCOPE_TOO_LARGE", message: String(localized: "项目超过 500 张，请先选择本次讨论的照片。")) }
         let bytes = try await client.perform("syncContext", payload: source.payload)
         let context = try JSONDecoder().decode(NativeAIContext.self, from: bytes)
         guard generation == epoch, currentProject == owner else { throw CancellationError() }
@@ -1443,7 +1443,7 @@ extension AppModel {
     }
 
     func nativePhotoName(_ coreID: String) -> String {
-        guard let id = nativeContext?.photoIDs.first(where: { $0.value == coreID })?.key else { return "原照片已移出当前项目" }
+        guard let id = nativeContext?.photoIDs.first(where: { $0.value == coreID })?.key else { return String(localized: "原照片已移出当前项目") }
         return observationPhotos.first(where: { $0.id == id })?.filename ?? id
     }
     func legacyAIChat() async -> [AIChatMessage] {
@@ -1464,7 +1464,7 @@ extension AppModel {
                                                                          "proposal": preference.id, "statement": statement as Any? ?? NSNull()]))
             if generation == epoch, currentProject == owner {
                 busy = false; await refreshNativeTasks()
-                notice = statement == nil ? "已忽略这条建议。" : "已保存为当前项目的偏好。"
+                notice = statement == nil ? String(localized: "已忽略这条建议。") : String(localized: "已保存为当前项目的偏好。")
             }
         } catch { if generation == epoch, currentProject == owner { notice = message(error) } }
     }
@@ -1481,10 +1481,10 @@ extension AppModel {
             let scope = AccountScope(configuration: try configuration(address), userID: credentials.user.id)
             let reviews = NativeAIReviewStore(root: root.appendingPathComponent("AIReviews"), scope: scope)
             let previous = try await reviews.record(applicationID: applicationID)
-            if previous?.completed == true { nativeReviewReceipt = "这份提案已提交。"; return true }
+            if previous?.completed == true { nativeReviewReceipt = String(localized: "这份提案已提交。"); return true }
             if case .local(let id) = owner, let library = localLibrary?.library,
                let local = try await library.projects().first(where: { $0.id == id }),
-               local.appliedAIDraftIDs?.contains(applicationID) == true { nativeReviewReceipt = "这些建议已采纳。"; return true }
+               local.appliedAIDraftIDs?.contains(applicationID) == true { nativeReviewReceipt = String(localized: "这些建议已采纳。"); return true }
             if case .cloud(let id) = owner, let api {
                 let fresh = try await projectRead(id) { try await api.snapshot(projectID: id, credentials: credentials) }
                 guard generation == epoch, currentProject == owner else { throw CancellationError() }
@@ -1496,7 +1496,7 @@ extension AppModel {
             let context = try JSONDecoder().decode(NativeAIContext.self, from: bytes)
             // 已落盘的云端原命令可继续核对；新审批必须与原任务的基线相同。
             guard previous != nil || (!draft.stale && draft.state == "pending" && context.revision == draft.baseRevision) else {
-                throw NativeAIError(code: "REVISION_CONFLICT", message: "项目已更新，请重新委托；这份草案已保留。")
+                throw NativeAIError(code: "REVISION_CONFLICT", message: String(localized: "项目已更新，请重新委托；这份草案已保留。"))
             }
             let reverse = Dictionary(uniqueKeysWithValues: context.photoIDs.map { ($0.value, $0.key) })
             let chosen = draft.items.filter { selectedIDs.contains($0.photo_id) }.sorted { $0.position < $1.position }
@@ -1518,7 +1518,7 @@ extension AppModel {
                                                    decisions: decisions, orderedPhotoIDs: ordered)
                 if generation == epoch, currentProject == owner {
                     await localLibrary?.reload()
-                    nativeReviewReceipt = "已采纳勾选的建议；保留列表按草案顺序排列。"
+                    nativeReviewReceipt = String(localized: "已采纳勾选的建议；保留列表按草案顺序排列。")
                 }
             case .cloud(let id):
                 guard let api, let snapshot, snapshot.project_id == id else { throw APIError.permissionDenied }
@@ -1534,7 +1534,7 @@ extension AppModel {
                 try await projectRead(id) { try await api.createProposal(record.create, token: credentials.token) }
                 try await projectRead(id) { try await api.submitProposal(record.submit, token: credentials.token) }
                 try await reviews.complete(applicationID: applicationID)
-                if generation == epoch, currentProject == owner { nativeReviewReceipt = "已提交云端提案，可在项目中逐项审批。"; await reloadSnapshot() }
+                if generation == epoch, currentProject == owner { nativeReviewReceipt = String(localized: "已提交云端提案，可在项目中逐项审批。"); await reloadSnapshot() }
             }
             if generation == epoch, currentProject == owner { busy = false; await refreshNativeTasks() }
             return true
@@ -1560,7 +1560,7 @@ extension AppModel {
         do {
             let applicationID = "board:" + board.id + ":" + String(board.revision)
             guard let local = try await library.projects().first(where: { $0.id == projectID }) else { throw APIError.permissionDenied }
-            if local.appliedAIDraftIDs?.contains(applicationID) == true { nativeReviewReceipt = "这份画布草案已添加。"; return true }
+            if local.appliedAIDraftIDs?.contains(applicationID) == true { nativeReviewReceipt = String(localized: "这份画布草案已添加。"); return true }
             let client = try await sharedAIClient()
             let source = try await nativeSource()
             let synced = try JSONDecoder().decode(NativeAIContext.self, from: await client.perform("syncContext", payload: source.payload))
@@ -1581,7 +1581,7 @@ extension AppModel {
                           let value = try? JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any], let text = value["text"] as? String {
                     accepted.append(.init(id: newID, kind: .note, text: text, x: node.x, y: node.y + top + 500,
                                           width: node.width, height: node.height, zOrder: node.zOrder))
-                } else { throw NativeAIError(code: "UNSUPPORTED_NODE", message: "此草案包含手机画布暂不支持的节点，当前只能预览。") }
+                } else { throw NativeAIError(code: "UNSUPPORTED_NODE", message: String(localized: "此草案包含手机画布暂不支持的节点，当前只能预览。")) }
             }
             guard generation == epoch, currentProject == owner else { throw CancellationError() }
             try await library.applyAICanvas(projectID: projectID, expectedUpdatedAt: local.updatedAt, applicationID: applicationID, nodes: accepted)
@@ -1589,7 +1589,7 @@ extension AppModel {
                 await localLibrary?.canvasModel(projectID: projectID).recordAIAddition(accepted.map(\.id))
             }
             if generation == epoch, currentProject == owner {
-                await localLibrary?.reload(); nativeReviewReceipt = "已将草案添加到本机画布。"; busy = false; await refreshNativeTasks()
+                await localLibrary?.reload(); nativeReviewReceipt = String(localized: "已将草案添加到本机画布。"); busy = false; await refreshNativeTasks()
             }
             return true
         } catch { if generation == epoch, currentProject == owner { notice = message(error) }; return false }

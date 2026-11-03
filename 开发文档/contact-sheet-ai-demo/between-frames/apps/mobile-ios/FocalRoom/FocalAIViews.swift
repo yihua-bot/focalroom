@@ -46,7 +46,7 @@ struct FocalAIView: View {
         VStack(spacing: 0) {
             ProjectContext(model: model)
             Picker("AI 功能", selection: Binding(get: { model.aiMode }, set: { model.aiMode = $0 })) {
-                ForEach(AppModel.AIMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
+                ForEach(AppModel.AIMode.allCases, id: \.self) { mode in Text(LocalizedStringKey(mode.rawValue)).tag(mode) }
             }.pickerStyle(.segmented).padding(.horizontal, 18).padding(.vertical, 8)
                 .disabled(model.aiSending || preparingVision)
                 .accessibilityIdentifier("ai.mode")
@@ -194,10 +194,10 @@ struct FocalAIView: View {
                     if let streaming = visibleStreamingText {
                         // 内容长度进入标识：增量到达时让 LazyVStack 用新身份重建该行，
                         // 否则与「正在思考…」分支共用同一 id 会让行停在思考态不刷新。
-                        assistantRow(text: streaming.isEmpty ? "正在思考…" : streaming, streaming: true)
+                        assistantRow(text: streaming.isEmpty ? String(localized: "正在思考…") : streaming, streaming: true)
                             .id(streaming.isEmpty ? "ai.streaming" : "ai.streaming-\(streaming.count)")
                     } else if showingThinking {
-                        assistantRow(text: "正在思考…", streaming: true)
+                        assistantRow(text: String(localized: "正在思考…"), streaming: true)
                             .id("ai.streaming")
                     }
                     draftSection
@@ -223,7 +223,7 @@ struct FocalAIView: View {
                             .frame(width: 44, height: 44)
                             .background(Color(white: 0.18), in: Circle())
                     }
-                    .accessibilityLabel("回到最新消息")
+                    .accessibilityLabel(String(localized: "回到最新消息"))
                     .accessibilityIdentifier("ai.scroll.latest")
                     .padding(.trailing, 18).padding(.bottom, 12)
                 }
@@ -257,8 +257,8 @@ struct FocalAIView: View {
                 .font(.subheadline).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 0) {
-                suggestion("怎样制定一组照片的选片标准？")
-                suggestion("给我一些排列照片的思路")
+                suggestion(String(localized: "怎样制定一组照片的选片标准？"))
+                suggestion(String(localized: "给我一些排列照片的思路"))
             }.padding(.top, 6)
         }
         .padding(.vertical, 18)
@@ -335,7 +335,7 @@ struct FocalAIView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
                 Text("Focal AI").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                if streaming && text == "正在思考…" {
+                if streaming && text == String(localized: "正在思考…") {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.mini)
                         Text("正在思考…").font(.subheadline).foregroundStyle(.secondary)
@@ -357,7 +357,7 @@ struct FocalAIView: View {
                 let applied = model.selectedLocalProject?.appliedAIDraftIDs?.contains(where: { $0.hasPrefix(draft.id + ":") }) == true
                 Button { activeSheet = .draft(draft) } label: {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("选片草案 · " + (applied ? "已采纳建议" : draft.stale ? "来源已更新" : "等待审阅"), systemImage: "sparkles")
+                        Label("选片草案 · " + (applied ? String(localized: "已采纳建议") : draft.stale ? String(localized: "来源已更新") : String(localized: "等待审阅")), systemImage: "sparkles")
                             .font(.caption).foregroundStyle(.secondary)
                         Text(draft.title).font(.headline)
                         Text(draft.summary).font(.subheadline).foregroundStyle(.secondary)
@@ -389,7 +389,7 @@ struct FocalAIView: View {
                     Text(taskStatus(task.state)).font(.caption.weight(.semibold))
                 }.foregroundStyle(.secondary)
                 if !task.reason.isEmpty && !task.isActive {
-                    Text(task.reason.contains("AI_RESULT_UNKNOWN") ? "结果尚未确认，请先核对，避免重复提交。" : task.reason)
+                    Text(task.reason.contains("AI_RESULT_UNKNOWN") ? String(localized: "结果尚未确认，请先核对，避免重复提交。") : task.reason)
                         .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                 }
                 if let question = task.question, task.state == "needs_input" {
@@ -397,7 +397,7 @@ struct FocalAIView: View {
                     Text("在下方输入你的答复，继续这次任务。").font(.caption).foregroundStyle(.secondary)
                 }
                 if !task.inspectedPhotos.isEmpty {
-                    DisclosureGroup("已实际观察 \(task.inspectedPhotos.count) 张照片") {
+                    DisclosureGroup(String(localized: "已实际观察 \(task.inspectedPhotos.count) 张照片")) {
                         ForEach(task.inspectedPhotos) { observation in
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(model.nativePhotoName(observation.photo_id)).font(.subheadline.weight(.semibold))
@@ -427,16 +427,16 @@ struct FocalAIView: View {
 
     private func taskStatus(_ state: String) -> String {
         switch state {
-        case "queued": "排队中"
-        case "planning", "running": "正在处理"
-        case "paused": "已暂停"
-        case "needs_input": "等待你的答复"
-        case "review_ready": "草案等待审阅"
-        case "completed": "已完成"
-        case "cancelled": "已取消"
-        case "failed": "任务已停止"
-        case "stale": "来源已更新"
-        default: "状态待核对"
+        case "queued": String(localized: "排队中")
+        case "planning", "running": String(localized: "正在处理")
+        case "paused": String(localized: "已暂停")
+        case "needs_input": String(localized: "等待你的答复")
+        case "review_ready": String(localized: "草案等待审阅")
+        case "completed": String(localized: "已完成")
+        case "cancelled": String(localized: "已取消")
+        case "failed": String(localized: "任务已停止")
+        case "stale": String(localized: "来源已更新")
+        default: String(localized: "状态待核对")
         }
     }
 
@@ -460,7 +460,7 @@ struct FocalAIView: View {
             ForEach(jobs) { job in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(job.kind == "summarize_disagreement" ? "评论分歧分析" : "项目评论分析").font(.subheadline.weight(.semibold))
+                        Text(job.kind == "summarize_disagreement" ? String(localized: "评论分歧分析") : String(localized: "项目评论分析")).font(.subheadline.weight(.semibold))
                         Spacer()
                         Text(jobStatus(job.status)).font(.caption)
                             .foregroundStyle(job.isActive ? Color.orange : Color.secondary)
@@ -471,7 +471,7 @@ struct FocalAIView: View {
             }
             ForEach(results) { result in
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(result.task_type == "summarize_disagreement" ? "评论分歧" : "评论汇总")
+                    Text(result.task_type == "summarize_disagreement" ? String(localized: "评论分歧") : String(localized: "评论汇总"))
                         .font(.subheadline.weight(.semibold))
                     Text(result.summary).font(.footnote).textSelection(.enabled)
                     Text("\(result.comment_count) 条评论 · \(result.created_by_name)")
@@ -490,9 +490,9 @@ struct FocalAIView: View {
                 }
                 if let account = model.aiAccountState {
                     Section("AI 服务") {
-                        LabeledContent("服务", value: "FocalRoom AI")
-                        LabeledContent("可用", value: "\(account.available.formatted()) \(account.unit)")
-                        LabeledContent("已用", value: "\(account.spent.formatted()) \(account.unit)")
+                        LabeledContent(LocalizedStringKey("服务")) { Text("FocalRoom AI") }
+                        LabeledContent(LocalizedStringKey("可用")) { Text(verbatim: "\(account.available.formatted()) \(account.unit)") }
+                        LabeledContent(LocalizedStringKey("已用")) { Text(verbatim: "\(account.spent.formatted()) \(account.unit)") }
                     }
                 }
             }
@@ -513,7 +513,7 @@ struct FocalAIView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                     ForEach(legacyMessages) { message in
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(message.role == "user" ? "你" : "Focal AI").font(.caption).foregroundStyle(.secondary)
+                            Text(message.role == "user" ? String(localized: "你") : "Focal AI").font(.caption).foregroundStyle(.secondary)
                             AIResponseText(text: message.text)
                         }
                     }
@@ -546,7 +546,7 @@ struct FocalAIView: View {
                                 .background(Color.white.opacity(0.07), in: Capsule())
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("移除照片 \(photo.filename)")
+                            .accessibilityLabel(String(localized: "移除照片 \(photo.filename)"))
                             .accessibilityIdentifier("ai.attachment.remove.\(photo.id)")
                         }
                     }
@@ -563,13 +563,16 @@ struct FocalAIView: View {
                 .buttonStyle(.plain)
                 .disabled(model.aiMode == .chat || model.observationPhotos.isEmpty || !model.canSendAI || model.aiSending || preparingVision)
                 .opacity(model.observationPhotos.isEmpty || !model.canSendAI || model.aiSending || preparingVision ? 0.35 : 1)
-                .accessibilityLabel("选择照片")
+                .accessibilityLabel(String(localized: "选择照片"))
                 .accessibilityIdentifier("ai.attach")
 
                 TextField("向 Focal AI 提问…", text: $draft, axis: .vertical)
                     .font(.body).lineLimit(1...5)
                     .textFieldStyle(.plain)
                     .focused($inputFocused)
+                    // 任务模式多了一行「参考张数」后，输入框会被压到 44 点的最小高度，
+                    // 长消息只能在框内向上滚动、前面的字看不见；按内容自身高度撑开。
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(minHeight: 44)
                     .submitLabel(.send)
                     .accessibilityIdentifier("ai.input")
@@ -591,7 +594,7 @@ struct FocalAIView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSendNow)
-                .accessibilityLabel(preparingVision ? "准备照片" : "发送")
+                .accessibilityLabel(preparingVision ? String(localized: "准备照片") : String(localized: "发送"))
                 .accessibilityIdentifier("ai.send")
             }
             .padding(4)
@@ -610,17 +613,17 @@ struct FocalAIView: View {
 
     // 键盘「发送」不经按钮，会绕过 disabled；被挡住时必须说明原因，否则像点了没反应。
     private var sendBlockReason: String? {
-        if preparingVision { return "正在准备照片授权，请稍候。" }
-        if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请输入消息内容。" }
-        if model.aiSending { return "上一条请求仍在处理，稍后再发送。" }
-        if model.aiMode == .task && model.nativeProjection?.tasks.contains(where: \.isActive) == true { return "这个项目已有任务执行中，请先暂停或取消。" }
-        if model.offline { return "当前离线，无法发送消息。" }
+        if preparingVision { return String(localized: "正在准备照片授权，请稍候。") }
+        if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return String(localized: "请输入消息内容。") }
+        if model.aiSending { return String(localized: "上一条请求仍在处理，稍后再发送。") }
+        if model.aiMode == .task && model.nativeProjection?.tasks.contains(where: \.isActive) == true { return String(localized: "这个项目已有任务执行中，请先暂停或取消。") }
+        if model.offline { return String(localized: "当前离线，无法发送消息。") }
         guard let account = model.aiAccountState else {
-            return model.aiAccountError != nil ? "AI 服务状态读取失败，请点按状态栏重试。" : "正在读取 AI 服务状态，请稍候。"
+            return model.aiAccountError != nil ? String(localized: "AI 服务状态读取失败，请点按状态栏重试。") : String(localized: "正在读取 AI 服务状态，请稍候。")
         }
-        if !account.enabled { return "AI 服务当前未开放。" }
-        if !account.verified { return "请先验证邮箱后再使用 AI。" }
-        if account.available == 0 { return "账户暂无可用额度，请先续费或等待额度重置。" }
+        if !account.enabled { return String(localized: "AI 服务当前未开放。") }
+        if !account.verified { return String(localized: "请先验证邮箱后再使用 AI。") }
+        if account.available == 0 { return String(localized: "账户暂无可用额度，请先续费或等待额度重置。") }
         return nil
     }
 
@@ -653,13 +656,13 @@ struct FocalAIView: View {
 
     // prepareVision 用同一个 permissionDenied 覆盖多种前置条件，直接展示其文案会把离线说成权限问题。
     private func visionPrepareFailure(_ error: Error) -> String {
-        if model.offline { return "当前离线，无法准备照片观察。" }
-        if model.aiSending { return "上一条请求仍在处理，稍后再发送。" }
-        if selectedPhotos.isEmpty { return "请先选择要观察的照片。" }
-        if model.currentProject == nil { return "请先选择项目，再向 AI 提问。" }
+        if model.offline { return String(localized: "当前离线，无法准备照片观察。") }
+        if model.aiSending { return String(localized: "上一条请求仍在处理，稍后再发送。") }
+        if selectedPhotos.isEmpty { return String(localized: "请先选择要观察的照片。") }
+        if model.currentProject == nil { return String(localized: "请先选择项目，再向 AI 提问。") }
         if let value = error as? LocalizedError, let description = value.errorDescription,
            description != APIError.permissionDenied.errorDescription { return description }
-        return "照片准备失败，请重新选择照片后再试。"
+        return String(localized: "照片准备失败，请重新选择照片后再试。")
     }
 
     private func clearPhotos() {
@@ -731,7 +734,7 @@ struct FocalAIView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(photo.filename)
-                            .accessibilityValue(selectedPhotos.contains(photo.id) ? "已选择" : "未选择")
+                            .accessibilityValue(selectedPhotos.contains(photo.id) ? String(localized: "已选择") : String(localized: "未选择"))
                             .accessibilityIdentifier("ai.attach.photo.\(photo.id)")
                         }
                     }
@@ -762,7 +765,7 @@ struct FocalAIView: View {
         let projectID = model.selectedProjectID
         guard projectID != nil else { return }
         guard !model.offline else {
-            tasksError = "当前离线，无法读取项目任务。联网后可重试。"
+            tasksError = String(localized: "当前离线，无法读取项目任务。联网后可重试。")
             return
         }
         do {
@@ -775,17 +778,17 @@ struct FocalAIView: View {
             tasksError = nil
         } catch is CancellationError {
         } catch {
-            if !Task.isCancelled, model.selectedProjectID == projectID { tasksError = "任务读取失败，可在此重试。" }
+            if !Task.isCancelled, model.selectedProjectID == projectID { tasksError = String(localized: "任务读取失败，可在此重试。") }
         }
     }
 
     private func jobStatus(_ status: String) -> String {
         switch status {
-        case "QUEUED": return "排队中"
-        case "RUNNING": return "运行中"
-        case "CANCELLED": return "已取消"
-        case "DONE", "COMPLETED": return "已完成"
-        default: return "状态待核对"
+        case "QUEUED": return String(localized: "排队中")
+        case "RUNNING": return String(localized: "运行中")
+        case "CANCELLED": return String(localized: "已取消")
+        case "DONE", "COMPLETED": return String(localized: "已完成")
+        default: return String(localized: "状态待核对")
         }
     }
 }

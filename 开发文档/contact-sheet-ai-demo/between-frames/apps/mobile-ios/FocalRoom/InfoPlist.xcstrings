@@ -1,0 +1,33 @@
+{
+  "sourceLanguage": "zh-Hans",
+  "version": "1.0",
+  "strings": {
+    "NSMicrophoneUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "口述研究笔记时使用麦克风。语音转写在本机完成，音频不会上传。" } },
+        "en": { "stringUnit": { "state": "translated", "value": "The microphone is used while you dictate research notes. Transcription runs on this device and no audio is uploaded." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "研究メモの口述時にマイクを使用します。音声文字起こしは端末内で行い、音声はアップロードしません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "연구 메모를 음성으로 입력할 때 마이크를 사용합니다. 음성 인식은 기기에서 처리하며 오디오는 업로드하지 않습니다." } }
+      }
+    },
+    "NSPhotoLibraryUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "把你在本 App 标记「保留」的照片同步为系统相册收藏（星标），便于在相册快速找到精选；不读取或修改照片内容。" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Photos you mark as Keep in this app are synced as favorites (starred) in the system library so you can find your selects quickly. Photo content is neither read nor modified." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "このアプリで「保持」に設定した写真をシステムアルバムのお気に入り（スター）に同期し、厳選写真をすばやく見つけられるようにします。写真の内容を読み取ったり変更したりしません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 앱에서 '보류'로 표시한 사진을 시스템 앨범의 즐겨찾기(별표)와 동기화해 엄선된 사진을 빠르게 찾을 수 있게 합니다. 사진 내용은 읽거나 수정하지 않습니다." } }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在本机将口述转为文字。音频不会上传；确认保存后，笔记文字会同步到你的工作区。" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Dictation is converted to text on this device. No audio is uploaded; after you confirm saving, the note text syncs to your workspace." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "口述を端末内で文字に変換します。音声はアップロードせず、保存を確定するとメモのテキストがワークスペースに同期されます。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "음성 입력을 기기에서 텍스트로 변환합니다. 오디오는 업로드하지 않으며, 저장을 확정하면 메모 텍스트가 워크스페이스에 동기화됩니다." } }
+      }
+    }
+  }
+}

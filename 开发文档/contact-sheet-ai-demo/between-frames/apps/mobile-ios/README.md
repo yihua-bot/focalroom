@@ -85,6 +85,8 @@ AI 可以选择当前本机项目的照片，每次展示实际预览并确认�
 
 正常登录默认使用与现有桌面客户端一致的工作空间地址。独立部署可展开登录页的“工作空间设置”更改 HTTPS 地址。Debug 构建额外允许本机回环 HTTP；Release 拒绝所有明文 HTTP 服务配置。
 
+构建脚本不安装任何工具链组件，缺目标标准库就直接失败。清理构建产物后若模拟器构建报“缺少 aarch64-apple-ios-sim 标准库”，先执行 `rustup target add aarch64-apple-ios-sim`；也可以把与编译器匹配的标准库放在 `DerivedData/NativeAgent/sysroot` 下作为项目本地备用。
+
 ## 1.0.0 归档与分发
 
 Release 使用 `studio.focalroom.ios`，Team `KXSFCZF4S3`，版本 `1.0.0`、构建号 `1`；Debug 保留 `studio.focalroom.ios.development`，使测试与正式应用的数据和 Keychain 身份分开。品牌图标集已配置，语音权限文案区分本机音频与确认保存后同步的笔记文字，隐私清单包含所选照片和设备标识用途。

@@ -48,13 +48,13 @@ struct ResearchView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 40)
                 } else if entries.isEmpty {
-                    EmptyWorkspace(title: "还没有研究资料", detail: "记录参考笔记与链接，辅助项目研究与整理。", symbol: "text.book.closed")
+                    EmptyWorkspace(title: String(localized: "还没有研究资料"), detail: String(localized: "记录参考笔记与链接，辅助项目研究与整理。"), symbol: "text.book.closed")
                         .padding(.top, 60)
                 } else {
                     ForEach(entries) { entry in
                         Button {
                             if canEdit { editorTarget = .edit(entry) }
-                            else { notice = model.offline ? "离线状态下为只读，联网后可编辑。" : "当前项目权限为只读，无法编辑这条资料。" }
+                            else { notice = model.offline ? String(localized: "离线状态下为只读，联网后可编辑。") : String(localized: "当前项目权限为只读，无法编辑这条资料。") }
                         } label: {
                             row(entry)
                         }
@@ -73,7 +73,7 @@ struct ResearchView: View {
                     editorTarget = .create
                 } label: { Image(systemName: "plus") }
                     .disabled(!canEdit || busy || loading)
-                    .accessibilityLabel("新建研究资料").accessibilityIdentifier("research.create")
+                    .accessibilityLabel(String(localized: "新建研究资料")).accessibilityIdentifier("research.create")
             }
         }
         .task { await load() }
@@ -120,7 +120,7 @@ struct ResearchView: View {
         defer { loading = false }
         guard !model.offline else {
             // 离线时 model 返回空数组，不能当成「没有资料」展示。
-            loadError = "当前离线，研究资料需联网读取。"
+            loadError = String(localized: "当前离线，研究资料需联网读取。")
             return
         }
         do {
@@ -134,7 +134,7 @@ struct ResearchView: View {
 
     private func message(_ error: Error) -> String {
         if let value = error as? LocalizedError, let description = value.errorDescription { return description }
-        return "暂时无法读取研究资料，请稍后重试。"
+        return String(localized: "暂时无法读取研究资料，请稍后重试。")
     }
 }
 
@@ -215,7 +215,7 @@ struct ResearchEditorView: View {
                     }
                 }
             }
-            .navigationTitle(editingEntry == nil ? "新建研究资料" : "编辑研究资料").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(editingEntry == nil ? String(localized: "新建研究资料") : String(localized: "编辑研究资料")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { voice.stop(); dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -280,6 +280,6 @@ struct ResearchEditorView: View {
 
     private func message(_ error: Error) -> String {
         if let value = error as? LocalizedError, let description = value.errorDescription { return description }
-        return "暂时无法保存，请稍后重试。"
+        return String(localized: "暂时无法保存，请稍后重试。")
     }
 }
