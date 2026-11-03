@@ -87,24 +87,30 @@ AI 可以选择当前本机项目的照片，每次展示实际预览并确认�
 
 构建脚本不安装任何工具链组件，缺目标标准库就直接失败。清理构建产物后若模拟器构建报“缺少 aarch64-apple-ios-sim 标准库”，先执行 `rustup target add aarch64-apple-ios-sim`；也可以把与编译器匹配的标准库放在 `DerivedData/NativeAgent/sysroot` 下作为项目本地备用。
 
-## 1.0.0 归档与分发
+## 归档与分发
 
-Release 使用 `studio.focalroom.ios`，Team `KXSFCZF4S3`，版本 `1.0.0`、构建号 `1`；Debug 保留 `studio.focalroom.ios.development`，使测试与正式应用的数据和 Keychain 身份分开。品牌图标集已配置，语音权限文案区分本机音频与确认保存后同步的笔记文字，隐私清单包含所选照片和设备标识用途。
+Release 使用 `studio.focalroom.ios`，Team `KXSFCZF4S3`，版本 `1.0.2`、构建号 `21`（首个归档版本为 `1.0.0`/`1`）；Debug 保留 `studio.focalroom.ios.development`，使测试与正式应用的数据和 Keychain 身份分开。品牌图标集已配置，语音权限文案区分本机音频与确认保存后同步的笔记文字，隐私清单包含所选照片和设备标识用途。
 
 从本目录执行：
 
 ```bash
 xcodebuild -project "FocalRoom.xcodeproj" -scheme "FocalRoom" -configuration Release \
   -destination "generic/platform=iOS" -derivedDataPath "DerivedData/ArchiveBuild" \
-  -archivePath "DerivedData/Distribution/FocalRoom-1.0.0-1-Verified.xcarchive" \
+  -archivePath "DerivedData/Distribution/FocalRoom-1.0.2-21-Verified.xcarchive" \
   -allowProvisioningUpdates archive
 xcodebuild -exportArchive \
-  -archivePath "DerivedData/Distribution/FocalRoom-1.0.0-1-Verified.xcarchive" \
-  -exportPath "DerivedData/Distribution/AppStore-1.0.0-1-Verified" \
+  -archivePath "DerivedData/Distribution/FocalRoom-1.0.2-21-Verified.xcarchive" \
+  -exportPath "DerivedData/Distribution/AppStore-1.0.2-21" \
   -exportOptionsPlist "ExportOptions-AppStore.plist" -allowProvisioningUpdates
 ```
 
 导出配置为 `app-store-connect` + `destination=export`，只生成本地分发产物，不自动上传。Archive 成功和证书存在都不能替代 IPA 导出与分发描述文件核验；归档可以先由开发证书签名，再在导出阶段使用分发身份重新签名。初始 `No Accounts` 已在用户完成 Xcode 登录后解除；Xcode 27.1 已成功导出 `DerivedData/Distribution/AppStore-1.0.0-1-Verified/FocalRoom.ipa`，实际 Apple Distribution 签名、App Store 描述文件及关闭调试权限均已核验。该 IPA 已包含最新对话滚动修复，尚未上传；详细日志和 SHA256 见仓库根目录 `FocalRoom-v4/IOS_1_0_0_RELEASE_STATUS.md`。
+
+### 1.0.2 构建记录
+
+`1.0.2`/`21` 从提交 `b9ae24c0` 的干净副本构建，不含其他在途工作。Archive 与 IPA 均已核验：`Apple Distribution: liqiang song (KXSFCZF4S3)`、`iOS Team Store Provisioning Profile: studio.focalroom.ios`、`get-task-allow=false`、单架构 arm64、`ITSAppUsesNonExemptEncryption=false`，包内含共享 AI 核心；`codesign --verify --deep --strict` 通过。产物与摘要在 `DerivedData/Distribution/AppStore-1.0.2-21/`，`FocalRoom.ipa` 9,650,612 字节，SHA256 `4f1ee6134a0e80ee99b718ca497935d0acc6243cff71c23829b075a479c50d7d`；同一 Archive 已放入 `~/Library/Developer/Xcode/Archives/2026-11-03/` 供 Xcode Organizer 分发。
+
+上传未完成：`destination=upload` 报 `Failed to Use Accounts`，需要用户的 App Store Connect 会话或 API 密钥，不能代为登录。登录 Xcode 账户后在 Organizer 里 Distribute App，或用 `-authenticationKeyPath`、`-authenticationKeyID`、`-authenticationKeyIssuerID` 三项指向本人密钥后重跑上面的导出命令并把 `destination` 改为 `upload`。发版前回归：整链模拟器 harness 247 秒 0 失败，照片出网归属按像素逐张核对。
 
 AI 的真实接入在应用中已走服务端托管网关与共用账户额度；确定性模型桩只在隔离验证脚本中注入，不打包进应用。服务状态读取失败时提供重试，未验证邮箱、服务关闭或无可用额度时不提交消息。真实模型调用按用户决定后置，不能把桩测试或公网 401 当作真实模型验收。
 
