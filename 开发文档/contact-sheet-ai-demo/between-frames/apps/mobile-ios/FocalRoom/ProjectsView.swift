@@ -120,13 +120,13 @@ struct ProjectLibraryView: View {
     let model: AppModel
     let projectID: String
     private func cloudPhotoLink(_ photo: Photo) -> some View {
-        NavigationLink {
-            PhotoViewer(model: model, projectID: projectID, photoID: photo.id)
+        Button {
+            viewerPhoto = photo
         } label: {
             cloudPhotoCell(photo)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(photo.filename)，\(localizedText(photo.selection.title))")
+        .accessibilityLabel("\(photo.filename)，\(photo.selection.title)")
         .accessibilityIdentifier("photo.\(photo.id)")
     }
 
@@ -144,6 +144,7 @@ struct ProjectLibraryView: View {
 
     @State private var filter: Selection?
     @State private var toolDestination: ProjectTool?
+    @State private var viewerPhoto: Photo?
     @Environment(\.dismiss) private var dismiss
 
     private enum ProjectTool: String, Identifiable {
