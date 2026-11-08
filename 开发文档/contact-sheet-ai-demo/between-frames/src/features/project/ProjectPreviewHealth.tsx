@@ -46,8 +46,8 @@ export function ProjectPreviewHealth({ repository, projectId }: { repository?: D
     return names;
   }, {}));
   return <section className="project-preview-health micro" aria-label={zh.projectPreviewHealthTitle}>
-    <p>{zh.projectPreviewHealthHint}</p>
-    <div className="project-preview-health-actions">
+    <div className="local-check-row">
+      <strong>{zh.projectPreviewHealthTitle}</strong>
       <Button size="small" disabled={busy} onClick={count}>{zh.projectPreviewAudit}</Button>
       {/* 只有确实能重算的那批才摆这个按钮：原图丢了或换过的，这个动作修不了，不拿它当万能解。 */}
       {repository.repairAllPreviews && audit && audit.needsRepair > 0 && <Button size="small" disabled={busy} onClick={repairAll}>{zh.projectPreviewRepairAll}</Button>}

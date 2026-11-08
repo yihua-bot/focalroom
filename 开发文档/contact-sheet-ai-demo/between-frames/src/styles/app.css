@@ -302,14 +302,19 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 
 .history-toolbar { display:flex; align-items:center; gap:8px; padding:12px 32px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
 .history-toolbar .micro { margin-left:auto; }
-.project-preview-health, .project-pixel-versions { display:grid; gap:6px; padding:10px 32px; border-bottom:1px solid var(--border); }
-.project-preview-health p, .project-pixel-versions p { margin:0; }
-.project-preview-health-actions, .project-pixel-versions-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.local-checks { padding:9px 32px; border-bottom:1px solid var(--border); text-align:left; }
+.local-checks-toggle { display:flex; align-items:center; gap:8px; padding:0; border:0; background:none; color:var(--muted); font:inherit; cursor:pointer; text-align:left; }
+.local-checks-toggle strong { color:var(--text); font-weight:600; }
+.local-checks-toggle svg { transition:transform .12s ease; }
+.local-checks-toggle[aria-expanded="true"] svg { transform:rotate(90deg); }
+.local-checks-body { display:grid; gap:12px; padding-top:10px; }
+.local-checks-body[hidden] { display:none; }
+.local-check-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.local-check-row strong { font-weight:600; }
+.project-preview-health, .project-pixel-versions, .sidecar-judgements { display:grid; gap:6px; }
+.project-preview-health p, .project-pixel-versions p, .sidecar-judgements p { margin:0; }
 .project-preview-health summary, .project-pixel-versions summary { cursor:pointer; }
 .project-preview-health ul, .project-pixel-versions ul { margin:6px 0; padding-left:20px; display:grid; gap:4px; }
-.sidecar-judgements { display:grid; gap:6px; }
-.local-file-panels > .sidecar-judgements { padding:10px 32px; border-bottom:1px solid var(--border); }
-.sidecar-judgements p { margin:0; }
 .sidecar-judgements ul { margin:6px 0; padding-left:0; list-style:none; display:grid; gap:6px; }
 .sidecar-judgements li { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .version-save { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:22px; }
@@ -331,7 +336,7 @@ kbd { border: 1px solid #505149; padding: 4px 7px; border-radius: 3px; color: va
 .compare-pickers select { min-width:180px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); }
 .compare-result ul { max-height:26vh; overflow:auto; padding-left:22px; font-size:13px; }
 .compare-result li { padding:4px; }
-@media (max-width:1000px) { .history-toolbar { padding:10px 18px; } .project-preview-health, .project-pixel-versions { padding:10px 18px; } .version-layout { grid-template-columns:1fr; } }
+@media (max-width:1000px) { .history-toolbar { padding:10px 18px; } .local-checks { padding:9px 18px; } .version-layout { grid-template-columns:1fr; } }
 
 /* M2 任务与草案沿用现有视觉 tokens，局部滚动不遮挡审批操作。 */
 .agent-panel { text-align: left; }

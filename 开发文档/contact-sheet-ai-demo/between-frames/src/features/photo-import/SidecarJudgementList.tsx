@@ -51,8 +51,10 @@ export function SidecarJudgementList({ repository, projectId, onApplied }: {
   const label = (value: string) => zh[`status.${value}`] || value;
   const batchable = proposals?.filter(item => item.batchSafe).length ?? 0;
   return <section className="sidecar-judgements micro" aria-label={zh.sidecarTitle}>
-    <p>{zh.sidecarHint}</p>
-    <Button size="small" disabled={Boolean(busy) || !repository.sidecarProposals} onClick={() => { void scan(); }}>{busy === 'scan' ? zh.sidecarReading : proposals ? zh.sidecarRescan : zh.sidecarScan}</Button>
+    <div className="local-check-row">
+      <strong>{zh.sidecarTitle}</strong>
+      <Button size="small" disabled={Boolean(busy) || !repository.sidecarProposals} onClick={() => { void scan(); }}>{busy === 'scan' ? zh.sidecarReading : proposals ? zh.sidecarRescan : zh.sidecarScan}</Button>
+    </div>
     {proposals && !proposals.length && <p className="muted">{zh.sidecarEmpty}</p>}
     {batch && <p role="status">{zh.sidecarBatchDone.replace('{applied}', String(batch.applied)).replace('{skipped}', String(batch.skipped))}</p>}
     {!!proposals?.length && <>

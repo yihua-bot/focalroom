@@ -229,8 +229,8 @@ it.each([['en','missing','This photo\'s visual record was not used: its original
 it('整项目的点名不再挂在这份方案的弹窗里：那是项目自己的文件事实，入口在图库一侧',()=>{
   const repository={agent:{},auditPreviews:vi.fn(),repairAllPreviews:vi.fn()};
   render(<DraftReview draft={draft} project={project} repository={repository as unknown as DesktopProjectRepository} onClose={vi.fn()} onUpdated={vi.fn()}/>);
-  expect(screen.queryByRole('button',{name:'数一下整个项目还有几张读不出来'})).not.toBeInTheDocument();
-  expect(screen.queryByRole('button',{name:'把整项目的坏预览一次修好'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'检查预览'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'重生成坏预览'})).not.toBeInTheDocument();
   expect(repository.auditPreviews).not.toHaveBeenCalled();
 });
 const judged=(photoId:string,uncertainty:string,observationUncertainty:string):PhotoJudgment=>({id:'judgment-'+photoId,photoId,observationCallId:'call',judgment:'主体可能不够突出',reasoning:'明亮背景竞争注意力',uncertainty,observationUncertainty,facts:[],methods:[],imageStatus:'verified',inference:true});

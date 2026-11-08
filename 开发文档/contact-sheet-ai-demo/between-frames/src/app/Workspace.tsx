@@ -7,9 +7,7 @@ import { NarrativeCanvas } from '../features/canvas/NarrativeCanvas';
 import { PublicationPanel } from '../features/publishing/PublicationPanel';
 import { zh } from './copy';
 import { ProjectHeader } from '../features/project/ProjectHeader';
-import { ProjectPreviewHealth } from '../features/project/ProjectPreviewHealth';
-import { ProjectObservationVersions } from '../features/project/ProjectObservationVersions';
-import { SidecarJudgementList } from '../features/photo-import/SidecarJudgementList';
+import { LocalFileChecks } from '../features/project/LocalFileChecks';
 import { ContactSheetGrid } from '../components/contact-sheet/ContactSheetGrid';
 import { SequenceBoard } from '../components/sequence/SequenceBoard';
 import { SelectionDock } from '../components/sequence/SelectionDock';
@@ -56,12 +54,7 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
       <Button size="small" disabled={busy} onClick={onActivity}>{zh.activityLog}{project.events.length ? ` · ${project.events.length}` : ''}</Button>
       <span className="micro">{zh.undoableEdits.replace('{count}', String(project.history?.undoCount ?? 0))}</span>
     </div>}
-    {photoTools && local && !readOnly && <>
-      <ProjectPreviewHealth repository={projectRepository} projectId={project.id} />
-      <ProjectObservationVersions repository={projectRepository} projectId={project.id} />
-      {/* 外部软件的判断不必等下一次导入才看得见：这里随时读一遍，落不落库还是由人点头。 */}
-      {projectRepository?.sidecarProposals && <div className="local-file-panels"><SidecarJudgementList repository={projectRepository} projectId={project.id} onApplied={onChanged} /></div>}
-    </>}
+    {photoTools && local && !readOnly && <LocalFileChecks repository={projectRepository} projectId={project.id} onApplied={onChanged} />}
     <div className="toolbar">{gridTools && <div className="filter-tabs" aria-label={zh.photoFilters}>{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter}
       className={ui.filter === filter ? 'active' : ''} onClick={() => ui.setFilter(filter)}>{String(zh['filters.' + filter] ?? filter)}<span className="count">{filter === 'all' ? project.photos.length : project.photos.filter(photo => photo.status === filter).length}</span></button>)}</div>}
       <div className="toolbar-actions">{gridTools && <Button size="small" onClick={ui.toggleDensity} aria-label={zh.toggleGridDensity} aria-pressed={ui.dense}><Columns3 size={15} /></Button>}

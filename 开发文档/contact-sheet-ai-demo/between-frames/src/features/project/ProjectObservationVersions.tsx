@@ -45,8 +45,8 @@ export function ProjectObservationVersions({ repository, projectId }: { reposito
     return names;
   }, {}) ?? {});
   return <section className="project-pixel-versions micro" aria-label={zh.observationPixelTitle}>
-    <p>{zh.observationPixelHint}</p>
-    <div className="project-pixel-versions-actions">
+    <div className="local-check-row">
+      <strong>{zh.observationPixelTitle}</strong>
       <Button size="small" disabled={busy} onClick={count}>{zh.observationPixelAudit}</Button>
       {/* 一条都补不了的时候不摆这个按钮：能补的数目来自本地比对，不是界面自己猜的。 */}
       {repository.backfillObservationVersions && ledger && ledger.ready > 0 && <Button size="small" disabled={busy} onClick={backfill}>{zh.observationPixelBackfill}</Button>}
