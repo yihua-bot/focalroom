@@ -89,6 +89,36 @@ final class AppModel {
     private(set) var pendingBoards: Set<String> = []
     var notice: String?
     var address = "https://team.focroom.cc"
+
+    /// 候选接入点：并发探测，先应答者胜。大陆直连入口（备案域名）优先级靠前，
+    /// 仅在地址仍为默认值时自动切换；用户手动填写过的地址永远尊重。
+    @ObservationIgnored static let defaultAddress = "https://team.focroom.cc"
+    @ObservationIgnored static let mainlandAddress = "https://api.netstar.org.cn/focalroom"
+    @ObservationIgnored private var probedWinner: Bool = false
+
+    func probeAndPickAddress() async {
+        // 测试夹具注入了评审地址时禁用自动选路，避免把夹具登录导向生产。
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["FOCALROOM_IOS_REVIEW_URL"] != nil { return }
+        #endif
+        guard !probedWinner, address == Self.defaultAddress else { return }
+        probedWinner = true
+        func reachable(_ base: String) async -> Bool {
+            guard let url = URL(string: base + "/api/v2/health") else { return false }
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 4
+            return (try? await URLSession.shared.data(for: request)) != nil
+        }
+        // 并发探测：主线路 4 秒内应答即保持不动（默认值已写入）；
+        // 只有主线路超时且直连可达时才切换——海外用户零感知，大陆用户自动走直连。
+        async let main = reachable(Self.defaultAddress)
+        async let direct = reachable(Self.mainlandAddress)
+        let (mainOK, directOK) = await (main, direct)
+        if !mainOK && directOK {
+            address = Self.mainlandAddress
+            notice = String(localized: "已自动选择大陆直连线路。")
+        }
+    }
     /// 验证码已发送到邮箱的提示状态；登录成功或切换模式时清除。
     var codeSent = false
 
@@ -1388,6 +1418,12 @@ extension AppModel {
         var command: [String: Any] = ["type": "StartConversation", "expectedAccountId": credentials?.user.id ?? "", "goal": text,
             "selectedPhotoIds": scope, "focusPhotoIds": vision == nil ? [] : scope, "targetCount": max(1, min(aiTargetCount, max(1, scope.count))),
             "budget": budget, "consentId": consent, "sourceBoard": NSNull()]
+        if vision?.detailInspection == true {
+            guard aiAccountState?.visionDetail?.policy == "preview1400-high-v1", aiAccountState?.visionDetail?.maxEdge == 1400,
+                  aiAccountState?.visionDetail?.maxPhotosPerTask == 4,
+                  !scope.isEmpty, scope.count <= 4 else { throw APIError.permissionDenied }
+            command["detailPhotoIds"] = scope
+        }
         if vision == nil, let task = nativeProjection?.tasks.first(where: { $0.state == "needs_input" }) {
             command = ["type": "SubmitFeedback", "taskId": task.id, "answer": text]
         }

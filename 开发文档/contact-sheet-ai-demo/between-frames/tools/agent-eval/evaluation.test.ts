@@ -38,7 +38,9 @@ function corpus(): EvaluationInput {
 }
 const codes = (input: EvaluationInput) => evaluate(input, 'fixed-test-seed').report.issues.map(i => i.code);
 
-describe('M3 evidence evaluation', () => {
+// 这几条要起真的命令行进程：本机空载实测最慢一条约 2 秒，全量并发时翻好几倍，5 秒默认门会随机误红。
+// 放宽只给这一组，全局默认门不动。
+describe('M3 evidence evaluation', { timeout: 20_000 }, () => {
   it('reports absent evidence as partial with null rates, not 0/0 success', () => {
     const input = corpus(); input.tasks = []; input.runs = []; input.registeredRunIds = []; input.reviews = [];
     const result = evaluate(input, 'fixed-test-seed');

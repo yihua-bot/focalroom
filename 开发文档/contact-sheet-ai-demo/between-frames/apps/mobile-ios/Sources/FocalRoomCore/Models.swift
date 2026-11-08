@@ -807,6 +807,12 @@ public struct ProjectEventsPage: Codable, Sendable, Equatable {
 
 // 账户 AI 额度与策略：与服务端 GET /ai/account 响应逐字段一致。
 public struct AIAccount: Codable, Sendable, Equatable {
+    public struct VisionDetail: Codable, Sendable, Equatable {
+        public let policy: String
+        public let maxEdge: Int
+        public let maxPhotosPerTask: Int
+    }
+    public let visionDetail: VisionDetail?
     public struct Recovery: Codable, Sendable, Equatable {
         public let enabled: Bool
     }

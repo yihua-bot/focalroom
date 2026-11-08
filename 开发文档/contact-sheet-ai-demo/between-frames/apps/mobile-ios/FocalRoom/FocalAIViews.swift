@@ -99,12 +99,12 @@ struct FocalAIView: View {
             case .board(let board):
                 NativeBoardReviewView(model: model, board: board)
             case .vision(let prepared):
-                VisionConsentView(draft: prepared) {
+                VisionConsentView(draft: prepared, detailAvailable: model.aiAccountState?.visionDetail?.policy == "preview1400-high-v1" && model.aiAccountState?.visionDetail?.maxEdge == 1400 && model.aiAccountState?.visionDetail?.maxPhotosPerTask == 4) { approved in
                     // 授权只消费一次；发送任务先消费授权，再主动收起确认页。
                     beginFollowingRequest()
                     let origin = model.currentProject
                     Task {
-                        let sent = await model.aiSend(text: prepared.text, vision: prepared,
+                        let sent = await model.aiSend(text: prepared.text, vision: approved,
                                                       onVisionConsumed: { activeSheet = nil })
                         if sent {
                             clearSentDraft(for: origin)
@@ -408,6 +408,8 @@ struct FocalAIView: View {
                         }
                     }.font(.subheadline)
                 }
+                NativePhotoJudgmentsView(judgments: task.photoJudgments ?? [], photoName: model.nativePhotoName)
+                if let trace = task.memoryTrace { NativeMemoryTimeline(trace: trace) }
                 ForEach(task.preferenceProposals) { preference in
                     NativePreferenceView(model: model, task: task, preference: preference)
                 }
@@ -868,5 +870,144 @@ private struct AIObservationThumbnail: View {
                 if !Task.isCancelled { failed = true }
             }
         }
+    }
+}
+
+private struct NativePhotoJudgmentsView: View {
+    let judgments: [NativePhotoJudgment]
+    let photoName: (String) -> String
+    private func reviewStatus(_ status: String?) -> String {
+        switch status {
+        case "verified": String(localized: "已核实")
+        case "imported": String(localized: "已导入，未核实")
+        case "reviewed": String(localized: "已审校")
+        default: status ?? String(localized: "审校状态未取得")
+        }
+    }
+    var body: some View {
+        if !judgments.isEmpty {
+            DisclosureGroup("单张判断与依据") {
+                Text("以下是 AI 的解释；引用来路可核对，不代表判断已被证实。").font(.caption).foregroundStyle(.secondary)
+                ForEach(judgments) { judgment in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(photoName(judgment.photoId)).font(.subheadline.weight(.semibold))
+                        if judgment.imageStatus == .verified { Text("当前预览与观察依据一致").font(.caption) }
+                        else { Text("当前照片版本未能核对一致；以下保留的是当时的判断依据。").font(.caption).foregroundStyle(.secondary) }
+                        Text(judgment.judgment)
+                        Text("画面依据（模型观察）").font(.subheadline.weight(.semibold))
+                        ForEach(judgment.facts, id: \.index) { Text($0.text).font(.footnote) }
+                        Text("如何得出这个判断").font(.subheadline.weight(.semibold))
+                        Text(judgment.reasoning).font(.footnote)
+                        Text("本次引用的方法").font(.subheadline.weight(.semibold))
+                        if judgment.methods.isEmpty { Text("本条判断没有绑定方法出处。").font(.footnote) }
+                        ForEach(Array(judgment.methods.enumerated()), id: \.offset) { _, method in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(method.title).font(.footnote.weight(.semibold))
+                                if method.kind == "original_method" { Text("FocalRoom 原创方法札记").font(.caption) }
+                                else { Text(reviewStatus(method.reviewStatus)).font(.caption) }
+                                if method.disputed { Text("有争议").font(.caption).foregroundStyle(.secondary) }
+                                Text(method.passage).font(.footnote)
+                                if method.excerpt { Text("摘录").font(.caption) }
+                                Text(method.source ?? String(localized: "未取得外部出处")).font(.caption)
+                                Text(method.citationId).font(.caption)
+                            }
+                        }
+                        Text("限制与不确定性").font(.subheadline.weight(.semibold))
+                        Text(judgment.observationUncertainty).font(.caption)
+                        Text(judgment.uncertainty).font(.caption)
+                    }.padding(.vertical, 8)
+                }
+            }.textSelection(.enabled)
+        }
+    }
+}
+
+private struct NativeMemoryTimeline: View {
+    let trace: NativeMemoryTrace
+    @State private var expanded = false
+    private func date(_ raw: String) -> String {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return parser.date(from: raw)?.formatted(date: .abbreviated, time: .shortened) ?? raw
+    }
+    private func label(_ value: String?, category: String) -> String {
+        switch category + (value ?? "") {
+        case "origin:user_stated": String(localized: "你写明的偏好")
+        case "origin:user_confirmed": String(localized: "你确认过的规则")
+        case "origin:rule_inferred": String(localized: "关键词推断")
+        case "state:confirmed": String(localized: "已确认")
+        case "state:unconfirmed": String(localized: "待确认")
+        case "state:corrected": String(localized: "已纠正")
+        case "state:retired": String(localized: "已移除")
+        case "reason:keyword_and_semantic_ranked": String(localized: "参与关键词及本地语义排序")
+        case "reason:keyword_ranked": String(localized: "参与关键词排序")
+        case "reason:semantic_ranked": String(localized: "参与本地语义排序")
+        case "reason:confirmed_priority": String(localized: "未取得相关性排序，按已确认优先提供")
+        case "reason:evidence_priority": String(localized: "未取得相关性排序，按证据排序提供")
+        case "reason:confirmed_author_priority": String(localized: "已授权的本地作者记忆，按已确认优先提供")
+        case "reason:author_keyword_ranked": String(localized: "已授权的本地作者记忆，参与来源项目关键词排序")
+        default: value ?? String(localized: "未记录或未取得")
+        }
+    }
+    var body: some View {
+        if !trace.events.isEmpty {
+            DisclosureGroup(isExpanded: $expanded) {
+                if expanded {
+                    Text("记录说明请求准备携带或查询返回了哪些记忆，不证明模型收到、采纳或据此作出判断。检索原因和当前状态也不保证适用于本次作品。").font(.caption).foregroundStyle(.secondary)
+                    if trace.hasEarlierEvents { Text("仅展示最近40次记录，另有更早记录。").font(.caption) }
+                    ForEach(trace.events) { event in
+                        VStack(alignment: .leading, spacing: 8) {
+                            if event.kind == .context_attempt { Text("请求尝试：准备携带").font(.subheadline.weight(.semibold)) }
+                            else { Text("记忆查询返回").font(.subheadline.weight(.semibold)) }
+                            if let round = event.round { Text("第 \(round) 轮").font(.caption) }
+                            else { Text("轮次未记录或未取得").font(.caption) }
+                            Text(date(event.createdAt)).font(.caption).foregroundStyle(.secondary)
+                            if !event.recorded { Text("这一条没有完整的读取记录，不能当作未提供记忆。").font(.footnote) }
+                            else if event.reads.isEmpty { Text("本条记录没有记忆条目。").font(.footnote) }
+                            else {
+                                ForEach(event.reads) { read in
+                                    NativeMemoryReadRow(read: read, describe: { label($0, category: $1) }, formatDate: date)
+                                }
+                            }
+                        }.padding(.vertical, 8)
+                    }
+                }
+            } label: { Text("请求中的记忆来路") }
+            .textSelection(.enabled)
+        }
+    }
+}
+
+private struct NativeMemoryReadRow: View {
+    let read: NativeMemoryTrace.Read
+    let describe: (String?, String) -> String
+    let formatDate: (String) -> String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if read.memoryTextVersion == .verified, let passage = read.passage { Text(passage).font(.footnote) }
+            else if read.memoryTextVersion == .changed { Text("记忆正文已改变，不能用现在的文字补作当时依据。").font(.footnote) }
+            else { Text("当时的记忆正文版本未能核对，不显示当前正文。").font(.footnote) }
+            Text(describe(read.origin, "origin:")).font(.caption)
+            if read.scope == "cross_project" { Text(String(localized: "来自其他本地项目：") + (read.sourceProjectTitle ?? read.sourceProjectId ?? String(localized: "未记录或未取得"))).font(.caption) }
+            else if read.scope == "project_local" { Text("本项目记忆").font(.caption) }
+            else { Text("未记录或未取得").font(.caption) }
+            Text(String(localized: "当时的检索依据：") + describe(read.selectionReason, "reason:")).font(.caption)
+            Text(String(localized: "当时状态：") + describe(read.statusAtRead, "state:")).font(.caption)
+            Text(String(localized: "当前状态：") + describe(read.currentStatus, "state:")).font(.caption)
+            if read.disabled == true { Text("停用检索").font(.caption) }
+            if let confirmation = read.confirmation {
+                DisclosureGroup("人工确认回执") {
+                    if confirmation.action == .rememberPreference { Text("明确保存偏好").font(.caption) }
+                    else { Text("人工确认假设").font(.caption) }
+                    Text(formatDate(confirmation.createdAt)).font(.caption)
+                    Text(confirmation.requestId).font(.caption)
+                }
+            } else { Text("本次读取未记录确认回执，不能补认某次确认。").font(.caption) }
+            if read.memoryTextVersion == .verified, read.scope == "project_local", let applicability = read.applicability { Text(String(localized: "保存时的适用说明：") + applicability).font(.caption) }
+            if let evidence = read.evidence {
+                Text("当时证据的现存状态：未排除 \(evidence.available) 条，已排除 \(evidence.excluded) 条，未取得 \(evidence.missing) 条。").font(.caption)
+            } else { Text("本次未记录可核对的证据编号。").font(.caption) }
+            if read.evidenceRefsTruncated { Text("这里只记录了前100条证据。").font(.caption) }
+        }.padding(.vertical, 6)
     }
 }

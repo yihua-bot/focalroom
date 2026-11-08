@@ -89,6 +89,29 @@ test('disabled service is explicit and has no trial side effect; exhausted quota
  const {HostedAiService}=await import('../src/hosted-ai.ts');const disabled=new HostedAiService(pool,api.service.auth);const b=await user();assert.equal((await disabled.account(auth(b))).enabled,false);
  await assert.rejects(disabled.respond(auth(b),body()),e=>e.status===503);assert.equal((await pool.query('SELECT count(*)::int n FROM fr_ai_accounts WHERE user_id=$1',[b.user.id])).rows[0].n,0);
 });
+
+test('detail capability requires its own consent, retains bounded high detail and reserves its larger input',async()=>{
+ mode='network';const a=await user();
+ assert.deepEqual((await account(a)).body.visionDetail,{policy:'preview1400-high-v1',maxEdge:1400,maxPhotosPerTask:4});
+ await grantAiTokens(pool,a.user.id,randomUUID(),100000,'fixture');
+ const bytes=await sharp({create:{width:1400,height:933,channels:3,background:'#369'}}).jpeg().withMetadata({orientation:1}).toBuffer();
+ const part={type:'input_image',image_url:'data:image/jpeg;base64,'+bytes.toString('base64'),detail:'high'};
+ const input={...body(),input:[{role:'user',content:[part]}]}, consent={'x-focalroom-image-consent':'granted'};
+ const start=calls;
+ assert.equal((await post(a,input,randomUUID(),{'x-focalroom-detail-consent':'preview1400-high-v1'})).status,403);
+ assert.equal((await post(a,{...input,input:[{role:'user',content:Array(5).fill(part)}]},randomUUID(),{...consent,'x-focalroom-detail-consent':'preview1400-high-v1'})).status,400);
+ assert.equal(calls,start);
+ const lowId=randomUUID();assert.equal((await post(a,input,lowId,{...consent,'x-focalroom-detail-consent':'other-policy'})).status,502);
+ assert.equal(seen.input[0].content[0].detail,'low');
+ const highId=randomUUID();assert.equal((await post(a,input,highId,{...consent,'x-focalroom-detail-consent':'preview1400-high-v1'})).status,502);
+ assert.equal(seen.input[0].content[0].detail,'high');
+ const meta=await sharp(Buffer.from(seen.input[0].content[0].image_url.split(',')[1],'base64')).metadata();
+ assert.equal(meta.width,1400);assert.equal(meta.height,933);assert.equal(meta.exif,undefined);
+ const reservations=(await pool.query('SELECT request_id,reserved FROM fr_ai_requests WHERE user_id=$1',[a.user.id])).rows;
+ assert.ok(Number(reservations.find(r=>r.request_id===highId).reserved)>=Number(reservations.find(r=>r.request_id===lowId).reserved)+8192);
+ const beforeRetry=calls;assert.equal((await post(a,input,highId,{...consent,'x-focalroom-detail-consent':'preview1400-high-v1'})).status,409);assert.equal(calls,beforeRetry);
+ mode='ok';
+});
 test('operator reconciliation needs a confirmed reference, cannot release active calls, and is atomic/idempotent',async()=>{
  const a=await user(),id=randomUUID();mode='network';assert.equal((await post(a,body(),id)).status,502);mode='ok';
  const reserved=(await account(a)).body.reserved;assert.ok(reserved>0);

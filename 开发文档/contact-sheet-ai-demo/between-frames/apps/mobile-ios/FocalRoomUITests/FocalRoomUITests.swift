@@ -372,6 +372,11 @@ final class FocalRoomUITests: XCTestCase {
         project.tap()
         // 提案基线必须与服务端当前版本一致：先在 rev2 上部分采纳（→rev3），再做 KEEP 选片（→rev4）。
         runProposalsSegment(app)
+        // sheet 关闭后视图 hit-test 层可能残留：轻微滚动强制网格重布局，恢复点击。
+        if !app.buttons["photo.ios-photo-1"].isHittable {
+            app.swipeDown(); Thread.sleep(forTimeInterval: 0.5)
+            if !app.buttons["photo.ios-photo-1"].isHittable { app.swipeUp(); Thread.sleep(forTimeInterval: 0.5) }
+        }
         let photo = app.buttons["photo.ios-photo-1"]
         XCTAssertTrue(photo.waitForExistence(timeout: 15))
         // 提案段后列表刷新中格子可能短暂不可点；轮询至可点再操作。

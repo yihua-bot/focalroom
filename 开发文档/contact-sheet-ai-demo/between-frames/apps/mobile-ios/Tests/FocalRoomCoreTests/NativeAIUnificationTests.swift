@@ -6,6 +6,67 @@ import UniformTypeIdentifiers
 @testable import FocalRoomCore
 
 @MainActor final class NativeAIUnificationTests: XCTestCase {
+    func testMemoryTraceKeepsAttemptQueryAndConfirmationProvenanceSeparate() throws {
+        var read: [String: Any] = ["memoryId": 7, "scope": "cross_project", "sourceProjectId": "source", "sourceProjectTitle": "来源",
+                                   "origin": "user_confirmed", "statusAtRead": "confirmed", "selectionReason": "author_keyword_ranked",
+                                   "memoryTextVersion": "changed", "currentStatus": "retired", "disabled": true, "evidenceRefsTruncated": false,
+                                   "evidence": ["recorded": 2, "available": 1, "excluded": 1, "missing": 0],
+                                   "confirmation": ["requestId": "approved", "createdAt": "2026-11-05T10:00:00Z", "action": "ConfirmHypothesis"]]
+        let trace: [String: Any] = ["hasEarlierEvents": true, "events": [
+            ["id": 1, "kind": "context_attempt", "round": 2, "createdAt": "2026-11-05T11:00:00Z", "recorded": true, "reads": [read]],
+            ["id": 2, "kind": "query_result", "createdAt": "2026-11-05T11:01:00Z", "recorded": false, "reads": []]]]
+        let decoded = try JSONDecoder().decode(NativeMemoryTrace.self, from: JSONSerialization.data(withJSONObject: trace))
+        XCTAssertTrue(decoded.hasEarlierEvents)
+        XCTAssertEqual(decoded.events[0].kind, .context_attempt)
+        XCTAssertEqual(decoded.events[0].round, 2)
+        XCTAssertEqual(decoded.events[1].kind, .query_result)
+        XCTAssertFalse(decoded.events[1].recorded)
+        XCTAssertNil(decoded.events[1].round)
+        let item = try XCTUnwrap(decoded.events.first?.reads.first)
+        XCTAssertEqual(item.memoryTextVersion, .changed)
+        XCTAssertNil(item.passage)
+        XCTAssertEqual(item.confirmation?.action, .confirmHypothesis)
+        XCTAssertEqual(item.currentStatus, "retired")
+        read["confirmation"] = ["requestId": "fake", "createdAt": "now", "action": "ModelConfirmed"]
+        XCTAssertThrowsError(try JSONDecoder().decode(NativeMemoryTrace.Read.self, from: JSONSerialization.data(withJSONObject: read)))
+    }
+
+    func testPhotoJudgmentsKeepLegacyTasksReadableAndPreserveHistoricalEvidence() throws {
+        var task: [String: Any] = ["id": "task", "goal": "说明依据", "state": "completed", "reason": "",
+                                  "messages": [], "boardDrafts": [], "inspectedPhotos": [], "preferenceProposals": [],
+                                  "budget": try JSONSerialization.jsonObject(with: JSONEncoder().encode(NativeAIBudget()))]
+        let legacy = try JSONDecoder().decode(NativeAITask.self, from: JSONSerialization.data(withJSONObject: task))
+        XCTAssertNil(legacy.photoJudgments)
+        var judgment: [String: Any] = ["id": "judgment", "photoId": "photo", "judgment": "一种可能的编辑作用",
+                                      "reasoning": "依据背景观察", "uncertainty": "作者意图未知", "observationUncertainty": "分辨率有限",
+                                      "imageStatus": "mismatch", "facts": [["index": 0, "text": "明亮背景"]],
+                                      "methods": [["citationId": "source", "title": "方法", "passage": "编辑假设", "kind": "retrieved_claim", "reviewStatus": "imported", "disputed": true, "excerpt": false]]]
+        task["photoJudgments"] = [judgment]
+        let decoded = try JSONDecoder().decode(NativeAITask.self, from: JSONSerialization.data(withJSONObject: task))
+        let item = try XCTUnwrap(decoded.photoJudgments?.first)
+        XCTAssertEqual(item.imageStatus, .mismatch)
+        XCTAssertEqual(item.facts.first?.text, "明亮背景")
+        XCTAssertEqual(item.methods.first?.reviewStatus, "imported")
+        XCTAssertEqual(item.methods.first?.disputed, true)
+        XCTAssertNil(item.methods.first?.source)
+        judgment["imageStatus"] = "guessed"
+        XCTAssertThrowsError(try JSONDecoder().decode(NativePhotoJudgment.self, from: JSONSerialization.data(withJSONObject: judgment)))
+    }
+
+    func testAIAccountWithoutDetailCapabilityRemainsReadable() throws {
+        var payload: [String: Any] = ["enabled": true, "verified": true, "policy": "deepseek-flash-v1",
+                                    "provider": "DeepSeek", "model": "deepseek-flash", "unit": "tokens",
+                                    "granted": 1000, "spent": 0, "reserved": 0, "available": 1000,
+                                    "recovery": ["enabled": false]]
+        let legacy = try JSONDecoder().decode(AIAccount.self, from: JSONSerialization.data(withJSONObject: payload))
+        XCTAssertNil(legacy.visionDetail, "旧网关不能被当作已开放精查")
+        payload["visionDetail"] = ["policy": "preview1400-high-v1", "maxEdge": 1400, "maxPhotosPerTask": 4]
+        let upgraded = try JSONDecoder().decode(AIAccount.self, from: JSONSerialization.data(withJSONObject: payload))
+        XCTAssertEqual(upgraded.visionDetail?.policy, "preview1400-high-v1")
+        XCTAssertEqual(upgraded.visionDetail?.maxEdge, 1400)
+        XCTAssertEqual(upgraded.visionDetail?.maxPhotosPerTask, 4)
+    }
+
     func testReviewedSelectionIsAtomicVersionedIdempotentAndKeepsOriginals() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

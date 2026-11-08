@@ -39,6 +39,11 @@ struct NativeDraftReviewView: View {
         !draft.stale && !selected.isEmpty && !model.busy && draft.state == "pending" &&
             model.nativeProjection?.tasks.contains(where: { $0.id == draft.taskId && $0.needsReview }) == true
     }
+    // 口径挂在任务上、按草案编号取：同一轮里可能同时有好几份方案，各说各的档位。
+    private var evidence: NativeDraftEvidence? {
+        model.nativeProjection?.tasks.first(where: { $0.id == draft.taskId })?
+            .draftEvidence?.first(where: { $0.draftId == draft.id })
+    }
     var body: some View {
         NavigationStack {
             List {
@@ -48,6 +53,8 @@ struct NativeDraftReviewView: View {
                     Text(draft.stale ? String(localized: "来源项目已更新。草案保留供参考，请重新委托后再采纳。") : String(localized: "勾选要采纳的建议。确认后才会改变本机选片，或创建待审批的云端提案。"))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                NativeDraftEvidenceSection(evidence: evidence, draftRevision: draft.revision)
+                    .accessibilityIdentifier("ai.review.evidence")
                 if let reviewError { Section { Text(reviewError).font(.footnote).foregroundStyle(.red) } }
                 Section("建议 \(draft.items.count) 项") {
                     ForEach(Array(draft.items.enumerated()), id: \.offset) { _, item in
@@ -61,6 +68,9 @@ struct NativeDraftReviewView: View {
                                     Text(model.nativePhotoName(item.photo_id)).font(.subheadline.weight(.semibold))
                                     Text(actionTitle(item.proposed_action, position: item.position)).font(.caption)
                                     Text(item.rationale).font(.footnote).foregroundStyle(.secondary)
+                                    if let tierNote = tierNote(for: item.photo_id) {
+                                        Text(tierNote).font(.caption).foregroundStyle(.secondary)
+                                    }
                                 }
                             }.foregroundStyle(.primary)
                         }.buttonStyle(.plain)
@@ -94,6 +104,86 @@ struct NativeDraftReviewView: View {
         case "reject": model.selectedLocalProjectID != nil ? String(localized: "排除") : String(localized: "移出作品序列")
         case "undecided": model.selectedLocalProjectID != nil ? String(localized: "待选") : String(localized: "移出作品序列")
         default: String(localized: "需要核对的建议")
+        }
+    }
+    // 逐张口径只在这张确实被记过时说话：没记过就什么都不加，不拿"没有记录"当作"没有观察"。
+    private func tierNote(for photoID: String) -> String? {
+        guard let entry = evidence?.perPhoto.first(where: { $0.photoId == photoID }) else { return nil }
+        if entry.used {
+            switch entry.contract {
+            case "current_page_tier": return String(localized: "这张按当前页面档看的画面")
+            case "current_detail_tier": return String(localized: "这张按大尺寸细节档看的画面，比页面档看得更细")
+            case "other_prompt_version": return String(localized: "这张按更早的问法看的画面")
+            case "other_tool": return String(localized: "这张用的是另一个工具问出的画面记录")
+            default: return nil
+            }
+        }
+        // 原图不在这台机器上、原图已经换过的，本地修不回来；这句话比"预览坏了"更该先说。
+        switch entry.originalStatus {
+        case "missing": return String(localized: "这张的画面记录没用上：原图不在这台机器上，本地修不回来")
+        case "changed": return String(localized: "这张的画面记录没用上：原图已经换过，本地修不回来")
+        default: break
+        }
+        switch entry.pixelVersion {
+        case "mismatch": return String(localized: "这张的画面记录没用上：当前预览和当初看的那份对不上")
+        case "unreadable": return String(localized: "这张的画面记录没用上：本地预览读不出来")
+        case "unrecorded": return String(localized: "这张的画面记录没用上：没记下当初看的是哪份图像")
+        default: return nil
+        }
+    }
+}
+
+/// 草案的"画面依据"口径一族：哪几档问法挑出来的、对着方案的哪一版算的、哪几张没采用。
+/// 手机上只读这些数字，不重算——重算入口目前在桌面端。
+struct NativeDraftEvidenceSection: View {
+    let evidence: NativeDraftEvidence?
+    let draftRevision: Int
+
+    var body: some View {
+        Section {
+            if let evidence {
+                Text(evidence.observed > 0
+                    ? String(localized: "这份方案的画面依据：\(evidence.observed) 张有可核对的画面观察，\(evidence.unobserved) 张没有。")
+                    : String(localized: "这份方案的照片都还没有可用的画面观察，下面的判断只靠评分、状态与顺序。"))
+                    .font(.footnote)
+                Text("同一张照片只取一条观察，按问法分档：当前页面档 \(evidence.pageTier) 张 · 大尺寸细节档 \(evidence.detailTier) 张 · 更早问法 \(evidence.otherVersion) 张 · 其它工具 \(evidence.otherTool) 张。")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let then = evidence.draftRevision {
+                    Text(then == draftRevision
+                        ? String(localized: "上面的口径是对着方案第 \(then) 版算的，就是现在这一版。")
+                        : String(localized: "上面的口径是对着方案第 \(then) 版算的，现在已是第 \(draftRevision) 版：中间改过，口径没重算。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if evidence.crossContractPairs > 0 {
+                    Text("有 \(evidence.crossContractPairs) 处相邻两张不是同一档问法问出来的，不能当成同一把尺子比。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if evidence.omitted > 0 {
+                    Text("另有 \(evidence.omitted) 张的画面记录因为原图换过或本地预览读不出来，没有采用。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                // 降级那一份的计数是就地取的，不是猜的；但逐张档位真没读回来，就得照着说。
+                if evidence.basisSummary {
+                    Text("这份方案算过，只是那份核验单没能整条读回来，逐张的档位这里就不写了。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if evidence.observed > evidence.scanned {
+                    Text("逐张口径只点到下面列出的那几张，其余有画面观察的照片只算进总数。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                // 口径可能对不上时才开口（版本号对不上，或有画面的记录被排除），本来就在说"手机上重算不了"。
+                if evidence.omitted > 0 || evidence.draftRevision != draftRevision {
+                    Text("要按现在这一版重算画面依据，得在桌面端打开这份草案；手机上只读这些数字，不重算，也不会因此改动草案。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else {
+                // 这一格说的是"没有能核对上的画面依据"：既包括从来没算过的，也包括算过但核验单整条读不回来的——
+                // 手机这边分辨不了，所以话只能说到这里，不许猜成"没算过"。
+                Text("这份方案还没有能核对的画面依据，下面的判断只靠评分、状态与顺序。")
+                    .font(.footnote)
+            }
+        } header: {
+            Text("画面依据").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
         }
     }
 }

@@ -5,7 +5,9 @@ import XCTest
 @MainActor
 final class CoreTests: XCTestCase {
     func testServerRejectsUntrustedAddressForms() throws {
-        for address in ["http://example.com", "https://user:secret@example.com", "https://example.com/path",
+        // 注：https 带一层路径前缀已放开（共享网关入口，见 APIConfigurationPrefixTests）；
+        // 这里仍拒绝明文 http、带凭据、查询、片段与本地文件。
+        for address in ["http://example.com", "https://user:secret@example.com",
                         "https://example.com?token=secret", "https://example.com#fragment", "file:///tmp/data"] {
             XCTAssertThrowsError(try APIConfiguration(address))
         }

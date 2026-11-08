@@ -49,7 +49,10 @@ public struct APIConfiguration: Codable, Sendable, Equatable {
         guard let value = URLComponents(string: address.trimmingCharacters(in: .whitespacesAndNewlines)),
               let host = value.host, !host.isEmpty, value.user == nil, value.password == nil,
               value.query == nil, value.fragment == nil,
-              value.path.isEmpty || value.path == "/",
+              // 允许一层路径前缀（如 https://host/focalroom 的共享网关入口）；
+              // 禁止 .、.. 与多斜杠，路径段拼接交给 endpoint()。
+              value.path.isEmpty || value.path == "/" || value.path.dropFirst().allSatisfy({ $0 != "?" && $0 != "#" }),
+              !value.path.contains("..") && !value.path.contains("//"),
               value.scheme == "https" || (allowLoopbackHTTP && value.scheme == "http" &&
                   ["127.0.0.1", "localhost", "[::1]", "::1"].contains(host)),
               let url = value.url

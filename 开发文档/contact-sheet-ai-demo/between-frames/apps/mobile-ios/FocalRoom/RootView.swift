@@ -166,6 +166,7 @@ private struct LoginView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Color(white: 0.055))
         .onAppear { offlineScopes = LocalScopeIndex.list(root: model.root) }
+        .task { await model.probeAndPickAddress() }
         .fullScreenCover(isPresented: $offlineLibrary) {
             OfflineLibraryView(root: model.root, model: model)
         }

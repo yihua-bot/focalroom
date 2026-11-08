@@ -151,6 +151,7 @@ export class HostedAiService {
       const granted = Number(row?.granted ?? 0), spent = Number(row?.spent ?? 0), reserved = Number(row?.reserved ?? 0);
       return { enabled: !!this.config, verified, policy: HOSTED_AI_POLICY, provider: "DeepSeek", model: HOSTED_AI_MODEL,
         unit: "tokens", granted, spent, reserved, available: granted - spent - reserved,
+        visionDetail: {policy:"preview1400-high-v1",maxEdge:1400,maxPhotosPerTask:4},
         recovery: this.config?.queue ? {enabled:true,policy:QUEUE_CONSENT,maxQueueSeconds:QUEUE_RETENTION_SECONDS} : {enabled:false} };
     });
   }
@@ -167,7 +168,7 @@ export class HostedAiService {
     const original = JSON.stringify(body);
     assert(Buffer.byteLength(original) <= MAX_BODY, 413, "AI_INPUT_TOO_LARGE", "AI 请求超过大小上限");
     // 只接收本地派生预览，拒绝 URL/file_id/其他输入类型与服务端工具，避免 SSRF 或绕过授权。
-    let images = 0;
+    let images = 0, highDetailImages = 0;
     const walk = async (value: unknown, depth = 0): Promise<void> => {
       assert(depth <= 30, 400, "VALIDATION_ERROR", "请求嵌套过深");
       if (!value || typeof value !== "object") return;
@@ -185,7 +186,10 @@ export class HostedAiService {
           assert(meta.format === "jpeg" && !!meta.width && !!meta.height && meta.width <= 1400 && meta.height <= 1400, 400, "AI_IMAGE_INVALID", "照片预览不得超过 1400px");
           const sanitized = await image.rotate().jpeg({quality:80}).toBuffer();
           item.image_url = `data:image/jpeg;base64,${sanitized.toString("base64")}`;
-          item.detail = "low";
+          item.detail = item.detail === "high" && headers["x-focalroom-detail-consent"] === "preview1400-high-v1" ? "high" : "low";
+          if (item.detail === "high") {
+            assert(++highDetailImages <= 4, 400, "AI_IMAGE_INVALID", "单次精查最多四张预览");
+          }
         } catch { throw new ApiError(400,"AI_IMAGE_INVALID","照片预览格式不合法"); }
         return;
       }
@@ -198,8 +202,8 @@ export class HostedAiService {
     // 连同属性名、JSON 转义与工具 schema 一起计入文本上界；仅排除已单独预留的预览像素。
     const textBytes = Buffer.byteLength(JSON.stringify(body,(key,value) => key === 'image_url' ? '[JPEG preview]' : value));
     assert(textBytes <= 200000,413,"AI_INPUT_TOO_LARGE","文本上下文超过上限");
-    const reservation = textBytes + images * 8192 + body.max_output_tokens + 8192;
-    const hash = digest(original);
+    const reservation = textBytes + images * 8192 + highDetailImages * 8192 + body.max_output_tokens + 8192;
+    const hash = digest(highDetailImages ? JSON.stringify([original,"preview1400-high-v1"]) : original);
     return { userId: user.id, requestId, headers, sessionDigest:user.session, body, images, reservation, hash };
   }
   private async reserve(request: PreparedRequest, allowReplay: boolean, durable = false): Promise<boolean> {

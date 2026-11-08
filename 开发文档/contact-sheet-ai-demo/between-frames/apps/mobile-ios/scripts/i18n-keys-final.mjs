@@ -28,6 +28,10 @@ const INT_EXPR = new Set([
   "task.inspectedPhotos.count", "board.revision", "diff.from.revision", "diff.to.revision",
   "projection.baseRevision", "projection.currentRevision", "proposal.base_revision", "project.revision",
   "row.revision", "version.revision",
+  // 草案画面依据口径一族（NativeDraftEvidenceSection）：这几格全是 Int，插值必须落成 %lld。
+  "evidence.observed", "evidence.unobserved", "evidence.pageTier", "evidence.detailTier",
+  "evidence.otherVersion", "evidence.otherTool", "evidence.crossContractPairs", "evidence.omitted",
+  "draftRevision", "then",
 ]);
 
 function spec(expr) {

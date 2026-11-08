@@ -457,6 +457,9 @@ async function applyCommand(
           "VALIDATION_ERROR",
           "版本锚点不存在",
         );
+      } else if (anchor.type === "publication") {
+        // 出版物只在本地权威库里，云端没有这本，也就没有可锚的对象。
+        assert(false, 400, "VALIDATION_ERROR", "云端不支持出版物锚点");
       } else {
         const version = (
           await tx.query(
