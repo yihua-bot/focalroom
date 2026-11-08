@@ -2352,6 +2352,34 @@ AI 请求恢复继续沿用已有持久回执与 UNKNOWN 边界：断流或结�
 
 **仍没做到（实话）。** ①这一批没打包、没上机，他屏幕上现在还是三张卡的 1.5.4；干净打包要先点头（工作树里还混着分身的 iOS 改动）。②真 App 里那一行的高度、折叠动画与窄窗折行只在 jsdom 断过文字，没人工看过。③顶部其它入口（历史工具条、筛选栏）本轮没跟着瘦身，占位是否还偏多没人核对。④没推送、没合并。
 
-下一步顺序：①这批装不装机等他一句话；②装机后真点一遍折叠条与三条按钮；③1.5.4 公证 DMG 仍等他补凭证。
+下一步顺序：①1.5.5 完整发版（公证 DMG + 自动更新 + 页面版本句对齐）；②装机后真点一遍折叠条与三条按钮；③边车扫描缓存。
+
+## 第五十批（2026-11-08）：1.5.5 完整发版——公证 DMG、自动更新、页面版本句一次对齐
+
+用户看了装机和线上核实之后说了一句"发到官网"。这一批就把 1.5.5 整条通道走完，不再只发一半。
+
+**之前什么样。** 上一批只把折叠条装进他机器，版本号仍停在 1.5.4：三处版本字段没抬、页面下载按钮指向 1.5.4.dmg、`latest.json` 也还是 1.5.4。线上还留着一处自相矛盾——分身那笔发版换了链接但没换文案，四语十条字符串仍写"现有版本 1.5.2"。
+
+**做了什么。**
+- **版本号抬到 1.5.5**：`Cargo.toml` + `Cargo.lock` + `tauri.conf.json` 三处一起改，避免"界面是新的、版本字段还是旧的"这种降级假象。
+- **公证链路全程跑得通**：`--bundles app` 出包 → `ditto -c -k --keepParent` → `notarytool submit --keychain-profile FOCALROOM_NOTARY`（`.app` 一次提交 `f5c385f2-1382-48eb-b54e-735d5be1aa9c` = Accepted）→ `stapler staple` → `hdiutil create` 出 DMG → DMG 再公证（`4eb14b6d-a238-4904-bd3e-9f26793a8a4b` = Accepted）→ staple DMG。第四十八批"凭证失效所以只能发 OTA"那条结论到这里彻底作废。
+- **更新包按禁 AppleDouble 的写法**：`COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs`，`tar -t` 里 `._` 条目数实测为 **0**；`tauri signer sign -k "$KEY" -p "" --app-version 1.5.5` 签名，可信注释里带 `version:1.5.5`。
+- **`latest.json` 第一版写错并当场改掉**：我按".sig 文件字节再 base64 一层"写，解出来只有 1 行——正是记忆里点名的那个错法。改成直接放 `.sig` 原文（436 字符，解一次得 4 行 minisign 文本），与线上已验证过的 1.5.4 那份结构逐字段对齐。
+- **全局签名的覆盖范围更正**：第一次按"74 字节主签名整块 || 注释行"核，连**已知正确的 1.5.4** 也报 false；正确口径是**去掉 2+8 字节头之后的 64 字节主签名 || 去掉 `trusted comment: ` 前缀的注释行、不含换行**，裸 ed25519（不再套 BLAKE2B）。改完两条都过。
+- **官网四处一起对齐**：模板下载按钮 → `FocalRoom-1.5.5.dmg`，中文两处版本句 + `locales/workspace.json` 里四语共 8 条全部改成 1.5.5（index0 与模板中文原句逐字一致）。
+- **部署前先把线上产物抓回本地**：`dist/download` 不被 git 跟踪，实测线上有、本地没有的是 `FocalRoom-1.5.2.dmg`（11,725,402 字节），已抓回；`FocalRoom-1.5.0.dmg`  HEAD 报 200/12,553,729 但整包 GET 报 404，**拿不回本地**，本次部署因此没带上它。
+
+**达到什么效果。** 新用户从官网下到的就是 1.5.5 公证包，老用户从自动更新拿到的也是同一份字节的 1.5.5；页面链接、中文版本句、四语文案三者不再互相打脸；他机器上装的与线上发布的**是同一份二进制**。
+
+**验证情况。**
+- 公证与签名：`.app` 与 DMG 两次提交都 Accepted；DMG staple validate 过；挂载线上那份 DMG，内部 App `codesign --verify --deep --strict` valid + satisfies DR，`spctl --assess --type execute` = `accepted / source=Notarized Developer ID`（origin: Developer ID Application: liqiang song / KXSFCZF4S3），`Info.plist` 读到 1.5.5。
+- 更新包离线验签（不点"立即更新"的证明）：先拿线上 1.5.4 那一对把算法校准通过，再验 1.5.5——fileSig / globalSig / keyID(`64ED06A56649CDB8`) 三项**两条都 ALL PASS**；换成**从线上下载回来的 tar** 配上 `latest.json` 里实际生效的签名字段再验，同样 ALL PASS。
+- 官网三道门全 exit 0：`npm run build`（messages 414、staticPages 20）、`npm run check`（localReferences 572、errors []）、`npm test`（7 pass / 0 fail）；`dist/config.js` 里 1.0.4 zip 指针按纪律原字节未动。
+- 部署后线上复核：`latest.json` version=1.5.5、签名解一次得 4 行、URL 指向 1.5.5 tar；DMG 与 tar 的 SHA-256（`b57af3a6…` / `3f429242…`）与本地产物**逐字节一致**；zh/en/ja/ko 四页都抓到 `download/FocalRoom-1.5.5.dmg` 与对应语言的 1.5.5 版本句（"现有版本/现有下载版为/Current release/current download/現行版/현재 버전"）。
+- 装机：把公证后那份换进 `/Applications`（换下的那份 21:14 构建备份在 `/tmp/FocalRoom-装机前1.5.4标签-换下-20261108.app`，装机前快照 `/tmp/focalroom-155-backup-213828`）；`codesign` 严格校验 + `stapler validate` + `spctl` 全过，版本字段读到 1.5.5，App 已重启并在跑。
+
+**仍没做到（实话）。** ①**必须更正第四十九批补记**：那次换包装进去的是**版本字段仍写 1.5.4 的公证前构建**（他屏幕上界面是新的，`Info.plist` 却报 1.5.4），本轮才换成与线上同字节的 1.5.5；也就是说上一轮"已装机"的证据只在界面层成立，版本层不成立。②折叠条**点开那一下仍然没由我代点**：本轮 App 一起来我就撞见"用户正在操作"，工具两次拒绝，我只读到他在项目列表页，图库那一行的实际高度与三条按钮要他自己看一眼。③"老 App 点立即更新"这一端到端真点仍没做——库里迁移号到 38，旧版本启动就在建库阶段崩，回不去；本轮用"线上下载回来的包 + 线上生效的签名字段"离线验签作为替代证明，它验的是密码学正确性，**不是**他那台机器真的换包成功。④`FocalRoom-1.5.0.dmg` 在线上已取不回，历史包列表少一份，不是我本轮弄丢的但也补不回来。⑤四语页面只核对了版本句与下载链接这两处，其余文案没重读；`locales/messages.tsv` 里描述 1.0.4 zip 的那句指南文案仍是老话。⑥两笔提交都在本地分支 `codex/focalroom-v1.5-reliability`，没推送、没合并；官网工作树里那行"下载 iPhone 版"的翻译仍归分身，我没动。
+
+下一步顺序：①他自己在真 App 里点一次折叠条，确认三条还在且不挡图；②推送与合并需要单独点头；③边车扫描缓存与"色标签/外部淘汰要不要加列"仍等拍板。
 
 **第四十九批补记（同日 21:20，装机与线上核实）**：这批已在本机重新打包（Developer ID 签名校验通过）并换掉 `/Applications/FocalRoom.app`，旧包备份在 `~/Documents/focalroom-app-backups/FocalRoom-1.5.4-before-collapse-20261108-2114.app`；换包时用户正在用这个 App，所以只读到"图库上方只剩一行『本机自查』"这一条实况，**折叠条点开那一下没由我代点**，请他自己在屏幕上看一眼三条是否还在。同时核实到两件必须更正的事：①**第四十八批写的"1.5.4 公证 DMG 没发"已过期**——协作分身随后那笔 `de51aeee v1.5.4 完整发版` 已把公证 DMG 上线，实测 `https://focroom.cc/download/FocalRoom-1.5.4.dmg` 返回 200（12,302,286 字节），挂载后 `spctl --assess` 报 `accepted / source=Notarized Developer ID`、`xcrun stapler validate` 通过、TeamID KXSFCZF4S3——**不需要再等他补公证凭证**。②那笔发版把下载按钮换成 1.5.4，但**页面版本句没跟着改**：线上仍是"现有版本 1.5.2"与"现有下载版为 1.5.2"，四处中文/四语共十条字符串与新链接不一致；这属于分身在管的官网面，本轮没擅自改或部署，只记下。③本机新包的 updater tar 未签（`TAURI_SIGNING_PRIVATE_KEY` 没在环境里），只影响这份本地构建，不参与发版，未上传任何产物。
