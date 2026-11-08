@@ -13,6 +13,11 @@ const discussionSchema = z.object({ draftId: z.string(), draftRevision: z.number
 const structuralConflictSchema = z.object({changeId:z.string(),nodeId:z.string(),kind:z.enum(['current_removed','remove_changed']),currentModified:z.boolean(),relatedNodes:z.array(z.object({nodeId:z.string(),nodeType:z.string(),effect:z.enum(['detach','remove'])})).max(5000),preservedCommentCount:z.number().int().nonnegative().max(1000),resolved:z.boolean()});
 
 export class TauriCanvasRepository implements CanvasRepository {
+  // 与图库侧同一个后端命令：只写这张照片自己那两份按内容指纹命名的派生文件，原图只读，因此不占修订号。
+  async repairPreviews(projectId: string, photoIds: string[]) {
+    return z.array(z.object({ photoId: z.string(), outcome: z.string(), rebuilt: z.array(z.string()), detail: z.string() }))
+      .parse(await invoke('repair_photo_previews', { projectId, photoIds }));
+  }
   async editorialRevisionContext(projectId: string, draftId: string, offset = 0) {
     const decision = z.enum(['pending','accepted','rejected','deferred','partial']);
     const result = z.object({ draftId:z.string(),parent:z.object({kind:z.literal('board'),id:z.string(),revision:z.number().int().positive()}),parentTitle:z.string(),discussion:discussionSchema,

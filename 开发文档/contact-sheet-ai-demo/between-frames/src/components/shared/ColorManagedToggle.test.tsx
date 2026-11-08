@@ -1,0 +1,30 @@
+import {act,render,screen,waitFor} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {expect,it,vi} from 'vitest';
+import {ColorManagedToggle} from './PhotoViewport';
+import {colorManagedPreviewSchema,managedInspectionSchema} from '../../services/colorManagedSchemas';
+import type {Photo} from '../../domain/models';
+const ipc=vi.hoisted(()=>vi.fn());
+vi.mock('@tauri-apps/api/core',()=>({invoke:ipc,isTauri:()=>true}));
+const photo:Photo={id:'a',index:1,name:'a.jpg',src:'a-thumb',previewSrc:'a-preview',status:'undecided',note:'',rating:0};
+const result={status:'transformed',detail:null,sourceProfile:'sRGB',displayProfile:'Display P3',pixelSource:'original' as const,dataUrl:'data:image/jpeg;base64,/9j/2Q=='};
+it('切换照片后忽略上一张晚到的色彩结果',async()=>{
+ let resolve!:(value:typeof result)=>void;
+ ipc.mockReset().mockImplementationOnce(()=>new Promise(done=>{resolve=done;})).mockResolvedValueOnce(result);
+ const onChange=vi.fn();
+ const view=render(<ColorManagedToggle photo={photo} projectId="p" managed={null} onChange={onChange}/>);
+ await userEvent.click(screen.getByRole('button',{name:'色彩管理'}));
+ await waitFor(()=>expect(ipc).toHaveBeenCalledTimes(1));
+ view.rerender(<ColorManagedToggle photo={{...photo,id:'b',src:'b-thumb'}} projectId="p" managed={null} onChange={onChange}/>);
+ await userEvent.click(screen.getByRole('button',{name:'色彩管理'}));
+ await waitFor(()=>expect(onChange).toHaveBeenCalledTimes(1));
+ await act(async()=>resolve({...result,sourceProfile:'stale'}));
+ expect(onChange).toHaveBeenCalledTimes(1);
+ expect(onChange).toHaveBeenCalledWith(expect.objectContaining({source:'sRGB',pixelSource:'original'}));
+});
+it('状态与实际像素/文件不一致时拒绝接管画面',()=>{
+ expect(colorManagedPreviewSchema.parse(result)).toEqual(result);
+ for(const bad of [{...result,status:'transform_failed'},{...result,dataUrl:null},{...result,dataUrl:'data:image/png;base64,AAAA'},{...result,pixelSource:'unknown'}]) expect(()=>colorManagedPreviewSchema.parse(bad)).toThrow();
+ expect(()=>managedInspectionSchema.parse({status:'transformed',detail:null,path:null})).toThrow();
+ expect(()=>managedInspectionSchema.parse({status:'transform_failed',detail:null,path:'/wrong.jpg'})).toThrow();
+});

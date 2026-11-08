@@ -1,3 +1,4 @@
+import { managedInspectionSchema } from './colorManagedSchemas';
 import { TauriDiagnosticsRepository } from './TauriDiagnosticsRepository';
 import { TauriEditorVersionsRepository } from './TauriEditorVersionsRepository';
 import { TauriAgentRepository } from './TauriAgentRepository';
@@ -6,6 +7,7 @@ import { TauriSharingRepository } from './TauriSharingRepository';
 import { TauriCanvasRepository } from './TauriCanvasRepository';
 import { TauriBillingRepository } from './TauriBillingRepository';
 import { userFacingError } from './userFacingError';
+import { colorStatusLabel, zh } from '../app/copy';
 import { TauriPublicationRepository } from './TauriPublicationRepository';
 import { invokeCommand as command } from './tauriCommand';
 import type { SelectionDraft } from '../domain/agent';
@@ -23,13 +25,58 @@ const projectSchema = z.object({
   history: z.object({ undoGroupId: z.string().nullable(), redoGroupId: z.string().nullable(), undoCount: z.number().int(), redoCount: z.number().int() }),
   versions: z.array(z.object({ id: z.string(), label: z.string(), basedOnRevision: z.number().int(), createdAt: z.string(), photoIds: z.array(z.string()), photos: z.array(z.object({ photoId: z.string(), status: z.enum(['keep','reject','undecided']), rating: z.number().int(), note: z.string() })) })),
 });
-const jobSchema = z.object({ jobId: z.string(), projectId: z.string(), status: z.enum(['running', 'completed', 'cancelled']), completed: z.number(), total: z.number(), imported: z.number(), skipped: z.number(), failures: z.array(z.object({ path: z.string(), code: z.string(), message: z.string() })) });
+const changeSchema = z.object({ photoId: z.string().min(1), path: z.string(), filename: z.string(), previousSha256: z.string().min(1), incomingSha256: z.string().min(1), previousWidth: z.number().finite(), previousHeight: z.number().finite(), previousSize: z.number().finite(), incomingWidth: z.number().finite(), incomingHeight: z.number().finite(), incomingSize: z.number().finite() });
+const jobSchema = z.object({ jobId: z.string(), projectId: z.string(), status: z.enum(['running', 'completed', 'cancelled']), completed: z.number(), total: z.number(), imported: z.number(), skipped: z.number(), changes: z.array(changeSchema), failures: z.array(z.object({ path: z.string(), code: z.string(), message: z.string() })) });
+
+const proposalSchema = z.object({ photoId: z.string().min(1), filename: z.string(), sidecarPath: z.string().min(1), sidecarRating: z.number().int().min(0).max(5).nullable(), localRating: z.number().finite(), appliesRating: z.boolean(), sidecarPick: z.boolean().nullable(), localStatus: z.enum(['undecided', 'keep', 'reject']), appliesStatus: z.boolean(), colorLabel: z.number().int().min(0).max(8).nullable(), ambiguousRating: z.boolean(), batchSafe: z.boolean() });
+
+/** 本地预览体检与重算共用一份回执形状：结局是后端原因码，界面只负责说成人话。 */
+const previewOutcomeSchema = z.object({ photoId: z.string(), outcome: z.string(), rebuilt: z.array(z.string()), detail: z.string() });
+
+/** 整项目方案口径的欠账：几个数字之间必须自洽，"还差多少"不能和"补了多少"对不上。 */
+const projectRecheckSchema = z.object({
+  drafts: z.number().int().nonnegative(),
+  draftsScanned: z.number().int().nonnegative(),
+  recheckOwed: z.number().int().nonnegative(),
+  recheckedDrafts: z.number().int().nonnegative(),
+  recheckFailed: z.number().int().nonnegative(),
+  recheckRemaining: z.number().int().nonnegative(),
+}).refine(report => report.draftsScanned <= report.drafts
+  && report.recheckOwed <= report.draftsScanned
+  && report.recheckedDrafts + report.recheckFailed <= report.recheckOwed
+  && report.recheckRemaining === report.recheckOwed - report.recheckedDrafts);
+
+/** 历史观察像素版本的点名单：能证明的与补不了的分开报，几个数字之间还要自洽。 */
+const pixelLedgerSchema = z.object({
+  rows: z.number().int().nonnegative(),
+  scanned: z.number().int().nonnegative(),
+  photos: z.number().int().nonnegative(),
+  ready: z.number().int().nonnegative(),
+  refused: z.number().int().nonnegative(),
+  reasons: z.record(z.string(), z.number().int().nonnegative()),
+  items: z.array(z.object({
+    observationId: z.number().int().positive(),
+    photoId: z.string().min(1),
+    filename: z.string().min(1),
+    outcome: z.string().min(1),
+  })),
+  backfilled: z.number().int().nonnegative().optional(),
+  remaining: z.number().int().nonnegative().optional(),
+  recheck: projectRecheckSchema.optional(),
+  recheckError: z.object({ code: z.string().min(1), message: z.string() }).optional(),
+}).refine(report => report.ready + report.refused === report.scanned
+  && report.scanned <= report.rows
+  && report.photos <= report.scanned
+  && Object.values(report.reasons).reduce((sum, n) => sum + n, 0) === report.refused
+  && (report.backfilled === undefined || (report.backfilled <= report.ready
+    && report.remaining === report.ready - report.backfilled)));
 
 /** 事件类型 → 人类可读描述；操作历史入口与事件映射共用。 */
 export const EVENT_KIND_LABELS: Record<string, string> = {
-  decision: '修改选片状态', note: '更新照片备注', compare: '记录两图偏好', reorder: '调整作品序列', import: '导入照片', relink: '重新定位照片',
+  decision: '修改选片状态', note: '更新照片备注', compare: '记录两图偏好', reorder: '调整作品序列', import: '导入照片', relink: '重新定位照片', content_apply: '更新原图内容记录',
   project: '更新项目意图', project_create: '创建项目', rating: '保存人工评分', undo: '撤销人工编辑', redo: '重做人工编辑',
   version_save: '保存作品版本', version_restore: '恢复作品版本', project_archive: '归档项目', project_restore: '恢复项目',
+  sidecar_apply: '回填外部软件的评分与选片',
   draft_apply: '采纳草案', draft_rebase: '根据当前作品重新比较方案', draft_edit: '调整草案顺序', draft_discard: '丢弃草案',
 };
 
@@ -49,6 +96,7 @@ export class TauriRepository implements DesktopProjectRepository {
   readonly diagnostics = new TauriDiagnosticsRepository();
   private snapshots = new Map<string, Project>();
   private originalLoaders = new Map<string, () => Promise<InspectionImage>>();
+  private managedLoaders = new Map<string, () => Promise<InspectionImage>>();
 
   private originalLoader(projectId: string, photoId: string) {
     const key = `${projectId}:${photoId}`;
@@ -69,12 +117,33 @@ export class TauriRepository implements DesktopProjectRepository {
     return loader;
   }
 
+  /** 色彩管理开启时 100% 检视用的全分辨率显示器渲染。后端说没做成时抛出原因，视口因此
+   *  继续显示受限的色彩预览，不会拿一张没变换过的原图冒充显示器色彩。 */
+  private managedOriginalLoader(projectId: string, photoId: string) {
+    const key = `${projectId}:${photoId}`;
+    let loader = this.managedLoaders.get(key);
+    if (!loader) {
+      loader = async () => {
+        const parsed = managedInspectionSchema.safeParse(await command('get_display_managed_inspection', { projectId, photoId }));
+        if (!parsed.success) throw new Error(zh.colorManagedInvalidResult);
+        const result = parsed.data;
+        if (!result.path) {
+          const reason = colorStatusLabel(result.status);
+          throw new Error(result.detail ? `${reason}：${result.detail}` : reason);
+        }
+        return { src: convertFileSrc(result.path), kind: 'display_managed' as const };
+      };
+      this.managedLoaders.set(key, loader);
+    }
+    return loader;
+  }
+
   private map(raw: unknown): Project {
     const parsed = projectSchema.parse(raw);
     const current = this.snapshots.get(parsed.id);
     if (current && (current.revision ?? 0) > parsed.revision) return current;
     const project: Project = { ...parsed, photos: parsed.photos.map(photo => ({ ...photo, src: convertFileSrc(photo.thumbnailPath), previewSrc: convertFileSrc(photo.previewPath),
-      loadOriginal: this.originalLoader(parsed.id, photo.id) })),
+      loadOriginal: this.originalLoader(parsed.id, photo.id), loadManagedOriginal: this.managedOriginalLoader(parsed.id, photo.id) })),
       events: parsed.events.map(event => ({ id: event.id, type: event.kind, photoId: event.photoId ?? undefined, at: event.at, actor: event.actor,
         description: event.reason || (EVENT_KIND_LABELS[event.kind] ?? event.kind),
         previous: event.previousJson ? JSON.parse(event.previousJson) : null, next: event.nextJson ? JSON.parse(event.nextJson) : null, context: JSON.parse(event.contextJson) })),
@@ -157,6 +226,50 @@ export class TauriRepository implements DesktopProjectRepository {
   async cancelImport(jobId: string) { await command('cancel_import', { jobId }); }
   async retryImport(jobId: string) { return command<string>('retry_import', { jobId }); }
   async relink(id: string, photoId: string) { const project = await command('relink_photo', { projectId: id, expectedRevision: this.revision(id), photoId }); return project ? this.map(project) : null; }
+  // 只点名照片、不点名文件：要读哪个文件由后端按这条记录在册的原图决定，界面给不了路径。
+  async applyPhotoChange(id: string, photoId: string) { return this.map(await command('apply_photo_change', { projectId: id, expectedRevision: this.revision(id), photoId })); }
+  // 修坏掉的中间文件：后端只写图库自己生成的缓存，原图一个字节都不动，所以不占修订号。
+  async repairPreviews(id: string, photoIds: string[]) {
+    return z.array(previewOutcomeSchema).parse(await command('repair_photo_previews', { projectId: id, photoIds }));
+  }
+  // 只读体检这一张：结局词表与重算共用，界面不用再翻译一遍；这条路不写文件，所以 rebuilt 一律为空。
+  async inspectPreview(id: string, photoId: string) {
+    return previewOutcomeSchema.parse(await command('inspect_photo_preview', { projectId: id, photoId }));
+  }
+  // 整项目点名与一次修完：都只按库里在册的记录动手，界面给不了路径，返回值也只有计数和原因码。
+  private ledger(value: unknown) {
+    const count = z.number().int().nonnegative();
+    return z.object({
+      total: count,
+      scanned: count,
+      healthy: count,
+      needsRepair: count,
+      blocked: count,
+      reasons: z.record(z.string(), count),
+      items: z.array(previewOutcomeSchema.extend({ filename: z.string() })),
+      repaired: count.optional(),
+      refused: count.optional(),
+      remaining: count.optional(),
+      recheck: projectRecheckSchema.optional(),
+      recheckError: z.object({ code: z.string().min(1), message: z.string() }).optional(),
+    }).parse(value);
+  }
+  async auditPreviews(id: string) { return this.ledger(await command('audit_photo_previews', { projectId: id })); }
+  async repairAllPreviews(id: string) { return this.ledger(await command('repair_all_broken_previews', { projectId: id })); }
+  // 接着补还欠着的口径：不重新修图，也不问模型，只把库里的事实再比一遍。
+  async recheckProjectEvidence(id: string) { return projectRecheckSchema.parse(await command('recheck_project_draft_evidence', { projectId: id })); }
+  // 历史观察的像素版本：点名只读本地文件，回填写的也是本地算出来的指纹，两条都不碰模型。
+  async auditObservationVersions(id: string) { return pixelLedgerSchema.parse(await command('audit_observation_pixel_versions', { projectId: id })); }
+  async backfillObservationVersions(id: string) { return pixelLedgerSchema.parse(await command('backfill_observation_pixel_versions', { projectId: id })); }
+  // 读边车是只读的：不占修订号，也不进幂等命令通道。
+  async sidecarProposals(id: string) { return z.array(proposalSchema).parse(await command('sidecar_proposals', { projectId: id })); }
+  async applySidecarJudgement(id: string, photoId: string) { return this.map(await command('apply_sidecar_judgement', { projectId: id, expectedRevision: this.revision(id), photoId })); }
+  // 一键回填只收项目与期望修订号：要读哪些边车由 Rust 从台账推，界面递不进路径。
+  async backfillSidecarJudgements(id: string) {
+    const reply = z.object({ applied: z.number().int().min(0), skipped: z.number().int().min(0), project: z.unknown() }).parse(await command('backfill_sidecar_judgements', { projectId: id, expectedRevision: this.revision(id) }));
+    this.map(reply.project);
+    return { applied: reply.applied, skipped: reply.skipped };
+  }
   async export(id: string, format: 'json' | 'csv' | 'html' | 'print' | 'sidecar' | 'shared', includePaths = false) {
     return z.object({ path: z.string(), sha256: z.string(), bytes: z.number() }).nullable().parse(await command('export_project', { projectId: id, format, includePaths }));
   }

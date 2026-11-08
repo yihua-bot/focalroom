@@ -4,6 +4,8 @@ import { userFacingError } from '../../services/userFacingError';
 import type { DesktopProjectRepository, ImportJob } from '../../domain/models';
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
+import { SourceChangeList } from './SourceChangeList';
+import { SidecarJudgementList } from './SidecarJudgementList';
 
 /** 后台导入指示器：导入进行中固定在底部，可展开详情。 */
 export function ImportBanner({ repository, jobId, onDone }: {
@@ -39,7 +41,8 @@ export function ImportBanner({ repository, jobId, onDone }: {
       <span className="import-banner-toggle" aria-hidden>{expanded ? '▼' : '▲'}</span>
     </button>
     {expanded && <div className="import-banner-detail">
-      <p className="muted">新增 {job?.imported ?? 0} 张 · 重复 {job?.skipped ?? 0} 张 · 失败 {job?.failures?.length ?? 0} 张</p>
+      <p className="muted">新增 {job?.imported ?? 0} 张 · 重复 {job?.skipped ?? 0} 张 · 内容已变化 {job?.changes.length ?? 0} 张 · 失败 {job?.failures?.length ?? 0} 张</p>
+      {job && <SourceChangeList repository={repository} projectId={job.projectId} changes={job.changes} onApplied={onDone} />}
       {running && <Button size="small" onClick={() => { void repository.cancelImport(jobId); }}>取消导入</Button>}
       {!!job?.failures?.length && <ul className="import-failures">{job.failures.map((f, i) => <li key={`${f.path}-${i}`}><strong>{f.path.split('/').pop()}</strong><p>{userFacingError(new Error(f.message), '无法读取这张照片。')}</p></li>)}</ul>}
       {!running && <Button size="small" onClick={onDone}>知道了</Button>}
@@ -89,7 +92,9 @@ export function ImportDialog({ repository, projectId, onClose, onChanged, onBack
     {choosing && <p role="status" className="muted">等待系统文件选择器…</p>}
     {jobId && <section className="import-progress" aria-label="导入进度"><progress max={job?.total || 1} value={job?.completed || 0} />
       <p role="status">{job?.status === 'cancelled' ? '已取消；已完成照片保留' : job?.status === 'completed' ? '导入完成' : job && job.total === 0 ? '正在扫描图库' : '正在导入'} · {job?.completed || 0} / {job ? job.total : '…'}</p>
-      <p className="muted">新增 {job?.imported || 0} 张 · 重复跳过 {job?.skipped || 0} 张 · 失败 {job?.failures.length || 0} 张</p>
+      <p className="muted">新增 {job?.imported || 0} 张 · 重复跳过 {job?.skipped || 0} 张 · 内容已变化 {job?.changes.length || 0} 张 · 失败 {job?.failures.length || 0} 张</p>
+      {job && <SourceChangeList repository={repository} projectId={job.projectId} changes={job.changes} onApplied={onChanged} />}
+      <SidecarJudgementList repository={repository} projectId={projectId} onApplied={onChanged} />
       <div className="import-dialog-actions">
         {running && <Button onClick={background}>后台导入</Button>}
         {running && <Button onClick={() => { void repository.cancelImport(jobId).catch(failure => setError(String(failure))); }}>取消导入</Button>}

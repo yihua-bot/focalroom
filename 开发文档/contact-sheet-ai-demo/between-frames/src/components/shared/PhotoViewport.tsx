@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { InspectionImage, Photo } from '../../domain/models';
+import { colorStatusLabel, zh } from '../../app/copy';
 import { Button } from './Button';
+import { colorManagedPreviewSchema } from '../../services/colorManagedSchemas';
 
 export interface PhotoZoom { mode: 'fit' | 'actual'; scale: number; x: number; y: number }
 export const fitZoom: PhotoZoom = { mode: 'fit', scale: 1, x: 0, y: 0 };
@@ -17,68 +19,89 @@ export function ZoomControls({ zoom, onChange, label, original = false }: { zoom
   </div>;
 }
 
-/** G2-③ 色彩管理开关：开启后照片经 ColorSync 变换到显示器色彩空间。 */
-export function ColorManagedToggle({ photo, projectId }: { photo: Photo; projectId: string }) {
-  const [enabled, setEnabled] = useState(false);
-  const [info, setInfo] = useState<{ source: string; display: string; applied: boolean } | null>(null);
+/** 后端 get_color_managed_preview 的结论：dataUrl 为空表示并没有真的变换过。 */
+export function photoSourceKey(photo:Photo) { return JSON.stringify([photo.id,photo.originalPath,photo.previewSrc,photo.src]); }
+
+/** 已经变换到显示器色彩空间的预览像素，连同它的来路一起交给视口显示。 */
+export interface ColorManaged { src: string; status: string; source: string; display: string; pixelSource?:'original' }
+
+/** 色彩管理开关：开启后从原图按源 ICC 生成目标色彩空间预览，并把结果真的显示出来。 */
+export function ColorManagedToggle({ photo, projectId, managed, onChange }: {
+  photo: Photo; projectId?: string; managed: ColorManaged | null; onChange: (next: ColorManaged | null) => void;
+}) {
+ return <ColorManagedControl key={`${projectId}:${photoSourceKey(photo)}`} photo={photo} projectId={projectId} managed={managed} onChange={onChange} />;
+}
+function ColorManagedControl({photo,projectId,managed,onChange}: {photo:Photo;projectId?:string;managed:ColorManaged|null;onChange:(next:ColorManaged|null)=>void}) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const live=useRef<AbortController|null>(null);
+  useEffect(()=>{const controller=new AbortController();live.current=controller;return()=>controller.abort();},[]);
 
   const toggle = async () => {
     if (busy) return;
-    const next = !enabled;
-    setEnabled(next);
-    if (!next) { setInfo(null); setError(''); return; }
-    setBusy(true); setError('');
+    const signal=live.current?.signal;
+    if(!signal || signal.aborted) return;
+    if (managed) { onChange(null); setNotice(''); return; }
+    setBusy(true); setNotice('');
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<{ dataUrl: string; sourceProfile: string; displayProfile: string; transformApplied: boolean }>(
-        'get_color_managed_preview', { projectId, photoId: photo.id },
-      );
-      setInfo({ source: result.sourceProfile, display: result.displayProfile, applied: result.transformApplied });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setEnabled(false);
-    } finally { setBusy(false); }
+      const { invoke, isTauri } = await import('@tauri-apps/api/core');
+      if (!isTauri() || !projectId) { setNotice(zh.colorManagedDesktopOnly); return; }
+      const parsed=colorManagedPreviewSchema.safeParse(await invoke('get_color_managed_preview', { projectId, photoId: photo.id }));
+      if(!parsed.success) throw new Error(zh.colorManagedInvalidResult);
+      const result=parsed.data;
+      if(signal.aborted) return;
+      if (result.dataUrl) onChange({ src: result.dataUrl, status: result.status, source: result.sourceProfile, display: result.displayProfile,pixelSource:result.pixelSource });
+      // 没变换就不接管画面，只把原因说清楚，免得开关看起来开着、颜色其实没动。
+      else setNotice(result.detail ? `${colorStatusLabel(result.status)}：${result.detail}` : colorStatusLabel(result.status));
+    } catch (error) {
+      if(!signal.aborted) setNotice(error instanceof Error ? error.message : String(error));
+    } finally { if(!signal.aborted) setBusy(false); }
   };
 
-  return <div className="color-managed-toggle" role="group" aria-label="色彩管理">
-    <Button size="small" aria-pressed={enabled} disabled={busy} onClick={() => void toggle()} title="开启后照片经 ColorSync 变换到你的显示器色彩空间">
-      🎨 {enabled ? '色彩管理已开启' : '色彩管理'}
+  return <div className="color-managed-toggle" role="group" aria-label={zh.colorManaged}>
+    <Button size="small" aria-pressed={Boolean(managed)} disabled={busy} onClick={() => void toggle()} title={zh.colorManagedHelp}>
+      {busy ? zh.colorManagedBusy : managed ? zh.colorManagedOn : zh.colorManaged}
     </Button>
-    {info && <span className="micro color-info">
-      {info.applied ? `${info.source} → ${info.display}` : '直通模式（无变换）'}
-    </span>}
-    {error && <span className="micro color-error">{error}</span>}
+    {managed && <span className="micro color-info">{`${colorStatusLabel(managed.status)} · ${managed.source} → ${managed.display}`}</span>}
+    {notice && <span className="micro color-error" role="status">{notice}</span>}
   </div>;
 }
 
-export function PhotoViewport({ photo, zoom, onChange }: { photo: Photo; zoom: PhotoZoom; onChange: (zoom: PhotoZoom) => void }) {
+export function PhotoViewport({ photo, zoom, onChange, managed }: { photo: Photo; zoom: PhotoZoom; onChange: (zoom: PhotoZoom) => void; managed?: ColorManaged | null }) {
   const root = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [loaded, setLoaded] = useState({ src: '', width: 0, height: 0 });
   const [failed, setFailed] = useState(false);
-  const [original, setOriginal] = useState<Partial<InspectionImage> & { error?: string }>({});
   const [pixelRatio, setPixelRatio] = useState(window.devicePixelRatio || 1);
   const loadOriginal = photo.loadOriginal;
+  // 开关开着时 100% 也走全分辨率的显示器渲染；没有这条通道（网页版）就仍是原图直通。
+  const managedOriginal = Boolean(managed && photo.loadManagedOriginal);
+  const inspection = managedOriginal ? photo.loadManagedOriginal : loadOriginal;
+  const sourceKey=photoSourceKey(photo);
+  const [originalState,setOriginalState]=useState<{key:string;loader:typeof inspection;image:Partial<InspectionImage>&{error?:string}}>({key:sourceKey,loader:inspection,image:{}});
+  if(originalState.key!==sourceKey||originalState.loader!==inspection) setOriginalState({key:sourceKey,loader:inspection,image:{}});
+  const original=originalState.key===sourceKey&&originalState.loader===inspection ? originalState.image : {};
+  const setOriginal=(image:Partial<InspectionImage>&{error?:string})=>setOriginalState({key:sourceKey,loader:inspection,image});
   useEffect(() => {
-    if (zoom.mode !== 'actual' || !loadOriginal) return;
+    if (zoom.mode !== 'actual' || !inspection) return;
     let active = true;
-    loadOriginal().then(({ src, kind }) => { if (active) setOriginal({ src, kind }); }, error => {
-      if (active) setOriginal({ error: error instanceof Error ? error.message : '原图不可用；当前显示缓存预览' });
+    inspection().then(({ src, kind }) => { if (active) setOriginalState({key:sourceKey,loader:inspection,image:{ src, kind }}); }, error => {
+      if (active) setOriginalState({key:sourceKey,loader:inspection,image:{ error: error instanceof Error ? error.message : '原图不可用；当前显示缓存预览' }});
     });
     return () => { active = false; };
-  }, [zoom.mode, loadOriginal]);
+  }, [zoom.mode, inspection,sourceKey]);
   useEffect(() => {
     const resize = () => setPixelRatio(window.devicePixelRatio || 1);
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, []);
   const originalVisible = zoom.mode === 'actual' && Boolean(original.src);
+  // 只有当前来源和模式的检视结果可接管 100%；受限预览不能冒充全分辨率像素。
+  const managedVisible = !originalVisible && Boolean(managed?.src);
   const sourceLabel = original.kind === 'embedded_preview' ? 'RAW 内嵌 JPEG 预览' : original.kind === 'derived_preview' ? 'RAW 派生预览' : original.kind === 'display_managed' ? '原图 · 显示器色彩' : '原图';
-  const src = originalVisible ? original.src! : photo.previewSrc ?? photo.src;
+  const src = originalVisible ? original.src! : managedVisible ? managed!.src : photo.previewSrc ?? photo.src;
   const natural = loaded.src === src ? loaded : { width: 0, height: 0 };
-  const waitingOriginal = zoom.mode === 'actual' && loadOriginal && !original.src && !original.error;
+  const waitingOriginal = zoom.mode === 'actual' && Boolean(inspection) && !original.src && !original.error;
   const drag = useRef<{ pointerId: number; left: number; top: number; x: number; y: number } | null>(null);
   useEffect(() => {
     const element = root.current;
@@ -96,7 +119,7 @@ export function PhotoViewport({ photo, zoom, onChange }: { photo: Photo; zoom: P
   const x = clamp(zoom.x, limitX);
   const y = clamp(zoom.y, limitY);
   const pannable = Boolean(limitX || limitY);
-  return <div ref={root} className={`photo-viewport ${pannable ? 'pannable' : ''}`} data-testid="photo-viewport" data-mode={zoom.mode} data-source={originalVisible ? original.kind?.replace('_', '-') : 'preview'} data-scale={zoom.scale} data-pan={`${zoom.x},${zoom.y}`}
+  return <div ref={root} className={`photo-viewport ${pannable ? 'pannable' : ''}`} data-testid="photo-viewport" data-mode={zoom.mode} data-source={originalVisible ? original.kind?.replace('_', '-') : managedVisible ? 'color-managed' : 'preview'} data-scale={zoom.scale} data-pan={`${zoom.x},${zoom.y}`}
     onPointerDown={event => {
       if (!pannable || event.button !== 0) return;
       event.preventDefault();
@@ -108,15 +131,18 @@ export function PhotoViewport({ photo, zoom, onChange }: { photo: Photo; zoom: P
       onChange({ ...zoom, x: clamp(start.x + (event.clientX - start.left) / width, limitX), y: clamp(start.y + (event.clientY - start.top) / height, limitY) });
     }} onPointerUp={event => { if (drag.current?.pointerId === event.pointerId) drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}>
     <img key={src} src={src} alt={photo.name} draggable={false} onLoad={event => { setFailed(false); setLoaded({ src, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight }); }} onError={() => {
-      if (originalVisible) setOriginal({ error: `${original.kind === 'embedded_preview' ? '内嵌 JPEG' : '原图'}无法解码；当前显示缓存预览` });
+      if (originalVisible) setOriginal({ error: `${sourceLabel}无法解码；当前显示缓存预览` });
       else setFailed(true);
     }}
       style={{ width, height, opacity: natural.width ? 1 : 0, transform: `translate(calc(-50% + ${x * width}px), calc(-50% + ${y * height}px))` }} />
     {originalVisible && original.kind !== 'original' && <span className="original-badge" role="note">{sourceLabel} · {original.kind === 'embedded_preview' ? '非 RAW 全分辨率' : original.kind === 'display_managed' ? '全分辨率 · 已按显示器 ICC 渲染' : '非全分辨率'}</span>}
+    {managedVisible && managed && <span className="original-badge" role="note">{`${managed.pixelSource==='original' ? zh.colorManagedOriginalPreviewBadge : zh.colorManagedBadge} · ${colorStatusLabel(managed.status)}`}</span>}
+    {/* 只有 100% 真的是没动过的像素时才说"直通"；已按显示器渲染过再说这句就是骗人。 */}
+    {managed && originalVisible && original.kind !== 'display_managed' && <p role="note" className="micro">{zh.colorManagedBypassed}</p>}
     {failed && <p role="alert">预览无法加载，请重新打开项目检查缓存。</p>}
-    {waitingOriginal && <p role="status">正在校验并加载原图…</p>}
+    {waitingOriginal && <p role="status">{managedOriginal ? zh.colorManagedOriginalWaiting : '正在校验并加载原图…'}</p>}
     {zoom.mode === 'actual' && original.error && <p role="alert">{original.error}</p>}
-    {originalVisible && <small className="inspection-source">{sourceLabel} · {Math.round(zoom.scale * 100)}% · 1 图像像素 = {zoom.scale} 屏幕像素；色彩由系统显示管理</small>}
+    {originalVisible && <small className="inspection-source">{`${sourceLabel} · ${Math.round(zoom.scale * 100)}% · 1 图像像素 = ${zoom.scale} 屏幕像素；${original.kind === 'display_managed' ? '色彩已按本机显示器配置渲染并标注' : '色彩由系统显示管理'}`}</small>}
     {!natural.width && !failed && !waitingOriginal && <p role="status">{originalVisible ? '正在加载原图…' : '正在加载预览…'}</p>}
   </div>;
 }

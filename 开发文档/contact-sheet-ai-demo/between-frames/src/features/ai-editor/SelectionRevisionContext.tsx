@@ -1,12 +1,13 @@
 import { useCallback } from 'react';
 import type { AgentRepository } from '../../domain/agent';
+import type { PreviewRepairOutcome } from '../../domain/models';
 import type { SelectionRevisionContext as RevisionContext } from '../../domain/revisionContext';
 import { useRevisionContext } from '../../components/review/useRevisionContext';
 import { HistoricalObservations } from '../../components/review/HistoricalObservations';
 import { Button } from '../../components/shared/Button';
 import { zh } from '../../app/copy';
 
-export function SelectionRevisionContext({ repository, projectId, draftId }: { repository: AgentRepository; projectId: string; draftId: string }) {
+export function SelectionRevisionContext({ repository, projectId, draftId, onRepair }: { repository: AgentRepository; projectId: string; draftId: string; onRepair?: (photoIds: string[]) => Promise<PreviewRepairOutcome[]> }) {
   const load = useCallback((project: string, draft: string, offset: number) => repository.selectionRevisionContext!(project,draft,offset),[repository]);
   const { location,page,busy,failed,navigate } = useRevisionContext<RevisionContext>(repository.selectionRevisionContext ? load : undefined,projectId,draftId);
   if (!repository.selectionRevisionContext || page === null) return null;
@@ -34,7 +35,7 @@ export function SelectionRevisionContext({ repository, projectId, draftId }: { r
       </article>)}
       <h5>{zh.selectionContextFeedback} · {page.totalFeedback}</h5>
       {page.feedback.map(message => <blockquote className="revision-feedback" key={message.messageId}><strong>{message.role === 'user' ? zh.selectionContextUser : zh.selectionContextQuestion}</strong><p>{message.content}</p></blockquote>)}
-      <HistoricalObservations observations={page.observations} total={page.totalObservations} />
+      <HistoricalObservations observations={page.observations} total={page.totalObservations} onRepair={onRepair} />
       <div className="revision-navigation">
         {location.offset > 0 && <Button size="small" disabled={busy} onClick={() => navigate(location.draftId,Math.max(0,location.offset-30))}>{zh.editorialRevisionPreviousPage}</Button>}
         {page.nextOffset !== null && <Button size="small" disabled={busy} onClick={() => navigate(location.draftId,page.nextOffset!)}>{zh.editorialRevisionNextPage}</Button>}

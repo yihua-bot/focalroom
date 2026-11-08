@@ -32,6 +32,18 @@ it('选片依据中的照片版本不一致时隐藏当前像素，不能冒充�
  ipc.mockResolvedValue({...selectionContext,items:[{...selectionContext.items[0],currentHashMatches:false}]});
  expect((await new TauriAgentRepository().selectionRevisionContext('p','child'))!.items[0].thumbnailPath).toBeNull();
 });
+it('本地重算只认计数：串方案、越界计数一律拒收，没记版本号仍算成功',async()=>{
+ const receipt={draftId:'draft',draftRevision:2,count:5,observed:2,unobserved:3,omitted:1};
+ const repository=new TauriAgentRepository();
+ ipc.mockResolvedValue(receipt);
+ expect(await repository.recheckEvidence!('p','draft')).toEqual(receipt);
+ expect(ipc).toHaveBeenCalledWith('recheck_draft_evidence',{projectId:'p',draftId:'draft'});
+ for(const value of [{...receipt,draftId:'other'},{...receipt,draftRevision:0},{...receipt,observed:-1},{...receipt,draftRevision:'现在'}]){
+  ipc.mockResolvedValue(value);await expect(repository.recheckEvidence!('p','draft')).rejects.toThrow();
+ }
+ ipc.mockResolvedValue({...receipt,draftRevision:null});
+ expect((await repository.recheckEvidence!('p','draft')).draftRevision).toBeNull();
+});
 it('独立观察配置按角色保留能力，并拒绝残缺的观察能力投影', async () => {
  const config = { observation: { modelId: 'observer', capabilities: ['vision', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null }, consentProvider: 'openai@' + 'a'.repeat(64), providerId: 'openai', modelId: 'curator', ready: true, apiKeyTail: null, keySource: null, baseUrl: 'https://example.invalid', promptVersion: 'm3-openai-9', consent: null, capabilities: ['tool_calling', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null };
  ipc.mockResolvedValue(config);
@@ -79,11 +91,87 @@ describe('视觉任务 IPC 投影', () => {
   expect(data.tasks[0].budget.maxCloudImages).toBe(2);
   expect(ipc).toHaveBeenCalledWith('get_agent_projection', { projectId: 'p' });
  });
+ it('口径摘要只带计数过界：后端没这一栏算没核验，负数和文字一律整条拒收', async () => {
+  const repository = new TauriAgentRepository();
+  const digest = { draftId: 'draft', count: 5, observed: 2, unobserved: 3, pageTier: 1, detailTier: 1, otherVersion: 0, otherTool: 0, crossContractPairs: 1, omitted: 2, scanned: 2, draftRevision: 2, perPhoto: [{ photoId: 'p', contract: 'current_page_tier', used: true }, { photoId: 'q', contract: 'other_tool', used: false, pixelVersion: 'unreadable' }] };
+  ipc.mockResolvedValue({ tasks: [{ ...task, draftEvidence: [digest] }], drafts: [] });
+  expect((await repository.query('p')).tasks[0].draftEvidence).toEqual([digest]);
+  ipc.mockResolvedValue({ tasks: [task], drafts: [] });
+  expect((await repository.query('p')).tasks[0].draftEvidence).toEqual([]);
+  ipc.mockResolvedValue({ tasks: [{ ...task, draftEvidence: [{ ...digest, observed: -1 }] }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+  ipc.mockResolvedValue({ tasks: [{ ...task, draftEvidence: [{ ...digest, pageTier: '全部' }] }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+  // 陌生档位名一律整条拒收：界面不能拿到一个自己都不认的口径。
+  ipc.mockResolvedValue({ tasks: [{ ...task, draftEvidence: [{ ...digest, perPhoto: [{ photoId: 'p', contract: '最准的档', used: true }] }] }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+ });
+ it('逐张原图状态只接收四种已知结果，旧回执没这一栏仍可读取', async () => {
+  const repository = new TauriAgentRepository();
+  const perPhoto = ['missing', 'changed', 'matches', 'unchecked'].map(originalStatus => ({
+   photoId: originalStatus, contract: null, used: false, pixelVersion: 'unreadable', originalStatus,
+  }));
+  const digest = { draftId: 'draft', count: 4, observed: 0, unobserved: 0, pageTier: 0, detailTier: 0, otherVersion: 0, otherTool: 0, crossContractPairs: 0, omitted: 4, scanned: 4, draftRevision: 2, perPhoto };
+  ipc.mockResolvedValue({ tasks: [{ ...task, draftEvidence: [digest] }], drafts: [] });
+  expect((await repository.query('p')).tasks[0].draftEvidence).toEqual([digest]);
+  ipc.mockResolvedValue({ tasks: [{ ...task, draftEvidence: [{ ...digest, perPhoto: [{ photoId: 'old', contract: null, used: false, pixelVersion: 'unrecorded' }] }] }], drafts: [] });
+  expect((await repository.query('p')).tasks[0].draftEvidence?.[0].perPhoto[0].originalStatus).toBeUndefined();
+  ipc.mockResolvedValue({ tasks: [{ ...task, draftEvidence: [{ ...digest, perPhoto: [{ ...perPhoto[0], originalStatus: 'probably-missing' }] }] }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+ });
  it('拒绝负数用量与超出后端范围的图像预算', async () => {
   const repository = new TauriAgentRepository();
   ipc.mockResolvedValue({ tasks: [{ ...task, usage: { ...task.usage, costMinorUsd: -1 } }], drafts: [] });
   await expect(repository.query('p')).rejects.toThrow();
   ipc.mockResolvedValue({ tasks: [{ ...task, budget: { ...task.budget, maxCloudImages: 101 } }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+ });
+ it('图像版本证据原样过界：记过的、没记过的、读不出的、原图换过的都不合并，陌生状态整条被拒', async () => {
+  const repository = new TauriAgentRepository();
+  const inspections = [
+   { photo_id: 'a', visible_facts: ['左侧有深色主体'], interpretation: '形成停顿', uncertainty: '细节难辨', imageVersion: { previewSha256: 'a'.repeat(64), pixelVersion: 'verified', sourceMatches: true } },
+   { photo_id: 'b', visible_facts: ['地平线偏上'], interpretation: '留出呼吸', uncertainty: '裁切未定', imageVersion: { previewSha256: null, pixelVersion: 'unrecorded', sourceMatches: true } },
+   { photo_id: 'c', visible_facts: ['逆光'], interpretation: '氛围优先', uncertainty: '曝光不可调', imageVersion: { previewSha256: 'b'.repeat(64), pixelVersion: 'unreadable', sourceMatches: false } },
+  ];
+  ipc.mockResolvedValue({ tasks: [{ ...task, inspectedPhotos: inspections }], drafts: [] });
+  const data = await repository.query('p');
+  expect(data.tasks[0].inspectedPhotos).toMatchObject([
+   { imageVersion: { previewSha256: 'a'.repeat(64), pixelVersion: 'verified', sourceMatches: true } },
+   { imageVersion: { previewSha256: null, pixelVersion: 'unrecorded' } },
+   { imageVersion: { pixelVersion: 'unreadable', sourceMatches: false } },
+  ]);
+  ipc.mockResolvedValue({ tasks: [{ ...task, inspectedPhotos: [{ ...inspections[0], imageVersion: { pixelVersion: 'probably-fine' } }] }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+ });
+ it('知识出处、审校状态与创作记忆来路原样过界，字段变形时整条投影被拒', async () => {
+  const repository = new TauriAgentRepository();
+  const references = [
+   { kind: 'knowledge', label: 'Stephen Shore', citationId: 'p-1', version: 3, passage: '这条断言已核实。', source: 'https://fixture.example/collection', institution: 'Fixture Museum', reviewStatus: 'verified', disputed: false },
+   { kind: 'knowledge', label: 'Diane Arbus', citationId: 'p-2', reviewStatus: 'imported', disputed: true, detailError: { code: 'KNOWLEDGE_UNAVAILABLE', message: '知识服务暂时连不上，不能视为没有出处' } },
+   { kind: 'context', label: 'chatContext_history', section: 'history', version: 9, visualEvidence: false },
+   { kind: 'memory', label: 'creative_memory', passage: '偏向留白的构图', memoryId: 7, origin: 'user_confirmed', scope: 'cross_project', sourceProjectId: 'p-source', rounds: 2, retrievals: 1, memoryStatus: 'confirmed', memoryDisabled: false, visualEvidence: false },
+   { kind: 'memory', label: 'creative_memory', passage: null, memoryId: 8, origin: 'rule_inferred', scope: 'project_local', sourceProjectId: 'p', rounds: 1, memoryStatus: null, memoryDisabled: null },
+  ];
+  ipc.mockResolvedValue({ tasks: [{ ...task, creativeReferences: references }], drafts: [] });
+  const data = await repository.query('p');
+  expect(data.tasks[0].creativeReferences).toMatchObject([
+   { reviewStatus: 'verified', institution: 'Fixture Museum', source: 'https://fixture.example/collection' },
+   { disputed: true, detailError: { code: 'KNOWLEDGE_UNAVAILABLE' } },
+   { kind: 'context', section: 'history', version: 9 },
+   { kind: 'memory', memoryId: 7, origin: 'user_confirmed', scope: 'cross_project', sourceProjectId: 'p-source', rounds: 2, retrievals: 1, memoryStatus: 'confirmed', memoryDisabled: false, passage: '偏向留白的构图' },
+   { kind: 'memory', memoryId: 8, origin: 'rule_inferred', passage: null, rounds: 1, memoryStatus: null, memoryDisabled: null },
+  ]);
+  // 没被主动查询过的记忆，Rust 就不带这个字段，前端也不会凭空补一个次数。
+  expect(data.tasks[0].creativeReferences?.[4].retrievals).toBeUndefined();
+  ipc.mockResolvedValue({ tasks: [{ ...task, creativeReferences: [{ ...references[1], detailError: { code: 1, message: 'x' } }] }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+  // 记忆条的轮数、查询次数与正文必须原样过界：结构错误的读数不能被当成真的用过。
+  ipc.mockResolvedValue({ tasks: [{ ...task, creativeReferences: [{ ...references[3], rounds: '2' }] }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+  ipc.mockResolvedValue({ tasks: [{ ...task, creativeReferences: [{ ...references[3], retrievals: '1' }] }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+  // "现在这条还作不作数"同理：把停用写成字符串不能被解释成"已经停用"。
+  ipc.mockResolvedValue({ tasks: [{ ...task, creativeReferences: [{ ...references[3], memoryDisabled: 'yes' }] }], drafts: [] });
   await expect(repository.query('p')).rejects.toThrow();
  });
 });
@@ -169,4 +257,91 @@ it('聊天回执只在已完成时接受正文，其余状态必须空正文', a
   ipc.mockResolvedValueOnce(value);
   await expect(repo.chatJob('3f2a1b0c-9d8e-4f70-a1b2-c3d4e5f60718')).rejects.toThrow();
  }
+});
+it('记忆正文版本状态必须可识别，未核对的正文不能冒充历史',async()=>{
+ const repository=new TauriAgentRepository();
+ for(const memoryTextVersion of ['verified','changed','unrecorded','source_unavailable']){
+  const reference={kind:'memory',label:'creative_memory',memoryTextVersion,passage:memoryTextVersion==='verified'?'原文':null};
+  ipc.mockResolvedValue({tasks:[{...task,creativeReferences:[reference]}],drafts:[]});
+  expect((await repository.query('p')).tasks[0].creativeReferences?.[0].memoryTextVersion).toBe(memoryTextVersion);
+ }
+ for(const invalid of [{memoryTextVersion:'invented',passage:null},{memoryTextVersion:'changed',passage:'新文字'}]){
+  ipc.mockResolvedValue({tasks:[{...task,creativeReferences:[{kind:'memory',label:'creative_memory',...invalid}]}],drafts:[]});
+  await expect(repository.query('p')).rejects.toThrow();
+ }
+});
+
+describe('知识引用"为什么算这条"的回执边界', () => {
+ const base = { kind: 'knowledge', label: '色彩与版本比较', citationId: 'FR-K004' };
+ const local = { kind: 'local_terms', termCount: 2, matchedTerms: ['色彩', '调色'], fields: ['title', 'tags'], matched: 4, returned: 1 };
+ it('三种命中理由原样过界，自相矛盾或陌生的理由整份投影被拒', async () => {
+  const repository = new TauriAgentRepository();
+  for (const matchReason of [local, { kind: 'builtin_method' }, { kind: 'cloud_search', relevance: 0.5 }, { kind: 'cloud_search', relevance: null }]) {
+   ipc.mockResolvedValue({ tasks: [{ ...task, creativeReferences: [{ ...base, matchReason }] }], drafts: [] });
+   expect((await repository.query('p')).tasks[0].creativeReferences?.[0].matchReason).toEqual(matchReason);
+  }
+  for (const matchReason of [
+   { ...local, termCount: 0 },
+   { ...local, matchedTerms: ['一', '二', '三'] },
+   { ...local, returned: 9 },
+   { ...local, fields: [] },
+   { ...local, fields: ['author'] },
+   { kind: 'cloud_search', relevance: '高' },
+   { kind: 'cloud_search' },
+   { kind: 'because_i_said_so' },
+  ]) {
+   ipc.mockResolvedValue({ tasks: [{ ...task, creativeReferences: [{ ...base, matchReason }] }], drafts: [] });
+   await expect(repository.query('p')).rejects.toThrow();
+  }
+ });
+ it('只有摘要的标记必须是布尔值，回执没带理由时不补一个', async () => {
+  const repository = new TauriAgentRepository();
+  ipc.mockResolvedValue({ tasks: [{ ...task, creativeReferences: [{ ...base, summaryOnly: true }] }], drafts: [] });
+  const reference = (await repository.query('p')).tasks[0].creativeReferences?.[0];
+  expect(reference?.summaryOnly).toBe(true);
+  expect(reference?.matchReason).toBeUndefined();
+  ipc.mockResolvedValue({ tasks: [{ ...task, creativeReferences: [{ ...base, summaryOnly: 'yes' }] }], drafts: [] });
+  await expect(repository.query('p')).rejects.toThrow();
+ });
+});
+
+describe('检索台账的回执边界', () => {
+ const base = { callId: 'c1', tool: 'search_photography_knowledge', query: '色彩', returned: 0 };
+ const reason = { code: 'KNOWLEDGE_PROTOCOL', message: '响应不是检索列表' };
+ it('四种结局原样过界，结论与数字对不上就整份投影被拒', async () => {
+  const repository = new TauriAgentRepository();
+  for (const search of [
+   { ...base, returned: 2, localMatched: 1, cloudAvailable: true, outcome: 'found' },
+   { ...base, cloudAvailable: true, outcome: 'no_match' },
+   { ...base, cloudAvailable: null, outcome: 'no_match' },
+   { ...base, cloudAvailable: false, cloudError: { code: 'AUTH_REQUIRED', message: '需要授权' }, outcome: 'unavailable' },
+   { ...base, query: '', error: reason, outcome: 'failed' },
+  ]) {
+   ipc.mockResolvedValue({ tasks: [{ ...task, knowledgeSearches: [search] }], drafts: [] });
+   expect((await repository.query('p')).tasks[0].knowledgeSearches?.[0]).toEqual(search);
+  }
+  for (const search of [
+   { ...base, outcome: 'found' },
+   { ...base, returned: 3, outcome: 'no_match' },
+   { ...base, returned: 3, cloudAvailable: false, outcome: 'unavailable' },
+   { ...base, cloudAvailable: true, outcome: 'unavailable' },
+   { ...base, cloudAvailable: false, outcome: 'no_match' },
+   { ...base, outcome: 'failed' },
+   { ...base, error: reason, outcome: 'no_match' },
+   { ...base, outcome: 'maybe' },
+   { ...base, tool: 'search_everything', outcome: 'no_match' },
+   { ...base, returned: -1, outcome: 'no_match' },
+   { ...base, localMatched: '0', outcome: 'no_match' },
+   { ...base, query: 'x'.repeat(201), outcome: 'no_match' },
+   { ...base, cloudAvailable: false, cloudError: { code: '', message: '空编号' }, outcome: 'unavailable' },
+  ]) {
+   ipc.mockResolvedValue({ tasks: [{ ...task, knowledgeSearches: [search] }], drafts: [] });
+   await expect(repository.query('p')).rejects.toThrow();
+  }
+ });
+ it('回执没带台账时补空数组，旧任务照样过界', async () => {
+  const repository = new TauriAgentRepository();
+  ipc.mockResolvedValue({ tasks: [task], drafts: [] });
+  expect((await repository.query('p')).tasks[0].knowledgeSearches).toEqual([]);
+ });
 });

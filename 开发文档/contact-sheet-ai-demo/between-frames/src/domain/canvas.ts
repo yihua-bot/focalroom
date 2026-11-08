@@ -1,4 +1,5 @@
 import type { HistoricalPhotoObservation } from './revisionContext';
+import type { PreviewRepairOutcome } from './models';
 export interface BoardInfo { id: string; projectId: string; title: string; state: string; owningTaskId?: string | null; revision?: number }
 export interface CanvasNodeInfo {
   id: string; boardId: string; nodeType: string;
@@ -69,6 +70,7 @@ export interface EditorialRevisionContext {
   totalDecisions: number; totalObservations: number; nextOffset: number | null; hasEarlier: boolean;
 }
 export interface CanvasRepository {
+  repairPreviews?(projectId: string, photoIds: string[]): Promise<PreviewRepairOutcome[]>;
   editorialRevisionContext?(projectId: string, draftId: string, offset?: number): Promise<EditorialRevisionContext | null>;
   editorialDiscussion?(projectId: string, draftId: string, revision: number, offset?: number, cursor?: number): Promise<EditorialDiscussion>;
   addEditorialComment?(projectId: string, draftId: string, revision: number, comment: { changeId: string | null; threadId: string | null; body: string }): Promise<void>;

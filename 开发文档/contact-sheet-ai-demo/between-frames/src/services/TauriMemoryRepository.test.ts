@@ -34,7 +34,7 @@ it('旧投影保守默认隔离，拒绝混入可编辑列表的其他项目假�
  ipc.mockResolvedValue({ evidence: [], hypotheses: [], notice: 'n' });
  expect(await repo.query('p1')).toMatchObject({ crossProjectEnabled: false, authorHypotheses: [] });
  const h = { id: 1, projectId: 'other', scope: 'project_local', statement: '留白', evidenceIds: [1], counterexampleIds: [],
-  status: 'confirmed', confidence: 'tentative', userCorrection: null, disabled: false, createdAt: 'n', updatedAt: 'n' };
+  status: 'confirmed', confidence: 'tentative', origin: 'user_confirmed', userCorrection: null, disabled: false, createdAt: 'n', updatedAt: 'n' };
  ipc.mockResolvedValue({ evidence: [], hypotheses: [h], notice: 'n' });
  await expect(repo.query('p1')).rejects.toThrow('范围不匹配');
  ipc.mockResolvedValue({ evidence: [], hypotheses: [], notice: 'n', crossProjectEnabled: true, authorHypotheses: [{ ...h, scope: 'cross_project' }] });

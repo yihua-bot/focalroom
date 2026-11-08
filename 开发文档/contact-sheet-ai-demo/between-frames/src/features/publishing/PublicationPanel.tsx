@@ -3,10 +3,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../components/shared/Button';
 
-import type { PublicationInfo, PublicationPage, PublicationRepository } from '../../domain/publication';
+import type { PublicationInfo, PublicationKind, PublicationPage, PublicationRepository } from '../../domain/publication';
 import { PublicationStudio } from './PublicationStudio';
+import { paperPresets, presetLabel } from './pageDraft';
+import { publicationStateLabel } from './publicationWorkflow';
 import { userFacingError } from '../../services/userFacingError';
 import { zh } from '../../app/copy';
+
+const kinds: PublicationKind[] = ['photobook', 'exhibition', 'portfolio'];
+// 类型标签一律走翻译表；库里出现契约之外的旧值就原样露出，不编一个标签把它盖住。
+const typeLabel = (value: string) => (kinds.includes(value as PublicationKind) ? zh[`publicationType_${value}`] : value);
 
 type Props={
   repository?: PublicationRepository;
@@ -20,6 +26,8 @@ function PublicationPanelBody({repository,projectId,sequenceCount,readOnly=false
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [title, setTitle] = useState('');
+  const [kind, setKind] = useState<PublicationKind>('photobook');
+  const [sizeId, setSizeId] = useState(paperPresets[0].id);
   const [perPage, setPerPage] = useState(1);
   const [notice, setNotice] = useState('');
   const [pages, setPages] = useState<Record<string, PublicationPage[]>>({});
@@ -52,7 +60,8 @@ function PublicationPanelBody({repository,projectId,sequenceCount,readOnly=false
     setCreating(true);
     setNotice('');
     try {
-      await repository.create(projectId, title.trim());
+      const preset = paperPresets.find(item => item.id === sizeId) ?? paperPresets[0];
+      await repository.create(projectId, title.trim(), { pubType: kind, widthMm: preset.widthMm, heightMm: preset.heightMm });
       setTitle('');
       await load();
     } catch (error) {
@@ -111,6 +120,12 @@ function PublicationPanelBody({repository,projectId,sequenceCount,readOnly=false
         onChange={e => setTitle(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') void create(); }}
       />
+      <select aria-label={zh.publicationType} value={kind} disabled={creating || readOnly} onChange={e => setKind(e.target.value as PublicationKind)}>
+        {kinds.map(value => <option key={value} value={value}>{zh[`publicationType_${value}`]}</option>)}
+      </select>
+      <select aria-label={zh.publicationPaperPreset} value={sizeId} disabled={creating || readOnly} onChange={e => setSizeId(e.target.value)}>
+        {paperPresets.map(preset => <option key={preset.id} value={preset.id}>{presetLabel(preset)}</option>)}
+      </select>
       <Button size="small" disabled={creating || readOnly || !title.trim()} onClick={() => void create()}>
         {creating ? '创建中…' : '创建'}
       </Button>
@@ -120,10 +135,10 @@ function PublicationPanelBody({repository,projectId,sequenceCount,readOnly=false
       <div key={pub.id} className="publication-card">
         <div className="publication-card-head">
           <strong>{pub.title}</strong>
-          <span className={`publication-state ${pub.state}`}>{{ draft: '草稿', in_review: '审阅中', finalized: '已定稿', delivered: '已交付' }[pub.state] ?? pub.state}</span>
+          <span className={`publication-state ${pub.state}`}>{publicationStateLabel(pub.state)}</span>
         </div>
         <div className="publication-card-meta">
-          {{ photobook: '摄影书', exhibition: '展览', portfolio: '作品集' }[pub.pubType] ?? pub.pubType} · {new Date(pub.createdAt).toLocaleDateString()}
+          {typeLabel(pub.pubType)} · {new Date(pub.createdAt).toLocaleDateString()}
         </div>
         <div className="publication-actions">
           <select aria-label={`${pub.title}每页照片数`} value={perPage} disabled={readOnly || generating} onChange={e => setPerPage(Number(e.target.value))}>

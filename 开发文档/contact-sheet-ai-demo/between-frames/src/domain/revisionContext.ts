@@ -1,6 +1,7 @@
 export interface HistoricalPhotoObservation {
   photoId: string; photoHash: string; photoName: string; thumbnailPath: string | null;
   modelId: string; promptVersion: string; taskId: string; callId: string;
+  previewSha256?: string | null; currentPixelVersion?: 'verified' | 'mismatch' | 'unrecorded' | 'unreadable';
   visibleFacts: string[]; interpretation: string; uncertainty: string; currentHashMatches: boolean;
 }
 export interface SelectionRevisionContext {

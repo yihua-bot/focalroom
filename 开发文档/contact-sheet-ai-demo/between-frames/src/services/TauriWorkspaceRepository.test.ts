@@ -19,12 +19,12 @@ it('适配 Rust 的 board/publication snake_case，不能把空字段渲染为�
   ipc.mockResolvedValueOnce([{ id: 'board', project_id: 'project', title: '叙事', state: 'draft', owning_task_id: null, revision: 1 }]);
   expect(await new TauriCanvasRepository().listBoards('project')).toEqual([{ id: 'board', projectId: 'project', title: '叙事', state: 'draft', owningTaskId: null, revision: 1 }]);
   ipc.mockImplementationOnce(async (_name: string, { request }: { request: PublicationRequestLike }) => receiptFor(request, true, [publicationRow(1, request.publicationId)]));
-  const created = await new TauriPublicationRepository().create('project', '书');
+  const created = await new TauriPublicationRepository().create('project', '书', { pubType: 'photobook', widthMm: 210, heightMm: 297 });
   expect(created).toMatchObject({ projectId: 'project', pubType: 'photobook', createdAt: '2026-10-21' });
   expect(ipc).toHaveBeenLastCalledWith('pub_execute', expect.objectContaining({
     request: expect.objectContaining({
       projectId: 'project', publicationId: created.id, baseRevision: 0,
-      operations: [expect.objectContaining({ action: { type: 'Create', data: { title: '书', pubType: 'photobook' } } })],
+      operations: [expect.objectContaining({ action: { type: 'Create', data: { title: '书', pubType: 'photobook', widthMm: 210, heightMm: 297 } } })],
     }),
   }));
   ipc.mockResolvedValueOnce([{ id: 'broken', projectId: 'project' }]);

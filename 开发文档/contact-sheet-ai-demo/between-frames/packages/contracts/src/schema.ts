@@ -15,6 +15,8 @@ const anchor = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('photo'), photo_id: id, x: z.number().min(0).max(1), y: z.number().min(0).max(1) }),
   z.strictObject({ type: z.literal('sequence'), sequence_item_id: id, revision_id: id }),
   z.strictObject({ type: z.literal('revision'), revision_id: id }),
+  // 审稿意见落在"这一本 + 提意见时那一版"：出版物版本不可变，锚在版本上的意见才不会随着版面改动漂移。
+  z.strictObject({ type: z.literal('publication'), publication_id: id, revision: z.number().int().min(0).max(100_000) }),
 ]);
 const envelope = {
   version: z.literal('2.0'), command_id: nonce, workspace_id: id, project_id: id,

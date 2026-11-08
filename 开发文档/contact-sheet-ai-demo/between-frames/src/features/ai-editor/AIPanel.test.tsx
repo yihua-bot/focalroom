@@ -4,14 +4,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUIStore } from '../../stores/uiStore';
 import { AIPanel } from './AIPanel';
-import type { AiConfig, AgentProjection, AgentTask } from '../../domain/agent';
+import type { AiConfig, AgentProjection, AgentTask, DraftEvidence, SelectionDraft } from '../../domain/agent';
 import { defaultAgentBudget } from '../../domain/agent';
 import type { Project } from '../../domain/models';
 const project = { id: 'p1', title: 't', brief: '', revision: 3, photos: [{ id: 'a', status: 'undecided' }, { id: 'b', status: 'undecided' }], sequence: [], events: [] } as unknown as Project;
 const readyConfig: AiConfig = { observation: null, consentProvider: 'openai@' + 'a'.repeat(64), providerId: 'openai', modelId: 'test-model', ready: true, apiKeyTail: 'abcd', keySource: 'keychain', baseUrl: 'https://x', promptVersion: 'test', capabilities: ['vision', 'tool_calling', 'structured_output', 'instruction_following'], capabilitySource: 'operator_declaration', configurationError: null, consent: null };
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn().mockResolvedValue(() => {}) }));
 function fixture(config: Partial<AiConfig> = {}, projection: AgentProjection = { tasks: [], drafts: [] }) {
- const agent = { chat: vi.fn().mockResolvedValue('聊天模式回复'), chatJob: vi.fn().mockResolvedValue({ state: 'completed', text: '核对到的回复' }), queryVisionResult: vi.fn().mockResolvedValue({state:'pending',images:1}), query: vi.fn().mockResolvedValue(projection), request: vi.fn().mockResolvedValue('task-1'), subscribe: vi.fn().mockResolvedValue(() => {}), aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...config }), setConsent: vi.fn().mockResolvedValue({ id: 9 }) };
+ const agent = { chat: vi.fn().mockResolvedValue('聊天模式回复'), chatJob: vi.fn().mockResolvedValue({ state: 'completed', text: '核对到的回复' }), queryVisionResult: vi.fn().mockResolvedValue({state:'pending',images:1}), query: vi.fn().mockResolvedValue(projection), request: vi.fn().mockResolvedValue('task-1'), subscribe: vi.fn().mockResolvedValue(() => {}), aiConfig: vi.fn().mockResolvedValue({ ...readyConfig, ...config }), setConsent: vi.fn().mockResolvedValue({ id: 9 }), recheckEvidence: vi.fn().mockResolvedValue({ draftId: 'd1', draftRevision: 1, count: 1, observed: 1, unobserved: 0, omitted: 0 }) };
  return { agent };
 }
 function mount(repository = fixture(), props: Partial<React.ComponentProps<typeof AIPanel>> = {}) {
@@ -21,6 +21,40 @@ function mount(repository = fixture(), props: Partial<React.ComponentProps<typeo
 }
 const send = () => screen.getByRole('button', { name: '发送' });
 const ready = () => waitFor(() => expect(send()).toBeEnabled());
+
+it('精查默认关闭，明确勾选后只授权所选照片，发送后清除选择', async () => {
+ const {repository}=mount(); await ready();
+ const option=screen.getByRole('checkbox',{name:'允许所选照片精查（1–4 张）'});
+ expect(option).not.toBeChecked();
+ await userEvent.click(option); await userEvent.click(send());
+ await waitFor(()=>expect(repository.agent.request).toHaveBeenCalledWith('p1',expect.objectContaining({type:'StartConversation',detailPhotoIds:['a']})));
+ await waitFor(()=>expect(option).not.toBeChecked());
+});
+
+it('变更照片选区清除精查许可，旧选择不会跟到新照片', async () => {
+ const {rerender,panel,repository}=mount(); await ready();
+ await userEvent.click(screen.getByRole('checkbox',{name:'允许所选照片精查（1–4 张）'}));
+ rerender(panel({selectedIds:['b']}));
+ expect(screen.getByRole('checkbox',{name:'允许所选照片精查（1–4 张）'})).not.toBeChecked();
+ await userEvent.click(send());
+ await waitFor(()=>expect(repository.agent.request).toHaveBeenCalled());
+ expect(repository.agent.request.mock.calls[0][1]).not.toHaveProperty('detailPhotoIds');
+});
+
+it('未开放能力的托管服务不能勾选精查，能力失效时发送前阻止新增许可', async () => {
+ const hosted: Partial<AiConfig>={keySource:'focalroom',hostedAccount:{enabled:true,verified:true,policy:'deepseek-flash-v1',provider:'DeepSeek',model:'deepseek-flash',unit:'tokens',granted:50000,spent:0,reserved:0,available:50000}};
+ const repo=fixture(hosted); const {client}=mount(repo); await ready();
+ const option=screen.getByRole('checkbox',{name:'允许所选照片精查（1–4 张）'});
+ expect(option).toBeDisabled();
+ repo.agent.aiConfig.mockResolvedValue({...readyConfig,...hosted,hostedAccount:{...hosted.hostedAccount!,visionDetail:{policy:'preview1400-high-v1',maxEdge:1400,maxPhotosPerTask:4}}});
+ await client.invalidateQueries(); await waitFor(()=>expect(option).toBeEnabled());
+ await userEvent.click(option);
+ repo.agent.aiConfig.mockResolvedValue({...readyConfig,...hosted});
+ await userEvent.click(send());
+ expect(await screen.findByText('当前选择或服务不支持精查，请选择1–4张照片并核对图像额度。')).toBeVisible();
+ expect(repo.agent.setConsent).not.toHaveBeenCalled(); expect(repo.agent.request).not.toHaveBeenCalled();
+});
+const draft: SelectionDraft = { id: 'd1', projectId: 'p1', taskId: 't1', title: '选片方案', baseRevision: 3, revision: 1, state: 'pending', stale: false, summary: '保留人物', items: [{ photo_id: 'a', proposed_action: 'keep', position: 0, rationale: '开篇' }], createdAt: 'now' };
 function task(state: AgentTask['state']): AgentTask { return { id: 't1', state, goal: '旅行故事', baseRevision: 3, reason: '预算已用完', question: state === 'needs_input' ? '希望以人物为主吗？' : null, budget: defaultAgentBudget, usage: { modelTurns: 1, toolCalls: 1, inputEstimate: 1, outputEstimate: 1, cloudImages: 0, costMinorUsd: 0 }, elapsedMs: 1, finalDraftIds: [], providerId: 'test', steps: [], createdAt: 'now' }; }
 beforeEach(() => { useUIStore.getState().reset(); useUIStore.setState({ aiDrafts: {}, aiMode: 'task', aiChat: {} }); });
 
@@ -124,9 +158,79 @@ describe('选片对话与本次预览使用', () => {
  it('新消息不拼接或伪造历史，历史由执行引擎加载', async () => { const repo = fixture({}, { tasks: [task('review_ready')], drafts: [] }); mount(repo); await ready(); await userEvent.click(send()); await waitFor(() => expect(repo.agent.request).toHaveBeenCalled()); expect(repo.agent.request).toHaveBeenCalledWith('p1', expect.objectContaining({ goal: '选出有叙事力的照片' })); });
  it('运行中的任务禁用再次发送，暂停按钮传递真实任务 ID', async () => { const repo = fixture({}, { tasks: [task('running')], drafts: [] }); mount(repo); await screen.findByText('执行中'); expect(send()).toBeDisabled(); await userEvent.click(screen.getByRole('button', { name: '暂停' })); await waitFor(() => expect(repo.agent.request).toHaveBeenCalledWith('p1', { type: 'PauseTask', taskId: 't1' })); });
  it('设置只提供照片数与等待时间，不暴露引擎参数', async () => { mount(fixture(), { settingsOpen: true }); expect(await screen.findByRole('dialog', { name: '设置' })).toBeVisible(); expect(screen.getByLabelText('本次分析次数上限')).toBeVisible(); expect(screen.getByLabelText('最长等待时间')).toBeVisible(); expect(screen.queryByLabelText('模型轮次上限')).not.toBeInTheDocument(); });
+ it('云端知识的出处与审校状态一起上屏，未核实与存疑不伪装成已核实', async () => {
+  const referenced: AgentTask = { ...task('review_ready'), creativeReferences: [
+   { kind: 'knowledge', label: 'Stephen Shore', citationId: 'p-1', passage: '这条断言已核实。', source: 'https://fixture.example/collection', institution: 'Fixture Museum', reviewStatus: 'verified' },
+   { kind: 'knowledge', label: 'Stephen Shore', citationId: 'p-1', passage: '这条还在争议中。', reviewStatus: 'imported', disputed: true },
+   { kind: 'knowledge', label: 'Diane Arbus', citationId: 'p-2', reviewStatus: 'imported', detailError: { code: 'KNOWLEDGE_FORBIDDEN', message: '知识服务请求未成功，不能视为没有匹配资料' } },
+  ] };
+  mount(fixture({}, { tasks: [referenced], drafts: [] })); await ready();
+  await userEvent.click(screen.getByText('查看参考来源'));
+  const panel = within(screen.getByRole('log'));
+  expect(panel.getByText('出处： Fixture Museum · https://fixture.example/collection')).toBeInTheDocument();
+  expect(panel.getByText('· 已核实')).toBeInTheDocument();
+  expect(panel.getAllByText('· 已导入，未核实')).toHaveLength(2);
+  expect(panel.getByText('· 有争议')).toBeInTheDocument();
+  // 详情没取到时要说清"没拿到出处"，而不是让这条记录看起来已经核实。
+  expect(panel.getByText(/出处未取得： 知识服务请求未成功/)).toBeInTheDocument();
+ });
+ it('每条知识说清为什么算它：命中词、命中在哪、只带回前几条，云端摘要不冒充有正文的出处', async () => {
+  const referenced: AgentTask = { ...task('review_ready'), creativeReferences: [
+   { kind: 'knowledge', label: '色彩与版本比较', citationId: 'FR-K004', passage: '正文', matchReason: { kind: 'local_terms', termCount: 12, matchedTerms: ['色彩', '调色'], fields: ['title', 'tags'], matched: 4, returned: 1 } },
+   { kind: 'knowledge', label: 'FocalRoom portfolio curation method', citationId: 'FR-METHOD-PORTFOLIO-1', matchReason: { kind: 'builtin_method' } },
+   { kind: 'knowledge', label: 'Stephen Shore', citationId: 'p-1', summaryOnly: true, matchReason: { kind: 'cloud_search', relevance: 0.5 } },
+   { kind: 'knowledge', label: 'Diane Arbus', citationId: 'p-2', matchReason: { kind: 'cloud_search', relevance: null } },
+   // 老回执没带理由：不替它编一句命中说明。
+   { kind: 'knowledge', label: '旧回执条目', citationId: 'p-3', passage: '旧正文' },
+  ] };
+  mount(fixture({}, { tasks: [referenced], drafts: [] })); await ready();
+  await userEvent.click(screen.getByText('查看参考来源'));
+  const panel = within(screen.getByRole('log'));
+  expect(panel.getByText('词面命中 12 个词：色彩、调色（只列前 2 个） · 命中在标题、标签')).toBeInTheDocument();
+  expect(panel.getByText('这次一共命中 4 条，只带回前 1 条')).toBeInTheDocument();
+  expect(panel.getByText('这条是点名取用的产品自带方法，不是词面命中')).toBeInTheDocument();
+  expect(panel.getByText('云端知识服务检索命中，本机不重算相关性 · 服务端给的相关性 0.5')).toBeInTheDocument();
+  expect(panel.getByText('云端知识服务检索命中，本机不重算相关性 · 服务端没给相关性分数')).toBeInTheDocument();
+  expect(panel.getByText('这条只是检索摘要，回执里没有断言正文。')).toBeInTheDocument();
+  expect(panel.getAllByText('命中只解释这条怎么被挑出来，不代表它与这张照片有关，也不代表它正确。')).toHaveLength(4);
+ });
+ it('创作记忆的来路、适用范围与现在还生不生效跟着正文一起上屏，来源对不上就不编正文', async () => {
+  const referenced: AgentTask = { ...task('review_ready'), creativeReferences: [
+   { kind: 'memory', label: 'creative_memory', passage: '偏向留白的构图', memoryId: 7, origin: 'user_confirmed', scope: 'cross_project', sourceProjectId: 'p-source', rounds: 2, retrievals: 1, memoryStatus: 'confirmed', memoryDisabled: false },
+   { kind: 'memory', label: 'creative_memory', passage: null, memoryId: 8, origin: 'rule_inferred', scope: 'project_local', sourceProjectId: 'p1', rounds: 1 },
+   // 只有主动查询带回来、从没被读进上下文的记忆：不编轮数，只报查询次数。
+   { kind: 'memory', label: 'creative_memory', passage: '逆光优先于顺光', memoryId: 9, origin: 'user_stated', scope: 'project_local', sourceProjectId: 'p1', rounds: 0, retrievals: 2, memoryStatus: 'unconfirmed', memoryDisabled: false },
+   // 事后被移除或被停用的：当时确实用过，但不能让它看起来仍然作数。
+   { kind: 'memory', label: 'creative_memory', passage: '暗部不提亮', memoryId: 10, origin: 'user_confirmed', scope: 'project_local', sourceProjectId: 'p1', rounds: 1, memoryStatus: 'retired', memoryDisabled: true },
+   { kind: 'memory', label: 'creative_memory', passage: '横幅优先', memoryId: 11, origin: 'user_stated', scope: 'project_local', sourceProjectId: 'p1', rounds: 1, memoryStatus: 'archived', memoryDisabled: false },
+  ] };
+  mount(fixture({}, { tasks: [referenced], drafts: [] })); await ready();
+  await userEvent.click(screen.getByText('查看参考来源'));
+  const panel = within(screen.getByRole('log'));
+  expect(panel.getAllByText('本次用到的创作记忆')).toHaveLength(5);
+  expect(panel.getByText('偏向留白的构图')).toBeInTheDocument();
+  expect(panel.getByText(/你确认过的规则 · 来自其他本地项目 p-source · 本任务用了 2 轮 · 本任务主动查了 1 次/)).toBeInTheDocument();
+  expect(panel.getByText(/关键词推断 · 仅本项目 · 本任务用了 1 轮/)).toBeInTheDocument();
+  // 整段文字精确匹配：只被查回来的那条，脚注里不该混进"用了 N 轮"这种它没发生过的数。
+  expect(panel.getByText('你写明的偏好 · 仅本项目 · 本任务主动查了 2 次')).toBeInTheDocument();
+  // 还在生效的两条不许多冒出提醒；陌生状态照原文露出来，不替它翻译成"已移除"。
+  expect(panel.getAllByText(/这条记忆当时用过，现在已不生效/)).toHaveLength(2);
+  expect(panel.getByText(/现在已不生效：已移除 · 已停用，不再参与读取/)).toBeInTheDocument();
+  expect(panel.getByText(/现在已不生效：archived/)).toBeInTheDocument();
+  // 这条记忆已被删除或来源对不上时，只报来路，不编一条看起来读过的正文。
+  expect(panel.getByText(/这条记忆已被移除/)).toBeInTheDocument();
+ });
 });
 
 describe('统一摄影助手', () => {
+ it('完成的纯文字回复仍可展开按轮记忆记录，已有轨迹时不重复展示旧汇总',async()=>{
+  const reply:AgentTask={...task('completed'),conversation:true,messages:[{id:1,role:'assistant',content:'这一轮的说明',createdAt:'now'}],memoryTrace:{hasEarlierEvents:false,events:[{id:1,kind:'context_attempt',round:1,createdAt:'now',callId:null,recorded:true,reads:[]}]},creativeReferences:[{kind:'memory',label:'creative_memory',passage:'旧汇总内容'}]};
+  mount(fixture({}, {tasks:[reply],drafts:[]})); await ready();
+  await userEvent.click(screen.getByText('请求中的记忆来路'));
+  expect(await screen.findByText('本条记录没有记忆条目。')).toBeVisible();
+  expect(screen.queryByText('旧汇总内容')).not.toBeInTheDocument();
+  expect(screen.queryByText('查看参考来源')).not.toBeInTheDocument();
+ });
  it('没有照片也能讨论摄影，且不授权或附带图像', async () => {
   const repo = fixture(); mount(repo, { project: { ...project, photos: [] }, selectedIds: [], initialGoal: '如何理解摄影叙事的节奏？' });
   await ready(); await userEvent.click(send());
@@ -151,6 +255,52 @@ describe('统一摄影助手', () => {
   expect(screen.getByText('画面左侧有深色主体')).toBeVisible();
   await userEvent.click(screen.getByRole('button', { name: 'a' }));
   expect(useUIStore.getState().activeId).toBe('a');
+ });
+ it('图像版本说实话：核对过才说核对，旧缓存、读不出、原图换过都各自点明', async () => {
+  const reply = { ...task('completed'), conversation: true, inspectedPhotos: [
+   { photo_id: 'a', visible_facts: ['画面左侧有深色主体'], interpretation: '可能形成停顿', uncertainty: '预览无法辨认远处细节', imageVersion: { previewSha256: 'abcdef1234567890', pixelVersion: 'verified' as const, sourceMatches: true } },
+   { photo_id: 'b', visible_facts: ['地平线偏上'], interpretation: '留出呼吸', uncertainty: '裁切未定', imageVersion: { previewSha256: null, pixelVersion: 'unrecorded' as const, sourceMatches: true } },
+   { photo_id: 'c', visible_facts: ['逆光'], interpretation: '氛围优先', uncertainty: '曝光不可调', imageVersion: { previewSha256: 'fedcba0987654321', pixelVersion: 'unreadable' as const, sourceMatches: true } },
+   { photo_id: 'd', visible_facts: ['前景虚化'], interpretation: '拉开层次', uncertainty: '景深判断有限', imageVersion: { previewSha256: 'abcdef1234567890', pixelVersion: 'verified' as const, sourceMatches: false } },
+  ] };
+  mount(fixture({}, { tasks: [reply], drafts: [] })); await ready();
+  await userEvent.click(screen.getByText('已查看 4 张照片'));
+  expect(screen.getByText('来自更早的缓存，图像版本没记过')).toBeVisible();
+  expect(screen.getByText('当前预览读不出来，这次没能核对图像')).toBeVisible();
+  expect(screen.getByText('这条观察对应的原图已经换过')).toBeVisible();
+  // 只有当前对得上的那条才配说"看的是这张图"。
+  expect(screen.getAllByText('看的是这张图（版本 abcdef12）')).toHaveLength(1);
+ });
+ it('预览读不出时给出能点的修复动作，结局按后端原因码说实话', async () => {
+  const reply = { ...task('completed'), conversation: true, inspectedPhotos: [
+   { photo_id: 'a', visible_facts: ['主体偏左'], interpretation: '可能停顿', uncertainty: '细节不可辨', imageVersion: { previewSha256: null, pixelVersion: 'unreadable' as const, sourceMatches: true } },
+   { photo_id: 'b', visible_facts: ['地平线偏上'], interpretation: '留出呼吸', uncertainty: '裁切未定', imageVersion: { previewSha256: 'abcdef1234567890', pixelVersion: 'verified' as const, sourceMatches: true } },
+  ] };
+  const repo = { ...fixture({}, { tasks: [reply], drafts: [] }), repairPreviews: vi.fn().mockResolvedValue([{ photoId: 'a', outcome: 'repaired', rebuilt: ['preview'], detail: '已只读原图重新算出派生文件' }]) };
+  mount(repo); await ready();
+  await userEvent.click(screen.getByText('已查看 2 张照片'));
+  // 好的那张不给按钮：不能让人以为每张都得修一次。
+  expect(screen.getAllByRole('button', { name: '修复本地预览' })).toHaveLength(1);
+  await userEvent.click(screen.getByRole('button', { name: '修复本地预览' }));
+  await waitFor(() => expect(repo.repairPreviews).toHaveBeenCalledWith('p1', ['a']));
+  expect(await screen.findByText('已按原图重新算出本地预览，下次让 AI 看这张就能送上')).toBeVisible();
+  // 修好的那张不再挂着"读不出来"；改口只说文件现在能读，不假装这条观察是新的。
+  expect(await screen.findByText('本地预览现在读得出来了；这条观察还是按修复前那份读的')).toBeVisible();
+  expect(screen.queryByText('当前预览读不出来，这次没能核对图像')).not.toBeInTheDocument();
+  expect(screen.getByText('看的是这张图（版本 abcdef12）')).toBeVisible();
+ });
+ it('修不成也说实话：原图不在就指到重新定位那一步，不假装已经修好', async () => {
+  const reply = { ...task('completed'), conversation: true, inspectedPhotos: [
+   { photo_id: 'a', visible_facts: ['主体偏左'], interpretation: '可能停顿', uncertainty: '细节不可辨', imageVersion: { previewSha256: null, pixelVersion: 'unreadable' as const, sourceMatches: true } },
+  ] };
+  const repo = { ...fixture({}, { tasks: [reply], drafts: [] }), repairPreviews: vi.fn().mockResolvedValue([{ photoId: 'a', outcome: 'original_missing', rebuilt: [], detail: '原图不在这台机器上' }]) };
+  mount(repo); await ready();
+  await userEvent.click(screen.getByText('已查看 1 张照片'));
+  await userEvent.click(screen.getByRole('button', { name: '修复本地预览' }));
+  expect(await screen.findByText('原图不在这台机器上，要先重新定位这张照片')).toBeVisible();
+  expect(screen.queryByText('已按原图重新算出本地预览，下次让 AI 看这张就能送上')).not.toBeInTheDocument();
+  // 没修成就不能改口：那句"读不出来"要还挂着。
+  expect(screen.getByText('当前预览读不出来，这次没能核对图像')).toBeVisible();
  });
  it('输入法确认不会意外发送', async () => {
   const repo = fixture(); mount(repo); await ready();
@@ -414,4 +564,83 @@ it('默认任务模式，切换开关不改变任务发送路径', async () => {
  await userEvent.click(send());
  await waitFor(() => expect(repo.agent.request).toHaveBeenCalled());
  expect(repo.agent.chat).not.toHaveBeenCalled();
+});
+it('记忆正文改过和历史未记录版本各自说明原因，不展示当前文字冒充历史',async()=>{
+ const referenced:AgentTask={...task('review_ready'),creativeReferences:[
+  {kind:'memory',label:'creative_memory',memoryId:7,origin:'user_confirmed',scope:'project_local',memoryTextVersion:'changed',passage:null},
+  {kind:'memory',label:'creative_memory',memoryId:8,origin:'user_confirmed',scope:'project_local',memoryTextVersion:'unrecorded',passage:null},
+ ]};
+ mount(fixture({}, {tasks:[referenced],drafts:[]}));await ready();
+ await userEvent.click(screen.getByText('查看参考来源'));
+ expect(screen.getByText('这条记忆的正文后来改过，当前文字不能作为当时读取的依据。')).toBeVisible();
+ expect(screen.getByText('这条历史读取未记录正文版本，无法确认当时的内容。')).toBeVisible();
+});
+it('视觉概览作为上下文来源显示用户名称，不露出内部 section 键',async()=>{
+ const referenced:AgentTask={...task('review_ready'),creativeReferences:[{kind:'context',label:'visual_overview',section:'visual_overview'}]};
+ mount(fixture({}, {tasks:[referenced],drafts:[]}));await ready();
+ await userEvent.click(screen.getByText('查看参考来源'));
+ expect(screen.getByText('项目视觉概览')).toBeVisible();
+ expect(screen.queryByText('chatContext_visual_overview')).not.toBeInTheDocument();
+});
+it('方案里那句画面依据走的是任务的核验回执，不是界面自己数照片',async()=>{
+ const digest:DraftEvidence={draftId:'d1',count:2,observed:1,unobserved:1,pageTier:1,detailTier:0,otherVersion:0,otherTool:0,crossContractPairs:0,omitted:1,scanned:1,draftRevision:1,perPhoto:[{photoId:'a',contract:'current_page_tier',used:true},{photoId:'b',contract:'other_tool',used:false,pixelVersion:'mismatch'}]};
+ mount(fixture({}, {tasks:[{...task('review_ready'),draftEvidence:[digest]}],drafts:[draft]}));await ready();
+ await userEvent.click(screen.getByRole('button',{name:'查看方案'}));
+ expect(await screen.findByText('这份方案的画面依据：1 张有可核对的画面观察，1 张没有。')).toBeVisible();
+ expect(screen.getByText('另有 1 张的画面记录因为原图换过或本地预览读不出来，没有采用。')).toBeVisible();
+ // 界面只有 1 张方案照片：那句"2 张"只能来自回执，不可能是数出来的。
+ expect(screen.getByText(/当前页面档 1 张 · 大尺寸细节档 0 张/)).toBeVisible();
+ expect(screen.getByText('这张按当前页面档看的画面')).toBeVisible();
+ expect(screen.queryByText(/不能当成同一把尺子比/)).not.toBeInTheDocument();
+});
+it('重算口径的入口从面板一路接到代理仓库：点一次只在本地重算一次',async()=>{
+ const stale:DraftEvidence={draftId:'d1',count:1,observed:1,unobserved:0,pageTier:1,detailTier:0,otherVersion:0,otherTool:0,crossContractPairs:0,omitted:0,scanned:1,draftRevision:5,perPhoto:[{photoId:'a',contract:'current_page_tier',used:true}]};
+ const repository=fixture({},{tasks:[{...task('review_ready'),draftEvidence:[stale]}],drafts:[draft]});
+ mount(repository);await ready();
+ await userEvent.click(screen.getByRole('button',{name:'查看方案'}));
+ await userEvent.click(await screen.findByRole('button',{name:'按现在这一版重算口径'}));
+ await waitFor(()=>expect(repository.agent.recheckEvidence).toHaveBeenCalledWith('p1','d1'));
+ expect(repository.agent.recheckEvidence).toHaveBeenCalledTimes(1);
+ expect(await screen.findByText('已重算一次，口径按现在这一版重新记了。')).toBeVisible();
+});
+it('回执对不上这份方案时不借隔壁方案的口径说话',async()=>{
+ mount(fixture({}, {tasks:[{...task('review_ready'),draftEvidence:[{draftId:'other',count:9,observed:9,unobserved:0,pageTier:9,detailTier:0,otherVersion:0,otherTool:0,crossContractPairs:0,omitted:0,scanned:9,draftRevision:1,perPhoto:[{photoId:'a',contract:'other_tool',used:true}]}]}],drafts:[draft]}));await ready();
+ await userEvent.click(screen.getByRole('button',{name:'查看方案'}));
+ await screen.findByRole('button',{name:'替换作品序列'});
+ // 隔壁方案那 9 张的数字一个也不许借过来；这份自己没算过就说没算过，并且给一条本地算一次的路。
+ expect(screen.queryByText(/9 张/)).not.toBeInTheDocument();
+ expect(screen.getByText('这份方案还没有能核对的画面依据，下面的判断只靠评分、状态与顺序。')).toBeVisible();
+ expect(screen.getByRole('button',{name:'在本地算一次画面依据'})).toBeVisible();
+});
+it('空手而归的那几次也在台账里说话：没有命中、云端没答、检索失败三种说法不混',async()=>{
+ const ledger:AgentTask={...task('completed'),knowledgeSearches:[
+  {callId:'c1',tool:'search_photography_knowledge',query:'荒木经惟 色彩',returned:0,localMatched:0,cloudAvailable:true,outcome:'no_match'},
+  {callId:'c2',tool:'search_photographers',query:'Shore',returned:0,cloudAvailable:false,cloudError:{code:'AUTH_REQUIRED',message:'需要当前账户授权'},outcome:'unavailable'},
+  {callId:'c3',tool:'get_photobook_structure',query:'',returned:0,error:{code:'KNOWLEDGE_PROTOCOL',message:'响应不是检索列表'},outcome:'failed'},
+  {callId:'c4',tool:'search_photography_knowledge',query:'只查本地',returned:0,cloudAvailable:null,outcome:'no_match'},
+  {callId:'c5',tool:'compare_photography_series',query:'Americans / Surface',returned:1,cloudAvailable:false,cloudError:{code:'KNOWLEDGE_HTTP',message:'第二个系列没取到'},outcome:'found'},
+  {callId:'c6',tool:'search_photographers',query:'Araki',returned:0,cloudAvailable:true,outcome:'no_match'},
+ ]};
+ mount(fixture({}, {tasks:[ledger],drafts:[]}));await ready();
+ // 一条参考来源都没有，助手那一块也必须出现，否则"查过但没查到"在界面上等于没查过。
+ expect(screen.queryByText('查看参考来源')).not.toBeInTheDocument();
+ await userEvent.click(screen.getByText('检索台账（6 次）'));
+ expect(screen.getByText('按这个词查过，本地札记和云端都没有命中，不是漏看。')).toBeVisible();
+ expect(screen.getByText('查的是：荒木经惟 色彩')).toBeVisible();
+ expect(screen.getByText('其中本地方法札记命中 0 条。')).toBeVisible();
+ expect(screen.getByText('云端这次没答上来，不能当成“没有资料”。')).toBeVisible();
+ expect(screen.getByText('云端返回：需要当前账户授权')).toBeVisible();
+ expect(screen.getByText('这次检索没跑成，下面不是“没有资料”的结论。')).toBeVisible();
+ expect(screen.getByText('失败原因：响应不是检索列表')).toBeVisible();
+ expect(screen.getByText('这次没留下查的是哪个词。')).toBeVisible();
+ expect(screen.getByText('按这个词查过，本地方法札记里没有命中；这次没查云端。')).toBeVisible();
+ // 摄影师检索根本没有本地语料，不能替它说"本地也没有"。
+ expect(screen.getByText('按这个词向云端查过，没有命中，不是漏看。')).toBeVisible();
+ expect(screen.getByText('查的是：Araki')).toBeVisible();
+ // 一边取到、一边没取到：照实说取到几条，出错的那一边单独讲，不整次说成失败。
+ expect(screen.getByText('两个系列比较')).toBeVisible();
+ expect(screen.getByText('取到 1 条记录。')).toBeVisible();
+ expect(screen.getByText('查的是：Americans / Surface')).toBeVisible();
+ expect(screen.getByText('云端返回：第二个系列没取到')).toBeVisible();
+ expect(screen.getByText('台账只说明查过什么、取到几条，不代表已核实的摄影史断言，也不代表与照片有关。')).toBeVisible();
 });

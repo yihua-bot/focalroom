@@ -148,6 +148,12 @@
               "maxItems": 500,
               "uniqueItems": true
             },
+            "detailPhotoIds": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1, "maxLength": 160 },
+              "maxItems": 4,
+              "uniqueItems": true
+            },
             "expectedAccountId": {
               "type": [
                 "string",

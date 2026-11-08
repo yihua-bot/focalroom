@@ -19,7 +19,9 @@ async function open() {
   await screen.findByRole('button', { name: '查看第 1 张 某个上午' });
   return { repository, user: userEvent.setup() };
 }
-describe('工作台交互', () => {
+// 这一组是整台应用起真渲染的集成用例：本机空载实测最慢一条约 0.9 秒，但全量 77 个文件并发跑时要翻好几倍，
+// 5 秒默认门在这台机器上会随机把好的判成红的。放宽只给**这一组**，不是全局调大门——真挂死照样撞 20 秒。
+describe('工作台交互', { timeout: 20_000 }, () => {
   it('切换语言后，项目导航和 AI 标题立即同步更新', async () => {
     const originalStorage = globalThis.localStorage;
     const storage = new Map([['focalroom-locale', 'zh']]);

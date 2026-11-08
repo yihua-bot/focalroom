@@ -1,8 +1,11 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Lightbox } from './Lightbox';
 import type { Photo } from '../../domain/models';
+
+const { invoke, isTauri } = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true) }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke, isTauri }));
 
 const photos: Photo[] = [
   { id: 'a', name: '晨光.jpg', status: 'undecided', rating: 0, src: 'a.jpg' },
@@ -52,5 +55,53 @@ describe('v1.1 沉浸审片', () => {
     expect(props.onDecide).toHaveBeenCalledWith('a', 'reject');
     await userEvent.click(screen.getByRole('button', { name: '评 3 星' }));
     expect(props.onRate).toHaveBeenCalledWith('a', 3);
+  });
+});
+
+describe('灯箱里的色彩管理', () => {
+  afterEach(() => { invoke.mockReset(); isTauri.mockReturnValue(true); });
+
+  // 胶片条每张照片各有一张缩略图，检视画面必须从视口里取，否则断言命中缩略条。
+  const stage = () => within(screen.getByTestId('photo-viewport'));
+
+  it('开启后把按显示器渲染的图像真的显示出来，再点一次退回缓存预览', async () => {
+    invoke.mockResolvedValue({ status: 'transformed', detail: null, sourceProfile: 'Display P3', displayProfile: 'ColorSync LCD', pixelSource: 'original', dataUrl: 'data:image/jpeg;base64,/9j/2Q==' });
+    open({ projectId: 'p1' });
+    await userEvent.click(screen.getByRole('button', { name: '色彩管理' }));
+    await waitFor(() => expect(stage().getByRole('img')).toHaveAttribute('src', 'data:image/jpeg;base64,/9j/2Q=='));
+    expect(invoke).toHaveBeenCalledWith('get_color_managed_preview', { projectId: 'p1', photoId: 'a' });
+    expect(screen.getByText('已按原文件配置渲染到显示器色彩 · Display P3 → ColorSync LCD')).toBeInTheDocument();
+    expect(stage().getByRole('note')).toHaveTextContent('色彩管理预览 · 从原图生成，非全分辨率');
+    await userEvent.click(screen.getByRole('button', { name: '色彩管理已开启' }));
+    expect(stage().getByRole('img')).toHaveAttribute('src', 'a.jpg');
+    expect(stage().queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('后端说没变换时画面不动，原因直接上屏', async () => {
+    invoke.mockResolvedValue({ status: 'container_unsupported', detail: '该容器暂不支持读取嵌入色彩配置（HEIF、RAW、BigTIFF 等）', sourceProfile: '无法确定', displayProfile: 'ColorSync LCD', dataUrl: null });
+    open({ projectId: 'p1' });
+    await userEvent.click(screen.getByRole('button', { name: '色彩管理' }));
+    expect(await screen.findByText(/该格式读不出色彩配置，未做色彩变换/)).toHaveTextContent('HEIF');
+    expect(stage().getByRole('img')).toHaveAttribute('src', 'a.jpg');
+    expect(screen.getByRole('button', { name: '色彩管理' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('只有桌面版能做本机显示器渲染，网页版不把话说满', async () => {
+    isTauri.mockReturnValue(false);
+    open({ projectId: 'p1' });
+    await userEvent.click(screen.getByRole('button', { name: '色彩管理' }));
+    expect(await screen.findByText('色彩管理预览仅桌面版本机可用')).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(stage().getByRole('img')).toHaveAttribute('src', 'a.jpg');
+  });
+
+  it('换片后不沿用上一张的色彩管理版本', async () => {
+    invoke.mockResolvedValue({ status: 'transformed', detail: null, sourceProfile: 'sRGB', displayProfile: 'ColorSync LCD', pixelSource: 'original', dataUrl: 'data:image/jpeg;base64,/9j/2Q==' });
+    const view = open({ projectId: 'p1' });
+    await userEvent.click(screen.getByRole('button', { name: '色彩管理' }));
+    await waitFor(() => expect(stage().getByRole('img')).toHaveAttribute('src', 'data:image/jpeg;base64,/9j/2Q=='));
+    view.rerender(<Lightbox photos={photos} activeId="b" onNavigate={vi.fn()} onClose={vi.fn()} onDecide={vi.fn()} onRate={vi.fn()} projectId="p1" />);
+    expect(stage().getByRole('img')).toHaveAttribute('src', 'b.jpg');
+    expect(screen.getByRole('button', { name: '色彩管理' })).toHaveAttribute('aria-pressed', 'false');
   });
 });

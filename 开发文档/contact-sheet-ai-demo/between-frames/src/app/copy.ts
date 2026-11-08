@@ -70,3 +70,10 @@ export const zh = new Proxy({} as Record<string, string>, {
 export function t(key: string): string {
   return String(zh[key]);
 }
+
+/** 色彩管理状态码 → 用户可读说明。界面与 IPC 层共用这一份，陌生的码原样露出，
+ * 不替它翻译成一句好看的说法——猜出来的解释比难看的原码更误导。 */
+export function colorStatusLabel(status: string): string {
+  const key = `colorStatus_${status}`;
+  return zh[key] === key ? status : zh[key];
+}

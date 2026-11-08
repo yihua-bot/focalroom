@@ -1,12 +1,15 @@
 import { Columns3, PanelRightClose, PanelRightOpen, Film, Search, Copy } from 'lucide-react';
 import type { SelectionGesture } from '../domain/selection';
-import type { Photo, PhotoFilter, PhotoStatus, Project } from '../domain/models';
+import type { DesktopProjectRepository, Photo, PhotoFilter, PhotoStatus, Project } from '../domain/models';
 import { groupPhotos, type GridGrouping } from '../domain/grouping';
 import { useUIStore } from '../stores/uiStore';
 import { NarrativeCanvas } from '../features/canvas/NarrativeCanvas';
 import { PublicationPanel } from '../features/publishing/PublicationPanel';
 import { zh } from './copy';
 import { ProjectHeader } from '../features/project/ProjectHeader';
+import { ProjectPreviewHealth } from '../features/project/ProjectPreviewHealth';
+import { ProjectObservationVersions } from '../features/project/ProjectObservationVersions';
+import { SidecarJudgementList } from '../features/photo-import/SidecarJudgementList';
 import { ContactSheetGrid } from '../components/contact-sheet/ContactSheetGrid';
 import { SequenceBoard } from '../components/sequence/SequenceBoard';
 import { SelectionDock } from '../components/sequence/SelectionDock';
@@ -18,7 +21,7 @@ import type { PublicationRepository } from '../domain/publication';
 import { useAccount } from '../features/cloud-login/AccountProvider';
 import { useI18n } from '../i18n';
 
-export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, onCopyPlan, onAICompare, onAIOrder, onEditorVersions, local = false, sharing, canvas, publication }: {
+export function Workspace({ project, visible, kept, active, selectedIds, busy, onEdit, onImport, onCompare, onExport, onDecide, onBatchDecide, onBatchRate, onSelect, onReorder, onEnlarge, onUndo, onRedo, onVersions, onActivity, onCopyPlan, onAICompare, onAIOrder, onEditorVersions, onChanged, local = false, sharing, canvas, publication, projectRepository }: {
   project: Project; visible: Photo[]; kept: Photo[]; active?: Photo; busy: boolean;
   selectedIds: string[]; onSelect: (id: string, gesture?: SelectionGesture) => void;
   onBatchDecide: (status: PhotoStatus) => void; onBatchRate: (rating: number) => void;
@@ -27,10 +30,13 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
   onUndo: () => void; onRedo: () => void; onVersions: () => void; onActivity: () => void; onCopyPlan: () => void;
   onAICompare?: () => void; onAIOrder?: () => void;
   onEditorVersions?: () => void;
+  /** 图库侧这条回填判断后要用最新台账刷新：直接命令不走实时事件。 */
+  onChanged?: () => void;
   local?: boolean;
   sharing?: import('../domain/sharing').SharingStatus;
   canvas?: CanvasRepository;
   publication?: PublicationRepository;
+  projectRepository?: DesktopProjectRepository;
 }) {
   const ui = useUIStore();
   const { t } = useI18n();
@@ -50,6 +56,12 @@ export function Workspace({ project, visible, kept, active, selectedIds, busy, o
       <Button size="small" disabled={busy} onClick={onActivity}>{zh.activityLog}{project.events.length ? ` · ${project.events.length}` : ''}</Button>
       <span className="micro">{zh.undoableEdits.replace('{count}', String(project.history?.undoCount ?? 0))}</span>
     </div>}
+    {photoTools && local && !readOnly && <>
+      <ProjectPreviewHealth repository={projectRepository} projectId={project.id} />
+      <ProjectObservationVersions repository={projectRepository} projectId={project.id} />
+      {/* 外部软件的判断不必等下一次导入才看得见：这里随时读一遍，落不落库还是由人点头。 */}
+      {projectRepository?.sidecarProposals && <div className="local-file-panels"><SidecarJudgementList repository={projectRepository} projectId={project.id} onApplied={onChanged} /></div>}
+    </>}
     <div className="toolbar">{gridTools && <div className="filter-tabs" aria-label={zh.photoFilters}>{filters.map(filter => <button key={filter} aria-pressed={ui.filter === filter}
       className={ui.filter === filter ? 'active' : ''} onClick={() => ui.setFilter(filter)}>{String(zh['filters.' + filter] ?? filter)}<span className="count">{filter === 'all' ? project.photos.length : project.photos.filter(photo => photo.status === filter).length}</span></button>)}</div>}
       <div className="toolbar-actions">{gridTools && <Button size="small" onClick={ui.toggleDensity} aria-label={zh.toggleGridDensity} aria-pressed={ui.dense}><Columns3 size={15} /></Button>}

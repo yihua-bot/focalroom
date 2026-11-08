@@ -973,7 +973,8 @@
               "publication",
               "drafts",
               "selection_draft",
-              "tool_receipt"
+              "tool_receipt",
+              "visual_overview"
             ]
           },
           "object_id": {
@@ -1234,6 +1235,133 @@
       },
       "strict": true,
       "access": "read"
+    },
+    {
+      "name": "inspect_photo_detail",
+      "description": "仅精查用户明确允许的照片，一次一张；发送最长边1400px重编码预览并请求高细节，仍受原图像配额和预算限制。",
+      "strict": true,
+      "access": "read_image_authorization_required",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "photo_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "项目中已存在的photo_id",
+            "maxItems": 1,
+            "uniqueItems": true,
+            "minItems": 1
+          }
+        },
+        "required": [
+          "project_id",
+          "photo_ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "explain_photo_judgment",
+      "description": "绑定本轮真实观察回执及事实索引（从0起），记录单张判断的解释。方法引用只能来自本轮已检索回执；原创方法 claim_index=null，云端断言填实际索引。无来源传空数组。解释仍是推断，不是事实认证，不改正式作品。",
+      "strict": true,
+      "access": "read",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "photo_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "observation_call_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "fact_indices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+          },
+          "judgment": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "reasoning": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          },
+          "knowledge_refs": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "properties": {
+                "call_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "citation_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "claim_index": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 99
+                }
+              },
+              "required": [
+                "call_id",
+                "citation_id",
+                "claim_index"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "uncertainty": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        },
+        "required": [
+          "project_id",
+          "photo_id",
+          "observation_call_id",
+          "fact_indices",
+          "judgment",
+          "reasoning",
+          "knowledge_refs",
+          "uncertainty"
+        ],
+        "additionalProperties": false
+      }
     }
   ]
 }

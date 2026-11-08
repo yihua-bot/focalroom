@@ -1,8 +1,12 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { z } from 'zod';
 
-export const historicalObservationSchema = z.object({ photoId:z.string(),photoHash:z.string().regex(/^[a-f0-9]{64}$/i),photoName:z.string(),thumbnailPath:z.string().nullable(),modelId:z.string(),promptVersion:z.string(),taskId:z.string(),callId:z.string(),visibleFacts:z.array(z.string()),interpretation:z.string(),uncertainty:z.string(),currentHashMatches:z.boolean() });
-export const withLocalRevisionPreviews = <T extends { currentHashMatches: boolean; thumbnailPath: string | null }>(photos: T[]): T[] => photos.map(photo => ({ ...photo, thumbnailPath: photo.currentHashMatches && photo.thumbnailPath ? convertFileSrc(photo.thumbnailPath) : null }));
+export const historicalObservationSchema = z.object({ previewSha256:z.string().regex(/^[a-f0-9]{64}$/i).nullable().optional(),currentPixelVersion:z.enum(['verified','mismatch','unrecorded','unreadable']).optional(),photoId:z.string(),photoHash:z.string().regex(/^[a-f0-9]{64}$/i),photoName:z.string(),thumbnailPath:z.string().nullable(),modelId:z.string(),promptVersion:z.string(),taskId:z.string(),callId:z.string(),visibleFacts:z.array(z.string()),interpretation:z.string(),uncertainty:z.string(),currentHashMatches:z.boolean() }).superRefine((value, context) => {
+ if (value.currentPixelVersion === 'verified' && !value.previewSha256) {
+  context.addIssue({ code:'custom', message:'Verified preview requires its fingerprint' });
+ }
+});
+export const withLocalRevisionPreviews = <T extends { currentHashMatches: boolean; thumbnailPath: string | null; currentPixelVersion?: string; visibleFacts?: string[] }>(photos: T[]): T[] => photos.map(photo => ({ ...photo, thumbnailPath: photo.currentHashMatches && (!photo.visibleFacts || photo.currentPixelVersion === 'verified') && photo.thumbnailPath ? convertFileSrc(photo.thumbnailPath) : null }));
 export const selectionRevisionSchema = z.object({
   draftId:z.string(),parent:z.object({kind:z.literal('selection'),id:z.string(),revision:z.number().int().positive()}),parentTitle:z.string(),parentSummary:z.string(),parentState:z.enum(['pending','applied','discarded']),parentBaseRevision:z.number().int().nonnegative(),
   items:z.array(z.object({photoId:z.string(),photoHash:z.string().regex(/^[a-f0-9]{64}$/i),photoName:z.string(),position:z.number().int().nonnegative(),action:z.enum(['keep','reject','undecided']),rationale:z.string(),currentHashMatches:z.boolean(),thumbnailPath:z.string().nullable()})).max(30),

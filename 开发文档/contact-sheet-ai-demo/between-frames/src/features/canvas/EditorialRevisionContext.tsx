@@ -29,7 +29,7 @@ export function EditorialRevisionContext({ repository, projectId, draftId }: { r
         {messages[0].resolved && <small>{zh.editorialThreadResolved}</small>}
         {messages.filter(message => message.isReply).map(message => <blockquote key={message.id}><p>{message.body}</p></blockquote>)}
       </article>)}
-      <HistoricalObservations observations={page.observations} total={page.totalObservations} />
+      <HistoricalObservations observations={page.observations} total={page.totalObservations} onRepair={repository.repairPreviews ? photoIds => repository.repairPreviews!(projectId, photoIds) : undefined} />
       <div className="editorial-comment-actions">
         {location.offset > 0 && <Button size="small" disabled={busy} onClick={() => navigate(location.draftId, Math.max(0, location.offset - 30))}>{zh.editorialRevisionPreviousPage}</Button>}
         {page.nextOffset !== null && <Button size="small" disabled={busy} onClick={() => navigate(location.draftId, page.nextOffset!)}>{zh.editorialRevisionNextPage}</Button>}

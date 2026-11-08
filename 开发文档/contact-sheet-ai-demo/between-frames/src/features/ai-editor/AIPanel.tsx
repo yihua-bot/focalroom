@@ -1,3 +1,8 @@
+import { MemoryTimeline } from './MemoryTimeline';
+import { previewRepairLabel, previewStatusAfterRepair } from '../../components/review/previewRepair';
+import { PhotoJudgments } from './PhotoJudgments';
+import { knowledgeMatchLines } from './knowledgeMatch';
+import { knowledgeSearchLines, knowledgeSearchToolLabel } from './knowledgeSearch';
 import { userFacingError } from '../../services/userFacingError';
 import { useEffect, useRef, useState, type ReactNode, type ComponentProps } from 'react';
 import { ArrowUp, Check, Image, Sparkles } from 'lucide-react';
@@ -5,11 +10,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '../../stores/uiStore';
 import { zh } from '../../app/copy';
 import type { DesktopProjectRepository, Project } from '../../domain/models';
-import { defaultAgentBudget, type AiConfig, type AgentTask, type TaskCommand, type TaskState, type DraftReference, type ChatTurn } from '../../domain/agent';
+import { defaultAgentBudget, type AiConfig, type AgentTask, type TaskCommand, type TaskState, type DraftReference, type ChatTurn, type PhotoInspection } from '../../domain/agent';
 import { budgetMessage, resumeBudget } from './budgetRecovery';
 import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
-import { DraftReview } from './DraftReview';
+import { collectDraftDoubts, DraftReview } from './DraftReview';
 import { TaskProgress } from './TaskProgress';
 import { useAccount } from '../cloud-login/AccountProvider';
 import { PreferenceProposalCard } from './PreferenceProposalCard';
@@ -27,6 +32,74 @@ function unavailable(config?: AiConfig): string {
  if (!config.hostedAccount?.enabled) return zh.aiClosed;
  if (!config.hostedAccount.verified) return zh.aiVerify;
  return config.hostedAccount.available > 0 ? '' : zh.aiQuota;
+}
+
+// 审校状态原样透传：陌生取值宁可露出服务端的原文，也不替它编一个"已核实"。
+function reviewStatusLabel(status: string): string {
+ const key = `chatReview_${status}`;
+ return zh[key] === key ? status : zh[key];
+}
+
+type CreativeReference = NonNullable<AgentTask['creativeReferences']>[number];
+
+function visibleReferences(task: AgentTask) {
+ return (task.creativeReferences ?? []).filter(reference=>reference.kind!=='memory' || !task.memoryTrace?.events.length);
+}
+
+function referenceTitle(reference: CreativeReference): string {
+ if (reference.kind === 'knowledge') return reference.label;
+ if (reference.kind === 'memory') return zh.chatMemoryReference;
+ return zh[`chatContext_${reference.section}`];
+}
+
+// 记忆条目只报回执里记下的来路：陌生取值直接露出原文，不替它编一个"你写明的偏好"。
+function memoryOriginLabel(origin?: string): string {
+ if (!origin) return zh.chatMemoryOriginUnknown;
+ const key = `chatMemoryOrigin_${origin}`;
+ return zh[key] === key ? origin : zh[key];
+}
+
+// 图像版本只说回执里记下的事实：没记过、读不出、原图换过，都不能显示成"已核对当前这张图"。
+// 例外是就地修复：后端确认这份文件现在读得出来，才把"读不出来"换成修复后的说法。
+function imageVersionLabel(version?: PhotoInspection['imageVersion'], outcome?: string): string | null {
+ if (!version) return null;
+ if (version.sourceMatches === false) return zh.chatImageStaleSource;
+ if (version.pixelVersion === 'unreadable') return previewStatusAfterRepair(outcome) ?? zh.chatImageVersionUnreadable;
+ if (version.pixelVersion === 'unrecorded' || !version.previewSha256) return zh.chatImageVersionUnrecorded;
+ return zh.chatImageVersionVerified.replace('{hash}', version.previewSha256.slice(0, 8));
+}
+
+// 修复的结局只报后端给的原因码：陌生取值露出原文，不替它编一句"已修好"。
+// 用的轮数来自上下文读取回执，查的次数来自记忆查询回执：两条来路分开记，缺哪条就不显示哪条。
+function memoryFootnote(reference: CreativeReference): string {
+ const scope = reference.scope === 'cross_project' ? zh.chatMemoryFromProject.replace('{project}', reference.sourceProjectId ?? '') : zh.chatMemoryLocalProject;
+ const rounds = reference.rounds ? ` · ${zh.chatMemoryRounds.replace('{rounds}', String(reference.rounds))}` : '';
+ const retrievals = reference.retrievals ? ` · ${zh.chatMemoryRetrievals.replace('{count}', String(reference.retrievals))}` : '';
+ return `${memoryOriginLabel(reference.origin)} · ${scope}${rounds}${retrievals}`;
+}
+
+function memoryStatusLabel(status: string): string {
+ const key = `chatMemoryState_${status}`;
+ return zh[key] === key ? status : zh[key];
+}
+
+// 用过是真的用过，但不能让一条"事后已经被撤掉"的记忆在抽屉里看起来仍然作数：
+// 只有当前状态确实不再生效才提示，读不到当前状态就闭嘴，不替它判断还有没有用。
+function memoryNotice(reference: CreativeReference): string | null {
+ const reasons: string[] = [];
+ if (reference.memoryStatus && !['unconfirmed', 'confirmed'].includes(reference.memoryStatus)) reasons.push(memoryStatusLabel(reference.memoryStatus));
+ if (reference.memoryDisabled === true) reasons.push(zh.chatMemoryDisabled);
+ return reasons.length ? `${zh.chatMemoryNoLongerActive}${reasons.join(' · ')}` : null;
+}
+
+// 记忆条目自己成一组说明：来路与次数、读不到正文时那句实话、以及"现在这条还作不作数"。
+function MemoryTrace({ reference }: { reference: CreativeReference }) {
+ const notice = memoryNotice(reference);
+ return <>
+  <p className="chat-footnote">{memoryFootnote(reference)}</p>
+  {!reference.passage && <p className="chat-footnote">{reference.memoryTextVersion === 'changed' ? zh.chatMemoryTextChanged : reference.memoryTextVersion === 'unrecorded' ? zh.chatMemoryTextUnrecorded : zh.chatMemoryUnreadable}</p>}
+  {notice && <p className="chat-footnote warning">{notice}</p>}
+ </>;
 }
 
 function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGoal, initialCount, quickAction, onQuickActionFired, settingsOpen = false, onSettingsClose = () => {}, children }: {
@@ -55,6 +128,11 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  const appendChat = useUIStore(state => state.appendChat);
  const settleChat = useUIStore(state => state.settleChat);
  const chatMode = aiMode === 'chat';
+ const detailSelectionKey=JSON.stringify([project.id,accountId,selectedIds]);
+ const [detailChoice,setDetailChoice]=useState({key:detailSelectionKey,allowed:false});
+ if (detailChoice.key!==detailSelectionKey) setDetailChoice({key:detailSelectionKey,allowed:false});
+ const allowDetail=detailChoice.key===detailSelectionKey && detailChoice.allowed;
+ const setAllowDetail=(allowed:boolean)=>setDetailChoice({key:detailSelectionKey,allowed});
  const [message, setMessage] = useState(initialRevision?.message ?? saved?.goal ?? initialGoal ?? '');
  const [count, setCount] = useState(initialRevision?.count ?? saved?.count ?? initialCount ?? 20);
  const [scopeSelection, setScopeSelection] = useState(initialRevision ? false : saved?.scopeSelection ?? false);
@@ -74,6 +152,9 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
  // 跟着项目/账户走——换了上下文就不认，免得把 A 项目的回复核到 B 项目头上。
  const [unconfirmedChat, setUnconfirmedChat] = useState<{ context: string; requestId: string; prompt: string; streamed: string } | null>(null);
  const [draftId, setDraftId] = useState<string | null>(null);
+ // 坏预览修复的结局按照片记后端给的原因码：同一批里每张的结局不同，不能用一个全局状态糊过去，
+ // 也不能只看翻译后的句子来决定这一行要不要改口。
+ const [previewRepair, setPreviewRepair] = useState<Record<string, string>>({});
  const [continuation, setContinuation] = useState<{ reference: DraftReference; title: string } | null>(initialRevision ? { reference: initialRevision.reference, title: initialRevision.title } : null);
  const last = useRef<HTMLDivElement>(null);
  const composer = useRef<HTMLTextAreaElement>(null);
@@ -149,6 +230,17 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
   try {
    await repository.agent.queryVisionResult(project.id, taskId);
    if (currentContext.current === sourceContext) await query.refetch();
+  } catch (cause) { if (currentContext.current === sourceContext) setError(userFacingError(cause)); }
+  finally { sending.current = false; if (currentContext.current === sourceContext) setBusy(false); }
+ };
+ // 修的是本地图库缓存那两份中间文件：只点名照片，原图由后端按在册记录决定，界面给不了路径。
+ const repairPreview = async (photoId: string) => {
+  if (!repository?.repairPreviews || sending.current) return;
+  const sourceContext = contextKey;
+  sending.current = true; setBusy(true); setError('');
+  try {
+   const done = await repository.repairPreviews(project.id, [photoId]);
+   if (currentContext.current === sourceContext) setPreviewRepair(current => ({ ...current, [photoId]: done[0]?.outcome ?? '' }));
   } catch (cause) { if (currentContext.current === sourceContext) setError(userFacingError(cause)); }
   finally { sending.current = false; if (currentContext.current === sourceContext) setBusy(false); }
  };
@@ -232,6 +324,8 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
     const ids = scopeSelection ? selectedIds : [];
     const images = supportsVision(fresh.data) && project.photos.length > 0 ? imageLimit : 0;
     if (allowQueuedRecovery && (!images || fresh.data.keySource!=='focalroom' || fresh.data.hostedAccount?.recovery?.enabled!==true)) throw new Error(zh.chatQueueUnavailable);
+    const detailIds=allowDetail ? selectedIds.filter(id=>!scopeSelection||ids.includes(id)) : [];
+    if (allowDetail && (!images || detailIds.length<1 || detailIds.length>4 || (fresh.data.keySource==='focalroom' && fresh.data.hostedAccount?.visionDetail?.policy!=='preview1400-high-v1'))) throw new Error(zh.chatDetailUnavailable);
     const budget = { ...defaultAgentBudget, maxDurationSeconds: duration, maxCloudImages: images };
     let consentId: number | null = null;
     if (images > 0) {
@@ -243,10 +337,11 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
     await repository.agent.request(project.id, {
      type: 'StartConversation', expectedAccountId: account?.status?.user?.id ?? null, goal: message.trim(), targetCount: count, selectedPhotoIds: ids,
      ...(allowQueuedRecovery ? {allowQueuedRecovery:true} : {}),
+     ...(detailIds.length ? {detailPhotoIds:detailIds} : {}),
      focusPhotoIds: selectedIds.filter(id => !scopeSelection || ids.includes(id)), budget, consentId, sourceBoard: continuation ? null : canvasSource, continuation: continuation?.reference ?? null,
     });
    }
-   if (currentContext.current === contextKey) { updateMessage(''); setContinuation(null); setAllowQueuedRecovery(false); }
+   if (currentContext.current === contextKey) { updateMessage(''); setContinuation(null); setAllowQueuedRecovery(false); setAllowDetail(false); }
    await query.refetch();
   } catch (cause) { if (currentContext.current === contextKey) setError(userFacingError(cause)); }
   finally { sending.current = false; setBusy(false); }
@@ -298,12 +393,14 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
    </div>}
    {[...tasks].slice(0, 10).reverse().map(item => <article key={item.id} className="chat-turn" aria-label={zh.chatTurn}>
     {item.messages?.length ? item.messages.map(turn => <div key={turn.id} className={turn.role === 'user' ? 'chat-user-message' : 'chat-assistant-message'}><p className="focal-message-text">{turn.content}</p></div>) : <div className="chat-user-message"><p>{item.goal}</p></div>}
-    {(!item.conversation || item.state !== 'completed' || !!item.inspectedPhotos?.length || !!item.preferenceProposals?.length || !!item.creativeReferences?.length || !!item.boardDrafts?.length || query.data?.drafts.some(draft => draft.taskId === item.id)) && <div className="chat-assistant-message"><span className="chat-assistant-icon"><Sparkles size={15} /></span><div>
+    {(!item.conversation || item.state !== 'completed' || !!item.memoryTrace?.events.length || !!item.photoJudgments?.length || !!item.inspectedPhotos?.length || !!item.preferenceProposals?.length || !!item.creativeReferences?.length || !!item.knowledgeSearches?.length || !!item.boardDrafts?.length || query.data?.drafts.some(draft => draft.taskId === item.id)) && <div className="chat-assistant-message"><span className="chat-assistant-icon"><Sparkles size={15} /></span><div>
      <strong className="chat-task-status" data-state={item.state}>{taskLabels[item.state]}</strong>
      <TaskProgress task={item} />
+     <MemoryTimeline trace={item.memoryTrace} />
+     <PhotoJudgments items={item.photoJudgments ?? []} photoName={id=>project.photos.find(p=>p.id===id)?.name ?? id} />
      {!!item.inspectedPhotos?.length && <details className="chat-inspection"><summary>{zh.chatInspected.replace('{count}', String(item.inspectedPhotos.length))}</summary>
       {item.inspectedPhotos.map(photo => <div key={photo.photo_id}><button type="button" onClick={() => selectPhoto(photo.photo_id, project.photos.map(p => p.id))}>{project.photos.find(p => p.id === photo.photo_id)?.name ?? photo.photo_id}</button>
-       <ul>{photo.visible_facts.map((fact, index) => <li key={index}>{fact}</li>)}</ul><p>{photo.interpretation}</p><small>{photo.uncertainty}</small></div>)}
+       <ul>{photo.visible_facts.map((fact, index) => <li key={index}>{fact}</li>)}</ul><p>{photo.interpretation}</p><small>{photo.uncertainty}</small>{photo.imageVersion && <small className="chat-image-version">{imageVersionLabel(photo.imageVersion, previewRepair[photo.photo_id])}</small>}{photo.imageVersion?.pixelVersion === 'unreadable' && <span className="chat-preview-repair"><Button size="small" disabled={busy || !repository} onClick={() => { void repairPreview(photo.photo_id); }}>{zh.chatRepairPreview}</Button>{previewRepair[photo.photo_id] !== undefined && <small role="status">{previewRepairLabel(previewRepair[photo.photo_id])}</small>}</span>}</div>)}
      </details>}
      {!item.messages?.some(turn => turn.role === 'assistant' && turn.content === item.question) && item.question && <p>{item.question}</p>}
      {!item.conversation && ['completed', 'review_ready'].includes(item.state) && <p className="focal-message-text">{item.reason}</p>}
@@ -326,7 +423,10 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
       <Button size="small" disabled={!['review_ready', 'completed'].includes(item.state)} onClick={() => openCanvasBoard(board.id)}>{zh.chatReviewBoard}</Button>
       <Button size="small" disabled={busy || running || ['queued','planning','running','needs_input'].includes(item.state)} onClick={() => continueDraft({ kind: 'board', id: board.id, revision: board.revision ?? 1 }, board.title)}>{zh.chatReviseDraft}</Button>
      </div>)}
-     {!!item.creativeReferences?.length && <details className="chat-references"><summary>{zh.chatReferences}</summary>{item.creativeReferences.map((reference, index) => <div key={index}><strong>{reference.kind === 'knowledge' ? reference.label : zh[`chatContext_${reference.section}`]}</strong>{reference.version != null && <small> · {reference.version}</small>}{reference.passage && <blockquote>{reference.passage}</blockquote>}{reference.citationId && <small>{reference.citationId} · {reference.license}</small>}</div>)}</details>}
+     {!!visibleReferences(item).length && <details className="chat-references"><summary>{zh.chatReferences}</summary>{visibleReferences(item).map((reference, index) => <div key={index}><strong>{referenceTitle(reference)}</strong>{reference.version != null && <small> · {reference.version}</small>}{reference.reviewStatus && <small> · {reviewStatusLabel(reference.reviewStatus)}</small>}{reference.disputed && <small> · {zh.chatReferenceDisputed}</small>}{reference.passage && <blockquote>{reference.passage}</blockquote>}{reference.kind === 'memory' && <MemoryTrace reference={reference} />}{reference.source && <p className="chat-footnote">{zh.chatReferenceSource} {reference.institution ? `${reference.institution} · ` : ''}{reference.source}</p>}{reference.detailError && <p className="chat-footnote">{zh.chatReferenceMissing} {reference.detailError.message}</p>}{reference.summaryOnly && <p className="chat-footnote">{zh.chatReferenceSummaryOnly}</p>}{knowledgeMatchLines(reference.matchReason).map((line, lineIndex) => <p key={lineIndex} className="chat-footnote">{line}</p>)}{reference.matchReason && <p className="chat-footnote">{zh.chatMatchNotEvidence}</p>}{reference.citationId && <small>{reference.citationId}{reference.license ? ` · ${reference.license}` : ''}</small>}</div>)}</details>}
+     {!!item.knowledgeSearches?.length && <details className="chat-search-log"><summary>{zh.chatSearchLogTitle.replace('{count}', String(item.knowledgeSearches.length))}</summary>
+      {item.knowledgeSearches.map(search => <div key={search.callId} data-outcome={search.outcome}><strong>{knowledgeSearchToolLabel(search.tool)}</strong>{knowledgeSearchLines(search).map((line, index) => <p key={index} className={index === 0 ? undefined : 'chat-footnote'}>{line}</p>)}</div>)}
+      <p className="chat-footnote">{zh.chatSearchNotEvidence}</p></details>}
      {!!item.draftLineage?.length && <details className="chat-lineage"><summary>{zh.chatRevisionHistory}</summary>{item.draftLineage.map(link => <p key={link.childId}>{zh.chatRevisionParent} {link.parent.revision} · {link.reason}</p>)}</details>}
      {(item.preferenceProposals ?? []).map(proposal => <PreferenceProposalCard key={proposal.id} proposal={proposal} disabled={busy} onSave={statement => memoryDecision(item.id, proposal.id, statement)} onDismiss={() => memoryDecision(item.id, proposal.id)} />)}
      {item.id === task?.id && <div className="chat-task-controls">
@@ -361,6 +461,9 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
     {!chatMode && <div className="chat-scope-row"><Image size={13} /><select aria-label={zh.chatScope} value={effectiveScope ? 'selected' : 'project'} disabled={busy} onChange={event => { const enabled = event.target.value === 'selected'; setUserToggled(true); setScopeSelection(enabled); saveDraft(project.id, { goal: message, count, scopeSelection: enabled }); }}>
      <option value="project">{zh.chatProjectPhotos} · {project.photos.length}</option><option value="selected">{zh.chatSelectedPhotos} · {selectedIds.length}</option>
     </select></div>}
+    {!chatMode && <label className="chat-queue-option"><input type="checkbox" aria-label={zh.chatDetailOption}
+      checked={allowDetail} disabled={busy || running || replying || !vision || selectedIds.length<1 || selectedIds.length>4 || (config?.keySource==='focalroom' && !config.hostedAccount?.visionDetail)}
+      onChange={event=>setAllowDetail(event.target.checked)} />{zh.chatDetailOption}<small>{zh.chatDetailPrivacy}</small></label>}
    </form>
    {!chatMode && selectionEmpty && <p className="chat-footnote">{zh.chatSelectPhotos}</p>}
    {!chatMode && effectiveScope && selectedIds.length > 500 && <p className="chat-footnote warning">选中 {selectedIds.length} 张超过单次上限 500 张——请先筛选或分批处理</p>}
@@ -374,7 +477,7 @@ function AIPanelContent({ repository, project, selectedIds, onUpdated, initialGo
     <p className="muted">{zh.chatImagePrivacy}</p>
    </div>
   </Modal>}
-  {draft && repository && <DraftReview key={draft.id + ':' + draft.revision} draft={draft} project={project} repository={repository} onClose={() => setDraftId(null)} onUpdated={updated => { onUpdated(updated); void query.refetch(); }} />}
+  {draft && repository && <DraftReview key={draft.id + ':' + draft.revision} draft={draft} project={project} repository={repository} evidence={(query.data?.tasks.find(task => task.id === draft.taskId)?.draftEvidence ?? []).find(entry => entry.draftId === draft.id)} doubts={collectDraftDoubts(query.data?.tasks.find(task => task.id === draft.taskId))} onClose={() => setDraftId(null)} onUpdated={updated => { onUpdated(updated); void query.refetch(); }} />}
 </section>;
 }
 

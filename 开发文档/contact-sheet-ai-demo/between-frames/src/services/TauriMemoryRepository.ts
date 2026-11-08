@@ -11,6 +11,7 @@ const hypothesis = z.object({
  id: z.number().int(), projectId: z.string(), scope: z.enum(['project_local', 'cross_project']),
  statement: z.string(), evidenceIds: z.array(z.number().int()), counterexampleIds: z.array(z.number().int()),
  status: z.enum(['unconfirmed', 'confirmed', 'corrected', 'retired']), confidence: z.enum(['tentative', 'moderate']),
+ origin: z.enum(['user_stated', 'user_confirmed', 'rule_inferred']),
  userCorrection: z.string().nullable(), disabled: z.boolean(), createdAt: z.string(), updatedAt: z.string(),
 });
 const cloudAuthorMemory = z.object({

@@ -34,3 +34,26 @@ it('关联冲突保留给界面明确处理，不信任串画布或未解决却�
   ipc.mockResolvedValue({...result,canApply:true,structuralConflicts:[{...conflict,resolved:true}]});
   expect((await repository.simulateMerge('p',{...selection,structuralResolutions:[{changeId:'c',choice:'remove_proposed'}]})).canApply).toBe(true);
 });
+it('画布审阅侧修预览用图库同一个命令、同一份口径，坏数据不当成功返回',async()=>{
+  const repository=new TauriCanvasRepository();
+  const outcome={photoId:'p',outcome:'repaired',rebuilt:['preview'],detail:'已只读原图重新算出派生文件'};
+  ipc.mockResolvedValue([outcome]);
+  expect(await repository.repairPreviews!('p',['photo'])).toEqual([outcome]);
+  expect(ipc).toHaveBeenCalledWith('repair_photo_previews',{projectId:'p',photoIds:['photo']});
+  for(const bad of [[{...outcome,outcome:undefined}],[{...outcome,rebuilt:'preview'}],[{...outcome,detail:undefined}],{}]){
+    ipc.mockResolvedValue(bad);await expect(repository.repairPreviews!('p',['photo'])).rejects.toThrow();
+  }
+});
+it('历史观察保留预览指纹和状态，版本不符或未记录时移除当前缩略图',async()=>{
+  const repository=new TauriCanvasRepository();
+  const observation={photoId:'p',photoHash:'a'.repeat(64),previewSha256:'b'.repeat(64),photoName:'frame.jpg',thumbnailPath:'/private/preview.jpg',modelId:'fixture',promptVersion:'v1',taskId:'source',callId:'inspect',visibleFacts:['fixture'],interpretation:'fixture',uncertainty:'fixture',currentHashMatches:true};
+  for(const status of ['verified','mismatch','unrecorded','unreadable']){
+    ipc.mockResolvedValue({...context,observations:[{...observation,currentPixelVersion:status}]});
+    const page=await repository.editorialRevisionContext('p','child');
+    expect(page!.observations[0].currentPixelVersion).toBe(status);
+    expect(page!.observations[0].previewSha256).toBe('b'.repeat(64));
+    expect(page!.observations[0].thumbnailPath === null).toBe(status !== 'verified');
+  }
+  ipc.mockResolvedValue({...context,observations:[{...observation,currentPixelVersion:'invented'}]});
+  await expect(repository.editorialRevisionContext('p','child')).rejects.toThrow();
+});

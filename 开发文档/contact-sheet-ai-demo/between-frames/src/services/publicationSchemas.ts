@@ -24,3 +24,25 @@ export function publicationPreviews(layout:z.infer<typeof publicationLayoutSchem
     return {frameId:preview.frameId,thumbnailSrc:preview.thumbnailPath?convertFileSrc(preview.thumbnailPath):undefined};
   });
 }
+
+export const preflightIssueSchema=z.object({
+  code:z.string().regex(/^[a-z_]{2,48}$/),severity:z.enum(['blocking','warning','info']),
+  pageNumber:z.number().int().min(-1).max(4096).nullable(),
+  frameId:identifier.nullable(),textId:identifier.nullable(),
+  measured:finite.nonnegative().nullable(),required:finite.nonnegative().nullable(),
+});
+export const preflightReportSchema=z.object({
+  minPpi:z.number().int().min(72).max(1200),
+  pages:z.number().int().nonnegative().max(512),
+  frames:z.number().int().nonnegative().max(4096),
+  texts:z.number().int().nonnegative().max(4096),
+  blocking:z.number().int().nonnegative(),warnings:z.number().int().nonnegative(),infos:z.number().int().nonnegative(),
+  truncated:z.boolean(),issues:z.array(preflightIssueSchema).max(200),
+});
+export type PreflightPayload=z.infer<typeof preflightReportSchema>;
+/// 汇总数必须与逐条问题对得上：对不上说明这份结果不是当前版面算出来的。
+export function checkPreflight(report:PreflightPayload){
+  const count=(severity:'blocking'|'warning'|'info')=>report.issues.filter(issue=>issue.severity===severity).length;
+  if(report.blocking!==count('blocking')||report.warnings!==count('warning')||report.infos!==count('info'))throw new Error('印前检查结果与版面不一致，请重新检查。');
+  if(report.truncated&&report.issues.length<200)throw new Error('印前检查结果不完整，请重新检查。');
+}
