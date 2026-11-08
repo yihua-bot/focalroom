@@ -1,6 +1,6 @@
 use crate::{
     db::Store,
-    domain::{self, AppError, ImportFailure, ImportJob, Result},
+    domain::{self, AppError, ImportFailure, ImportJob, ImportOutcome, Result},
     image_pipeline,
 };
 use std::{
@@ -39,6 +39,7 @@ impl ImportManager {
             completed: 0,
             imported: 0,
             skipped: 0,
+            changes: Vec::new(),
             failures: Vec::new(),
         };
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -114,8 +115,10 @@ impl ImportManager {
                     Err(error) => Err(AppError::new("BACKGROUND", error.to_string())),
                 };
                 match result {
-                    Ok(true) => job.imported += 1,
-                    Ok(false) => job.skipped += 1,
+                    Ok(ImportOutcome::Inserted { .. }) => job.imported += 1,
+                    Ok(ImportOutcome::Duplicate { .. }) => job.skipped += 1,
+                    // 同名文件内容变了：既不算新增也不算跳过，单独列出来等人确认后再落库。
+                    Ok(ImportOutcome::Changed(change)) => job.changes.push(change),
                     Err(error) => job.failures.push(ImportFailure {
                         path: path.to_string_lossy().into(),
                         code: error.code,

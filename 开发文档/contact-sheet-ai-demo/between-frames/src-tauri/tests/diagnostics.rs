@@ -65,7 +65,8 @@ async fn diagnostics_counts_sizes_are_read_only_and_redacted() {
         .unwrap();
     assert_eq!(data.database["projects"], 1);
     assert_eq!(data.database["photos"], 0);
-    assert_eq!(data.migrations_applied, 37);
+    // 0038 给本地观察缓存补了图像版本指纹，计数随迁移链一起钉住。
+    assert_eq!(data.migrations_applied, 38);
     assert_eq!(data.storage.cache.bytes, 40);
     assert_eq!(data.storage.cache.files, 2);
     assert_eq!(data.storage.backups.bytes, 31);

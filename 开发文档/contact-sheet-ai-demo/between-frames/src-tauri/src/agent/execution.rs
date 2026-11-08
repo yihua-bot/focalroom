@@ -360,6 +360,7 @@ pub(crate) async fn tool_with_knowledge(
     } else {
         let v = result.result.as_ref().unwrap();
         match call.name.as_str() {
+            "explain_photo_judgment" => "记录单张判断及其观察、方法出处；解释仍为推断".into(),
             "get_project_context" => "读取项目目标与任务范围".into(),
             "list_photos" | "search_photos" => format!(
                 "检索了 {} 张授权照片的人工元数据",
@@ -373,17 +374,56 @@ pub(crate) async fn tool_with_knowledge(
                 "读取序列与选区，共 {} 张",
                 v["photo_ids"].as_array().map_or(0, Vec::len)
             ),
-            "inspect_photos" | "compare_photos" => {
-                let count = v["photos"].as_array().map_or(0, Vec::len);
+            "inspect_photos" | "compare_photos" | "inspect_photo_detail" => {
+                let requested = v["photos"].as_array().map_or(0, Vec::len);
+                let count = v["observations"].as_array().map_or(0, Vec::len);
                 if v["mode"] == "vision_observed" {
-                    format!(
-                        "视觉观察了 {} 张照片（上传 {} 张，缓存命中 {} 张）",
-                        count,
-                        v["uploaded_images"].as_u64().unwrap_or(0),
-                        v["cache_hits"].as_u64().unwrap_or(0)
-                    )
+                    let uploaded = v["uploaded_images"].as_u64().unwrap_or(0);
+                    let cached = v["cache_hits"].as_u64().unwrap_or(0);
+                    let mut gaps: Vec<String> = vec![];
+                    let mut notes: Vec<String> = vec![];
+                    if let Some(repaired) = v["preview_rebuilt_photo_ids"]
+                        .as_array()
+                        .filter(|items| !items.is_empty())
+                        .map(Vec::len)
+                    {
+                        notes.push(format!(
+                            "其中 {repaired} 张的本地预览读不出来、已只读原图重算像素后送出"
+                        ));
+                    }
+                    if let Some(missed) = v["unobserved_photo_ids"]
+                        .as_array()
+                        .filter(|items| !items.is_empty())
+                        .map(Vec::len)
+                    {
+                        gaps.push(format!("{missed} 张传过去了但模型没有给出观察"));
+                    }
+                    if let Some(skipped) = v["unreadable_photo_ids"]
+                        .as_array()
+                        .filter(|items| !items.is_empty())
+                        .map(Vec::len)
+                    {
+                        gaps.push(format!("{skipped} 张本地预览读不出来、没有送出"));
+                    }
+                    if gaps.is_empty() && notes.is_empty() {
+                        format!(
+                            "视觉观察了 {} 张照片（上传 {} 张，缓存命中 {} 张）",
+                            count, uploaded, cached
+                        )
+                    } else {
+                        if !gaps.is_empty() {
+                            notes.push(format!("另有 {}，不算看过", gaps.join("、")));
+                        }
+                        format!(
+                            "视觉观察了 {} 张照片（上传 {} 张，缓存命中 {} 张；{}）",
+                            count,
+                            uploaded,
+                            cached,
+                            notes.join("；")
+                        )
+                    }
                 } else {
-                    format!("对照了 {count} 张人工元数据；没有读图")
+                    format!("对照了 {requested} 张人工元数据；没有读图")
                 }
             }
             "retrieve_preferences" => format!(
@@ -415,6 +455,27 @@ pub(crate) async fn tool_with_knowledge(
         &summary,
     )
     .await?;
+    if result.ok
+        && matches!(
+            call.name.as_str(),
+            "retrieve_preferences" | "retrieve_memory"
+        )
+        && let Some(hypotheses) = result
+            .result
+            .as_ref()
+            .map(|data| &data["hypotheses"])
+            .filter(|v| v.is_array())
+    {
+        let reads = super::memory_trace::capture(&mut tx, hypotheses).await?;
+        store::step(
+            &mut tx,
+            id,
+            "memory_query_trace",
+            json!({"callId":call.call_id,"round":t.usage.model_turns,"memoryReads":reads}),
+            "记录本次记忆查询的来路，不代表模型采纳",
+        )
+        .await?;
+    }
     store::checkpoint(&mut tx, &t).await?;
     tx.commit().await?;
     Ok(result)
@@ -481,6 +542,7 @@ pub(crate) async fn attempt(
     cost_limit: u32,
     output_limit: u32,
     rate: super::pricing::RateCard,
+    memory: &serde_json::Value,
 ) -> Result<()> {
     let mut tx = db.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut t = store::load(&mut tx, id).await?;
@@ -510,7 +572,8 @@ pub(crate) async fn attempt(
         .execute(&mut *tx)
         .await?;
     let binding = super::model_binding::load(&mut tx, id).await?;
-    store::step(&mut tx,id,"model_attempt",json!({"modelRole":if t.provider_id == super::PROVIDER_OPENAI { "curation" } else { "mock" },"modelId":binding.map(|identity| identity.model_id),"round":t.usage.model_turns,"startedAt":crate::domain::timestamp(),"promptVersion":super::prompt_version(&t.provider_id),"providerId":t.provider_id,"maxOutputTokens":output_limit,"reservedCostMinorUsd":reserved,"rateCard":rate}),"发起一轮模型请求").await?;
+    let memory_reads = super::memory_trace::capture(&mut tx, memory).await?;
+    store::step(&mut tx,id,"model_attempt",json!({"modelRole":if t.provider_id == super::PROVIDER_OPENAI { "curation" } else { "mock" },"modelId":binding.map(|identity| identity.model_id),"round":t.usage.model_turns,"startedAt":crate::domain::timestamp(),"promptVersion":super::prompt_version(&t.provider_id),"providerId":t.provider_id,"maxOutputTokens":output_limit,"reservedCostMinorUsd":reserved,"rateCard":rate,"memoryReads":memory_reads}),"发起一轮模型请求").await?;
     store::save(&mut tx, &t).await?;
     tx.commit().await?;
     Ok(())

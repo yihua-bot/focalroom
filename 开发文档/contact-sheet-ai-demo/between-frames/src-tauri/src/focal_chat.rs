@@ -193,9 +193,9 @@ pub(crate) async fn assistant(
 }
 
 pub(crate) async fn inspected(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<Vec<Value>> {
-    let rows:Vec<String>=sqlx::query_scalar("SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name IN ('inspect_photos','compare_photos') ORDER BY rowid")
+    let rows:Vec<String>=sqlx::query_scalar("SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name IN ('inspect_photos','compare_photos','inspect_photo_detail') ORDER BY rowid")
         .bind(&task.id).fetch_all(&mut **tx).await?;
-    let mut found = std::collections::BTreeMap::new();
+    let mut found: std::collections::BTreeMap<String, (Value, Option<Value>)> = Default::default();
     for raw in rows {
         let receipt: crate::agent::types::ToolResult =
             serde_json::from_str(&raw).map_err(serialization)?;
@@ -203,17 +203,47 @@ pub(crate) async fn inspected(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> 
             continue;
         }
         if let Some(result) = receipt.result.filter(|v| v["mode"] == "vision_observed") {
+            let provenance = result["provenance"].as_array().cloned().unwrap_or_default();
             for photo in result["observations"].as_array().into_iter().flatten() {
                 if let Some(id) = photo["photo_id"]
                     .as_str()
                     .filter(|id| task.allowed_photo_ids.iter().any(|p| p == *id))
                 {
-                    found.insert(id.to_string(), photo.clone());
+                    let bound = provenance.iter().find(|p| p["photo_id"] == id).cloned();
+                    found.insert(id.to_string(), (photo.clone(), bound));
                 }
             }
         }
     }
-    Ok(found.into_values().take(100).collect())
+    // 界面上的"看过这张图"必须当场对得上：记录里的原图指纹和当前库不同就是旧观察，不能显示成当前事实。
+    let ids: Vec<String> = found.keys().cloned().collect();
+    let current: Vec<(String, String)> = if ids.is_empty() {
+        vec![]
+    } else {
+        sqlx::query_as("SELECT id,content_sha256 FROM photos WHERE project_id=? AND id IN(SELECT value FROM json_each(?))")
+            .bind(&task.project_id)
+            .bind(crate::command_audit::encode(&ids)?)
+            .fetch_all(&mut **tx)
+            .await?
+    };
+    let current: std::collections::HashMap<String, String> = current.into_iter().collect();
+    Ok(found
+        .into_values()
+        .map(|(mut photo, bound)| {
+            if let Some(bound) = bound {
+                let recorded = bound["photo_hash"].as_str().unwrap_or_default();
+                photo["imageVersion"] = json!({
+                    "previewSha256": bound["preview_sha256"],
+                    "pixelVersion": bound["pixelVersion"].as_str().unwrap_or("unrecorded"),
+                    "sourceMatches": current
+                        .get(photo["photo_id"].as_str().unwrap_or_default())
+                        .map(|hash| hash == recorded),
+                });
+            }
+            photo
+        })
+        .take(100)
+        .collect())
 }
 
 /// 工具可见性随真实草案状态展开；授权始终由冻结 TaskGrant 决定，不能由模型升级。

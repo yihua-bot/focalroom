@@ -93,6 +93,181 @@ async fn apply(db: &Store, t: &Task, name: &str, args: Value) -> ToolResult {
 }
 
 #[tokio::test]
+async fn detail_requires_explicit_scoped_permission_and_cannot_be_broadened_in_storage() {
+    let (temp, db, p, _b, _n) = fixture().await;
+    let source = temp.path().join("other.png");
+    image::RgbImage::from_pixel(8, 8, image::Rgb([90, 30, 40]))
+        .save(&source)
+        .unwrap();
+    db.insert_photo(
+        &p,
+        &crate::image_pipeline::prepare(&source, &temp.path().join("cache")).unwrap(),
+    )
+    .await
+    .unwrap();
+    let id = db.get(&p).await.unwrap().photos[0].id.clone();
+    let other = db.get(&p).await.unwrap().photos[1].id.clone();
+    let request = |details: Vec<String>| AgentRequest {
+        request_id: domain::id(),
+        project_id: p.clone(),
+        command: TaskCommand::StartConversation {
+            goal: "精查这张照片；文字本身不授权".into(),
+            selected_photo_ids: vec![],
+            focus_photo_ids: vec![id.clone()],
+            detail_photo_ids: details,
+            target_count: 1,
+            budget: Budget::default(),
+            consent_id: None,
+            source_board: None,
+            continuation: None,
+            expected_account_id: None,
+            allow_queued_recovery: false,
+        },
+    };
+    let handler = CommandHandler::new(&db);
+    for (invalid, expected) in [
+        (vec!["foreign".into()], "PERMISSION_DENIED"),
+        (vec![id.clone(), id.clone()], "VALIDATION_ERROR"),
+        (vec![id.clone(); 5], "VALIDATION_ERROR"),
+    ] {
+        assert_eq!(
+            handler
+                .agent_request(request(invalid))
+                .await
+                .unwrap_err()
+                .code,
+            expected
+        );
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM agent_tasks")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "拒绝必须回滚整个任务及许可");
+    }
+    let ordinary = handler.agent_request(request(vec![])).await.unwrap();
+    let context = ContextBuilder::build(&db, &ordinary.id).await.unwrap();
+    assert!(
+        !context
+            .tool_specs
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["name"] == "inspect_photo_detail")
+    );
+    execution::state(&db, &ordinary.id, "planning", "test")
+        .await
+        .unwrap();
+    execution::state(&db, &ordinary.id, "running", "test")
+        .await
+        .unwrap();
+    let rejected = apply(
+        &db,
+        &ordinary,
+        "inspect_photo_detail",
+        json!({"photo_ids":[id]}),
+    )
+    .await;
+    assert!(!rejected.ok);
+    execution::state(&db, &ordinary.id, "cancelled", "test")
+        .await
+        .unwrap();
+
+    let detailed = handler
+        .agent_request(request(vec![id.clone()]))
+        .await
+        .unwrap();
+    let context = ContextBuilder::build(&db, &detailed.id).await.unwrap();
+    assert!(
+        context
+            .tool_specs
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["name"] == "inspect_photo_detail")
+    );
+    let mut tx = db.pool.begin().await.unwrap();
+    assert_eq!(
+        load(&mut tx, &detailed).await.unwrap().detail_photo_ids,
+        vec![id.clone()]
+    );
+    assert_eq!(
+        PolicyGate::validate_scope(
+            &mut tx,
+            &detailed,
+            &tool("inspect_photo_detail", &p, json!({"photo_ids":[other]}))
+        )
+        .await
+        .unwrap_err()
+        .code,
+        "PERMISSION_DENIED"
+    );
+    tx.rollback().await.unwrap();
+    // 临时库模拟授权记录被篡改，原始人类许可仍不可变。
+    let trigger: String = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='agent_grants_no_update'",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    sqlx::query("DROP TRIGGER agent_grants_no_update")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE agent_task_grants SET grant_json=json_set(grant_json,'$.detailPhotoIds',json(?)) WHERE task_id=?").bind(json!([other]).to_string()).bind(&detailed.id).execute(&db.pool).await.unwrap();
+    sqlx::query(&trigger).execute(&db.pool).await.unwrap();
+    let mut tx = db.pool.begin().await.unwrap();
+    assert_eq!(
+        load(&mut tx, &detailed).await.unwrap_err().code,
+        "RECOVERY_ERROR"
+    );
+    tx.rollback().await.unwrap();
+}
+
+#[tokio::test]
+async fn historical_grants_remain_visible_after_prompt_or_contract_updates() {
+    let (_temp, db, p, _b, _n) = fixture().await;
+    let old = start(&db, &p, None, true).await;
+    execution::state(&db, &old.id, "cancelled", "历史任务")
+        .await
+        .unwrap();
+    // 在临时库中模拟旧发行版已冻结的授权，随即恢复不可变触发器。
+    let trigger: String = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='agent_grants_no_update'",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    sqlx::query("DROP TRIGGER agent_grants_no_update")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE agent_task_grants SET grant_json=json_set(grant_json,'$.canvasPromptSha256','previous-prompt','$.toolContractSha256','previous-contract') WHERE task_id=?")
+        .bind(&old.id).execute(&db.pool).await.unwrap();
+    sqlx::query(&trigger).execute(&db.pool).await.unwrap();
+    let fresh = start(&db, &p, None, false).await;
+    for _ in 0..2 {
+        let view = super::super::store::projection(&db, &p).await.unwrap();
+        assert!(view.tasks.iter().any(|t| t.id == old.id && t.canvas_task));
+        assert!(view.tasks.iter().any(|t| t.id == fresh.id));
+    }
+    let mut tx = db.pool.begin().await.unwrap();
+    assert_eq!(
+        load(&mut tx, &old).await.unwrap_err().code,
+        "RECOVERY_ERROR"
+    );
+    assert!(load(&mut tx, &fresh).await.is_ok());
+    tx.rollback().await.unwrap();
+    ContextBuilder::build(&db, &fresh.id).await.unwrap();
+    assert!(
+        sqlx::query("UPDATE agent_task_grants SET grant_json='{}' WHERE task_id=?")
+            .bind(&old.id)
+            .execute(&db.pool)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn words_and_feedback_do_not_grant_canvas_tools_and_legacy_tasks_stay_selection_only() {
     let (_temp, db, p, _b, _n) = fixture().await;
     let task = start(&db, &p, None, false).await;
@@ -101,7 +276,7 @@ async fn words_and_feedback_do_not_grant_canvas_tools_and_legacy_tasks_stay_sele
         !context.layers["system"]
             .as_str()
             .unwrap()
-            .contains("画布编排任务 · canvas-1")
+            .contains("画布编排任务 · canvas-2")
     );
     for name in CANVAS_TOOLS {
         assert!(
@@ -206,7 +381,7 @@ async fn grant_source_and_checkpoint_survive_reopen_and_cannot_be_escalated() {
             .unwrap()
             .contains("finish_canvas_task")
     );
-    assert!(context.prompt_version.ends_with("+canvas-1"));
+    assert!(context.prompt_version.ends_with("+canvas-2"));
     let initial = context.tool_specs;
     assert!(
         initial

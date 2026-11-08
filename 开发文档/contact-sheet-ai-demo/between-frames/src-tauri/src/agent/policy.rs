@@ -152,6 +152,21 @@ impl PolicyGate {
         if active != 1 {
             return Err(AppError::new("PERMISSION_DENIED", "项目不可访问"));
         }
+        if call.name == "inspect_photo_detail" {
+            let grant = super::task_scope::load(tx, task).await?;
+            if call.args["photo_ids"].as_array().is_none_or(|ids| {
+                ids.iter().any(|id| {
+                    id.as_str().is_none_or(|id| {
+                        !grant.detail_photo_ids.iter().any(|allowed| allowed == id)
+                    })
+                })
+            }) {
+                return Err(AppError::new(
+                    "PERMISSION_DENIED",
+                    "这张照片没有本次精查许可",
+                ));
+            }
+        }
         let mut ids = vec![];
         if let Some(arr) = call.args["photo_ids"]
             .as_array()

@@ -23,6 +23,8 @@ pub struct HypothesisView {
     pub id: i64,
     pub project_id: String,
     pub scope: String,
+    /// 这条记忆怎么来的：用户写明 / 用户确认过推断 / 仅关键词推断待验证。
+    pub origin: String,
     pub statement: String,
     pub evidence_ids: Vec<i64>,
     pub counterexample_ids: Vec<i64>,
@@ -275,28 +277,57 @@ async fn load_hypotheses(
     tx: &mut Transaction<'_, Sqlite>,
     project: &str,
 ) -> Result<Vec<HypothesisView>> {
+    let stated = stated_ids(tx, project).await?;
     Ok(
         sqlx::query("SELECT * FROM preference_hypotheses WHERE project_id=? AND scope='project_local' ORDER BY id DESC")
             .bind(project)
             .fetch_all(&mut **tx)
             .await?
             .iter()
-            .map(|r| HypothesisView {
-                id: r.get("id"),
+            .map(|r| {
+                let status: String = r.get("status");
+                let id: i64 = r.get("id");
+                HypothesisView {
+                origin: origin_of(&status, stated.contains(&id)).into(),
+                id,
                 project_id: r.get("project_id"),
                 scope: r.get("scope"),
                 statement: r.get("statement"),
                 evidence_ids: parse_ids(r.get("evidence_ids_json")),
                 counterexample_ids: parse_ids(r.get("counterexample_ids_json")),
-                status: r.get("status"),
+                status,
                 confidence: r.get("confidence"),
                 user_correction: r.get("user_correction"),
                 disabled: r.get::<i64, _>("disabled_for_retrieval") != 0,
                 created_at: r.get("created_at"),
                 updated_at: r.get("updated_at"),
+            }
             })
             .collect(),
     )
+}
+/// 用户写明并确认过的偏好证据；排除后不再作为来源依据。
+async fn stated_ids(
+    tx: &mut Transaction<'_, Sqlite>,
+    project: &str,
+) -> Result<std::collections::HashSet<i64>> {
+    let rows: Vec<Option<i64>> = sqlx::query_scalar(
+        "SELECT DISTINCT json_extract(e.detail_json,'$.hypothesisId') FROM preference_evidence e LEFT JOIN memory_evidence_state s ON s.evidence_id=e.id WHERE e.project_id=? AND json_extract(e.detail_json,'$.explicitPreference')=1 AND COALESCE(s.excluded,0)=0",
+    )
+    .bind(project)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows.into_iter().flatten().collect())
+}
+/// 来源途径与确认状态是两个维度：写明的偏好从不被推断规则冒充。
+fn origin_of(status: &str, stated: bool) -> &'static str {
+    if stated {
+        "user_stated"
+    } else if status == "confirmed" {
+        "user_confirmed"
+    } else {
+        "rule_inferred"
+    }
 }
 fn parse_ids(raw: String) -> Vec<i64> {
     serde_json::from_str(&raw).unwrap_or_default()
@@ -435,7 +466,22 @@ pub async fn retrievable_for_goal(
     let mut seen = std::collections::HashSet::new();
     usable.retain(|h| seen.insert(statement_key(&h.statement)));
     usable.truncate(limit);
-    let summaries: Vec<Value> = usable.iter().map(summary).collect();
+    let summaries: Vec<Value> = usable
+        .iter()
+        .map(|h| {
+            let mut value = summary(h);
+            let keyword = keyword_ranks.contains_key(&h.id);
+            let semantic = semantic_ranks.get(&h.id).is_some_and(Option::is_some);
+            value["retrieval_reason"] = json!(match (keyword, semantic) {
+                (true, true) => "keyword_and_semantic_ranked",
+                (true, false) => "keyword_ranked",
+                (false, true) => "semantic_ranked",
+                _ if h.status == "confirmed" => "confirmed_priority",
+                _ => "evidence_priority",
+            });
+            value
+        })
+        .collect();
     Ok(json!({
         "hypotheses": summaries,
         "mode": "evidence_backed",
@@ -447,12 +493,33 @@ fn summary(h: &HypothesisView) -> Value {
     json!({
         "memory_id":h.id, "source_project_id":h.project_id,
         "statement":h.statement, "scope":h.scope, "status":h.status,
+        "origin":h.origin,
         "confidence":h.confidence, "evidence_ids":h.evidence_ids,
         "counterexample_ids":h.counterexample_ids, "user_correction":h.user_correction,
         "evidence_refs":h.evidence_ids.iter().map(|id| json!({"project_id":h.project_id,"evidence_id":id})).collect::<Vec<_>>(),
         "counterexample_refs":h.counterexample_ids.iter().map(|id| json!({"project_id":h.project_id,"evidence_id":id})).collect::<Vec<_>>(),
     })
 }
+/// 只读回执：这一轮真正进入上下文的记忆，带来源项目、适用范围与获得途径。
+/// 不复制正文，agent_steps 的 model_attempt 不参与模型协议，因此不占上下文。
+pub(crate) fn read_trace(hypotheses: &Value) -> Value {
+    let empty: Vec<Value> = vec![];
+    let reads: Vec<Value> = hypotheses.as_array().unwrap_or(&empty).iter().take(10).map(|h| {
+        let refs = h["evidence_refs"].as_array();
+        let ids = refs.map(|refs| refs.iter().take(100)
+            .filter(|e| e["project_id"] == h["source_project_id"])
+            .filter_map(|e| e["evidence_id"].as_i64()).collect::<Vec<_>>());
+        json!({
+            "memoryId": h["memory_id"], "sourceProjectId": h["source_project_id"],
+            "scope": h["scope"], "origin": h["origin"],
+            "statementSha256": h["statement"].as_str().map(|text| crate::command_audit::fingerprint(&json!(text))),
+            "statusAtRead": h["status"], "selectionReason": h["retrieval_reason"],
+            "evidenceIds": ids, "evidenceRefsTruncated": refs.is_some_and(|refs|refs.len()>100)
+        })
+    }).collect();
+    json!(reads)
+}
+
 /// 只返回已确认、有有效证据且与目标相关的作者线索；不暴露来源照片或备注正文。
 async fn author_hypotheses(
     tx: &mut Transaction<'_, Sqlite>,
@@ -530,7 +597,19 @@ pub async fn retrievable_author(
         ));
     }
     let items = author_hypotheses(tx, &task.project_id, &task.goal, limit).await?;
-    let mut result = json!({"hypotheses":items.iter().map(summary).collect::<Vec<_>>(),"mode":"confirmed_local_author","notice":"其他本地项目的已确认假设，不代表永久偏好；引用必须带来源项目和证据 ID，不能作为照片操作权限"});
+    let summaries: Vec<Value> = items
+        .iter()
+        .map(|h| {
+            let mut value = summary(h);
+            value["retrieval_reason"] = json!(if task.goal.trim().is_empty() {
+                "confirmed_author_priority"
+            } else {
+                "author_keyword_ranked"
+            });
+            value
+        })
+        .collect();
+    let mut result = json!({"hypotheses":summaries,"mode":"confirmed_local_author","notice":"其他本地项目的已确认假设，不代表永久偏好；引用必须带来源项目和证据 ID，不能作为照片操作权限"});
     super::preference_proposal::filter_for_task(tx, task, &mut result).await?;
     Ok(result)
 }
@@ -607,14 +686,18 @@ pub(crate) async fn row_view(tx: &mut Transaction<'_, Sqlite>, id: i64) -> Resul
         .bind(id)
         .fetch_one(&mut **tx)
         .await?;
+    let project_id: String = r.get("project_id");
+    let status: String = r.get("status");
+    let origin = origin_of(&status, stated_ids(tx, &project_id).await?.contains(&id)).into();
     Ok(HypothesisView {
         id: r.get("id"),
-        project_id: r.get("project_id"),
+        project_id,
         scope: r.get("scope"),
+        origin,
         statement: r.get("statement"),
         evidence_ids: parse_ids(r.get("evidence_ids_json")),
         counterexample_ids: parse_ids(r.get("counterexample_ids_json")),
-        status: r.get("status"),
+        status,
         confidence: r.get("confidence"),
         user_correction: r.get("user_correction"),
         disabled: r.get::<i64, _>("disabled_for_retrieval") != 0,

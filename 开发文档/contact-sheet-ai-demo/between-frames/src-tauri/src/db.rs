@@ -334,8 +334,58 @@ impl Store {
         )
         .await
     }
-    pub async fn insert_photo(&self, id: &str, prepared: &PreparedPhoto) -> Result<bool> {
+    pub async fn insert_photo(
+        &self,
+        id: &str,
+        prepared: &PreparedPhoto,
+    ) -> Result<crate::domain::ImportOutcome> {
         CommandHandler::new(self).import_photo(id, prepared).await
+    }
+    /// 这条记录在册的原文件路径（取规范路径；文件已不在原地时如实报错，不猜）。
+    pub async fn photo_source(&self, project: &str, photo: &str) -> Result<std::path::PathBuf> {
+        let path: Option<String> =
+            sqlx::query_scalar("SELECT original_path FROM photos WHERE project_id=? AND id=?")
+                .bind(project)
+                .bind(photo)
+                .fetch_optional(&self.pool)
+                .await?;
+        let path = path.ok_or_else(|| AppError::new("NOT_FOUND", "照片不属于项目"))?;
+        std::path::PathBuf::from(path)
+            .canonicalize()
+            .map_err(|_| AppError::new("ORIGINAL_MISSING", "原图已失联，请先重新定位这张照片"))
+    }
+    pub async fn apply_photo_change(
+        &self,
+        id: &str,
+        photo: &str,
+        prepared: &PreparedPhoto,
+        revision: i64,
+    ) -> Result<Project> {
+        CommandHandler::new(self)
+            .apply_photo_change(id, photo, prepared, revision)
+            .await
+    }
+    pub async fn sidecar_rows(&self, project: &str) -> Result<Vec<crate::sidecar::PhotoJudgement>> {
+        CommandHandler::new(self).sidecar_rows(project).await
+    }
+    pub async fn apply_sidecar_judgement(
+        &self,
+        project: &str,
+        photo: &str,
+        revision: i64,
+    ) -> Result<Project> {
+        CommandHandler::new(self)
+            .apply_sidecar_judgement(project, photo, revision)
+            .await
+    }
+    pub async fn backfill_sidecar_judgements(
+        &self,
+        project: &str,
+        revision: i64,
+    ) -> Result<crate::sidecar::SidecarBatchOutcome> {
+        CommandHandler::new(self)
+            .backfill_sidecar_judgements(project, revision)
+            .await
     }
     /// 全部照片的内容指纹（缓存清理的 live 集合；缓存按 hash 跨项目共享）。
     /// 项目标签（v1.1）：组织元数据走独立通道——不占人工撤销栈、不改

@@ -60,7 +60,7 @@ pub async fn ensure_demo(store: &Store, resource_demo: &Path, cache: &Path) -> R
         if handler
             .import_photo(DEMO_PROJECT_ID, &prepared)
             .await
-            .unwrap_or(false)
+            .is_ok_and(|outcome| outcome.inserted())
         {
             imported += 1;
         }

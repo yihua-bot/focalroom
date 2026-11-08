@@ -30,16 +30,22 @@ pub mod login_guard;
 mod macos_menu;
 #[cfg(feature = "native-agent")]
 pub mod native_agent;
+pub mod observation_backfill;
 pub mod photo_inspection;
+pub mod preview_audit;
 pub mod product_links;
 pub mod publication_commands;
+pub mod publication_export;
+pub mod publication_preflight;
 pub(crate) mod publication_previews;
+pub mod publication_spec;
 pub mod publication_versions;
 pub mod publishing;
 mod resource_commands;
 pub mod seed_demo;
 pub mod shared_cloud;
 pub mod shared_export;
+pub mod sidecar;
 pub mod v2_bridge;
 #[cfg(feature = "desktop")]
 use tauri::Manager;
@@ -199,6 +205,18 @@ pub fn run() {
             commands::cancel_import,
             commands::retry_import,
             commands::relink_photo,
+            commands::apply_photo_change,
+            commands::repair_photo_previews,
+            commands::inspect_photo_preview,
+            commands::audit_photo_previews,
+            commands::repair_all_broken_previews,
+            commands::recheck_draft_evidence,
+            commands::recheck_project_draft_evidence,
+            commands::audit_observation_pixel_versions,
+            commands::backfill_observation_pixel_versions,
+            commands::sidecar_proposals,
+            commands::apply_sidecar_judgement,
+            commands::backfill_sidecar_judgements,
             commands::export_project,
             commands::get_sharing_status,
             commands::open_shared_review,
@@ -214,6 +232,7 @@ pub fn run() {
             commands::billing_cancel_checkout,
             commands::share_project,
             commands::get_color_managed_preview,
+            commands::get_display_managed_inspection,
             commands::cloud_stats_overview,
             commands::canvas_execute,
             commands::canvas_snapshot,
@@ -235,7 +254,11 @@ pub fn run() {
             commands::pub_version,
             commands::pub_list,
             commands::pub_pages,
-            commands::pub_generate
+            commands::pub_preflight,
+            commands::pub_export,
+            commands::pub_generate,
+            commands::pub_review,
+            commands::pub_review_write
         ])
         .run(tauri::generate_context!())
         .expect("无法启动 FocalRoom 桌面应用");

@@ -261,7 +261,24 @@ pub(crate) async fn request_bound_with_canvas(
             super::consent::ensure_task_recipient(&mut tx, &t, identity).await?;
         }
         // 先冻结宿主身份，再按该身份的能力生成工具授权。
-        super::task_scope::bind_creative(&mut tx, &t, canvas, source, conversation).await?;
+        let detail_ids = match &r.command {
+            TaskCommand::StartConversation {
+                detail_photo_ids, ..
+            } => detail_photo_ids.as_slice(),
+            _ => &[],
+        };
+        super::task_scope::bind_creative(&mut tx, &t, canvas, source, conversation, detail_ids)
+            .await?;
+        if !detail_ids.is_empty() {
+            store::step(
+                &mut tx,
+                &t.id,
+                "detail_inspection_permission",
+                json!({"photoIds":detail_ids,"policy":"preview1400-high-v1"}),
+                "用户明确允许本次指定照片精查",
+            )
+            .await?;
+        }
         if let TaskCommand::StartConversation {
             allow_queued_recovery,
             focus_photo_ids,

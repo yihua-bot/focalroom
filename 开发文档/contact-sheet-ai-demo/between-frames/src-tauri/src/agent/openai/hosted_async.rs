@@ -84,6 +84,9 @@ pub(super) async fn post_with_id(
         .header("x-focalroom-image-consent", "granted")
         .timeout(Duration::from_secs(30))
         .json(body);
+    if has_high_detail(body) {
+        request = request.header("x-focalroom-detail-consent", "preview1400-high-v1");
+    }
     if allow_queued_recovery {
         request = request.header("x-focalroom-recovery-consent", "encrypted-queue-v1");
     }
@@ -285,4 +288,16 @@ pub(super) async fn query(
         ));
     }
     classify(provider, value, id, u64::from(output_limit))
+}
+
+pub(super) fn has_high_detail(body: &Value) -> bool {
+    match body {
+        Value::Object(map) => {
+            (map.get("type").and_then(Value::as_str) == Some("input_image")
+                && map.get("detail").and_then(Value::as_str) == Some("high"))
+                || map.values().any(has_high_detail)
+        }
+        Value::Array(values) => values.iter().any(has_high_detail),
+        _ => false,
+    }
 }

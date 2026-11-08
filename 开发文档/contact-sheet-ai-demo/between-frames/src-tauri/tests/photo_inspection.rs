@@ -2,7 +2,7 @@ use between_frames_lib::{
     db::Store,
     image_pipeline,
     importer::ImportManager,
-    photo_inspection::{compact_project, original_path},
+    photo_inspection::{compact_project, display_managed_inspection, original_path},
 };
 
 async fn setup(
@@ -360,7 +360,7 @@ async fn png_16bit_quantization_preserves_original_bytes() {
 
 #[cfg(target_os = "macos")]
 #[tokio::test]
-async fn icc_metadata_is_preserved_in_original_and_absent_in_preview() {
+async fn icc_metadata_is_preserved_in_original_and_preview_declares_its_space() {
     let temp = tempfile::tempdir().unwrap();
     let source = temp.path().join("wide.jpg");
     image::RgbImage::from_pixel(320, 240, image::Rgb([200, 100, 50]))
@@ -381,16 +381,156 @@ async fn icc_metadata_is_preserved_in_original_and_absent_in_preview() {
     store.insert_photo(&project.id, &prepared).await.unwrap();
     let project = store.get(&project.id).await.unwrap();
     let photo = &project.photos[0];
-    assert!(
-        !std::fs::read(&photo.preview_path)
-            .unwrap()
-            .windows(11)
-            .any(|w| w == b"ICC_PROFILE")
+    // 320×240 在缩放阈值之下：像素沿用原图数值，缓存因此必须如实写明它在源配置里。
+    // 旧规矩"缓存一律不带配置"已作废——不标注的那张会被读侧当成 sRGB 再管一次。
+    let source_icc = std::fs::read(profile).unwrap();
+    let declared = between_frames_lib::color_engine::embedded_icc_bytes(std::path::Path::new(
+        &photo.preview_path,
+    ))
+    .unwrap();
+    assert_eq!(
+        declared.as_deref(),
+        Some(source_icc.as_slice()),
+        "标准解码生成的预览必须原样声明源配置"
+    );
+    assert_eq!(
+        between_frames_lib::color_engine::embedded_icc_bytes(std::path::Path::new(
+            &photo.thumbnail_path,
+        ))
+        .unwrap(),
+        declared,
+        "缩略图与预览来自同一次解码，声明必须是同一份"
     );
     let inspected = original_path(&store, &project.id, &photo.id).await.unwrap();
     assert_eq!(std::fs::read(inspected.path().unwrap()).unwrap(), bytes);
     assert!(bytes.windows(11).any(|w| w == b"ICC_PROFILE"));
     // 以上验证字节保留，不证明显示器色彩准确。
+}
+
+/// 全分辨率按显示器渲染：源用超过缓存预览上限的图，才能证明渲染取自原图而不是缓存预览。
+#[cfg(target_os = "macos")]
+async fn wide_import(
+    dir: &std::path::Path,
+    store: &Store,
+    project_id: &str,
+    extension: &str,
+) -> between_frames_lib::domain::Photo {
+    let source = dir.join(format!("wide.{extension}"));
+    image::RgbImage::from_pixel(2400, 1600, image::Rgb([71, 91, 113]))
+        .save(&source)
+        .unwrap();
+    if extension == "jpg" {
+        embed_icc_app2(&source, "/System/Library/ColorSync/Profiles/Display P3.icc");
+    }
+    let prepared = image_pipeline::prepare(&source, &dir.join("cache")).unwrap();
+    store.insert_photo(project_id, &prepared).await.unwrap();
+    store.get(project_id).await.unwrap().photos[0].clone()
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn display_managed_inspection_renders_full_resolution_without_touching_original() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = Store::open(&temp.path().join("projects.sqlite"))
+        .await
+        .unwrap();
+    let project = store.create("显示器色彩检视", "").await.unwrap();
+    let photo = wide_import(temp.path(), &store, &project.id, "jpg").await;
+    let before = std::fs::read(&photo.original_path).unwrap();
+    // 分支由"这台机器有没有可用的显示器配置"决定，而不是由被测代码的回答决定：
+    // 无头环境确实取不到时要求它明说不可用；有显示器时任何"没变换"的回答都算失败。
+    let display_usable =
+        between_frames_lib::color_engine::native_transform::display_profile_bytes().is_ok();
+
+    let outcome = display_managed_inspection(&store, &project.id, &photo.id)
+        .await
+        .unwrap();
+    if !display_usable {
+        assert_eq!(outcome.status, "display_unavailable");
+        assert!(outcome.path.is_none(), "取不到显示器配置时不回传像素");
+        assert!(outcome.detail.unwrap().contains("显示器"));
+        assert_eq!(
+            std::fs::read(&photo.original_path).unwrap(),
+            before,
+            "失败也不改原图"
+        );
+        return;
+    }
+    assert_eq!(
+        outcome.status, "transformed",
+        "已嵌入 Display P3 应报告真实来路"
+    );
+    assert!(outcome.source_profile.contains("Display P3"));
+    let rendered = std::path::Path::new(
+        outcome
+            .path
+            .as_ref()
+            .expect("有显示器配置就必须给出渲染结果"),
+    );
+    // 全分辨率：缓存预览被压到 1400，原图尺寸只能来自原文件。
+    assert_eq!(image::image_dimensions(rendered).unwrap(), (2400, 1600));
+    assert_eq!(
+        image::image_dimensions(&photo.preview_path).unwrap().0,
+        1400
+    );
+    // 数值已是显示器色彩，文件必须标注本机那份配置；缺标注的话渲染端会按 sRGB 再管一次。
+    assert_eq!(
+        between_frames_lib::color_engine::embedded_icc_bytes(rendered).unwrap(),
+        between_frames_lib::color_engine::native_transform::display_profile_bytes().ok(),
+        "渲染结果要带上它所变换到的那份显示器配置"
+    );
+    assert_eq!(
+        std::fs::read(&photo.original_path).unwrap(),
+        before,
+        "原图字节必须逐字节不变"
+    );
+
+    // 第二次命中同一缓存：不重渲染，也不换文件。
+    let first = std::fs::metadata(rendered).unwrap().modified().unwrap();
+    let again = display_managed_inspection(&store, &project.id, &photo.id)
+        .await
+        .unwrap();
+    assert_eq!(again.path, outcome.path);
+    assert_eq!(
+        std::fs::metadata(rendered).unwrap().modified().unwrap(),
+        first
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn display_managed_inspection_inherits_inspection_gates_and_refuses_derived_sources() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = Store::open(&temp.path().join("projects.sqlite"))
+        .await
+        .unwrap();
+    let project = store.create("显示器色彩门禁", "").await.unwrap();
+    let photo = wide_import(temp.path(), &store, &project.id, "jpg").await;
+
+    // 原图被改动：沿用检视门禁，报文件已变，不渲染一张冒充原图内容的显示器版本。
+    std::fs::write(&photo.original_path, b"changed").unwrap();
+    assert_eq!(
+        display_managed_inspection(&store, &project.id, &photo.id)
+            .await
+            .unwrap_err()
+            .code,
+        "FILE_CHANGED"
+    );
+
+    // RAW 派生预览没有可用的全分辨率原图：明确拒绝而不是拿派生缓存换个说法。
+    let dng = temp.path().join("shooting.dng");
+    image::GrayImage::from_pixel(900, 700, image::Luma([128]))
+        .save_with_format(&dng, image::ImageFormat::Tiff)
+        .unwrap();
+    let prepared = image_pipeline::prepare(&dng, &temp.path().join("cache")).unwrap();
+    store.insert_photo(&project.id, &prepared).await.unwrap();
+    let raw = store.get(&project.id).await.unwrap().photos[1].clone();
+    let refused = display_managed_inspection(&store, &project.id, &raw.id)
+        .await
+        .unwrap();
+    assert_eq!(refused.status, "source_not_original");
+    assert!(refused.path.is_none(), "拒绝时不回传像素");
+    assert!(refused.detail.unwrap().contains("全分辨率"));
 }
 
 fn make_png16(path: &std::path::Path, width: u32, height: u32) {

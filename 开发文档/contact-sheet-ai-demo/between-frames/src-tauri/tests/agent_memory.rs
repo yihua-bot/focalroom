@@ -1514,3 +1514,98 @@ async fn cross_project_memory_authorization_controls_visibility() {
             .is_empty()
     );
 }
+
+// 用户写明的偏好、用户确认过的规则、仅由关键词推断的摘要，三条来源必须可区分。
+#[tokio::test]
+async fn memory_origin_separates_stated_confirmed_and_inferred() {
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let p = note(&db, p, 0, "留白更克制").await;
+    let p = note(&db, p, 1, "留白多一些").await;
+    let view = memory::projection(&db, &p.id).await.unwrap();
+    let inferred = view
+        .hypotheses
+        .iter()
+        .find(|h| h.statement.contains("留白"))
+        .unwrap();
+    assert_eq!(inferred.origin, "rule_inferred");
+    assert_eq!(inferred.status, "unconfirmed");
+    let listed = (retrieved(&db, &p, "留白", 10).await)["hypotheses"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(listed[0]["origin"], "rule_inferred");
+    control(
+        &db,
+        &p,
+        MemoryCommand::ConfirmHypothesis {
+            hypothesis_id: inferred.id,
+        },
+    )
+    .await;
+    let view = memory::projection(&db, &p.id).await.unwrap();
+    let confirmed = view
+        .hypotheses
+        .iter()
+        .find(|h| h.id == inferred.id)
+        .unwrap();
+    assert_eq!(confirmed.origin, "user_confirmed");
+    assert_eq!(confirmed.status, "confirmed");
+    let listed = (retrieved(&db, &p, "留白", 10).await)["hypotheses"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(listed[0]["origin"], "user_confirmed");
+    // 用户写明的偏好走显式偏好证据：同样是 confirmed，途径不能和"确认过规则"混为一谈。
+    let now = between_frames_lib::domain::timestamp();
+    let statement = "开篇只留一张留白";
+    sqlx::query("INSERT INTO preference_hypotheses(project_id,scope,statement,evidence_ids_json,status,confidence,created_at,updated_at) VALUES(?,'project_local',?,'[]','confirmed','tentative',?,?)")
+        .bind(&p.id).bind(statement).bind(&now).bind(&now)
+        .execute(&db.pool).await.unwrap();
+    let stated_id: i64 =
+        sqlx::query_scalar("SELECT id FROM preference_hypotheses WHERE statement=?")
+            .bind(statement)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    sqlx::query("INSERT INTO preference_evidence(project_id,kind,detail_json,dedup_key,created_at) VALUES(?,'note',?,?,?)")
+        .bind(&p.id)
+        .bind(json!({"hypothesisId":stated_id,"note":statement,"explicitPreference":true,"applicability":"仅本项目","scope":"project_local"}).to_string())
+        .bind(between_frames_lib::domain::id())
+        .bind(&now)
+        .execute(&db.pool).await.unwrap();
+    let view = memory::projection(&db, &p.id).await.unwrap();
+    let stated = view.hypotheses.iter().find(|h| h.id == stated_id).unwrap();
+    assert_eq!(stated.origin, "user_stated");
+    assert_eq!(stated.evidence_ids.len(), 1);
+    let listed = (retrieved(&db, &p, "留白", 10).await)["hypotheses"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(
+        listed
+            .iter()
+            .find(|h| h["memory_id"].as_i64() == Some(stated_id))
+            .unwrap()["origin"],
+        "user_stated"
+    );
+    // 撤回那条显式偏好证据后，不能再声称是用户写明的。
+    control(
+        &db,
+        &p,
+        MemoryCommand::SetEvidenceExcluded {
+            evidence_id: stated.evidence_ids[0],
+            excluded: true,
+        },
+    )
+    .await;
+    let view = memory::projection(&db, &p.id).await.unwrap();
+    assert_ne!(
+        view.hypotheses
+            .iter()
+            .find(|h| h.id == stated_id)
+            .unwrap()
+            .origin,
+        "user_stated"
+    );
+}

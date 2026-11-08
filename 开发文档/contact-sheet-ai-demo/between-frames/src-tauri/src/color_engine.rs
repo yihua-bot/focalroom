@@ -6,8 +6,11 @@
 //! - ai_preview: 模型观察用（成本敏感，尺寸/质量可配）
 //! - print_master: 印刷母版（高位深、ICC 保留、不可降格）
 //!
-//! 当前阶段：profile 检测 + digest 落库 + 管线类型枚举。高位深渲染和 ColorSync
-//! 集成需要原生 Metal/CoreImage 层，按 v3 蓝图 §10.2 的技术验证关口决定。
+//! 当前已有 RGB 8/16/32f 原生 CMM。显式检视从原图经 16-bit 变换生成带目标 ICC 的
+//! 8-bit JPEG；图库缓存在写出时就声明自己的空间（缩放解码标注 sRGB，标准解码沿用源配置，
+//! 平台解码不声明），上传给模型的像素统一落到 sRGB 并如实标注。瓦片按 EXIF 方向取图、
+//! 透明合成白底并带上身份声明，大图粗档位已改走缩放解码（声明也随之落 sRGB），但全分辨率
+//! 档与小图仍整图解码、且未做块级局部取像；印刷母版仍是待接通的路径。
 
 use crate::domain::Result;
 use std::path::Path;
@@ -106,6 +109,70 @@ pub fn embedded_icc_bytes(path: &Path) -> Result<Option<Vec<u8>>> {
     Ok(extract_embedded_icc(&mut file, file_len))
 }
 
+/// 缓存像素沿用源数值（标准解码）时，缓存如实声明源自己的配置。
+/// 判定不了、或配置不是 RGB 时返回 None：宁可留一张没有声明的缓存，也不替它猜一个身份。
+pub fn source_profile_bytes_for_cache(original: &Path) -> Option<Vec<u8>> {
+    rgb_only(embedded_icc_bytes(original).ok().flatten())
+}
+
+/// 只有结构可读、且色彩空间标记确实是 RGB 的配置，才允许写进 RGB 像素的声明里。
+fn rgb_only(icc: Option<Vec<u8>>) -> Option<Vec<u8>> {
+    let icc = icc?;
+    (valid_icc_structure(&icc) && icc.get(16..20) == Some(b"RGB ")).then_some(icc)
+}
+
+/// 缩放解码显式把像素映射到 sRGB 后，缓存要标注的就是这份 sRGB 配置。
+#[cfg(target_os = "macos")]
+pub fn srgb_cache_profile_bytes() -> Option<Vec<u8>> {
+    native_transform::srgb_profile_bytes().ok()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn srgb_cache_profile_bytes() -> Option<Vec<u8>> {
+    None
+}
+
+/// 内存里的一份图片字节 → 可核对的 RGB 源配置；容器读不懂、结构不完整或不是 RGB 都返回 None。
+pub fn declared_rgb_profile(bytes: &[u8]) -> Option<Vec<u8>> {
+    rgb_only(extract_embedded_icc(
+        &mut std::io::Cursor::new(bytes),
+        bytes.len() as u64,
+    ))
+}
+
+/// 交给模型的像素必须有确定身份：无标签 JPEG 会被接收方当成 sRGB 解读，
+/// 所以这里只做一件事——把有明确 RGB 声明的像素真正落到 sRGB，并如实标上 sRGB。
+/// 说不清身份的（旧缓存、平台解码）保留数值、不补标签，也不假装已经变换过。
+/// 返回值是给上传 JPEG 补的标签，None 表示这份上传件没有可声明的身份。
+pub fn normalize_upload_pixels(
+    pixels: &mut [u8],
+    width: usize,
+    height: usize,
+    source_icc: Option<&[u8]>,
+) -> Result<Option<Vec<u8>>> {
+    let Some(source_icc) = source_icc else {
+        return Ok(None);
+    };
+    #[cfg(target_os = "macos")]
+    {
+        let target = srgb_cache_profile_bytes().ok_or_else(|| {
+            crate::domain::AppError::new(
+                "COLOR_SRGB_UNAVAILABLE",
+                "系统未提供 sRGB 配置，上传像素不猜测色彩身份",
+            )
+        })?;
+        if source_icc != target {
+            native_transform::transform_rgb8(source_icc, &target, pixels, width, height)?;
+        }
+        Ok(Some(target))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (pixels, width, height);
+        Ok(Some(source_icc.to_vec()))
+    }
+}
+
 use std::io::{Read, Seek, SeekFrom};
 const MAX_ICC_BYTES: usize = 32 * 1024 * 1024;
 const MAX_METADATA_RECORDS: usize = 4096;
@@ -130,21 +197,39 @@ fn be32(bytes: &[u8], offset: usize) -> Option<usize> {
     Some(u32::from_be_bytes(bytes.get(offset..offset.checked_add(4)?)?.try_into().ok()?) as usize)
 }
 
+#[derive(Default)]
+struct ProfileScan {
+    present: bool,
+    complete: bool,
+}
+
 fn extract_embedded_icc<R: Read + Seek>(reader: &mut R, file_len: u64) -> Option<Vec<u8>> {
+    extract_profile_scan(reader, file_len, &mut ProfileScan::default())
+}
+
+fn extract_profile_scan<R: Read + Seek>(
+    reader: &mut R,
+    file_len: u64,
+    scan: &mut ProfileScan,
+) -> Option<Vec<u8>> {
     let header = read_at(reader, file_len, 0, 8)?;
     if header.starts_with(&[0xff, 0xd8]) {
-        extract_jpeg_icc(reader, file_len)
+        extract_jpeg_icc(reader, file_len, scan)
     } else if header == b"\x89PNG\r\n\x1a\n" {
-        extract_png_icc(reader, file_len)
+        extract_png_icc(reader, file_len, scan)
     } else if header.starts_with(b"II*\0") || header.starts_with(b"MM\0*") {
-        extract_tiff_icc(reader, file_len, &header)
+        extract_tiff_icc(reader, file_len, &header, scan)
     } else {
         // BigTIFF、HEIF 和相机 RAW 的 profile 需由其专用解码器处理。
         None
     }
 }
 
-fn extract_jpeg_icc<R: Read + Seek>(reader: &mut R, file_len: u64) -> Option<Vec<u8>> {
+fn extract_jpeg_icc<R: Read + Seek>(
+    reader: &mut R,
+    file_len: u64,
+    scan: &mut ProfileScan,
+) -> Option<Vec<u8>> {
     let mut position = 2;
     let mut total = None;
     let mut chunks = std::collections::BTreeMap::new();
@@ -159,6 +244,7 @@ fn extract_jpeg_icc<R: Read + Seek>(reader: &mut R, file_len: u64) -> Option<Vec
             continue;
         }
         if matches!(marker[1], 0xda | 0xd9) {
+            scan.complete = true;
             break;
         }
         if matches!(marker[1], 0x01 | 0xd0..=0xd7) {
@@ -177,6 +263,7 @@ fn extract_jpeg_icc<R: Read + Seek>(reader: &mut R, file_len: u64) -> Option<Vec
         if marker[1] == 0xe2 {
             let data = read_at(reader, file_len, position + 4, length - 2)?;
             if data.starts_with(b"ICC_PROFILE\0") {
+                scan.present = true;
                 if data.len() < 14 {
                     return None;
                 }
@@ -199,6 +286,9 @@ fn extract_jpeg_icc<R: Read + Seek>(reader: &mut R, file_len: u64) -> Option<Vec
         }
         position = end;
     }
+    if !scan.complete {
+        return None;
+    }
     let total = total?;
     if chunks.len() != total as usize || collected == 0 {
         return None;
@@ -210,7 +300,11 @@ fn extract_jpeg_icc<R: Read + Seek>(reader: &mut R, file_len: u64) -> Option<Vec
     Some(icc)
 }
 
-fn extract_png_icc<R: Read + Seek>(reader: &mut R, file_len: u64) -> Option<Vec<u8>> {
+fn extract_png_icc<R: Read + Seek>(
+    reader: &mut R,
+    file_len: u64,
+    scan: &mut ProfileScan,
+) -> Option<Vec<u8>> {
     let mut position = 8u64;
     for _ in 0..MAX_METADATA_RECORDS {
         let header = read_at(reader, file_len, position, 8)?;
@@ -220,6 +314,7 @@ fn extract_png_icc<R: Read + Seek>(reader: &mut R, file_len: u64) -> Option<Vec<
             return None;
         }
         if &header[4..8] == b"iCCP" {
+            scan.present = true;
             let data = read_at(reader, file_len, position + 8, length)?;
             let name_end = data.iter().position(|byte| *byte == 0)?;
             if !(1..=79).contains(&name_end) || *data.get(name_end + 1)? != 0 {
@@ -234,6 +329,7 @@ fn extract_png_icc<R: Read + Seek>(reader: &mut R, file_len: u64) -> Option<Vec<
         }
         // iCCP 应在像素数据之前；不读取、解压 IDAT。
         if matches!(&header[4..8], b"IDAT" | b"IEND") {
+            scan.complete = true;
             return None;
         }
         position = end;
@@ -245,6 +341,7 @@ fn extract_tiff_icc<R: Read + Seek>(
     reader: &mut R,
     file_len: u64,
     header: &[u8],
+    scan: &mut ProfileScan,
 ) -> Option<Vec<u8>> {
     let little = header.starts_with(b"II");
     let u16_at = |data: &[u8], offset: usize| -> Option<u16> {
@@ -280,6 +377,7 @@ fn extract_tiff_icc<R: Read + Seek>(
     )?;
     for entry in entries[..count * 12].chunks_exact(12) {
         if u16_at(entry, 0)? == 34675 {
+            scan.present = true;
             // TIFF/EP ICCProfile 为 UNDEFINED 字节数组，不在像素数据中搜索 acsp。
             if !matches!(u16_at(entry, 2)?, 1 | 7) {
                 return None;
@@ -291,6 +389,7 @@ fn extract_tiff_icc<R: Read + Seek>(
             return read_at(reader, file_len, u32_at(entry, 8)? as u64, size);
         }
     }
+    scan.complete = true;
     None
 }
 
@@ -686,6 +785,369 @@ pub mod native_transform {
     }
 }
 
+// ── G2-③ 色彩管理检视：源空间判定 → 显示器变换 ──
+
+/// 缓存预览像素所在的源色彩空间结论。判定只看容器魔数与 ICC 结构，不认文件扩展名。
+#[derive(Debug, PartialEq, Eq)]
+pub enum SourceSpace {
+    /// 原文件嵌入且结构合法的 ICC，字节可直接交给原生 CMM。
+    Profile { icc: Vec<u8>, description: String },
+    /// 容器可解析且确认没有嵌入 ICC：按 sRGB 处理，但结论要说明这是假定。
+    AssumedSrgb,
+    /// 读不出可靠源空间：不猜，把原因交给界面说明。
+    Rejected {
+        status: &'static str,
+        detail: String,
+    },
+}
+
+/// 只判定原文件的源色彩空间，不据此推断旧缓存的像素空间。
+pub fn source_space_for_preview(original: &Path) -> SourceSpace {
+    use std::io::Read;
+    let mut file = match std::fs::File::open(original) {
+        Ok(file) => file,
+        Err(error) => {
+            return SourceSpace::Rejected {
+                status: "source_missing",
+                detail: format!("原文件无法打开：{error}"),
+            };
+        }
+    };
+    let mut magic = [0_u8; 8];
+    let read = match file.read(&mut magic) {
+        Ok(read) => read,
+        Err(error) => {
+            return SourceSpace::Rejected {
+                status: "source_missing",
+                detail: format!("原文件读取失败：{error}"),
+            };
+        }
+    };
+    // 短文件也按已有字节判断：JPEG 只占 2 字节，PNG 占 8 字节。
+    let head = &magic[..read];
+    let parseable = head.starts_with(&[0xff, 0xd8])
+        || head.starts_with(b"\x89PNG\r\n\x1a\n")
+        || head.starts_with(b"II*\0")
+        || head.starts_with(b"MM\0*");
+    if !parseable {
+        return SourceSpace::Rejected {
+            status: "container_unsupported",
+            detail: "该容器暂不支持读取嵌入色彩配置（HEIF、RAW、BigTIFF 等）".to_owned(),
+        };
+    }
+    let Ok(metadata) = file.metadata() else {
+        return SourceSpace::Rejected {
+            status: "source_missing",
+            detail: "原文件信息读取失败".to_owned(),
+        };
+    };
+    let mut scan = ProfileScan::default();
+    match extract_profile_scan(&mut file, metadata.len(), &mut scan) {
+        None if scan.present || !scan.complete => SourceSpace::Rejected {
+            status: "profile_invalid",
+            detail: "色彩配置分段或容器元数据不完整，不能按无配置处理".into(),
+        },
+        None => SourceSpace::AssumedSrgb,
+        Some(icc) if valid_icc_structure(&icc) => SourceSpace::Profile {
+            description: parse_icc_description(&icc),
+            icc,
+        },
+        Some(icc) => SourceSpace::Rejected {
+            status: "profile_invalid",
+            detail: format!("嵌入色彩配置 {} 字节未通过结构校验", icc.len()),
+        },
+    }
+}
+
+/// 色彩管理渲染结论：状态自解释；没有真正变换时不回传与源相同的像素。
+#[derive(Debug)]
+pub struct ManagedRender {
+    /// transformed / assumed_srgb = 已变换；其余为未变换的原因代码。
+    pub status: &'static str,
+    pub detail: Option<String>,
+    pub source_profile: String,
+    pub display_profile: String,
+    pub jpeg: Option<Vec<u8>>,
+}
+
+impl ManagedRender {
+    fn stopped(
+        status: &'static str,
+        detail: String,
+        source_profile: String,
+        display_profile: String,
+    ) -> Self {
+        Self {
+            status,
+            detail: Some(detail),
+            source_profile,
+            display_profile,
+            jpeg: None,
+        }
+    }
+}
+
+/// 判定好的两侧色彩配置与状态。缓存预览重渲染与全分辨率原图渲染共用同一次判定和同一套
+/// 状态码，否则两条链路会各说各话地解释"为什么没变换"。Err 里已带回可直接上屏的说明。
+#[cfg(target_os = "macos")]
+pub struct RenderPlan {
+    pub source_icc: Vec<u8>,
+    pub display_icc: Vec<u8>,
+    pub source_profile: String,
+    pub display_profile: String,
+    pub status: &'static str,
+}
+
+#[cfg(target_os = "macos")]
+pub fn plan_managed_render(
+    original: &Path,
+    display_icc: crate::domain::Result<Vec<u8>>,
+) -> std::result::Result<RenderPlan, ManagedRender> {
+    let display_icc = match display_icc {
+        Ok(icc) if valid_icc_structure(&icc) && icc.get(16..20) == Some(b"RGB ") => icc,
+        Ok(icc) => {
+            return Err(ManagedRender::stopped(
+                "display_unavailable",
+                format!("显示器色彩配置 {} 字节未通过结构校验", icc.len()),
+                "无法确定".to_owned(),
+                "不可用".to_owned(),
+            ));
+        }
+        Err(error) => {
+            return Err(ManagedRender::stopped(
+                "display_unavailable",
+                error.message,
+                "无法确定".to_owned(),
+                "不可用".to_owned(),
+            ));
+        }
+    };
+    let display_desc = parse_icc_description(&display_icc);
+    let assumed = "未嵌入色彩配置（按 sRGB 假定）".to_owned();
+    let (source_icc, source_desc, status) = match source_space_for_preview(original) {
+        SourceSpace::Profile { icc, description } => (icc, description, "transformed"),
+        SourceSpace::AssumedSrgb => match native_transform::srgb_profile_bytes() {
+            Ok(icc) => (icc, assumed, "assumed_srgb"),
+            Err(error) => {
+                return Err(ManagedRender::stopped(
+                    "transform_failed",
+                    error.message,
+                    assumed,
+                    display_desc,
+                ));
+            }
+        },
+        SourceSpace::Rejected { status, detail } => {
+            return Err(ManagedRender::stopped(
+                status,
+                detail,
+                "无法确定".to_owned(),
+                display_desc,
+            ));
+        }
+    };
+    if source_icc.get(16..20) != Some(b"RGB ") {
+        return Err(ManagedRender::stopped(
+            "profile_unsupported",
+            "当前显式色彩检视只支持 RGB 源配置".to_owned(),
+            source_desc,
+            display_desc,
+        ));
+    }
+    Ok(RenderPlan {
+        source_icc,
+        display_icc,
+        source_profile: source_desc,
+        display_profile: display_desc,
+        status,
+    })
+}
+
+/// 变换后的像素已经是显示器色彩空间的数值，但不带配置的 JPEG 会被渲染端当成 sRGB **再管一次**，
+/// 同一次转换做两遍，颜色反而错得更远。把作为目标的那份显示器 ICC 写成 APP2 段，渲染端再管理
+/// 时使用实际输出的色彩空间；窗口所在显示器不同时，系统仍需按该标记进行映射。
+pub fn tag_jpeg_with_icc(jpeg: &[u8], icc: &[u8]) -> crate::domain::Result<Vec<u8>> {
+    if !jpeg.starts_with(&[0xFF, 0xD8]) {
+        return Err(crate::domain::AppError::new(
+            "NOT_JPEG",
+            "变换结果不是有效 JPEG，无法写入色彩配置",
+        ));
+    }
+    // ICC JPEG 约定：每段最多 65519 字节配置数据，序号与总数各占一个字节。
+    const CHUNK: usize = 65519;
+    if icc.is_empty() || icc.len() > CHUNK * 255 {
+        return Err(crate::domain::AppError::new(
+            "ICC_TOO_LARGE",
+            "色彩配置无法装入有界 JPEG ICC 段",
+        ));
+    }
+    let count = icc.len().div_ceil(CHUNK);
+    let mut out = Vec::with_capacity(jpeg.len() + icc.len() + count * 18);
+    out.extend_from_slice(&jpeg[..2]);
+    for (index, chunk) in icc.chunks(CHUNK).enumerate() {
+        out.extend_from_slice(&[0xFF, 0xE2]);
+        out.extend_from_slice(&((chunk.len() + 16) as u16).to_be_bytes());
+        out.extend_from_slice(b"ICC_PROFILE\0");
+        out.extend_from_slice(&[(index + 1) as u8, count as u8]);
+        out.extend_from_slice(chunk);
+    }
+    out.extend_from_slice(&jpeg[2..]);
+    Ok(out)
+}
+
+/// 从原图解码并应用方向，保持 16-bit 变换精度，到显示用 JPEG 编码时才降到 8-bit。
+/// 适合屏幕与全分辨率共用此路径，不解释来源不明的旧缓存像素。
+#[cfg(target_os = "macos")]
+pub(crate) fn render_source_jpeg(
+    original: &std::path::Path,
+    source_icc: &[u8],
+    display_icc: &[u8],
+    max_edge: u32,
+    expected_sha256: Option<&str>,
+) -> Result<Vec<u8>> {
+    use crate::domain::AppError;
+    use image::ImageDecoder;
+    use std::io::Read;
+    if max_edge == 0 || max_edge > 30_000 {
+        return Err(AppError::new("INSPECTION_LIMIT", "渲染尺寸无效"));
+    }
+    let metadata = std::fs::metadata(original)?;
+    if !metadata.is_file() || metadata.len() > 64 * 1024 * 1024 {
+        return Err(AppError::new(
+            "INSPECTION_LIMIT",
+            "原图超过色彩检视文件上限",
+        ));
+    }
+    let mut bytes = vec![];
+    std::fs::File::open(original)?
+        .take(64 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > 64 * 1024 * 1024 {
+        return Err(AppError::new(
+            "INSPECTION_LIMIT",
+            "原图超过色彩检视文件上限",
+        ));
+    }
+    if let Some(expected) = expected_sha256 {
+        use sha2::{Digest, Sha256};
+        if format!("{:x}", Sha256::digest(&bytes)) != expected {
+            return Err(AppError::new(
+                "FILE_CHANGED",
+                "实际解码的原图字节与登记版本不一致",
+            ));
+        }
+    }
+    if let Some(icc) = extract_embedded_icc(&mut std::io::Cursor::new(&bytes), bytes.len() as u64)
+        && icc != source_icc
+    {
+        return Err(AppError::new("FILE_CHANGED", "解码快照与源色彩配置不一致"));
+    }
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(256 * 1024 * 1024);
+    limits.max_image_width = Some(30_000);
+    limits.max_image_height = Some(30_000);
+    reader.limits(limits);
+    let mut decoder = reader
+        .into_decoder()
+        .map_err(|e| AppError::new("DECODE", e.to_string()))?;
+    let (width, height) = decoder.dimensions();
+    if matches!(
+        decoder.color_type(),
+        image::ColorType::Rgb32F | image::ColorType::Rgba32F
+    ) {
+        return Err(AppError::new(
+            "COLOR_PRECISION_UNSUPPORTED",
+            "浮点或 HDR 源尚未接入显示映射，未生成色彩检视",
+        ));
+    }
+    if width == 0 || height == 0 || u64::from(width) * u64::from(height) > 32_000_000 {
+        return Err(AppError::new(
+            "INSPECTION_LIMIT",
+            "原图超过色彩检视像素上限",
+        ));
+    }
+    let orientation = decoder
+        .orientation()
+        .map_err(|e| AppError::new("DECODE", e.to_string()))?;
+    let mut bitmap = image::DynamicImage::from_decoder(decoder)
+        .map_err(|e| AppError::new("DECODE", e.to_string()))?;
+    bitmap.apply_orientation(orientation);
+    if bitmap.width().max(bitmap.height()) > max_edge {
+        bitmap = bitmap.thumbnail(max_edge, max_edge);
+    }
+    let alpha = bitmap.color().has_alpha().then(|| {
+        bitmap
+            .to_rgba16()
+            .pixels()
+            .map(|p| p[3])
+            .collect::<Vec<_>>()
+    });
+    let rgb = bitmap.into_rgb16();
+    let (width, height) = rgb.dimensions();
+    let mut pixels = rgb.into_raw();
+    crate::color_engine::native_transform::transform_rgb16(
+        source_icc,
+        display_icc,
+        &mut pixels,
+        width as usize,
+        height as usize,
+    )?;
+    // 在目标显示色彩空间合成白底；透明区域不因丢 alpha 变黑。
+    if let Some(alpha) = alpha {
+        for (rgb, alpha) in pixels.chunks_exact_mut(3).zip(alpha) {
+            let alpha = u64::from(alpha);
+            for channel in rgb {
+                *channel = ((u64::from(*channel) * alpha + 65535 * (65535 - alpha) + 32767) / 65535)
+                    as u16;
+            }
+        }
+    }
+    let managed = image::RgbImage::from_raw(
+        width,
+        height,
+        pixels
+            .into_iter()
+            .map(|v| ((u32::from(v) + 128) / 257) as u8)
+            .collect(),
+    )
+    .ok_or_else(|| AppError::new("DECODE", "变换后缓冲尺寸不匹配"))?;
+    let mut jpeg = vec![];
+    image::DynamicImage::ImageRgb8(managed)
+        .write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+            &mut jpeg, 92,
+        ))
+        .map_err(|e| AppError::new("ENCODE", e.to_string()))?;
+    crate::color_engine::tag_jpeg_with_icc(&jpeg, display_icc)
+}
+
+/// 显式色彩预览只从原图生成，拒绝推断旧缓存的像素色彩身份。
+#[cfg(target_os = "macos")]
+pub fn render_managed_preview(
+    original: &Path,
+    display_icc: crate::domain::Result<Vec<u8>>,
+) -> ManagedRender {
+    let plan = match plan_managed_render(original, display_icc) {
+        Ok(plan) => plan,
+        Err(stopped) => return stopped,
+    };
+    match render_source_jpeg(original, &plan.source_icc, &plan.display_icc, 1400, None) {
+        Ok(jpeg) => ManagedRender {
+            status: plan.status,
+            detail: None,
+            source_profile: plan.source_profile,
+            display_profile: plan.display_profile,
+            jpeg: Some(jpeg),
+        },
+        Err(error) => ManagedRender::stopped(
+            "transform_failed",
+            error.message,
+            plan.source_profile,
+            plan.display_profile,
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -697,6 +1159,7 @@ mod tests {
         let size = icc.len() as u32;
         icc[..4].copy_from_slice(&size.to_be_bytes());
         icc[36..40].copy_from_slice(b"acsp");
+        icc[16..20].copy_from_slice(b"RGB ");
         icc[128..132].copy_from_slice(&1u32.to_be_bytes());
         icc[132..136].copy_from_slice(b"desc");
         icc[136..140].copy_from_slice(&144u32.to_be_bytes());
@@ -889,6 +1352,408 @@ mod tests {
         let result = read_source_profile(temp.path()).unwrap().unwrap();
         assert!(result.valid);
         assert_eq!(result.description, "Test Profile");
+    }
+
+    // ── G2-③ 色彩管理预览：源空间判定 ──
+
+    fn jpeg_with(icc: Option<&[u8]>) -> Vec<u8> {
+        let mut bytes = vec![0xff, 0xd8];
+        if let Some(icc) = icc {
+            bytes.extend(jpeg_segment(1, 1, icc));
+        }
+        bytes.extend([0xff, 0xd9]);
+        bytes
+    }
+
+    fn written(name: &str, bytes: &[u8]) -> tempfile::NamedTempFile {
+        let file = tempfile::Builder::new().prefix(name).tempfile().unwrap();
+        std::fs::write(file.path(), bytes).unwrap();
+        file
+    }
+
+    fn solid_jpeg(color: [u8; 3]) -> Vec<u8> {
+        let image = image::RgbImage::from_pixel(8, 8, image::Rgb(color));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(image)
+            .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Jpeg)
+            .unwrap();
+        bytes
+    }
+
+    #[cfg(target_os = "macos")]
+    fn system_icc(name: &str) -> Vec<u8> {
+        let path = std::path::Path::new("/System/Library/ColorSync/Profiles").join(name);
+        std::fs::read(&path).unwrap_or_else(|error| panic!("缺少系统色彩配置 {name}: {error}"))
+    }
+
+    #[test]
+    fn tagged_jpeg_declares_the_display_profile_so_pixels_are_not_managed_twice() {
+        let icc = profile();
+        let original = solid_jpeg([220, 40, 30]);
+        let tagged = tag_jpeg_with_icc(&original, &icc).unwrap();
+        assert_eq!(extract(&tagged), Some(icc.clone()));
+        assert_eq!(
+            embedded_icc_bytes(written("tagged.jpg", &tagged).path()).unwrap(),
+            Some(icc.clone())
+        );
+        // 标注只加头部，不改像素：解码出来仍是变换后的那一份数值。
+        let decoded = image::load_from_memory(&tagged).unwrap().to_rgb8();
+        assert_eq!(
+            decoded.get_pixel(4, 4).0.to_vec(),
+            image::load_from_memory(&original)
+                .unwrap()
+                .to_rgb8()
+                .get_pixel(4, 4)
+                .0
+                .to_vec()
+        );
+        // 不是 JPEG、或配置超出 JPEG ICC 分段上限时明确失败，绝不交出一张"没标注却自称已管理"的图。
+        assert_eq!(
+            tag_jpeg_with_icc(b"not a jpeg", &icc).unwrap_err().code,
+            "NOT_JPEG"
+        );
+        assert_eq!(
+            tag_jpeg_with_icc(&original, &vec![0u8; 65519 * 255 + 1])
+                .unwrap_err()
+                .code,
+            "ICC_TOO_LARGE"
+        );
+    }
+
+    #[test]
+    fn cache_declaration_refuses_to_guess_a_space() {
+        let plain = written("plain.jpg", &solid_jpeg([10, 20, 30]));
+        assert_eq!(
+            source_profile_bytes_for_cache(plain.path()),
+            None,
+            "源没有嵌入配置时不替缓存编一个身份"
+        );
+
+        let rgb = written(
+            "rgb.jpg",
+            &tag_jpeg_with_icc(&solid_jpeg([10, 20, 30]), &profile()).unwrap(),
+        );
+        assert_eq!(
+            source_profile_bytes_for_cache(rgb.path()).as_deref(),
+            Some(profile().as_slice()),
+            "合法 RGB 配置原样交给缓存"
+        );
+
+        let mut gray = profile();
+        gray[16..20].copy_from_slice(b"GRAY");
+        let gray_file = written(
+            "gray.jpg",
+            &tag_jpeg_with_icc(&solid_jpeg([10, 20, 30]), &gray).unwrap(),
+        );
+        assert_eq!(
+            source_profile_bytes_for_cache(gray_file.path()),
+            None,
+            "结构完整但不是 RGB 的配置，不写进 RGB 缓存"
+        );
+    }
+
+    #[test]
+    fn upload_pixels_without_a_known_space_stay_unclaimed() {
+        let mut pixels = vec![210, 40, 60, 1, 2, 3];
+        let before = pixels.clone();
+        assert_eq!(
+            normalize_upload_pixels(&mut pixels, 2, 1, None).unwrap(),
+            None,
+            "核对不出身份时不交出标签"
+        );
+        assert_eq!(pixels, before, "身份不明时一个像素都不动");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn upload_pixels_already_in_srgb_are_not_managed_twice() {
+        let srgb = srgb_cache_profile_bytes().expect("系统 sRGB 配置缺失时本用例不成立");
+        let mut pixels = vec![200, 100, 50, 12, 200, 9];
+        let before = pixels.clone();
+        let declared = normalize_upload_pixels(&mut pixels, 2, 1, Some(&srgb)).unwrap();
+        assert_eq!(declared.as_deref(), Some(srgb.as_slice()));
+        assert_eq!(pixels, before, "已经是 sRGB 的数值不再变换一次");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn upload_pixels_from_a_wide_gamut_source_are_transformed_once_and_declare_srgb() {
+        let path = std::path::Path::new("/System/Library/ColorSync/Profiles/Display P3.icc");
+        assert!(path.is_file(), "广色源配置缺失时本用例不成立");
+        let p3 = std::fs::read(path).unwrap();
+        let srgb = srgb_cache_profile_bytes().expect("系统 sRGB 配置缺失时本用例不成立");
+        let mut pixels = vec![200, 100, 50, 12, 200, 9];
+        let before = pixels.clone();
+        let declared = normalize_upload_pixels(&mut pixels, 2, 1, Some(&p3))
+            .unwrap()
+            .expect("可核对的广色域源必须落到确定身份");
+        assert_eq!(
+            declared, srgb,
+            "上传件声明的是真正落到的 sRGB，而不是源配置"
+        );
+        assert_ne!(pixels, before, "P3 数值确实被变换过，不是只换个标签");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_profile_the_engine_cannot_load_fails_instead_of_faking_a_label() {
+        // 结构可读、标记也是 RGB，但引擎认不出的配置不能换来一份"看起来已管理"的上传件。
+        let fake = profile();
+        let mut pixels = vec![200, 100, 50];
+        let before = pixels.clone();
+        let error = normalize_upload_pixels(&mut pixels, 1, 1, Some(&fake)).unwrap_err();
+        assert_eq!(
+            error.code, "COLOR_PROFILE_INVALID",
+            "变换失败要如实报错：{error:?}"
+        );
+        assert_eq!(pixels, before, "报错时不留下半成品像素");
+    }
+
+    #[test]
+    fn declared_rgb_profile_accepts_only_a_loadable_rgb_declaration() {
+        let tagged = tag_jpeg_with_icc(&solid_jpeg([10, 20, 30]), &profile()).unwrap();
+        assert_eq!(
+            declared_rgb_profile(&tagged).as_deref(),
+            Some(profile().as_slice())
+        );
+        assert_eq!(declared_rgb_profile(&solid_jpeg([10, 20, 30])), None);
+        let mut cmyk = profile();
+        cmyk[16..20].copy_from_slice(b"CMYK");
+        let cmyk_file = tag_jpeg_with_icc(&solid_jpeg([10, 20, 30]), &cmyk).unwrap();
+        assert_eq!(
+            declared_rgb_profile(&cmyk_file),
+            None,
+            "非 RGB 声明不做任何 RGB 承诺"
+        );
+    }
+
+    #[test]
+    fn large_icc_roundtrips_across_multiple_jpeg_segments_without_changing_pixels() {
+        let mut icc = profile();
+        icc.resize(150_000, 0);
+        let len = icc.len() as u32;
+        icc[..4].copy_from_slice(&len.to_be_bytes());
+        let original = solid_jpeg([20, 100, 180]);
+        let tagged = tag_jpeg_with_icc(&original, &icc).unwrap();
+        assert_eq!(extract(&tagged), Some(icc));
+        assert_eq!(
+            image::load_from_memory(&tagged).unwrap().to_rgb8(),
+            image::load_from_memory(&original).unwrap().to_rgb8()
+        );
+        assert_eq!(
+            tagged
+                .windows(12)
+                .filter(|s| *s == b"ICC_PROFILE\0")
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn explicit_view_rejects_non_rgb_source_profile_without_publishing_pixels() {
+        let mut icc = system_icc("sRGB Profile.icc");
+        icc[16..20].copy_from_slice(b"CMYK");
+        let bytes = tag_jpeg_with_icc(&solid_jpeg([20, 100, 180]), &icc).unwrap();
+        let file = written("unsupported.jpg", &bytes);
+        let rendered = render_managed_preview(file.path(), Ok(system_icc("sRGB Profile.icc")));
+        assert_eq!(rendered.status, "profile_unsupported");
+        assert!(rendered.jpeg.is_none());
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn profiled_original_is_converted_once_and_float_sources_are_not_silently_clipped() {
+        let p3 = system_icc("Display P3.icc");
+        let srgb = system_icc("sRGB Profile.icc");
+        let bytes = tag_jpeg_with_icc(&solid_jpeg([64, 128, 128]), &p3).unwrap();
+        let original = written("p3.jpg", &bytes);
+        let rendered = render_managed_preview(original.path(), Ok(srgb.clone()));
+        assert_eq!(rendered.status, "transformed");
+        let pixel = image::load_from_memory(rendered.jpeg.as_ref().unwrap())
+            .unwrap()
+            .to_rgb8()
+            .get_pixel(4, 4)
+            .0;
+        // P3→sRGB 此样本红通道约32：不转换约64，重复转换会压到接近0。
+        assert!(
+            (20..=45).contains(&pixel[0]) && pixel[1] > 118 && pixel[2] > 118,
+            "{pixel:?}"
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let float = dir.path().join("float.tiff");
+        image::Rgb32FImage::from_pixel(4, 4, image::Rgb([0.5, 1.2, 0.3]))
+            .save(&float)
+            .unwrap();
+        assert_eq!(
+            render_source_jpeg(&float, &srgb, &srgb, 1400, None)
+                .unwrap_err()
+                .code,
+            "COLOR_PRECISION_UNSUPPORTED"
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn incomplete_icc_chunks_are_not_assumed_to_be_an_untagged_srgb_source() {
+        let srgb = system_icc("sRGB Profile.icc");
+        let mut bytes = tag_jpeg_with_icc(&solid_jpeg([20, 100, 180]), &srgb).unwrap();
+        let marker = bytes
+            .windows(12)
+            .position(|w| w == b"ICC_PROFILE\0")
+            .unwrap();
+        bytes[marker + 13] = 2; // 声明两段，实际仅有第一段。
+        let file = written("incomplete.jpg", &bytes);
+        assert!(matches!(
+            source_space_for_preview(file.path()),
+            SourceSpace::Rejected {
+                status: "profile_invalid",
+                ..
+            }
+        ));
+        let rendered = render_managed_preview(file.path(), Ok(srgb));
+        assert_eq!(rendered.status, "profile_invalid");
+        assert!(rendered.jpeg.is_none());
+    }
+
+    #[test]
+    fn source_space_assumes_srgb_only_for_parseable_container_without_profile() {
+        // 容器可解析且确认没有嵌入 ICC 才允许假定；扩展名不参与判断。
+        let file = written("plain.jpg", &solid_jpeg([10, 20, 30]));
+        assert_eq!(
+            source_space_for_preview(file.path()),
+            SourceSpace::AssumedSrgb
+        );
+    }
+
+    #[test]
+    fn source_space_uses_the_embedded_profile_bytes_verbatim() {
+        let icc = profile();
+        let file = written("embedded.jpg", &jpeg_with(Some(&icc)));
+        match source_space_for_preview(file.path()) {
+            SourceSpace::Profile {
+                icc: found,
+                description,
+            } => {
+                assert_eq!(found, icc);
+                assert_eq!(description, "Test Profile");
+            }
+            other => panic!("应使用嵌入配置，实际 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn source_space_refuses_containers_it_cannot_read_instead_of_guessing() {
+        // HEIF 魔数与 BigTIFF 都读不出源空间：必须拒绝，不能按 sRGB 变换。
+        for (label, bytes) in [
+            ("heic", b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00".to_vec()),
+            ("bigtiff", b"II+\0\x08\0\x00\0".to_vec()),
+            ("unrecognised", vec![0x00, 0x01, 0x02]),
+        ] {
+            let file = written(label, &bytes);
+            let SourceSpace::Rejected { status, detail } = source_space_for_preview(file.path())
+            else {
+                panic!("{label} 应被拒绝");
+            };
+            assert_eq!(status, "container_unsupported", "{label}");
+            assert!(!detail.is_empty(), "{label}");
+        }
+    }
+
+    #[test]
+    fn source_space_separates_missing_original_from_invalid_profile() {
+        // 原文件失联与"有嵌入数据但结构损坏"是两回事，界面说的话不一样。
+        let missing = std::path::Path::new("/tmp/between-frames-definitely-absistent-20261104.bin");
+        assert!(matches!(
+            source_space_for_preview(missing),
+            SourceSpace::Rejected {
+                status: "source_missing",
+                ..
+            }
+        ));
+        let broken = written("broken.jpg", &jpeg_with(Some(&[0_u8; 50])));
+        let SourceSpace::Rejected { status, detail } = source_space_for_preview(broken.path())
+        else {
+            panic!("结构损坏的嵌入配置应被拒绝");
+        };
+        assert_eq!(status, "profile_invalid");
+        assert!(detail.contains("50"), "{detail}");
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn managed_preview_transforms_with_the_embedded_profile_and_leaves_original_untouched() {
+        let srgb = system_icc("sRGB Profile.icc");
+        let original_bytes = tag_jpeg_with_icc(&solid_jpeg([220, 40, 30]), &srgb).unwrap();
+        let file = written("source.jpg", &original_bytes);
+        let outcome = render_managed_preview(file.path(), Ok(srgb.clone()));
+        assert_eq!(outcome.status, "transformed", "{:?}", outcome.detail);
+        let jpeg = outcome.jpeg.clone().unwrap();
+        assert!(
+            outcome.source_profile.to_ascii_lowercase().contains("srgb"),
+            "{}",
+            outcome.source_profile
+        );
+        // 输出的数值已是显示器色彩空间，必须标注成那份显示器配置；不标注就会被渲染端
+        // 当作 sRGB 再管一次，同一次转换做两遍，颜色反而更错。
+        assert_eq!(
+            embedded_icc_bytes(written("managed.jpg", &jpeg).path()).unwrap(),
+            Some(srgb.clone())
+        );
+        let pixels = image::load_from_memory(&jpeg).unwrap().to_rgb8();
+        let red = pixels.get_pixel(4, 4);
+        // sRGB → sRGB 近似恒等：变换不应把颜色搬走，只证明像素确实经过原生 CMM 输出。
+        assert!(
+            (red[0] as i16 - 220).abs() <= 12 && red[1] < 70 && red[2] < 70,
+            "{red:?}"
+        );
+        // 检视只读：原文件字节一个都不该变。
+        assert_eq!(std::fs::read(file.path()).unwrap(), original_bytes);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn managed_preview_says_the_source_space_was_assumed_when_nothing_is_embedded() {
+        let srgb = system_icc("sRGB Profile.icc");
+        let file = written("plain.jpg", &solid_jpeg([30, 200, 40]));
+        let outcome = render_managed_preview(file.path(), Ok(srgb));
+        assert_eq!(outcome.status, "assumed_srgb", "{:?}", outcome.detail);
+        assert!(outcome.jpeg.is_some());
+        assert!(
+            outcome.source_profile.contains("假定"),
+            "{}",
+            outcome.source_profile
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn managed_preview_returns_no_pixels_when_nothing_was_transformed() {
+        // 未变换却回传同一份缓存字节，就是"看起来成功、其实没变换"的老毛病。
+        let srgb = system_icc("sRGB Profile.icc");
+        let heic = written("photo.heic", b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00");
+        let outcome = render_managed_preview(heic.path(), Ok(srgb.clone()));
+        assert_eq!(outcome.status, "container_unsupported");
+        assert!(outcome.jpeg.is_none());
+        assert!(outcome.detail.unwrap().contains("HEIF"));
+
+        let display = written("plain.jpg", &jpeg_with(None));
+        let error = crate::domain::AppError::new("COLOR_DISPLAY_UNAVAILABLE", "拿不到显示器配置");
+        let outcome = render_managed_preview(display.path(), Err(error));
+        assert_eq!(outcome.status, "display_unavailable");
+        assert!(outcome.jpeg.is_none());
+        assert_eq!(outcome.detail.as_deref(), Some("拿不到显示器配置"));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn managed_preview_reports_the_transformer_own_failure() {
+        // 结构自检通过、原生 CMM 却建不出色彩空间：失败原因必须原样上屏。
+        let file = written("fake.jpg", &jpeg_with(Some(&profile())));
+        let outcome = render_managed_preview(file.path(), Ok(system_icc("sRGB Profile.icc")));
+        assert_eq!(outcome.status, "transform_failed", "{:?}", outcome);
+        assert!(outcome.jpeg.is_none());
+        assert!(!outcome.detail.unwrap().is_empty());
     }
 }
 

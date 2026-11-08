@@ -284,6 +284,188 @@ pub async fn retry_import(
         .await
 }
 
+/// 图库派生文件的修复入口：命令只从库里取记录、把活交给 image_pipeline。
+///
+/// 原图只读：这条路径只写图库自己生成的缓存，且只写按这张照片的内容指纹命名的那两份；
+/// 本来就是好的文件不动，色彩标注也就不会被白白重写一遍。
+#[tauri::command]
+pub async fn repair_photo_previews(
+    state: State<'_, Backend>,
+    project_id: String,
+    photo_ids: Vec<String>,
+) -> Result<Vec<image_pipeline::PreviewRepair>> {
+    if photo_ids.is_empty() {
+        return Err(AppError::new("INVALID_INPUT", "没有要点名的照片"));
+    }
+    if photo_ids.len() > 200 {
+        return Err(AppError::new("INVALID_INPUT", "一次最多修复 200 张"));
+    }
+    state.store.get(&project_id).await?;
+    let mut jobs: Vec<image_pipeline::PreviewJob> = vec![];
+    for photo_id in &photo_ids {
+        jobs.push(preview_job(&state.store.pool, &project_id, photo_id).await?);
+    }
+    let cache = state.cache.clone();
+    tokio::task::spawn_blocking(move || image_pipeline::repair_preview_jobs(&cache, &jobs))
+        .await
+        .map_err(|error| AppError::new("BACKGROUND", error.to_string()))
+}
+
+/// 要读哪两份派生文件、原图在哪，一律取自库里在册的这条记录：调用方只能点名照片，给不了路径。
+async fn preview_job(
+    pool: &sqlx::SqlitePool,
+    project_id: &str,
+    photo_id: &str,
+) -> Result<image_pipeline::PreviewJob> {
+    let row = sqlx::query_as::<_, (String, String, String, String, String)>(
+        "SELECT filename,original_path,content_sha256,thumbnail_path,preview_path FROM photos WHERE project_id=? AND id=?",
+    )
+    .bind(project_id)
+    .bind(photo_id)
+    .fetch_optional(pool)
+    .await?;
+    let Some((filename, original_path, content_sha256, thumbnail_path, preview_path)) = row else {
+        return Err(AppError::new("NOT_FOUND", "照片不在该项目中"));
+    };
+    Ok(image_pipeline::PreviewJob {
+        photo_id: photo_id.to_owned(),
+        filename,
+        original_path,
+        content_sha256,
+        thumbnail_path,
+        preview_path,
+    })
+}
+
+/// 单张本地文件的只读体检：与真动手重算前那道门同一套判断（含原图内容比对），但一个字节都不写。
+///
+/// 检视器先问清"这张现在能不能读"，再决定要不要摆重算按钮，不对着好文件推销修复。
+#[tauri::command]
+pub async fn inspect_photo_preview(
+    state: State<'_, Backend>,
+    project_id: String,
+    photo_id: String,
+) -> Result<image_pipeline::PreviewRepair> {
+    state.store.get(&project_id).await?;
+    let job = preview_job(&state.store.pool, &project_id, &photo_id).await?;
+    let cache = state.cache.clone();
+    tokio::task::spawn_blocking(move || image_pipeline::inspect_preview_job(&cache, &job))
+        .await
+        .map_err(|error| AppError::new("BACKGROUND", error.to_string()))
+}
+
+/// 整项目派生预览的只读点名：不改一个字节，只数出还有几张读不出来、各是因为什么。
+#[tauri::command]
+pub async fn audit_photo_previews(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<serde_json::Value> {
+    crate::preview_audit::audit(&state.store, &state.cache, &project_id).await
+}
+
+/// 整项目坏预览的一键修好：先点名，再按一轮的上限重算，修完把这台机器上各份方案的口径一起跟上。
+#[tauri::command]
+pub async fn repair_all_broken_previews(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<serde_json::Value> {
+    let report = crate::preview_audit::repair_all(&state.store, &state.cache, &project_id).await?;
+    if report["repaired"].as_i64().unwrap_or_default() > 0 {
+        for event in [
+            crate::commands_generated::DRAFT_UPDATED_EVENT,
+            crate::commands_generated::AGENT_TASK_UPDATED_EVENT,
+        ] {
+            let _ = app.emit(event, serde_json::json!({"projectId": project_id}));
+        }
+    }
+    Ok(report)
+}
+
+/// 审稿方案口径的就地重算：只把库里存着的画面事实和现在的预览再比一遍，不经过模型、不上传照片。
+///
+/// 算完仍旧只往 `tool_calls` 里写一条回执，然后按方案更新广播一次：界面上的口径本来就是从回执
+/// 投影出来的，这里再算一份数字只会造出两处真相。
+#[tauri::command]
+pub async fn recheck_draft_evidence(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    draft_id: String,
+) -> Result<serde_json::Value> {
+    let summary = crate::agent::recheck::run(&state.store, &project_id, &draft_id).await?;
+    for event in [
+        crate::commands_generated::DRAFT_UPDATED_EVENT,
+        crate::commands_generated::AGENT_TASK_UPDATED_EVENT,
+    ] {
+        let _ = app.emit(event, serde_json::json!({"projectId": project_id}));
+    }
+    Ok(summary)
+}
+
+/// 接着把整项目还欠着的方案口径补上：修完预览那一轮算不完时，不必重新修图也能往下算。
+/// 仍旧只往回执表里写，不经过模型、不上传照片，也不占项目修订号。
+#[tauri::command]
+pub async fn recheck_project_draft_evidence(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<serde_json::Value> {
+    let report = crate::agent::recheck::project(
+        &state.store,
+        &project_id,
+        crate::agent::recheck::ROUND_LIMIT,
+    )
+    .await?;
+    if report["recheckedDrafts"].as_i64().unwrap_or_default() > 0 {
+        for event in [
+            crate::commands_generated::DRAFT_UPDATED_EVENT,
+            crate::commands_generated::AGENT_TASK_UPDATED_EVENT,
+        ] {
+            let _ = app.emit(event, serde_json::json!({"projectId": project_id}));
+        }
+    }
+    Ok(report)
+}
+
+/// 点名"当年没记像素版本"的历史观察：只读比对本地文件，一个字节都不改，也不问模型。
+#[tauri::command]
+pub async fn audit_observation_pixel_versions(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<serde_json::Value> {
+    crate::observation_backfill::audit(&state.store, &project_id).await
+}
+
+/// 把能证明的那部分观察补上像素版本，并让收着这些照片的方案口径跟着重算。
+/// 全程本地：不上传照片、不花额度，补的也只是能核对上"当初发出去的就是这一份字节"的那部分。
+#[tauri::command]
+pub async fn backfill_observation_pixel_versions(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<serde_json::Value> {
+    let report = crate::observation_backfill::apply(
+        &state.store,
+        &project_id,
+        crate::observation_backfill::APPLY_LIMIT,
+    )
+    .await?;
+    if report["recheck"]["recheckedDrafts"]
+        .as_i64()
+        .unwrap_or_default()
+        > 0
+    {
+        for event in [
+            crate::commands_generated::DRAFT_UPDATED_EVENT,
+            crate::commands_generated::AGENT_TASK_UPDATED_EVENT,
+        ] {
+            let _ = app.emit(event, serde_json::json!({"projectId": project_id}));
+        }
+    }
+    Ok(report)
+}
+
 #[tauri::command]
 pub async fn relink_photo(
     app: AppHandle,
@@ -323,6 +505,67 @@ pub async fn relink_photo(
     } else {
         Ok(None)
     }
+}
+
+/// 外部编辑器就地改写原图后，把这条记录更新成文件现在真正的内容。
+/// 要读哪个文件由库里这条记录决定，界面只能点名照片，不能指定路径。
+#[tauri::command]
+pub async fn apply_photo_change(
+    state: State<'_, Backend>,
+    project_id: String,
+    photo_id: String,
+    expected_revision: i64,
+) -> Result<Project> {
+    let source = state.store.photo_source(&project_id, &photo_id).await?;
+    let cache = state.cache.clone();
+    let prepared = tokio::task::spawn_blocking(move || image_pipeline::prepare(&source, &cache))
+        .await
+        .map_err(|error| AppError::new("BACKGROUND", error.to_string()))??;
+    state
+        .store
+        .apply_photo_change(&project_id, &photo_id, &prepared, expected_revision)
+        .await
+}
+
+/// 只读：把每条记录自己的 XMP 边车与台账判断并列出来，不占修订号、不落库。
+#[tauri::command]
+pub async fn sidecar_proposals(
+    state: State<'_, Backend>,
+    project_id: String,
+) -> Result<Vec<crate::sidecar::SidecarProposal>> {
+    let rows = state.store.sidecar_rows(&project_id).await?;
+    // 边车是一堆小文件，读它们放进阻塞线程，不占着界面这条异步通道。
+    let found = tokio::task::spawn_blocking(move || crate::sidecar::proposals_for(&rows))
+        .await
+        .map_err(|error| AppError::new("BACKGROUND", error.to_string()))??;
+    Ok(found)
+}
+
+#[tauri::command]
+pub async fn apply_sidecar_judgement(
+    state: State<'_, Backend>,
+    project_id: String,
+    photo_id: String,
+    expected_revision: i64,
+) -> Result<Project> {
+    state
+        .store
+        .apply_sidecar_judgement(&project_id, &photo_id, expected_revision)
+        .await
+}
+
+/// 一键回填：只把"本地还空着"的那部分边车判断落库，人工判过的一条不碰。
+/// 界面仍然只递项目与期望修订号——要读哪些边车由台账自己说了算。
+#[tauri::command]
+pub async fn backfill_sidecar_judgements(
+    state: State<'_, Backend>,
+    project_id: String,
+    expected_revision: i64,
+) -> Result<crate::sidecar::SidecarBatchOutcome> {
+    state
+        .store
+        .backfill_sidecar_judgements(&project_id, expected_revision)
+        .await
 }
 
 #[tauri::command]
@@ -1087,15 +1330,93 @@ pub async fn pub_generate(
     state.store.generate_from_sequence(&project_id, &cmd).await
 }
 
+#[tauri::command]
+pub async fn pub_preflight(
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+    min_ppi: Option<i64>,
+) -> Result<crate::publication_preflight::PreflightReport> {
+    state
+        .store
+        .publication_preflight(&project_id, &publication_id, min_ppi)
+        .await
+}
+
+/// 审稿面板：这一本的审阅意见。读侧不带修订号、不进幂等队列。
+#[tauri::command]
+pub async fn pub_review(
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+) -> Result<serde_json::Value> {
+    crate::agent::comments::publication_review(&state.store, &project_id, &publication_id).await
+}
+
+/// 审阅意见的写侧：挂到当前版本、明确解决或重开；回执是刷新后的整份清单。
+#[tauri::command]
+pub async fn pub_review_write(
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+    request: crate::agent::comments::PublicationReviewRequest,
+) -> Result<serde_json::Value> {
+    crate::agent::comments::publication_review_write(
+        &state.store,
+        &project_id,
+        &publication_id,
+        request,
+    )
+    .await
+}
+
+/// 交付出口：把这本的版面导成一张可核对的作品清单 CSV。
+#[tauri::command]
+pub async fn pub_export(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    publication_id: String,
+) -> Result<Option<ExportReceipt>> {
+    let layout = state
+        .store
+        .publication_layout(&project_id, &publication_id)
+        .await?;
+    let csv = crate::publication_export::render_worklist(&layout);
+    let filename = crate::publication_export::file_name(&layout.publication.title);
+    tokio::task::spawn_blocking(move || {
+        let Some(path) = app
+            .dialog()
+            .file()
+            .set_title("导出作品清单（选择新的文件名）")
+            .set_file_name(&filename)
+            .add_filter("作品清单 CSV", &["csv"])
+            .blocking_save_file()
+        else {
+            return Ok(None);
+        };
+        let path = path
+            .into_path()
+            .map_err(|error| AppError::new("INVALID_PATH", error.to_string()))?;
+        crate::publication_export::write(&csv, &path).map(Some)
+    })
+    .await
+    .map_err(|error| AppError::new("BACKGROUND", error.to_string()))?
+}
+
 // ── G2-③ 色彩管理检视开关 ──
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ColorManagedPreview {
-    pub data_url: String,
+    pub pixel_source: &'static str,
+    /// 已变换 = transformed / assumed_srgb；其余状态说明为什么没变换。
+    pub status: &'static str,
+    pub detail: Option<String>,
     pub source_profile: String,
     pub display_profile: String,
-    pub transform_applied: bool,
+    /// 未做变换时为 None：界面保持缓存原样，不假装换过颜色。
+    pub data_url: Option<String>,
 }
 
 #[tauri::command]
@@ -1104,90 +1425,40 @@ pub async fn get_color_managed_preview(
     project_id: String,
     photo_id: String,
 ) -> Result<ColorManagedPreview> {
-    // 读取预览路径
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT p.preview_path, p.original_path FROM photos p JOIN projects j ON j.id=p.project_id WHERE p.project_id=? AND p.id=? AND j.deleted_at IS NULL",
-    )
-    .bind(&project_id)
-    .bind(&photo_id)
-    .fetch_optional(&state.store.pool)
-    .await?;
-    let (preview_path, original_path) =
-        row.ok_or_else(|| crate::domain::AppError::new("NOT_FOUND", "照片不存在"))?;
-
-    // 读取源 ICC profile
-    let source_profile =
-        crate::color_engine::read_source_profile(std::path::Path::new(&original_path))
-            .ok()
-            .flatten();
-
-    // 获取显示器 profile
-    let display_icc = crate::color_engine::native_transform::display_profile_bytes()
-        .unwrap_or_else(|_| Vec::new());
-
-    let source_desc = source_profile
-        .as_ref()
-        .map(|p| p.description.clone())
-        .unwrap_or_else(|| "未嵌入（假定为 sRGB）".to_owned());
-    let display_desc = "显示器色彩空间".to_owned();
-
-    // 如果有源 profile 且显示器 profile 可用，做变换
-    let (data_url, transform_applied) =
-        if let (Some(_src), true) = (&source_profile, !display_icc.is_empty()) {
-            // 读预览 JPEG → 解码 → 变换 → 重编码
-            let preview_bytes = std::fs::read(&preview_path).map_err(|e| {
-                crate::domain::AppError::new("RESOURCE_MISSING", format!("预览缺失：{e}"))
-            })?;
-            let img = image::load_from_memory(&preview_bytes)
-                .map_err(|e| crate::domain::AppError::new("DECODE", e.to_string()))?;
-            let rgb = img.to_rgb8();
-            let (w, h) = rgb.dimensions();
-            let mut pixels = rgb.as_raw().clone();
-            match crate::color_engine::native_transform::transform_rgb8(
-                &Vec::new(),
-                &display_icc,
-                &mut pixels,
-                w as usize,
-                h as usize,
-            ) {
-                Ok(()) => {
-                    let transformed = image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
-                        crate::domain::AppError::new("VALIDATION_ERROR", "像素重建失败")
-                    })?;
-                    let mut out = Vec::new();
-                    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 92);
-                    image::DynamicImage::ImageRgb8(transformed)
-                        .write_with_encoder(encoder)
-                        .map_err(|e| crate::domain::AppError::new("ENCODE", e.to_string()))?;
-                    (
-                        format!("data:image/jpeg;base64,{}", base64_encode(&out)),
-                        true,
-                    )
-                }
-                Err(_) => {
-                    // 变换失败回退到原始预览
-                    (
-                        format!("data:image/jpeg;base64,{}", base64_encode(&preview_bytes)),
-                        false,
-                    )
-                }
-            }
-        } else {
-            (
-                format!(
-                    "data:image/jpeg;base64,{}",
-                    base64_encode(&std::fs::read(&preview_path).unwrap_or_default())
-                ),
-                false,
-            )
-        };
+    let outcome =
+        crate::photo_inspection::display_managed_preview(&state.store, &project_id, &photo_id)
+            .await?;
 
     Ok(ColorManagedPreview {
-        data_url,
-        source_profile: source_desc,
-        display_profile: display_desc,
-        transform_applied,
+        pixel_source: "original",
+        status: outcome.status,
+        detail: outcome.detail,
+        source_profile: outcome.source_profile,
+        display_profile: outcome.display_profile,
+        data_url: outcome
+            .jpeg
+            .map(|bytes| format!("data:image/jpeg;base64,{}", base64_encode(&bytes))),
     })
+}
+
+/// 100% 检视的按显示器渲染：与预览开关同一套状态契约。`path` 为 None 表示没变换，
+/// 界面继续显示缓存预览的重渲染版本，不会拿没变换的原图冒充显示器色彩。
+#[tauri::command]
+pub async fn get_display_managed_inspection(
+    app: AppHandle,
+    state: State<'_, Backend>,
+    project_id: String,
+    photo_id: String,
+) -> Result<crate::photo_inspection::ManagedInspection> {
+    let outcome =
+        crate::photo_inspection::display_managed_inspection(&state.store, &project_id, &photo_id)
+            .await?;
+    if let Some(path) = &outcome.path {
+        app.asset_protocol_scope()
+            .allow_file(std::path::Path::new(path))
+            .map_err(|error| AppError::new("ASSET_SCOPE", error.to_string()))?;
+    }
+    Ok(outcome)
 }
 
 fn base64_encode(data: &[u8]) -> String {

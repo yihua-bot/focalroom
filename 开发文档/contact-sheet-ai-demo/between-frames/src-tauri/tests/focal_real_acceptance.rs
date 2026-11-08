@@ -391,7 +391,10 @@ async fn unified_300_real_photos_three_boards_and_followup() {
         };
         hashes.push(prepared.hash.clone());
         assert!(
-            db.insert_photo(&project.id, &prepared).await.unwrap(),
+            db.insert_photo(&project.id, &prepared)
+                .await
+                .unwrap()
+                .inserted(),
             "真实素材重复，不能虚报 300 张候选"
         );
     }
@@ -445,6 +448,7 @@ async fn unified_300_real_photos_three_boards_and_followup() {
             goal,
             selected_photo_ids: vec![],
             focus_photo_ids: vec![],
+            detail_photo_ids: vec![],
             target_count: 20,
             budget,
             consent_id,

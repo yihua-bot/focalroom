@@ -71,6 +71,8 @@ pub enum TaskCommand {
         goal: String,
         selected_photo_ids: Vec<String>,
         focus_photo_ids: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        detail_photo_ids: Vec<String>,
         target_count: u32,
         budget: Budget,
         consent_id: Option<i64>,
@@ -284,9 +286,12 @@ pub struct ChatJobView {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskView {
+    pub memory_trace: Value,
+    pub photo_judgments: Vec<Value>,
     pub queue_cancellation: Option<String>,
     pub vision_recovery: Option<super::vision_recovery::VisionRecoveryView>,
     pub creative_references: Vec<Value>,
+    pub knowledge_searches: Vec<Value>,
     pub draft_lineage: Vec<Value>,
     pub preference_proposals: Vec<Value>,
     pub continuation: Value,
@@ -294,6 +299,7 @@ pub struct TaskView {
     pub conversation: bool,
     pub messages: Vec<crate::focal_chat::ConversationMessage>,
     pub budget_issue: Option<super::budget::BudgetIssue>,
+    pub draft_evidence: Vec<Value>,
     pub canvas_task: bool,
     pub canvas_source: Option<super::task_scope::CanvasTaskSource>,
     pub board_drafts: Vec<crate::canvas::Board>,

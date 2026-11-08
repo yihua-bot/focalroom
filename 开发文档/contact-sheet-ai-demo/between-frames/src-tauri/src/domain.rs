@@ -133,6 +133,39 @@ pub struct ImportFailure {
     pub message: String,
 }
 
+/// 同一来源路径、内容指纹已不同的记录：外部编辑器就地改写原图后就是这个形状。
+/// 只报事实，不动库——落不落库由人在界面上决定。
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PhotoChange {
+    pub photo_id: String,
+    pub path: String,
+    pub filename: String,
+    pub previous_sha256: String,
+    pub incoming_sha256: String,
+    pub previous_width: i64,
+    pub previous_height: i64,
+    pub previous_size: i64,
+    pub incoming_width: i64,
+    pub incoming_height: i64,
+    pub incoming_size: i64,
+}
+
+/// 一张源文件走导入通道后的去向。三种都要能说出来：静默把"内容变了"当成"新增一张"
+/// 会让同一个文件在项目里留下两条记录，选片状态各说各话。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ImportOutcome {
+    Inserted { photo_id: String },
+    Duplicate { photo_id: String },
+    Changed(PhotoChange),
+}
+
+impl ImportOutcome {
+    pub fn inserted(&self) -> bool {
+        matches!(self, Self::Inserted { .. })
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportJob {
@@ -143,6 +176,7 @@ pub struct ImportJob {
     pub total: usize,
     pub imported: usize,
     pub skipped: usize,
+    pub changes: Vec<PhotoChange>,
     pub failures: Vec<ImportFailure>,
 }
 

@@ -38,6 +38,8 @@ fn session(user: &str) -> String {
     json!({"pending":null,"session":{"token":"f".repeat(64),"user":{"id":user,"email":"fixture@example.test","name":"Fixture"}}}).to_string()
 }
 struct Server {
+    detail: Arc<AtomicBool>,
+    detail_uploads: Arc<AtomicU32>,
     queue: Arc<AtomicBool>,
     opt_ins: Arc<AtomicU32>,
     cancels: Arc<AtomicU32>,
@@ -76,6 +78,10 @@ impl Server {
         let poll_count = polls.clone();
         let mode = Arc::new(AtomicU32::new(0));
         let queue = Arc::new(AtomicBool::new(false));
+        let detail = Arc::new(AtomicBool::new(false));
+        let detail_enabled = detail.clone();
+        let detail_uploads = Arc::new(AtomicU32::new(0));
+        let detail_count = detail_uploads.clone();
         let queue_enabled = queue.clone();
         let opt_ins = Arc::new(AtomicU32::new(0));
         let opted = opt_ins.clone();
@@ -149,6 +155,15 @@ impl Server {
                         }
                         let parts = body["input"][0]["content"].as_array().unwrap();
                         let with_images = parts.iter().any(|part| part["type"] == "input_image");
+                        if parts
+                            .iter()
+                            .any(|part| part["type"] == "input_image" && part["detail"] == "high")
+                        {
+                            assert!(
+                                headers.contains("x-focalroom-detail-consent: preview1400-high-v1")
+                            );
+                            detail_count.fetch_add(1, Ordering::SeqCst);
+                        }
                         // 聊天任务不挂图也不带工具，但仍走同一条"只提交一次、凭编号只读核对"的
                         // 异步链路——所以这里按正文分流，而不是假定异步提交一定是视觉任务。
                         is_chat_job.store(!with_images, Ordering::SeqCst);
@@ -308,7 +323,7 @@ impl Server {
                     account_count.fetch_add(1, Ordering::SeqCst);
                     (
                         200,
-                        json!({"policy":"deepseek-flash-v1","enabled":true,"verified":true,"available":250000,"recovery":if queue_enabled.load(Ordering::SeqCst){json!({"enabled":true,"policy":"encrypted-queue-v1","maxQueueSeconds":600})}else{json!({"enabled":false})}}),
+                        json!({"policy":"deepseek-flash-v1","enabled":true,"verified":true,"available":250000,"visionDetail":if detail_enabled.load(Ordering::SeqCst){json!({"policy":"preview1400-high-v1","maxEdge":1400,"maxPhotosPerTask":4})}else{Value::Null},"recovery":if queue_enabled.load(Ordering::SeqCst){json!({"enabled":true,"policy":"encrypted-queue-v1","maxQueueSeconds":600})}else{json!({"enabled":false})}}),
                     )
                 } else {
                     assert!(headers.starts_with("get /api/v2/auth/me "));
@@ -335,6 +350,8 @@ impl Server {
             }
         });
         Self {
+            detail,
+            detail_uploads,
             queue,
             opt_ins,
             cancels,
@@ -818,6 +835,20 @@ async fn recovery_fixture_with_options(
     String,
     Task,
 ) {
+    recovery_fixture_with_detail(run_to_unknown, allow_queued_recovery, false).await
+}
+async fn recovery_fixture_with_detail(
+    run_to_unknown: bool,
+    allow_queued_recovery: bool,
+    detail: bool,
+) -> (
+    tempfile::TempDir,
+    between_frames_lib::db::Store,
+    Server,
+    Arc<Vault>,
+    String,
+    Task,
+) {
     use between_frames_lib::{agent::runtime::AgentEngine, db::Store, image_pipeline};
     let root = tempfile::tempdir().unwrap();
     let db = Store::open(&root.path().join("recovery.sqlite"))
@@ -837,6 +868,7 @@ async fn recovery_fixture_with_options(
     let p = db.get(&p.id).await.unwrap();
     let server = Server::new();
     server.queue.store(allow_queued_recovery, Ordering::SeqCst);
+    server.detail.store(detail, Ordering::SeqCst);
     let vault = Arc::new(Vault::default());
     vault.write("", &session("user-a")).unwrap();
     let engine = AgentEngine::hosted(
@@ -857,13 +889,18 @@ async fn recovery_fixture_with_options(
         .request(AgentRequest {
             request_id: uuid::Uuid::new_v4().to_string(),
             project_id: p.id.clone(),
-            command: if allow_queued_recovery {
+            command: if allow_queued_recovery || detail {
                 TaskCommand::StartConversation {
-                    allow_queued_recovery: true,
+                    allow_queued_recovery,
                     expected_account_id: Some("user-a".into()),
                     goal: "观察后恢复".into(),
                     selected_photo_ids: vec![],
                     focus_photo_ids: vec![],
+                    detail_photo_ids: if detail {
+                        vec![p.photos[0].id.clone()]
+                    } else {
+                        vec![]
+                    },
                     target_count: 1,
                     budget: Budget {
                         max_cloud_images: 1,
@@ -889,7 +926,7 @@ async fn recovery_fixture_with_options(
         .await
         .unwrap();
     *server.main_reply.lock().unwrap() = Some(
-        json!({"status":"completed","output":[{"type":"function_call","call_id":"inspect-once","name":"inspect_photos","arguments":json!({"project_id":p.id,"photo_ids":[p.photos[0].id]}).to_string()}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}),
+        json!({"status":"completed","output":[{"type":"function_call","call_id":"inspect-once","name":if detail {"inspect_photo_detail"} else {"inspect_photos"},"arguments":json!({"project_id":p.id,"photo_ids":[p.photos[0].id]}).to_string()}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}),
     );
     server.mode.store(9, Ordering::SeqCst);
     if run_to_unknown {
@@ -900,6 +937,92 @@ async fn recovery_fixture_with_options(
         assert_eq!(server.calls.load(Ordering::SeqCst), 2);
     }
     (root, db, server, vault, p.id, task)
+}
+
+#[tokio::test]
+async fn detail_requires_live_gateway_capability_before_reservation_or_upload() {
+    use between_frames_lib::agent::runtime::AgentEngine;
+    let (_root, db, server, vault, _project, task) =
+        recovery_fixture_with_detail(false, false, true).await;
+    server.detail.store(false, Ordering::SeqCst);
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+    );
+    assert_eq!(
+        engine.run(&task.id).await.unwrap_err().code,
+        "AI_DETAIL_UNAVAILABLE"
+    );
+    assert_eq!(server.detail_uploads.load(Ordering::SeqCst), 0);
+    assert_eq!(server.calls.load(Ordering::SeqCst), 1, "只发送了文字编排轮");
+    let reserved: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM agent_steps WHERE task_id=? AND kind='vision_reserved'",
+    )
+    .bind(&task.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    assert_eq!(reserved, 0);
+}
+
+#[tokio::test]
+async fn detail_unknown_result_recovers_with_its_profile_and_never_reuploads() {
+    use between_frames_lib::{
+        agent::{self, runtime::AgentEngine},
+        db::Store,
+    };
+    let (root, db, server, vault, project, task) =
+        recovery_fixture_with_detail(true, false, true).await;
+    assert_eq!(server.detail_uploads.load(Ordering::SeqCst), 1);
+    let before = db.get(&project).await.unwrap();
+    db.pool.close().await;
+    let db = Store::open(&root.path().join("recovery.sqlite"))
+        .await
+        .unwrap();
+    server.detail.store(false, Ordering::SeqCst); // 已发送结果只读核对不依赖当前开放状态。
+    server.mode.store(6, Ordering::SeqCst);
+    let engine = AgentEngine::hosted(
+        db.clone(),
+        Arc::new(CloudAuth::new(&server.origin, "fixture", vault).unwrap()),
+    );
+    assert_eq!(
+        engine
+            .query_vision_result(&project, &task.id)
+            .await
+            .unwrap()
+            .state,
+        "completed"
+    );
+    assert_eq!(server.detail_uploads.load(Ordering::SeqCst), 1);
+    engine
+        .request(AgentRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            project_id: project.clone(),
+            command: TaskCommand::ResumeTask {
+                task_id: task.id.clone(),
+                budget: task.budget.clone(),
+            },
+        })
+        .await
+        .unwrap();
+    engine.run(&task.id).await.unwrap();
+    assert_eq!(server.detail_uploads.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        agent::projection(&db, &project).await.unwrap().tasks[0]
+            .usage
+            .cloud_images,
+        1
+    );
+    let versions: Vec<String> = sqlx::query_scalar("SELECT prompt_version FROM photo_observations")
+        .fetch_all(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(versions.len(), 1);
+    assert!(versions[0].starts_with("m3-vision-detail1400-q90-v1@"));
+    assert_eq!(
+        serde_json::to_value(db.get(&project).await.unwrap()).unwrap(),
+        serde_json::to_value(before).unwrap()
+    );
 }
 
 #[tokio::test]
@@ -1277,6 +1400,7 @@ async fn queue_capability_change_is_rejected_before_delegation_or_image_reservat
                 goal: "不应开始".into(),
                 selected_photo_ids: vec![],
                 focus_photo_ids: vec![],
+                detail_photo_ids: vec![],
                 target_count: 1,
                 budget: task.budget.clone(),
                 consent_id: task.consent_id,

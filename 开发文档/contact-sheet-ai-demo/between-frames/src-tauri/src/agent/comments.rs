@@ -55,9 +55,37 @@ async fn validate_anchor(
             Ok(())
         }
         "project" => Ok(()),
+        // 出版物锚点：线程只属于确实存在于该项目的那一本， revision 记的是提意见时那一版。
+        "publication" => {
+            let publication = anchor["publication_id"].as_str().unwrap_or("");
+            if publication.is_empty() {
+                return Err(AppError::new(
+                    "VALIDATION_ERROR",
+                    "出版物锚点缺少 publication_id",
+                ));
+            }
+            if !matches!(anchor["revision"].as_i64(), Some(value) if (0..=100_000).contains(&value))
+            {
+                return Err(AppError::new(
+                    "VALIDATION_ERROR",
+                    "出版物锚点缺少合法的版本号",
+                ));
+            }
+            let owned: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM publications WHERE id=? AND project_id=?")
+                    .bind(publication)
+                    .bind(project)
+                    .fetch_one(&mut **tx)
+                    .await
+                    .unwrap_or(0);
+            if owned != 1 {
+                return Err(AppError::new("PERMISSION_DENIED", "锚点出版物不属于此项目"));
+            }
+            Ok(())
+        }
         _ => Err(AppError::new(
             "VALIDATION_ERROR",
-            "锚点类型须为 photo 或 project",
+            "锚点类型须为 photo、project 或 publication",
         )),
     }
 }
@@ -213,4 +241,145 @@ pub async fn list_tx(
         }));
     }
     Ok(json!({"threads": threads, "notice": "评论为人工审稿记录；Agent 只读，不构成偏好证据"}))
+}
+
+/// 未解决的出版物审阅意见条数：定稿要跨过这些意见，必须先有人明确处理掉。
+pub(crate) async fn open_count_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    project_id: &str,
+    publication_id: &str,
+) -> Result<usize> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM comment_threads
+         WHERE project_id=? AND state='open'
+           AND json_extract(anchor_json,'$.type')='publication'
+           AND json_extract(anchor_json,'$.publication_id')=?",
+    )
+    .bind(project_id)
+    .bind(publication_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(count.max(0) as usize)
+}
+
+fn publication_of(anchor: &Value) -> Option<String> {
+    (anchor["type"] == "publication")
+        .then(|| anchor["publication_id"].as_str().unwrap_or("").to_owned())
+}
+
+async fn review_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    project_id: &str,
+    publication_id: &str,
+) -> Result<Value> {
+    let revision: Option<i64> =
+        sqlx::query_scalar("SELECT revision FROM publications WHERE id=? AND project_id=?")
+            .bind(publication_id)
+            .bind(project_id)
+            .fetch_optional(&mut **tx)
+            .await?;
+    let current =
+        revision.ok_or_else(|| AppError::new("NOT_FOUND", "出版物不存在或不属于此项目"))?;
+    let ids: Vec<String> = sqlx::query_scalar(
+        "SELECT id FROM comment_threads
+         WHERE project_id=?
+           AND json_extract(anchor_json,'$.type')='publication'
+           AND json_extract(anchor_json,'$.publication_id')=?
+         ORDER BY CASE state WHEN 'open' THEN 0 ELSE 1 END, updated_at DESC, id DESC
+         LIMIT 60",
+    )
+    .bind(project_id)
+    .bind(publication_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    let mut threads = Vec::with_capacity(ids.len());
+    for id in &ids {
+        let view = thread_view_tx(tx, id).await?;
+        threads.push(json!({
+            "id": view.id,
+            "revision": view.anchor["revision"].as_i64(),
+            "state": view.state,
+            "comments": view.comments,
+        }));
+    }
+    let open = threads
+        .iter()
+        .filter(|thread| thread["state"] == "open")
+        .count();
+    Ok(
+        json!({"publicationId": publication_id, "revision": current, "open": open, "threads": threads}),
+    )
+}
+
+/// 审稿面板读侧：只读通道，不带修订号、不进幂等队列。
+pub async fn publication_review(
+    store: &Store,
+    project_id: &str,
+    publication_id: &str,
+) -> Result<Value> {
+    let mut tx = store.pool.begin().await?;
+    let value = review_tx(&mut tx, project_id, publication_id).await?;
+    tx.commit().await?;
+    Ok(value)
+}
+
+/// 审稿面板写侧：`add` 挂在当前那一版上，`resolve`/`reopen` 明确表态这条意见处理过了。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    deny_unknown_fields,
+    tag = "action",
+    content = "data"
+)]
+pub enum PublicationReviewRequest {
+    Add { body: String },
+    Resolve { thread_id: String, resolved: bool },
+}
+
+pub async fn publication_review_write(
+    store: &Store,
+    project_id: &str,
+    publication_id: &str,
+    request: PublicationReviewRequest,
+) -> Result<Value> {
+    // 桌面本地身份：与 v2 通道同一个受信主体，审阅意见因此带上可核对的作者标签。
+    let author = betweenframes_local_domain::actor_label(&crate::v2_bridge::local_owner_principal(
+        "local-workspace",
+        project_id,
+    ));
+    let mut tx = store.pool.begin().await?;
+    let view = match &request {
+        PublicationReviewRequest::Add { body } => {
+            let revision: Option<i64> =
+                sqlx::query_scalar("SELECT revision FROM publications WHERE id=? AND project_id=?")
+                    .bind(publication_id)
+                    .bind(project_id)
+                    .fetch_optional(&mut *tx)
+                    .await?;
+            let current =
+                revision.ok_or_else(|| AppError::new("NOT_FOUND", "出版物不存在或不属于此项目"))?;
+            add_tx(
+                &mut tx,
+                project_id,
+                &author,
+                body,
+                &json!({"type": "publication", "publication_id": publication_id, "revision": current}),
+            )
+            .await?
+        }
+        PublicationReviewRequest::Resolve {
+            thread_id,
+            resolved,
+        } => resolve_tx(&mut tx, project_id, thread_id, *resolved).await?,
+    };
+    // 这条通道只管本出版物的意见：拿照片线程或别本的线程号来关，整条拒掉且不落库。
+    if publication_of(&view.anchor).as_deref() != Some(publication_id) {
+        return Err(AppError::new(
+            "PERMISSION_DENIED",
+            "这条讨论不属于当前出版物",
+        ));
+    }
+    let value = review_tx(&mut tx, project_id, publication_id).await?;
+    tx.commit().await?;
+    Ok(value)
 }

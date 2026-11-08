@@ -65,6 +65,7 @@ async fn start(
                 goal: "这两张如何形成观看节奏？".into(),
                 selected_photo_ids: scope,
                 focus_photo_ids: focus,
+                detail_photo_ids: vec![],
                 target_count: 2,
                 budget: Budget::default(),
                 consent_id: None,
@@ -97,7 +98,7 @@ async fn empty_project_can_discuss_photography_without_granting_legacy_tasks_emp
     let t = start(&db, &p, None, vec![], vec![]).await.unwrap();
     let context = ContextBuilder::build(&db, &t.id).await.unwrap();
     assert_eq!(context.layers["project"]["scope_count"], 0);
-    assert!(context.prompt_version.ends_with("+focal-2.1"));
+    assert!(context.prompt_version.ends_with("+focal-2.5"));
     answer(
         &db,
         &t,
@@ -354,6 +355,7 @@ async fn long_history_is_trimmed_to_current_context_budget_without_deleting_save
                 goal: "继续谈观看距离".into(),
                 selected_photo_ids: vec![],
                 focus_photo_ids: vec![],
+                detail_photo_ids: vec![],
                 target_count: 2,
                 budget: Budget {
                     max_context_tokens: baseline + 3000,
@@ -412,6 +414,7 @@ async fn exhausted_context_without_prior_history_pauses_instead_of_panicking_or_
                 goal: "讨论摄影".into(),
                 selected_photo_ids: vec![],
                 focus_photo_ids: vec![],
+                detail_photo_ids: vec![],
                 target_count: 2,
                 budget: Budget {
                     max_context_tokens: 128,
@@ -549,6 +552,7 @@ async fn read_only_conversation_preserves_large_reference_count_without_granting
                 goal: "讨论一本五百张照片的摄影书".into(),
                 selected_photo_ids: vec![],
                 focus_photo_ids: vec![],
+                detail_photo_ids: vec![],
                 target_count: 500,
                 budget: Budget::default(),
                 consent_id: None,

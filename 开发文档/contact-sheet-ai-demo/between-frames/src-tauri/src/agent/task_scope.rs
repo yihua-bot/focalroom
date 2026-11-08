@@ -44,9 +44,11 @@ pub const CANVAS_TOOLS: &[&str] = &[
     "finish_canvas_task",
 ];
 pub const CREATIVE_TOOLS: &[&str] = &[
+    "explain_photo_judgment",
     "read_creative_context",
     "fork_creative_draft",
     "search_photography_knowledge",
+    "inspect_photo_detail",
     "search_photographers",
     "get_photobook_structure",
     "compare_photography_series",
@@ -63,6 +65,8 @@ pub struct CanvasTaskSource {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TaskGrant {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detail_photo_ids: Vec<String>,
     pub version: u8,
     pub project_id: String,
     pub photo_ids: Vec<String>,
@@ -85,6 +89,7 @@ fn denied(message: &str) -> AppError {
 }
 fn defaults(task: &Task) -> TaskGrant {
     let mut grant = TaskGrant {
+        detail_photo_ids: vec![],
         version: 1,
         project_id: task.project_id.clone(),
         photo_ids: task.allowed_photo_ids.clone(),
@@ -100,6 +105,55 @@ fn defaults(task: &Task) -> TaskGrant {
     grant
 }
 pub async fn load(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<TaskGrant> {
+    let grant = load_for_projection(tx, task).await?;
+    if grant.tool_contract_sha256 != fingerprint(&ToolRegistry::model_specs_for_grant(&grant))
+        || grant.canvas_prompt_sha256
+            != grant
+                .canvas
+                .then(|| fingerprint(&json!(CANVAS_SYSTEM_PROMPT)))
+    {
+        return Err(AppError::new(
+            "RECOVERY_ERROR",
+            "任务授权与当前范围不一致，请重新委托",
+        ));
+    }
+    let has_detail = grant
+        .tools
+        .iter()
+        .any(|name| name == "inspect_photo_detail");
+    if has_detail == grant.detail_photo_ids.is_empty()
+        || grant.detail_photo_ids.len() > 4
+        || grant.detail_photo_ids.iter().collect::<HashSet<_>>().len()
+            != grant.detail_photo_ids.len()
+        || grant
+            .detail_photo_ids
+            .iter()
+            .any(|id| !task.allowed_photo_ids.contains(id))
+    {
+        return Err(AppError::new("RECOVERY_ERROR", "本次精查授权范围不一致"));
+    }
+    if has_detail {
+        let raw:Option<String>=sqlx::query_scalar("SELECT body_json FROM agent_steps WHERE task_id=? AND kind='detail_inspection_permission' ORDER BY id LIMIT 1")
+            .bind(&task.id).fetch_optional(&mut **tx).await?;
+        let permission: Value = raw
+            .and_then(|v| serde_json::from_str(&v).ok())
+            .unwrap_or(Value::Null);
+        if permission["photoIds"] != json!(grant.detail_photo_ids)
+            || permission["policy"] != "preview1400-high-v1"
+        {
+            return Err(AppError::new(
+                "RECOVERY_ERROR",
+                "精查授权不能由模型或任务记录自行扩大",
+            ));
+        }
+    }
+    Ok(grant)
+}
+/// 历史展示只读取冻结范围；当前提示词/工具兼容性仍由执行入口的 load 严格校验。
+pub(crate) async fn load_for_projection(
+    tx: &mut Transaction<'_, Sqlite>,
+    task: &Task,
+) -> Result<TaskGrant> {
     let row: Option<(String, String)> =
         sqlx::query_as("SELECT project_id,grant_json FROM agent_task_grants WHERE task_id=?")
             .bind(&task.id)
@@ -114,11 +168,6 @@ pub async fn load(tx: &mut Transaction<'_, Sqlite>, task: &Task) -> Result<TaskG
         || grant.photo_ids != task.allowed_photo_ids
         || grant.target_count != task.target_count
         || grant.version != 1
-        || grant.tool_contract_sha256 != fingerprint(&ToolRegistry::model_specs_for_grant(&grant))
-        || grant.canvas_prompt_sha256
-            != grant
-                .canvas
-                .then(|| fingerprint(&json!(CANVAS_SYSTEM_PROMPT)))
     {
         return Err(AppError::new(
             "RECOVERY_ERROR",
@@ -146,7 +195,7 @@ pub async fn bind(
     canvas: bool,
     source: Option<&CanvasTaskSource>,
 ) -> Result<()> {
-    bind_creative(tx, task, canvas, source, false).await
+    bind_creative(tx, task, canvas, source, false, &[]).await
 }
 pub async fn bind_creative(
     tx: &mut Transaction<'_, Sqlite>,
@@ -154,8 +203,25 @@ pub async fn bind_creative(
     canvas: bool,
     source: Option<&CanvasTaskSource>,
     creative: bool,
+    detail_photo_ids: &[String],
 ) -> Result<()> {
     let mut grant = defaults(task);
+    if !detail_photo_ids.is_empty() {
+        if !creative
+            || detail_photo_ids.len() > 4
+            || detail_photo_ids.iter().collect::<HashSet<_>>().len() != detail_photo_ids.len()
+            || detail_photo_ids
+                .iter()
+                .any(|id| !task.allowed_photo_ids.contains(id))
+        {
+            return Err(AppError::new(
+                "PERMISSION_DENIED",
+                "精查仅可明确指定本次范围内的 1–4 张照片",
+            ));
+        }
+        grant.detail_photo_ids = detail_photo_ids.to_vec();
+        grant.tools.push("inspect_photo_detail".into());
+    }
     if creative {
         // 仅托管账户具备云端知识身份；离线会话仍可检索本地方法札记。
         let cloud_knowledge = super::model_binding::load(tx, &task.id)
@@ -165,6 +231,7 @@ pub async fn bind_creative(
             CREATIVE_TOOLS
                 .iter()
                 .filter(|name| canvas || **name != "fork_creative_draft")
+                .filter(|name| **name != "inspect_photo_detail")
                 .filter(|name| {
                     cloud_knowledge
                         || !matches!(

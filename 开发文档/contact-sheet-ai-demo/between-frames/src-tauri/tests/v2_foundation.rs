@@ -102,8 +102,8 @@ async fn existing_local_schema_remains_authoritative_and_transactional() {
         .await
         .unwrap();
     assert_eq!(
-        migrations, 37,
-        "v2 切片经 0011–0037 新增迁移引入；既有 0001–0010 未改"
+        migrations, 38,
+        "v2 切片经 0011–0037 新增迁移引入，0038 只给本地观察缓存补图像版本指纹；既有 0001–0010 未改"
     );
     let parallel: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE 'local_%'",

@@ -131,6 +131,24 @@ impl OpenAiProvider {
             .as_ref()
             .map(|auth| super::knowledge::KnowledgeClient::new(auth.clone(), self.identity()))
     }
+    pub(crate) async fn require_detail_support(&self) -> Result<()> {
+        if let Some(auth) = &self.hosted {
+            let account = auth.ai_account().await?;
+            if self.hosted_account.as_deref() != Some(auth.account_id()?.as_str()) {
+                return Err(AppError::new("AUTH_CHANGED", "账户已改变，请重新委托"));
+            }
+            if account["visionDetail"]["policy"] != "preview1400-high-v1"
+                || account["visionDetail"]["maxEdge"] != 1400
+                || account["visionDetail"]["maxPhotosPerTask"] != 4
+            {
+                return Err(AppError::new(
+                    "AI_DETAIL_UNAVAILABLE",
+                    "当前服务尚未开放精查，未发送图片",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub fn is_hosted(&self) -> bool {
         self.hosted.is_some()
     }
@@ -327,6 +345,9 @@ impl OpenAiProvider {
                 .header("x-focalroom-image-consent", "granted");
         } else {
             request = request.bearer_auth(&self.api_key);
+        }
+        if hosted_async::has_high_detail(body) {
+            request = request.header("x-focalroom-detail-consent", "preview1400-high-v1");
         }
         let response = request.send().await.map_err(|e| {
             if self.is_hosted() {
@@ -533,7 +554,10 @@ impl OpenAiProvider {
         max_output_tokens: u32,
     ) -> Result<(Value, u32)> {
         let body = self.observation_body(brief, question, images, max_output_tokens)?;
-        self.parse_observation(&self.post(&body, None).await?)
+        self.observe_prepared(&body).await
+    }
+    pub(crate) async fn observe_prepared(&self, body: &Value) -> Result<(Value, u32)> {
+        self.parse_observation(&self.post(body, None).await?)
     }
     pub(crate) fn observation_body(
         &self,

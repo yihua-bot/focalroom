@@ -62,6 +62,7 @@ impl Fixture {
                     goal: "我希望这个项目保留留白和观看距离的变化".into(),
                     selected_photo_ids: scope,
                     focus_photo_ids: vec![],
+                    detail_photo_ids: vec![],
                     target_count: 20,
                     budget: Budget::default(),
                     consent_id: None,
@@ -511,7 +512,12 @@ async fn revision_context_preserves_frozen_decisions_discussion_and_hash_bound_o
             f.photos[0].clone(),
             json!({"photo_id":f.photos[0],"visible_facts":["generated fixture"],"interpretation":"test interpretation","uncertainty":"not real model quality"}),
         )],
+        image_versions: vec![],
         uploaded: 0,
+        dropped: vec![],
+        unreadable: vec![],
+        rebuilt: vec![],
+        unreadable_reasons: vec![],
         tokens: 0,
         consent_id: 0,
         cost_minor_usd: 0,
@@ -798,7 +804,12 @@ async fn selection_revision_context_freezes_partial_approval_feedback_and_observ
             f.photos[0].clone(),
             json!({"photo_id":f.photos[0],"visible_facts":["generated fixture"],"interpretation":"test only","uncertainty":"not real model quality"}),
         )],
+        image_versions: vec![],
         uploaded: 0,
+        dropped: vec![],
+        unreadable: vec![],
+        rebuilt: vec![],
+        unreadable_reasons: vec![],
         tokens: 0,
         consent_id: 0,
         cost_minor_usd: 0,
@@ -1422,6 +1433,19 @@ async fn confirmed_preference_is_human_deduplicated_retractable_and_account_scop
             .to_string()
             .contains("保留留白")
     );
+    let mut trace_tx = f.db.pool.begin().await.unwrap();
+    let captured = super::super::memory_trace::capture(
+        &mut trace_tx,
+        &context.layers["human_evidence"]["hypotheses"],
+    )
+    .await
+    .unwrap();
+    assert_eq!(captured[0]["confirmation"]["action"], "RememberPreference");
+    let saved_request: String=sqlx::query_scalar("SELECT request_id FROM memory_commands WHERE project_id=? AND changed=1 AND json_extract(command_json,'$.type')='RememberPreference' AND json_extract(command_json,'$.proposalId')=?")
+        .bind(&f.p).bind(&proposal).fetch_one(&mut *trace_tx).await.unwrap();
+    assert_eq!(captured[0]["confirmation"]["requestId"], saved_request);
+    assert_eq!(captured[0]["statusAtRead"], "confirmed");
+    trace_tx.rollback().await.unwrap();
     f.run(&a).await;
     f.finish(&a).await;
     let b = f
@@ -1540,6 +1564,16 @@ impl crate::agent::provider::ModelProvider for ThreeThreads {
                     }],
                 })
             };
+            if !records
+                .iter()
+                .any(|r| r.body["name"] == "search_photography_knowledge")
+                && !input.layers["creative"]["portfolio_method"].is_object()
+            {
+                return call(
+                    "search_photography_knowledge",
+                    json!({"query":"portfolio-curation-v1","limit":1}),
+                );
+            }
             let pages: Vec<_> = records
                 .iter()
                 .filter(|r| r.body["name"] == "list_photos")
@@ -1616,10 +1650,29 @@ async fn three_hundred_scope_three_twenty_photo_boards_use_actual_runtime_and_ke
     let view = store::projection(&f.db, &f.p).await.unwrap();
     assert_eq!(
         view.tasks[0].state, "review_ready",
-        "{}; usage={:?}",
-        view.tasks[0].reason, view.tasks[0].usage
+        "{}; usage={:?}; issue={:?}",
+        view.tasks[0].reason, view.tasks[0].usage, view.tasks[0].budget_issue
     );
     assert_eq!(view.tasks[0].board_drafts.len(), 3);
+    // 上下文归档可以省略布局细节，权威回执仍保留全部节点身份和坐标。
+    let receipts: Vec<String> = sqlx::query_scalar(
+        "SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name='place_photos_on_board'",
+    )
+    .bind(&task.id)
+    .fetch_all(&f.db.pool)
+    .await
+    .unwrap();
+    assert_eq!(receipts.len(), 3);
+    for receipt in receipts {
+        let receipt: Value = serde_json::from_str(&receipt).unwrap();
+        let nodes = receipt["result"]["nodes"].as_array().unwrap();
+        assert_eq!(nodes.len(), 20);
+        assert!(nodes.iter().all(|node| node["node_id"].is_string()
+            && node["photo_id"].is_string()
+            && node["x"].is_number()
+            && node["y"].is_number()));
+    }
+
     assert!(view.tasks[0].inspected_photos.is_empty());
     assert_eq!(view.tasks[0].usage.cloud_images, 0);
     let mut seen = std::collections::HashSet::new();
@@ -1678,4 +1731,524 @@ async fn three_hundred_scope_three_twenty_photo_boards_use_actual_runtime_and_ke
             photo.content_sha256
         );
     }
+}
+
+async fn overview_cache(
+    f: &Fixture,
+    photo: &str,
+    recorded: Option<String>,
+    valid: bool,
+    model: &str,
+    version: &str,
+) {
+    let hash: String = sqlx::query_scalar("SELECT content_sha256 FROM photos WHERE id=?")
+        .bind(photo)
+        .fetch_one(&f.db.pool)
+        .await
+        .unwrap();
+    let observation = if valid {
+        json!({"photo_id":photo,"visible_facts":["shared fixture fact"],"interpretation":"fixture interpretation","uncertainty":"not real model quality"})
+    } else {
+        json!({"photo_id":"foreign","visible_facts":["must not appear"]})
+    };
+    sqlx::query("INSERT INTO photo_observations(photo_id,photo_hash,model_id,prompt_version,kind,observation_json,created_at,preview_sha256) VALUES(?,?,?,?,'inspect_photos',?,?,?)")
+        .bind(photo).bind(hash).bind(model).bind(version).bind(observation.to_string())
+        .bind(domain::timestamp()).bind(recorded).execute(&f.db.pool).await.unwrap();
+}
+async fn overview_pixels(f: &Fixture, photo: &str) -> (String, String) {
+    let path: String = sqlx::query_scalar("SELECT preview_path FROM photos WHERE id=?")
+        .bind(photo)
+        .fetch_one(&f.db.pool)
+        .await
+        .unwrap();
+    let (_, hash) =
+        super::super::upload_compress::compress_and_fingerprint(std::path::Path::new(&path))
+            .unwrap();
+    (path, hash)
+}
+async fn overview_page(f: &Fixture, t: &Task, offset: usize, limit: usize) -> Value {
+    let result = f
+        .tool(
+            t,
+            "read_creative_context",
+            json!({"section":"visual_overview","object_id":null,"offset":offset,"limit":limit}),
+        )
+        .await;
+    assert!(result.ok, "{:?}", result.error);
+    result.result.unwrap()["data"].clone()
+}
+
+#[tokio::test]
+async fn visual_overview_paginates_scope_and_separates_unseen_stale_legacy_and_unreadable_pixels() {
+    let f = Fixture::new(8).await;
+    let ids = f.photos[..6].to_vec();
+    let task = f.start(ids.clone(), None, None).await.unwrap();
+    f.run(&task).await;
+    let version = format!(
+        "{}@{}",
+        super::super::vision::VISION_PROMPT_VERSION,
+        "a".repeat(64)
+    );
+    for (index, id) in ids.iter().enumerate().take(5) {
+        let (path, hash) = overview_pixels(&f, id).await;
+        overview_cache(
+            &f,
+            id,
+            if index == 2 { None } else { Some(hash) },
+            index != 4,
+            "fixture",
+            &version,
+        )
+        .await;
+        if index == 1 {
+            image::RgbImage::from_pixel(8, 8, image::Rgb([240, 1, 2]))
+                .save(&path)
+                .unwrap();
+        }
+        if index == 3 {
+            std::fs::rename(&path, format!("{path}.saved")).unwrap();
+        }
+    }
+    let first = overview_page(&f, &task, 0, 3).await;
+    assert_eq!(first["scope"]["photoCount"], 6);
+    assert_eq!(first["coverage"]["storedObservationRecords"], 5);
+    assert_eq!(
+        first["coverage"]["globalPixelVerification"],
+        "not_performed"
+    );
+    assert_eq!(
+        first["coverage"]["pagePixelVersions"],
+        json!({"verified":1,"mismatch":1,"unrecorded":1})
+    );
+    assert_eq!(first["nextOffset"], 3);
+    assert_eq!(first["nextSteps"]["inspectPhotoIds"], json!([ids[1]]));
+    assert_eq!(
+        first["nextSteps"]["historicalUnverifiedPhotoIds"],
+        json!([ids[2]])
+    );
+    assert_eq!(
+        first["items"][0]["visibleFacts"],
+        json!(["shared fixture fact"])
+    );
+    assert!(first["items"][1]["visibleFacts"].is_null());
+    assert!(first["items"][2]["visibleFacts"].is_null());
+    assert!(
+        !first.to_string().contains(f._temp.path().to_str().unwrap()),
+        "不把本地路径交给模型"
+    );
+    for hidden in &f.photos[6..] {
+        assert!(!first.to_string().contains(hidden));
+    }
+    let second = overview_page(&f, &task, 3, 3).await;
+    assert_eq!(
+        second["coverage"]["pagePixelVersions"],
+        json!({"unreadable":1,"invalid":1,"missing":1})
+    );
+    assert_eq!(second["nextSteps"]["unavailablePhotoIds"], json!([ids[3]]));
+    assert_eq!(
+        second["nextSteps"]["inspectPhotoIds"],
+        json!([ids[4], ids[5]])
+    );
+    assert!(second["nextOffset"].is_null());
+    assert!(!second.to_string().contains("must not appear"));
+    assert_eq!(overview_page(&f, &task, 6, 3).await["items"], json!([]));
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations")
+        .fetch_one(&f.db.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 5, "概览不创建观察缓存或触发上传");
+    assert_eq!(
+        store::projection(&f.db, &f.p).await.unwrap().tasks[0]
+            .usage
+            .cloud_images,
+        0
+    );
+}
+
+#[tokio::test]
+async fn visual_overview_rechecks_after_new_observations_and_compares_only_true_sequence_neighbors()
+{
+    let f = Fixture::new(3).await;
+    let task = f.start(f.photos.clone(), None, None).await.unwrap();
+    f.run(&task).await;
+    let version = format!(
+        "{}@{}",
+        super::super::vision::VISION_PROMPT_VERSION,
+        "a".repeat(64)
+    );
+    assert_eq!(
+        overview_page(&f, &task, 0, 3).await["coverage"]["pagePixelVersions"]["missing"],
+        3
+    );
+    for id in &f.photos {
+        let (_, hash) = overview_pixels(&f, id).await;
+        overview_cache(&f, id, Some(hash), true, "fixture", &version).await;
+    }
+    sqlx::query("UPDATE photo_decisions SET status='keep' WHERE project_id=?")
+        .bind(&f.p)
+        .execute(&f.db.pool)
+        .await
+        .unwrap();
+    for (position, id) in f.photos.iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO sequence_items(project_id,photo_id,position,updated_at) VALUES(?,?,?,?)",
+        )
+        .bind(&f.p)
+        .bind(id)
+        .bind(position as i64)
+        .bind(domain::timestamp())
+        .execute(&f.db.pool)
+        .await
+        .unwrap();
+    }
+    let checked = overview_page(&f, &task, 0, 3).await;
+    assert_eq!(checked["coverage"]["pagePixelVersions"]["verified"], 3);
+    assert_eq!(
+        checked["nextSteps"]["comparePhotoIds"],
+        json!(&f.photos[..2])
+    );
+    assert_eq!(checked["pageRepeatedFacts"][0]["photoIds"], json!(f.photos));
+    assert_eq!(checked["sampling"]["isSelectionRecommendation"], false);
+    let first_page = overview_page(&f, &task, 0, 1).await;
+    assert_eq!(
+        first_page["nextSteps"]["comparePhotoIds"],
+        json!([]),
+        "不把未核对页面内的图当作序列比较依据"
+    );
+}
+
+#[tokio::test]
+async fn visual_overview_respects_model_binding_and_empty_projects() {
+    let f = Fixture::new(1).await;
+    let binding = identity("fixture-user", "b");
+    let task = f
+        .start(f.photos.clone(), Some(&binding), None)
+        .await
+        .unwrap();
+    f.run(&task).await;
+    let (_, hash) = overview_pixels(&f, &f.photos[0]).await;
+    overview_cache(
+        &f,
+        &f.photos[0],
+        Some(hash.clone()),
+        true,
+        "other-model",
+        &binding.cache_version(),
+    )
+    .await;
+    assert_eq!(
+        overview_page(&f, &task, 0, 30).await["coverage"]["noStoredObservation"],
+        1
+    );
+    overview_cache(
+        &f,
+        &f.photos[0],
+        Some(hash.clone()),
+        true,
+        binding.observation_model_id(),
+        &format!(
+            "{}@{}",
+            super::super::vision::VISION_PROMPT_VERSION,
+            "a".repeat(64)
+        ),
+    )
+    .await;
+    assert_eq!(
+        overview_page(&f, &task, 0, 30).await["coverage"]["noStoredObservation"],
+        1
+    );
+    overview_cache(
+        &f,
+        &f.photos[0],
+        Some(hash),
+        true,
+        binding.observation_model_id(),
+        &binding.cache_version(),
+    )
+    .await;
+    assert_eq!(
+        overview_page(&f, &task, 0, 30).await["coverage"]["pagePixelVersions"]["verified"],
+        1
+    );
+    let empty = Fixture::new(0).await;
+    let task = empty.start(vec![], None, None).await.unwrap();
+    empty.run(&task).await;
+    let page = overview_page(&empty, &task, 0, 30).await;
+    assert_eq!(page["scope"]["photoCount"], 0);
+    assert_eq!(page["items"], json!([]));
+    assert_eq!(page["sampling"]["photoIds"], json!([]));
+    assert!(page["nextOffset"].is_null());
+}
+
+struct OverviewWithoutVision;
+impl crate::agent::provider::ModelProvider for OverviewWithoutVision {
+    fn generate<'a>(
+        &'a self,
+        input: &'a crate::agent::context::ModelTurnRequest,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<ModelOutcome>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            let tools: Vec<_> = input.protocol.iter().filter(|p| p.kind == "tool").collect();
+            let call = |name: &str, mut args: Value| {
+                args["project_id"] = json!(input.task.project_id);
+                ModelOutcome::ToolCalls {
+                    calls: vec![ToolCall {
+                        call_id: format!("overview-{}", input.task.usage.model_turns),
+                        name: name.into(),
+                        args,
+                    }],
+                }
+            };
+            if tools.is_empty() {
+                assert!(input.tool_specs.as_array().unwrap().iter().any(|t| {
+                    t["name"] == "read_creative_context"
+                        && t["parameters"]["properties"]["section"]["enum"]
+                            .as_array()
+                            .unwrap()
+                            .contains(&json!("visual_overview"))
+                }));
+                return Ok(call(
+                    "read_creative_context",
+                    json!({"section":"visual_overview","object_id":null,"offset":0,"limit":30}),
+                ));
+            }
+            assert!(tools.iter().all(|t| t.body["result"]["ok"] == true));
+            if tools.len() == 1 {
+                let ids =
+                    &tools[0].body["result"]["result"]["data"]["nextSteps"]["inspectPhotoIds"];
+                assert!(!ids.as_array().unwrap().is_empty());
+                return Ok(call("inspect_photos", json!({"photo_ids":ids})));
+            }
+            assert_eq!(
+                tools[1].body["result"]["result"]["mode"],
+                "mock_metadata_only"
+            );
+            Ok(ModelOutcome::NoAction {
+                reason: "缺少视觉授权；概览只说明待观察范围，没有完成视觉分析。".into(),
+            })
+        })
+    }
+}
+#[tokio::test]
+async fn visual_overview_runs_in_agent_loop_without_turning_metadata_into_visual_analysis() {
+    let f = Fixture::new(4).await;
+    let task = f.start(f.photos[..2].to_vec(), None, None).await.unwrap();
+    let engine = crate::agent::runtime::AgentEngine::with_providers(
+        f.db.clone(),
+        std::sync::Arc::new(OverviewWithoutVision),
+        None,
+    );
+    engine.run(&task.id).await.unwrap();
+    let projection = store::projection(&f.db, &f.p).await.unwrap();
+    let result = &projection.tasks[0];
+    assert_eq!(result.usage.tool_calls, 2);
+    assert_eq!(result.usage.cloud_images, 0);
+    assert!(result.board_drafts.is_empty());
+    assert!(result.inspected_photos.is_empty());
+    assert!(result.reason.contains("没有完成视觉分析"));
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations")
+        .fetch_one(&f.db.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn visual_overview_does_not_group_different_facts_with_the_same_excerpt_or_count_one_photo_twice()
+ {
+    let f = Fixture::new(2).await;
+    let task = f.start(f.photos.clone(), None, None).await.unwrap();
+    f.run(&task).await;
+    let version = format!(
+        "{}@{}",
+        super::super::vision::VISION_PROMPT_VERSION,
+        "a".repeat(64)
+    );
+    for (index, id) in f.photos.iter().enumerate() {
+        let (_, hash) = overview_pixels(&f, id).await;
+        overview_cache(&f, id, Some(hash), true, "fixture", &version).await;
+        let facts = if index == 0 {
+            vec![
+                format!("{}A", "a".repeat(160)),
+                "one photo only".into(),
+                "one photo only".into(),
+            ]
+        } else {
+            vec![format!("{}B", "a".repeat(160))]
+        };
+        sqlx::query("UPDATE photo_observations SET observation_json=? WHERE photo_id=?")
+            .bind(json!({"photo_id":id,"visible_facts":facts,"interpretation":"fixture","uncertainty":"fixture"}).to_string())
+            .bind(id).execute(&f.db.pool).await.unwrap();
+    }
+    let page = overview_page(&f, &task, 0, 30).await;
+    assert_eq!(page["pageRepeatedFacts"], json!([]));
+    assert_eq!(page["items"][0]["factExcerptsTruncated"], true);
+    assert_eq!(
+        page["nextSteps"]["focusReview"]["higherResolutionAvailable"],
+        false
+    );
+    assert_eq!(
+        page["nextSteps"]["focusReview"]["photoIds"],
+        json!(f.photos)
+    );
+}
+
+#[tokio::test]
+async fn knowledge_references_explain_the_match_and_keep_cloud_summaries_apart() {
+    let f = Fixture::new(0).await;
+    sqlx::query("INSERT INTO agent_tasks(id,project_id,goal,base_revision,allowed_ids_json,selected_ids_json,target_count,state,reason,budget_json,usage_json,created_at,updated_at) VALUES('t',?,'引用理由',1,'[]','[]',1,'completed','测试','{}','{}','2026-11-07','2026-11-07')")
+        .bind(&f.p).execute(&f.db.pool).await.unwrap();
+    let receipt = json!({"callId":"c1","ok":true,"error":null,"observationRefs":[],"durationMs":0,"billingEstimate":0,"result":{"results":[
+        {"citationId":"FR-K004","title":"色彩与版本比较","passage":"正文","version":"v1","source":"focalroom://knowledge/original-method-notes","license":"CC0-1.0","contentSha256":"abc",
+         "matchReason":{"kind":"local_terms","termCount":2,"matchedTerms":["色彩","调色"],"fields":["title","tags"],"matched":4,"returned":3}},
+        {"id":"cloud-one","title":"Shore","kind":"photographer","reviewStatus":"verified","matchReason":{"kind":"cloud_search","relevance":0.5}},
+        {"id":"cloud-two","title":"Araki","kind":"photographer","reviewStatus":"draft","matchReason":{"kind":"cloud_search","relevance":null}}
+    ]}});
+    sqlx::query("INSERT INTO tool_calls VALUES('t','c1','search_photography_knowledge','fp',?)")
+        .bind(receipt.to_string())
+        .execute(&f.db.pool)
+        .await
+        .unwrap();
+    let mut tx = f.db.pool.begin().await.unwrap();
+    let list = references(&mut tx, "t").await.unwrap();
+    // 两条云端摘要早先会挤成同一条无名引用；现在各按自己的编号入表。
+    assert_eq!(list.len(), 3, "{list:?}");
+    let local = list
+        .iter()
+        .find(|row| row["citationId"] == "FR-K004")
+        .expect("本机方法条");
+    assert_eq!(local["matchReason"]["kind"], "local_terms");
+    assert_eq!(local["matchReason"]["matched"], 4);
+    assert_eq!(local["passage"], "正文");
+    for (id, label, relevance) in [
+        ("cloud-one", "Shore", json!(0.5)),
+        ("cloud-two", "Araki", json!(null)),
+    ] {
+        let row = list
+            .iter()
+            .find(|row| row["citationId"] == id)
+            .expect("云端摘要条");
+        assert_eq!(row["label"], label);
+        assert_eq!(row["summaryOnly"], true, "摘要不能被当成已取到断言的出处");
+        assert!(row.get("passage").is_none(), "{row}");
+        assert_eq!(
+            row["matchReason"],
+            json!({"kind":"cloud_search","relevance":relevance})
+        );
+        assert_eq!(row["visualEvidence"], false);
+    }
+}
+
+#[tokio::test]
+async fn search_ledger_keeps_empty_unanswered_and_failed_calls_apart() {
+    let f = Fixture::new(0).await;
+    sqlx::query("INSERT INTO agent_tasks(id,project_id,goal,base_revision,allowed_ids_json,selected_ids_json,target_count,state,reason,budget_json,usage_json,created_at,updated_at) VALUES('t',?,'检索台账',1,'[]','[]',1,'completed','测试','{}','{}','2026-11-07','2026-11-07')")
+        .bind(&f.p).execute(&f.db.pool).await.unwrap();
+    let ok = |id: &str, result: Value| json!({"callId":id,"ok":true,"error":null,"observationRefs":[],"durationMs":0,"billingEstimate":0,"result":result});
+    let rows = [
+        (
+            "c1",
+            "search_photography_knowledge",
+            ok(
+                "c1",
+                json!({"query":"两边都没有","results":[],"localMatched":0,"localReturned":0,"cloudAvailable":true,"cloudError":null}),
+            ),
+        ),
+        (
+            "c2",
+            "search_photography_knowledge",
+            ok(
+                "c2",
+                json!({"query":"云端没答","results":[],"localMatched":0,"cloudAvailable":false,"cloudError":{"code":"AUTH_REQUIRED","message":"需要当前账户授权"}}),
+            ),
+        ),
+        // 内嵌方法那次只查本地：回执里根本没有云端字段，不能替它说"云端也没有"。
+        (
+            "c3",
+            "search_photography_knowledge",
+            ok(
+                "c3",
+                json!({"query":"只查本地","results":[],"matched":0,"returned":0}),
+            ),
+        ),
+        (
+            "c4",
+            "search_photographers",
+            ok(
+                "c4",
+                json!({"query":"shore","photographers":[{"name":"Shore","id":"p1"},{"name":"Araki","id":"p2"}],"available":true,"error":null}),
+            ),
+        ),
+        (
+            "c5",
+            "compare_photography_series",
+            ok(
+                "c5",
+                json!({"query":"A / B","seriesA":{"name":"Americans","id":"s1"},"seriesB":null,"available":false,"errors":{"seriesA":null,"seriesB":{"code":"KNOWLEDGE_HTTP","message":"第二个系列没取到"}}}),
+            ),
+        ),
+        (
+            "c6",
+            "get_photobook_structure",
+            json!({"callId":"c6","ok":false,"result":null,"error":{"code":"KNOWLEDGE_PROTOCOL","retryable":false,"message":"响应不是检索列表"},"observationRefs":[],"durationMs":0,"billingEstimate":0}),
+        ),
+        // 不是知识检索的回执不进台账。
+        ("c7", "inspect_photos", ok("c7", json!({"photos":[]}))),
+    ];
+    for (id, tool, receipt) in rows {
+        sqlx::query("INSERT INTO tool_calls VALUES('t',?,?,'fp',?)")
+            .bind(id)
+            .bind(tool)
+            .bind(receipt.to_string())
+            .execute(&f.db.pool)
+            .await
+            .unwrap();
+    }
+    let mut tx = f.db.pool.begin().await.unwrap();
+    let ledger = searches(&mut tx, "t").await.unwrap();
+    assert_eq!(ledger.len(), 6, "{ledger:?}");
+    let ids: Vec<_> = ledger
+        .iter()
+        .map(|row| row["callId"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["c1", "c2", "c3", "c4", "c5", "c6"], "按发生顺序留档");
+    for (index, outcome, returned) in [
+        (0, "no_match", 0),
+        (1, "unavailable", 0),
+        (2, "no_match", 0),
+        (3, "found", 2),
+        (4, "found", 1),
+        (5, "failed", 0),
+    ] {
+        assert_eq!(ledger[index]["outcome"], outcome, "{:?}", ledger[index]);
+        assert_eq!(ledger[index]["returned"], returned);
+    }
+    assert_eq!(ledger[0]["query"], "两边都没有");
+    assert_eq!(ledger[0]["localMatched"], 0);
+    assert_eq!(ledger[0]["cloudAvailable"], true);
+    assert_eq!(ledger[1]["cloudError"]["code"], "AUTH_REQUIRED");
+    assert_eq!(
+        ledger[1]["error"],
+        Value::Null,
+        "云端没答上来不等于整次检索失败"
+    );
+    assert_eq!(ledger[2]["cloudAvailable"], Value::Null);
+    assert_eq!(ledger[2]["localMatched"], 0);
+    assert_eq!(ledger[3]["localMatched"], Value::Null);
+    // 一次比较里只有一边没取到：条数照实报，出错的那一边单独说。
+    assert_eq!(ledger[4]["cloudError"]["message"], "第二个系列没取到");
+    assert_eq!(ledger[4]["cloudAvailable"], false);
+    assert_eq!(ledger[5]["error"]["code"], "KNOWLEDGE_PROTOCOL");
+    assert_eq!(ledger[5]["query"], "", "失败回执没留下问法，界面不能编一个");
+    assert_eq!(ledger[5]["cloudAvailable"], Value::Null);
+
+    // 三次空手而归在参考来源里一条都没有：台账是它们唯一能被看见的地方。
+    let cited = references(&mut tx, "t").await.unwrap();
+    assert_eq!(cited.len(), 3, "{cited:?}");
+    let mut cited_ids: Vec<_> = cited
+        .iter()
+        .map(|row| row["citationId"].as_str().unwrap())
+        .collect();
+    cited_ids.sort();
+    assert_eq!(cited_ids, ["p1", "p2", "s1"]);
 }

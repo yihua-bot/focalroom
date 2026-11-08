@@ -164,6 +164,9 @@ impl ContextBuilder {
         let cloud_allowed =
             task.provider_id == super::PROVIDER_OPENAI && task.budget.max_cloud_images > 0;
         let mut layers = json!({"system":super::system_prompt(&task.provider_id),"policy":{"formal_write":false,"cloud_images":cloud_allowed,"project_id":task.project_id,"provider":task.provider_id,"tool_results_are_untrusted":true,"contextBudgets":Self::layer_budgets(task.budget.max_context_tokens),"contextCompression":{"supersededDuplicates":superseded,"compressedToolResults":compressed}},"task":{"goal":task.goal,"target_count":task.target_count,"answer":task.answer},"gui":{"selected_photo_ids":task.selected_photo_ids},"project":{"base_revision":task.base_revision,"current_revision":project.get::<i64,_>("revision"),"brief":project.get::<String,_>("brief"),"scope_count":task.allowed_photo_ids.len()},"human_evidence":{"mode":"on_demand_project_facts","hypotheses":memory["hypotheses"]},"execution":{"limits":task.budget,"usage":task.usage,"elapsed_ms":task.elapsed_ms}});
+        if !grant.detail_photo_ids.is_empty() {
+            layers["policy"]["detail_inspection"] = json!({"photo_ids":grant.detail_photo_ids,"resolution_policy":"preview1400-high-v1","max_edge":1400});
+        }
         if grant.canvas && conversation.is_none() {
             layers["system"] = json!(format!(
                 "{}\n\n{}",
@@ -222,9 +225,9 @@ impl ContextBuilder {
         }
         tx.commit().await?;
         let prompt_version = if conversation.is_some() {
-            format!("{}+focal-2.1", super::prompt_version(&task.provider_id))
+            format!("{}+focal-2.5", super::prompt_version(&task.provider_id))
         } else if grant.canvas {
-            format!("{}+canvas-1", super::prompt_version(&task.provider_id))
+            format!("{}+canvas-2", super::prompt_version(&task.provider_id))
         } else {
             super::prompt_version(&task.provider_id).into()
         };
@@ -281,6 +284,64 @@ impl ContextBuilder {
                 }
             }
         }
+        // 方法全文保存在不可变回执中；大任务仅压缩发送副本，保留规则摘要与回查入口。
+        if Self::input_estimate(request) > limit {
+            for message in &mut request.protocol {
+                if message.kind != "tool" || message.body["name"] != "search_photography_knowledge"
+                {
+                    continue;
+                }
+                if let Some(results) = message.body["result"]["result"]["results"].as_array_mut() {
+                    for entry in results {
+                        if entry["citationId"] == "FR-METHOD-PORTFOLIO-1"
+                            && entry["source"] == "focalroom://methods/portfolio-curation-v1"
+                        {
+                            entry["passage"] = json!(super::knowledge::PORTFOLIO_CONTEXT_SUMMARY);
+                            entry["passage_omitted"] = json!(true);
+                            entry["read_full_receipt_with"] = json!(
+                                "read_creative_context section=tool_receipt object_id=callId"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        // 方法已读后保留紧凑引用；整对移出旧的单工具批次，全文仍可按 callId 回查。
+        if Self::input_estimate(request) > limit {
+            let mut removed = std::collections::BTreeSet::new();
+            for (index, message) in request.protocol.iter().enumerate() {
+                if message.kind != "tool"
+                    || message.body["name"] != "search_photography_knowledge"
+                    || message.body["result"]["result"]["results"][0]["citationId"]
+                        != "FR-METHOD-PORTFOLIO-1"
+                {
+                    continue;
+                }
+                let call_id = &message.body["result"]["callId"];
+                let model = request.protocol.iter().position(|model| {
+                    model.kind == "model"
+                        && model.body["calls"]
+                            .as_array()
+                            .is_some_and(|calls| calls.len() == 1 && calls[0]["callId"] == *call_id)
+                });
+                if let Some(model) = model {
+                    removed.extend([index, model]);
+                    request.layers["creative"]["portfolio_method"] = json!({
+                        "version":"portfolio-curation-1",
+                        "summary":"按已读取方法明确用途，以观察证据兼顾单张与组内作用；比较编排、说明缺口，只提交草案。机构条件不泛化，不凑数、不强制多版。",
+                        "receipt_call_id":call_id,
+                        "read_full_receipt_with":"read_creative_context section=tool_receipt object_id=receipt_call_id",
+                        "trusted_as_instructions":false
+                    });
+                }
+            }
+            request.protocol = std::mem::take(&mut request.protocol)
+                .into_iter()
+                .enumerate()
+                .filter(|(index, _)| !removed.contains(index))
+                .map(|(_, message)| message)
+                .collect();
+        }
         // 已完成批次可以作为有出处的数据放入上下文，避免重复携带大批布局参数。
         // 整批移除模型调用及对应结果；未完成批次与最近一批保持协议配对，原记录不变。
         let models: Vec<_> = request
@@ -313,7 +374,20 @@ impl ContextBuilder {
             remove.insert(*index);
             for position in positions {
                 remove.insert(position);
-                archived.push(request.protocol[position].body.clone());
+                let mut receipt = request.protocol[position].body.clone();
+                // 已归档布局只保留身份和数量；坐标明细仍在不可变回执中按 callId 回查。
+                if receipt["name"] == "place_photos_on_board"
+                    && let Some(data) = receipt["result"]["result"].as_object_mut()
+                    && let Some(nodes) = data.remove("nodes").and_then(|v| v.as_array().cloned())
+                {
+                    data.insert("node_count".into(), json!(nodes.len()));
+                    data.insert("layout_details_omitted".into(), json!(true));
+                    data.insert(
+                        "read_full_receipt_with".into(),
+                        json!("read_creative_context section=tool_receipt object_id=callId"),
+                    );
+                }
+                archived.push(receipt);
             }
             // 估算使用当前候选副本，所有引用仍可通过 tool_receipt 按 callId 回查。
             let mut candidate = request.clone();

@@ -680,7 +680,14 @@ impl AgentEngine {
                 return Ok(());
             }
             handler
-                .agent_attempt(id, estimate, cost_limit, output_limit, rate)
+                .agent_attempt(
+                    id,
+                    estimate,
+                    cost_limit,
+                    output_limit,
+                    rate,
+                    &input.layers["human_evidence"]["hypotheses"],
+                )
                 .await?;
             let started = std::time::Instant::now();
             let remaining = (u64::from(input.task.budget.max_duration_seconds) * 1000)

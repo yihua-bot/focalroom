@@ -118,7 +118,7 @@ impl Store {
     }
 
     /// G2-②：画布瓦片按 (源SHA, 算法版本, 层级, x, y) 内容寻址缓存于预览目录；
-    /// 首次请求解码原图构建金字塔（总内存 ≤ 原图 × 4/3），此后命中缓存文件。
+    /// 首次请求按目标层级所需的那一段缩放链取像素（不把整棵金字塔留在内存里），此后命中缓存文件。
     pub async fn canvas_photo_tile(
         &self,
         project_id: &str,
@@ -462,7 +462,12 @@ mod tests {
             .unwrap();
         let prepared =
             crate::image_pipeline::prepare(&img_path, &temp.path().join("cache")).unwrap();
-        assert!(db.insert_photo(&project.id, &prepared).await.unwrap());
+        assert!(
+            db.insert_photo(&project.id, &prepared)
+                .await
+                .unwrap()
+                .inserted()
+        );
         let asset: String = sqlx::query_scalar("SELECT id FROM source_assets LIMIT 1")
             .fetch_one(&db.pool)
             .await
@@ -2021,7 +2026,7 @@ mod g1_representation_tests {
 
         // 走正式导入
         let inserted = db.insert_photo(&project.id, &prepared).await.unwrap();
-        assert!(inserted, "首次导入应成功");
+        assert!(inserted.inserted(), "首次导入应成功");
 
         // 验证 representation 尺寸来自真实文件
         let reps: Vec<(String, i64, i64)> = sqlx::query_as(

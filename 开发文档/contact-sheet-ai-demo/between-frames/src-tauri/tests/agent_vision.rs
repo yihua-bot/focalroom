@@ -156,6 +156,10 @@ fn spawn_server(script: Script) -> (String, Arc<Mutex<State>>) {
                                     let item = data["observations"][0].clone();
                                     data["observations"].as_array_mut().unwrap().push(item);
                                 }
+                                "drop_one" => {
+                                    // 模型只回答其中一张：确实传过去了，却没给出观察。
+                                    data["observations"].as_array_mut().unwrap().pop();
+                                }
                                 "null" => data = Value::Null,
                                 "array" => data = json!([]),
                                 "incomplete_response" | "error_response" => {}
@@ -944,6 +948,41 @@ fn main_response(body: &str, step: Option<String>) -> String {
         Some("tool:inspect_from_history") if history_ids.len() >= 2 => envelope(
             json!([{"type":"function_call","call_id":"call-inspect","name":"inspect_photos","arguments":json!({"project_id": project_id, "photo_ids": [history_ids[0], history_ids[1]]}).to_string()}]),
         ),
+        Some("tool:inspect_three_from_history") if history_ids.len() >= 3 => envelope(
+            json!([{"type":"function_call","call_id":"call-inspect","name":"inspect_photos","arguments":json!({"project_id": project_id, "photo_ids": [history_ids[0], history_ids[1], history_ids[2]]}).to_string()}]),
+        ),
+        Some("tool:inspect_all_from_history") if !history_ids.is_empty() => envelope(
+            json!([{"type":"function_call","call_id":"call-inspect","name":"inspect_photos","arguments":json!({"project_id": project_id, "photo_ids": history_ids}).to_string()}]),
+        ),
+        Some("tool:detail_from_history") if !history_ids.is_empty() => envelope(
+            json!([{"type":"function_call","call_id":"call-detail","name":"inspect_photo_detail","arguments":json!({"project_id": project_id, "photo_ids": [history_ids[0]]}).to_string()}]),
+        ),
+        Some("tool:judgment_knowledge") => envelope(
+            json!([{"type":"function_call","call_id":"call-judgment-method","name":"search_photography_knowledge","arguments":json!({"project_id":project_id,"query":"观察 解释 不确定性","limit":1}).to_string()}]),
+        ),
+        Some("tool:judge_from_history") if !history_ids.is_empty() => {
+            let citation = parsed["input"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|i| i["type"] == "function_call_output")
+                .filter_map(|i| serde_json::from_str::<Value>(i["output"].as_str()?).ok())
+                .find_map(|v| {
+                    v["result"]["results"][0]["citationId"]
+                        .as_str()
+                        .map(str::to_string)
+                })
+                .unwrap();
+            envelope(
+                json!([{"type":"function_call","call_id":"call-judgment","name":"explain_photo_judgment","arguments":json!({"project_id":project_id,"photo_id":history_ids[0],"observation_call_id":"call-inspect","fact_indices":[0],"judgment":"这张可能适合作为停顿","reasoning":"从已取得的背景观察提出编辑假设","knowledge_refs":[{"call_id":"call-judgment-method","citation_id":citation,"claim_index":null}],"uncertainty":"预览不能替代作者意图"}).to_string()}]),
+            )
+        }
+        Some("tool:compare_from_history") if history_ids.len() >= 2 => envelope(
+            json!([{"type":"function_call","call_id":"call-compare","name":"compare_photos","arguments":json!({"project_id": project_id, "photo_ids": [history_ids[0], history_ids[1]], "brief":"比较空间关系与不确定性"}).to_string()}]),
+        ),
+        Some("tool:request_feedback") => envelope(
+            json!([{"type":"function_call","call_id":"call-feedback","name":"request_feedback","arguments":json!({"project_id":project_id,"question":"Which relationship should I compare?","options":[]}).to_string()}]),
+        ),
         _ => envelope(
             json!([{"type":"message","content":[{"type":"output_text","text":"观察完成，没有进一步操作。"}]}]),
         ),
@@ -1270,12 +1309,31 @@ async fn start_vision_task(
     cloud: u32,
     consent_id: Option<i64>,
 ) -> Task {
+    start_vision_task_with_goal(
+        db,
+        p,
+        photo_ids,
+        cloud,
+        consent_id,
+        "用视觉观察前两张并总结",
+    )
+    .await
+}
+
+async fn start_vision_task_with_goal(
+    db: &Store,
+    p: &Project,
+    photo_ids: Vec<String>,
+    cloud: u32,
+    consent_id: Option<i64>,
+    goal: &str,
+) -> Task {
     CommandHandler::new(db)
         .agent_request(AgentRequest {
             request_id: domain::id(),
             project_id: p.id.clone(),
             command: TaskCommand::StartTask {
-                goal: "用视觉观察前两张并总结".into(),
+                goal: goal.into(),
                 selected_photo_ids: photo_ids,
                 target_count: 2,
                 budget: Budget {
@@ -2607,6 +2665,755 @@ async fn consented_vision_uploads_once_then_cache_hits_without_reupload() {
     unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
 }
 
+/// 模型可以只回答传给它的一部分照片。这一轮要证明的是：确实发出去的字节、
+/// 真正读到的画面、缓存省下的一次上传，三件事各记各的数，谁也不替谁背书。
+#[tokio::test]
+async fn partially_observed_batches_separate_what_was_sent_from_what_was_seen() {
+    async fn receipt(db: &Store, task: &str) -> Value {
+        let raw: String = sqlx::query_scalar(
+            "SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name='inspect_photos'",
+        )
+        .bind(task)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+        serde_json::from_str::<Value>(&raw).unwrap()["result"].clone()
+    }
+    async fn rows_for(db: &Store, photo: &str) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations WHERE photo_id=?")
+            .bind(photo)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap()
+    }
+    async fn summaries(db: &Store, task: &str) -> Vec<String> {
+        sqlx::query_scalar("SELECT summary FROM agent_steps WHERE task_id=? AND kind='tool'")
+            .bind(task)
+            .fetch_all(&db.pool)
+            .await
+            .unwrap()
+    }
+    async fn charged(db: &Store, project: &Project, base: &str) -> i64 {
+        consent::effective_view(db, &project.id, &recipient(base, "test-model"))
+            .await
+            .unwrap()
+            .unwrap()
+            .used
+    }
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 3).await;
+    let ids: Vec<String> = p.photos.iter().map(|photo| photo.id.clone()).collect();
+    let (base, state) = spawn_server(Script {
+        main: vec![
+            "tool:list_photos".into(),
+            "tool:inspect_from_history".into(),
+            "text".into(),
+            "tool:list_photos".into(),
+            "tool:inspect_three_from_history".into(),
+            "text".into(),
+        ],
+        vision: VisionReply::InvalidObservation("drop_one"),
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+
+    // 任务一：请求 2 张、两张都出了本机，模型只回答第一张。
+    let task = start_vision_task(&db, &p, ids[..2].to_vec(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&task.id).await.unwrap();
+    let first = receipt(&db, &task.id).await;
+    assert_eq!(first["mode"], "vision_observed");
+    assert_eq!(first["uploaded_images"], 2, "漏答不改变字节确实离开过本机");
+    assert_eq!(first["cache_hits"], 0);
+    assert_eq!(first["observed_photo_ids"], json!([ids[0]]));
+    assert_eq!(first["unobserved_photo_ids"], json!([ids[1]]));
+    // 两份缺口名单互不相交：这张是"发出去了没人看"，不是"没发出去"。
+    assert_eq!(first["unreadable_photo_ids"], json!([]));
+    assert_eq!(first["observations"].as_array().unwrap().len(), 1);
+    // 没被回答的那张不能留下观察行：否则下一次会把它当成"已经看过"直接命中缓存。
+    assert_eq!(rows_for(&db, &ids[1]).await, 0);
+    assert_eq!(charged(&db, &p, &base).await, 2, "传输发生了，配额照实扣");
+
+    // 任务二：请求 3 张，第一张命中上一轮缓存，后两张上传、模型又漏答最后一张。
+    let task2 = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&task2.id).await.unwrap();
+    let second = receipt(&db, &task2.id).await;
+    assert_eq!(second["uploaded_images"], 2);
+    // 旧口径拿"观察条数减上传数"推算命中，这里会算成 0：丢的那张既没省钱也被抹掉了。
+    assert_eq!(
+        second["cache_hits"], 1,
+        "省下的一次上传要记在真正命中的那张上"
+    );
+    assert_eq!(second["observed_photo_ids"], json!([ids[0], ids[1]]));
+    assert_eq!(second["unobserved_photo_ids"], json!([ids[2]]));
+    // 上一轮漏答的那张这次被重新看过并落库；这一轮漏答的仍然一条都不留。
+    assert_eq!(rows_for(&db, &ids[1]).await, 1);
+    assert_eq!(rows_for(&db, &ids[2]).await, 0, "第三张仍然没有观察");
+    assert_eq!(charged(&db, &p, &base).await, 4);
+    assert_eq!(image_requests(&state.lock().unwrap()), 2);
+
+    // 时间线上那行字也要说清：不能写成"视觉观察了 3 张"。
+    for task_id in [&task.id, &task2.id] {
+        let lines = summaries(&db, task_id).await;
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("另有 1 张传过去了但模型没有给出观察，不算看过")),
+            "{lines:?}"
+        );
+        assert!(
+            !lines.iter().any(|line| line.contains("视觉观察了 3 张")),
+            "{lines:?}"
+        );
+    }
+    let projection = agent::projection(&db, &p.id).await.unwrap();
+    assert!(
+        projection
+            .tasks
+            .iter()
+            .all(|item| item.state == "completed" && item.usage.cloud_images == 2),
+        "两次任务都按真实上传计量：{:?}",
+        projection
+            .tasks
+            .iter()
+            .map(|item| (&item.state, item.usage.cloud_images))
+            .collect::<Vec<_>>()
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+/// 一批照片里只有一张真的没法送出：其余照片照常看，坏的那张如实点名，
+/// 既不占额度也不冒充看过。整批都送不出时，维持原有口径——一个字节都不发。
+/// 这一张的原件也解不开，所以"从原图重算像素"救不回来（能救回来的情形见下一条用例）。
+#[tokio::test]
+async fn one_unreadable_preview_degrades_to_that_photo_instead_of_the_whole_batch() {
+    async fn receipt(db: &Store, task: &str) -> Value {
+        let raw: String = sqlx::query_scalar(
+            "SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name='inspect_photos'",
+        )
+        .bind(task)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+        serde_json::from_str::<Value>(&raw).unwrap()
+    }
+    async fn rows_for(db: &Store, photo: &str) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations WHERE photo_id=?")
+            .bind(photo)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap()
+    }
+    async fn preview_of(db: &Store, photo: &str) -> String {
+        sqlx::query_scalar("SELECT preview_path FROM photos WHERE id=?")
+            .bind(photo)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap()
+    }
+    async fn original_of(db: &Store, photo: &str) -> String {
+        sqlx::query_scalar("SELECT original_path FROM photos WHERE id=?")
+            .bind(photo)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap()
+    }
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let ids: Vec<String> = p.photos.iter().map(|photo| photo.id.clone()).collect();
+    let (intact, broken) = (ids[0].clone(), ids[1].clone());
+    let (base, state) = spawn_server(Script {
+        main: (0..2)
+            .flat_map(|_| {
+                ["tool:list_photos", "tool:inspect_from_history", "text"].map(String::from)
+            })
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+    std::fs::write(preview_of(&db, &broken).await, b"not a jpeg at all").unwrap();
+    // 原件也解不开：这一张没有任何一条路能凑出像素，只能如实说没送出。
+    std::fs::write(original_of(&db, &broken).await, b"not a jpeg either").unwrap();
+
+    let task = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&task.id).await.unwrap();
+    let first = receipt(&db, &task.id).await;
+    assert_eq!(first["ok"], true, "一张坏缓存不该让整次观察失败");
+    assert_eq!(first["result"]["mode"], "vision_observed");
+    assert_eq!(
+        first["result"]["uploaded_images"], 1,
+        "只有读得出来的那张真的出去了"
+    );
+    assert_eq!(first["result"]["observed_photo_ids"], json!([intact]));
+    assert_eq!(first["result"]["unreadable_photo_ids"], json!([broken]));
+    assert_eq!(
+        first["result"]["preview_rebuilt_photo_ids"],
+        json!([]),
+        "原件也解不开，就没有一张是重算出来的"
+    );
+    // 坏的那张根本没出去，不能再出现在"送过去了没人看"那份名单里，否则一张照片被数两次。
+    assert_eq!(first["result"]["unobserved_photo_ids"], json!([]));
+    assert_eq!(
+        rows_for(&db, &broken).await,
+        0,
+        "没送出的照片不留任何已看过的记录"
+    );
+    let used = consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
+        .await
+        .unwrap()
+        .unwrap()
+        .used;
+    assert_eq!(used, 1, "读不出来的那张不占图像额度");
+    assert_eq!(image_requests(&state.lock().unwrap()), 1);
+    let lines: Vec<String> =
+        sqlx::query_scalar("SELECT summary FROM agent_steps WHERE task_id=? AND kind='tool'")
+            .bind(&task.id)
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("另有 1 张本地预览读不出来、没有送出，不算看过")),
+        "{lines:?}"
+    );
+
+    // 剩下的那张也救不出来：这时没有任何可发的图像，维持原口径整个任务失败，不发出空批次。
+    std::fs::write(preview_of(&db, &intact).await, b"still not a jpeg").unwrap();
+    std::fs::write(original_of(&db, &intact).await, b"still not a jpeg").unwrap();
+    let second = start_vision_task(&db, &p, ids, 2, Some(consent.id)).await;
+    let error = engine(&db, &base).run(&second.id).await.unwrap_err();
+    assert_eq!(error.code, "DECODE", "说的是本地预览读不出来，不是模型故障");
+    assert!(error.message.contains("预览"), "{:?}", error.message);
+    assert_eq!(
+        agent::projection(&db, &p.id)
+            .await
+            .unwrap()
+            .tasks
+            .iter()
+            .find(|view| view.id == second.id)
+            .expect("第二个任务要出现在任务列表里")
+            .state,
+        "failed"
+    );
+    let rows: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM tool_calls WHERE task_id=? AND tool_name='inspect_photos'",
+    )
+    .bind(&second.id)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        rows, 0,
+        "一个字节都没发的批次不留回执，免得下次当成已经看过"
+    );
+    assert_eq!(
+        image_requests(&state.lock().unwrap()),
+        1,
+        "没有发出任何图像请求"
+    );
+    let used = consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
+        .await
+        .unwrap()
+        .unwrap()
+        .used;
+    assert_eq!(used, 1, "失败的批次不扣额度");
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+/// 本地预览坏了不等于这张照片没法看：能从原图只读重算出像素的就重算并照常送出去，
+/// 重算不出来的按各自原因点名。一批里重算有上限，排不上的也照实说"没来得及"。
+/// 全程原图与图库缓存只读，数据库不动。
+#[tokio::test]
+async fn broken_preview_cache_is_recomputed_from_the_read_only_original_when_possible() {
+    async fn receipt(db: &Store, task: &str) -> Value {
+        let raw: String = sqlx::query_scalar(
+            "SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name='inspect_photos'",
+        )
+        .bind(task)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+        serde_json::from_str::<Value>(&raw).unwrap()
+    }
+    async fn rows_for(db: &Store, photo: &str) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations WHERE photo_id=?")
+            .bind(photo)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap()
+    }
+    async fn preview_path(db: &Store, photo: &str) -> String {
+        sqlx::query_scalar("SELECT preview_path FROM photos WHERE id=?")
+            .bind(photo)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap()
+    }
+    async fn original_path(db: &Store, photo: &str) -> String {
+        sqlx::query_scalar("SELECT original_path FROM photos WHERE id=?")
+            .bind(photo)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap()
+    }
+    fn names(list: &Value) -> Vec<String> {
+        let mut items: Vec<String> = list
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_owned())
+            .collect();
+        items.sort();
+        items
+    }
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 6).await;
+    let ids: Vec<String> = p.photos.iter().map(|photo| photo.id.clone()).collect();
+    let mut originals: Vec<(String, Vec<u8>)> = vec![];
+    for id in &ids {
+        let bytes = std::fs::read(original_path(&db, id).await).unwrap();
+        originals.push((id.clone(), bytes));
+    }
+    let (base, state) = spawn_server(Script {
+        main: vec![
+            "tool:list_photos".into(),
+            "tool:inspect_all_from_history".into(),
+            "text".into(),
+        ],
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+
+    // 六张的派生预览全写坏，再用不同的"原图状况"把它们分进五种结局。
+    for id in &ids {
+        std::fs::write(preview_path(&db, id).await, b"not a jpeg at all")
+            .unwrap_or_else(|error| panic!("{id} 的预览应当可以改写：{error}"));
+    }
+    // 第 2 张：原图不在这台机器上了。
+    std::fs::remove_file(original_path(&db, &ids[1]).await).unwrap();
+    // 第 3 张：同一个路径下内容已经不是这一张，重算出来的像素不能算这张照片的。
+    image::RgbImage::from_pixel(32, 24, image::Rgb([200, 7, 7]))
+        .save(original_path(&db, &ids[2]).await)
+        .unwrap();
+    // 第 1、4 张：原图完好，重算应当成功（一批的重算上限是 4 次，这两张都在额度内）。
+    // 第 5、6 张：额度已被前四次用完，这一轮不再重算。
+
+    let task = start_vision_task(&db, &p, ids.clone(), 6, Some(consent.id)).await;
+    engine(&db, &base).run(&task.id).await.unwrap();
+    let first = receipt(&db, &task.id).await;
+    assert_eq!(first["ok"], true, "缓存坏了应当降级，不该让整次观察失败");
+    assert_eq!(first["result"]["mode"], "vision_observed");
+    assert_eq!(
+        first["result"]["uploaded_images"], 2,
+        "只有凑得出像素的两张真的出去了"
+    );
+    assert_eq!(
+        names(&first["result"]["observed_photo_ids"]),
+        names(&json!([ids[0], ids[3]])),
+        "看过的是重算成功的这两张"
+    );
+    assert_eq!(
+        names(&first["result"]["preview_rebuilt_photo_ids"]),
+        names(&json!([ids[0], ids[3]])),
+        "这两张要如实标成'从原图重算后看过'"
+    );
+    assert_eq!(
+        names(&first["result"]["unreadable_photo_ids"]),
+        names(&json!([ids[1], ids[2], ids[4], ids[5]]))
+    );
+    assert_eq!(first["result"]["unobserved_photo_ids"], json!([]));
+
+    // 每张各自的原因：原图不在这台机器上、原图内容已经变了、这张没排上重算——用户能做的完全不同。
+    let mut reasons: Vec<(String, String)> = first["result"]["unreadable_photos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| {
+            (
+                item["photo_id"].as_str().unwrap().to_owned(),
+                item["reason"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    reasons.sort();
+    let mut want: Vec<(String, String)> = vec![
+        (ids[1].clone(), "original_missing".to_owned()),
+        (ids[2].clone(), "original_changed".to_owned()),
+        (ids[4].clone(), "rebuild_over_limit".to_owned()),
+        (ids[5].clone(), "rebuild_over_limit".to_owned()),
+    ];
+    want.sort();
+    assert_eq!(reasons, want);
+
+    for id in [&ids[1], &ids[2], &ids[4], &ids[5]] {
+        assert_eq!(rows_for(&db, id).await, 0, "没送出去的不留已看过的记录");
+    }
+    for id in [&ids[0], &ids[3]] {
+        assert_eq!(rows_for(&db, id).await, 1, "重算成功的照常记下观察");
+    }
+    let used = consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
+        .await
+        .unwrap()
+        .unwrap()
+        .used;
+    assert_eq!(used, 2, "四张送不出去的不占图像额度");
+    assert_eq!(image_requests(&state.lock().unwrap()), 1);
+
+    // 两条信任底线：原图一个字节没动，图库那份坏缓存本轮也不改写。
+    for (id, bytes) in &originals {
+        if id == &ids[1] || id == &ids[2] {
+            continue;
+        }
+        assert_eq!(
+            std::fs::read(original_path(&db, id).await).unwrap(),
+            *bytes,
+            "原图只读：重算不该动它"
+        );
+    }
+    for id in &ids {
+        assert_eq!(
+            std::fs::read(preview_path(&db, id).await).unwrap(),
+            b"not a jpeg at all",
+            "图库里那份坏缓存本轮不改写"
+        );
+    }
+
+    let lines: Vec<String> =
+        sqlx::query_scalar("SELECT summary FROM agent_steps WHERE task_id=? AND kind='tool'")
+            .bind(&task.id)
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("其中 2 张的本地预览读不出来、已只读原图重算像素后送出")),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("另有 4 张本地预览读不出来、没有送出，不算看过")),
+        "{lines:?}"
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+/// 修复动作与观察链路是否接得上：把坏预览就地修好之后，下一次观察不再需要
+/// 从原图重算，也不该再有任何"没送出去"的照片——回执里那两份缺口名单都空。
+#[tokio::test]
+async fn repairing_the_corrupt_preview_closes_the_gap_the_observation_reported() {
+    async fn jobs_for(
+        db: &Store,
+        ids: &[String],
+    ) -> Vec<between_frames_lib::image_pipeline::PreviewJob> {
+        let mut jobs = vec![];
+        for id in ids {
+            let row = sqlx::query_as::<_, (String, String, String, String, String)>(
+                "SELECT filename,original_path,content_sha256,thumbnail_path,preview_path FROM photos WHERE id=?",
+            )
+            .bind(id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+            jobs.push(between_frames_lib::image_pipeline::PreviewJob {
+                photo_id: id.clone(),
+                filename: row.0,
+                original_path: row.1,
+                content_sha256: row.2,
+                thumbnail_path: row.3,
+                preview_path: row.4,
+            });
+        }
+        jobs
+    }
+    async fn receipt(db: &Store, task: &str) -> Value {
+        let raw: String = sqlx::query_scalar(
+            "SELECT result_json FROM tool_calls WHERE task_id=? AND tool_name='inspect_photos'",
+        )
+        .bind(task)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+        serde_json::from_str::<Value>(&raw).unwrap()
+    }
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let ids: Vec<String> = p.photos.iter().map(|photo| photo.id.clone()).collect();
+    let (base, state) = spawn_server(Script {
+        main: vec![
+            "tool:list_photos".into(),
+            "tool:inspect_from_history".into(),
+            "text".into(),
+        ],
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+    for id in &ids {
+        let path: String = sqlx::query_scalar("SELECT preview_path FROM photos WHERE id=?")
+            .bind(id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        std::fs::write(&path, b"not a jpeg at all").unwrap();
+    }
+
+    let jobs = jobs_for(&db, &ids).await;
+    // 原图与缩略图的字节先各留一份底：修复只准重写坏的那一档，动到别的文件就是越界。
+    let before: Vec<(Vec<u8>, Vec<u8>)> = jobs
+        .iter()
+        .map(|job| {
+            (
+                std::fs::read(&job.original_path).unwrap(),
+                std::fs::read(&job.thumbnail_path).unwrap(),
+            )
+        })
+        .collect();
+    let cache = temp.path().join("cache");
+    let work = jobs.clone();
+    let done = tokio::task::spawn_blocking(move || {
+        between_frames_lib::image_pipeline::repair_preview_jobs(&cache, &work)
+    })
+    .await
+    .unwrap();
+    assert!(
+        done.iter()
+            .all(|item| item.outcome == "repaired" && item.rebuilt.len() == 1),
+        "两份坏预览都该就地修好：{done:?}"
+    );
+    for (job, (original, thumbnail)) in jobs.iter().zip(&before) {
+        assert_eq!(
+            &std::fs::read(&job.original_path).unwrap(),
+            original,
+            "原图只读"
+        );
+        assert_eq!(
+            &std::fs::read(&job.thumbnail_path).unwrap(),
+            thumbnail,
+            "好的那一档一个字节都不该重写，色彩标注也就不会被白白再过一遍"
+        );
+        assert!(
+            std::fs::metadata(&job.preview_path).unwrap().len() > 100,
+            "坏的那份要真的变成读得开的图"
+        );
+    }
+
+    let task = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&task.id).await.unwrap();
+    let after = receipt(&db, &task.id).await;
+    assert_eq!(after["ok"], true);
+    assert_eq!(
+        after["result"]["uploaded_images"], 2,
+        "图库缓存已经能直接读，两张照常送出"
+    );
+    assert_eq!(
+        after["result"]["preview_rebuilt_photo_ids"],
+        json!([]),
+        "修好之后不再需要临时从原图重算"
+    );
+    assert_eq!(after["result"]["unreadable_photo_ids"], json!([]));
+    assert_eq!(after["result"]["unobserved_photo_ids"], json!([]));
+    let observed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM photo_observations")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(observed, 2);
+    assert_eq!(image_requests(&state.lock().unwrap()), 1);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+fn observation_question(request: &Value) -> Value {
+    let text = request["input"][0]["content"][0]["text"].as_str().unwrap();
+    let question = text.split_once("\n观察问题：").unwrap().1;
+    serde_json::from_str(question.lines().next().unwrap()).unwrap()
+}
+
+#[tokio::test]
+async fn observation_requests_use_user_language_instead_of_project_or_comparison_language() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    for goal in [
+        "Inspect these photographs and explain their relationship.",
+        "この写真の関係を観察して説明してください。",
+        "이 사진들의 관계를 관찰하고 설명해 주세요.",
+        "Please inspect these photographs and reply in French.",
+    ] {
+        for operation in ["inspect", "compare"] {
+            let temp = tempfile::tempdir().unwrap();
+            // 项目简介为中文，比较 brief 也由夹具故意写成中文。
+            let (db, p) = setup(temp.path(), 2).await;
+            let (base, state) = spawn_server(Script {
+                main: vec![
+                    "tool:list_photos".into(),
+                    format!("tool:{operation}_from_history"),
+                    "text".into(),
+                ],
+                vision: VisionReply::Valid,
+            });
+            let consent = grant(&db, &p, "project", &base).await;
+            let task = start_vision_task_with_goal(
+                &db,
+                &p,
+                p.photos.iter().map(|photo| photo.id.clone()).collect(),
+                2,
+                Some(consent.id),
+                goal,
+            )
+            .await;
+            engine(&db, &base).run(&task.id).await.unwrap();
+            let state = state.lock().unwrap();
+            let image_request = state
+                .requests
+                .iter()
+                .find(|request| request["text"]["format"].is_object())
+                .expect("必须实际发出观察请求");
+            let question = observation_question(image_request);
+            assert_eq!(question["language_reference"], goal);
+            assert_eq!(question["operation"], format!("{operation}_photos"));
+            if operation == "compare" {
+                assert_eq!(question["comparison_focus"], "比较空间关系与不确定性");
+            } else {
+                assert!(question["comparison_focus"].is_null());
+            }
+        }
+    }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn observation_language_follows_latest_human_feedback_after_resume() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: [
+            "tool:request_feedback",
+            "tool:list_photos",
+            "tool:compare_from_history",
+            "text",
+        ]
+        .map(String::from)
+        .to_vec(),
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+    let task = start_vision_task_with_goal(
+        &db,
+        &p,
+        p.photos.iter().map(|photo| photo.id.clone()).collect(),
+        2,
+        Some(consent.id),
+        "Compare the spatial relationships in these photographs.",
+    )
+    .await;
+    let runtime = engine(&db, &base);
+    runtime.run(&task.id).await.unwrap();
+    assert_eq!(
+        agent::projection(&db, &p.id).await.unwrap().tasks[0].state,
+        "needs_input"
+    );
+    let answer = "光と空間の関係を比べて、日本語で説明してください。";
+    CommandHandler::new(&db)
+        .agent_request(AgentRequest {
+            request_id: domain::id(),
+            project_id: p.id.clone(),
+            command: TaskCommand::SubmitFeedback {
+                task_id: task.id.clone(),
+                answer: answer.into(),
+            },
+        })
+        .await
+        .unwrap();
+    runtime.run(&task.id).await.unwrap();
+    let state = state.lock().unwrap();
+    let request = state
+        .requests
+        .iter()
+        .find(|request| request["text"]["format"].is_object())
+        .unwrap();
+    assert_eq!(observation_question(request)["language_reference"], answer);
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+#[tokio::test]
+async fn switching_user_language_preserves_cached_observations_without_another_upload() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let (base, state) = spawn_server(Script {
+        main: (0..2)
+            .flat_map(|_| {
+                ["tool:list_photos", "tool:inspect_from_history", "text"].map(String::from)
+            })
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+    let ids: Vec<_> = p.photos.iter().map(|photo| photo.id.clone()).collect();
+    let first = start_vision_task_with_goal(
+        &db,
+        &p,
+        ids.clone(),
+        2,
+        Some(consent.id),
+        "Inspect these photographs.",
+    )
+    .await;
+    engine(&db, &base).run(&first.id).await.unwrap();
+    let before: Vec<String> =
+        sqlx::query_scalar("SELECT observation_json FROM photo_observations ORDER BY id")
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    let second = start_vision_task_with_goal(
+        &db,
+        &p,
+        ids,
+        2,
+        Some(consent.id),
+        "同じ写真について日本語で説明してください。",
+    )
+    .await;
+    engine(&db, &base).run(&second.id).await.unwrap();
+    let after: Vec<String> =
+        sqlx::query_scalar("SELECT observation_json FROM photo_observations ORDER BY id")
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    assert!(after.starts_with(&before), "切换语言不能改写原始观察");
+    assert!(
+        after.iter().all(|value| before.contains(value)),
+        "允许为新任务追加相同观察的回执，不得翻译或替换事实记录"
+    );
+    assert_eq!(image_requests(&state.lock().unwrap()), 1);
+    let projection = agent::projection(&db, &p.id).await.unwrap();
+    let second = projection
+        .tasks
+        .iter()
+        .find(|task| task.id == second.id)
+        .unwrap();
+    assert_eq!(second.usage.cloud_images, 0);
+    assert_eq!(
+        consent::effective_view(&db, &p.id, &recipient(&base, "test-model"))
+            .await
+            .unwrap()
+            .unwrap()
+            .used,
+        2,
+        "语言变化不应消耗额外图片额度"
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
 #[tokio::test]
 async fn pixel_pipeline_change_does_not_reuse_legacy_observations_or_reupload_current_cache() {
     let _guard = ENV_LOCK.lock().await;
@@ -2658,6 +3465,168 @@ async fn pixel_pipeline_change_does_not_reuse_legacy_observations_or_reupload_cu
         image_requests(&state.lock().unwrap()),
         2,
         "相同新策略继续命中，不重复上传"
+    );
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+// 同一张原图、同一套像素策略，预览文件仍可能被重新生成过（修过透明合成、换解码器、重新关联文件）。
+// 只有"交给模型的那份字节"的指纹能发现旧观察说的是另一张图。
+#[tokio::test]
+async fn regenerated_preview_forces_reobservation_and_binds_sent_pixels() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let ids: Vec<String> = p.photos.iter().map(|photo| photo.id.clone()).collect();
+    let (base, state) = spawn_server(Script {
+        main: (0..3)
+            .flat_map(|_| {
+                ["tool:list_photos", "tool:inspect_from_history", "text"].map(String::from)
+            })
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+    let previews: Vec<String> =
+        sqlx::query_scalar("SELECT preview_path FROM photos WHERE project_id=? ORDER BY id")
+            .bind(&p.id)
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    let fingerprints = || -> Vec<String> {
+        previews
+            .iter()
+            .map(|preview| {
+                between_frames_lib::agent::upload_compress::compress_and_fingerprint(
+                    std::path::Path::new(preview),
+                )
+                .unwrap()
+                .1
+            })
+            .collect()
+    };
+    let stale = fingerprints();
+    let first = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&first.id).await.unwrap();
+    assert_eq!(image_requests(&state.lock().unwrap()), 1);
+    let stored: Vec<String> = sqlx::query_scalar(
+        "SELECT preview_sha256 FROM photo_observations WHERE preview_sha256 IS NOT NULL",
+    )
+    .fetch_all(&db.pool)
+    .await
+    .unwrap();
+    assert!(!stored.is_empty(), "新观察要记下真正发出去的字节指纹");
+    assert!(
+        stored.iter().all(|hash| stale.contains(hash)),
+        "落库的指纹只能是当时交给模型的那份像素：{stored:?}"
+    );
+    // 原图与像素策略都没变，只有预览文件被重新生成过。
+    for preview in &previews {
+        image::RgbImage::from_pixel(700, 500, image::Rgb([9, 240, 15]))
+            .save(preview)
+            .unwrap();
+    }
+    let fresh = fingerprints();
+    assert_ne!(fresh, stale, "夹具确实换了像素版本");
+    let second = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&second.id).await.unwrap();
+    assert_eq!(
+        image_requests(&state.lock().unwrap()),
+        2,
+        "预览换了版本就不能复用旧观察，要重新看一次"
+    );
+    let rebound: Vec<String> = sqlx::query_scalar(
+        "SELECT preview_sha256 FROM photo_observations WHERE preview_sha256 IS NOT NULL",
+    )
+    .fetch_all(&db.pool)
+    .await
+    .unwrap();
+    assert!(
+        rebound.iter().any(|hash| fresh.contains(hash)),
+        "重新观察要绑在新像素版本上：{rebound:?}"
+    );
+    let third = start_vision_task(&db, &p, ids, 2, Some(consent.id)).await;
+    engine(&db, &base).run(&third.id).await.unwrap();
+    assert_eq!(
+        image_requests(&state.lock().unwrap()),
+        2,
+        "版本没再变就继续命中，不反复上传"
+    );
+    let projection = agent::projection(&db, &p.id).await.unwrap();
+    let task = projection
+        .tasks
+        .iter()
+        .find(|item| item.id == third.id)
+        .unwrap();
+    assert!(!task.inspected_photos.is_empty());
+    for photo in &task.inspected_photos {
+        assert_eq!(photo["imageVersion"]["pixelVersion"], "verified");
+        assert_eq!(photo["imageVersion"]["sourceMatches"], true);
+    }
+    unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
+}
+
+// 旧库里的观察没有图像版本字段：照常复用，不逼用户重传、不白扣授权额度，
+// 但界面不能把它显示成"已核对当前这张图"。
+#[tokio::test]
+async fn legacy_observations_are_reused_but_never_claimed_as_verified() {
+    let _guard = ENV_LOCK.lock().await;
+    unsafe { std::env::set_var("BETWEEN_FRAMES_OPENAI_API_KEY", "test-key-abcd") };
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let ids: Vec<String> = p.photos.iter().map(|photo| photo.id.clone()).collect();
+    let (base, state) = spawn_server(Script {
+        main: (0..2)
+            .flat_map(|_| {
+                ["tool:list_photos", "tool:inspect_from_history", "text"].map(String::from)
+            })
+            .collect(),
+        vision: VisionReply::Valid,
+    });
+    let consent = grant(&db, &p, "project", &base).await;
+    let first = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&first.id).await.unwrap();
+    sqlx::query("UPDATE photo_observations SET preview_sha256=NULL")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let second = start_vision_task(&db, &p, ids.clone(), 2, Some(consent.id)).await;
+    engine(&db, &base).run(&second.id).await.unwrap();
+    assert_eq!(
+        image_requests(&state.lock().unwrap()),
+        1,
+        "版本未记录只该降低可信等级，不该逼一次重新上传"
+    );
+    let projection = agent::projection(&db, &p.id).await.unwrap();
+    let task = projection
+        .tasks
+        .iter()
+        .find(|item| item.id == second.id)
+        .unwrap();
+    assert!(!task.inspected_photos.is_empty());
+    for photo in &task.inspected_photos {
+        assert_eq!(photo["imageVersion"]["pixelVersion"], "unrecorded");
+        assert!(photo["imageVersion"]["previewSha256"].is_null());
+        assert_eq!(photo["imageVersion"]["sourceMatches"], true);
+    }
+    // 原图身份变了：旧观察必须当场显示成对不上，不能继续冒充这张照片的事实。
+    sqlx::query("UPDATE photos SET content_sha256=? WHERE project_id=?")
+        .bind("f".repeat(64))
+        .bind(&p.id)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let projection = agent::projection(&db, &p.id).await.unwrap();
+    let task = projection
+        .tasks
+        .iter()
+        .find(|item| item.id == second.id)
+        .unwrap();
+    assert!(
+        task.inspected_photos
+            .iter()
+            .all(|photo| photo["imageVersion"]["sourceMatches"] == false),
+        "原图换身份后仍显示为已核对就是假证据"
     );
     unsafe { std::env::remove_var("BETWEEN_FRAMES_OPENAI_API_KEY") };
 }
@@ -3376,6 +4345,203 @@ async fn http_redirect_does_not_forward_preview_or_authorization_to_another_serv
     );
 }
 
+#[tokio::test]
+async fn detail_upload_uses_high_preview_and_a_separate_cache_without_reuploading() {
+    use base64::Engine;
+    let _guard = ENV_LOCK.lock().await;
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let previews: Vec<String> =
+        sqlx::query_scalar("SELECT preview_path FROM photos WHERE project_id=?")
+            .bind(&p.id)
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    for path in previews {
+        image::RgbImage::from_pixel(1400, 933, image::Rgb([20, 80, 120]))
+            .save(path)
+            .unwrap();
+    }
+    let (base, state) = spawn_server(Script {
+        main: [
+            "tool:list_photos",
+            "tool:inspect_from_history",
+            "tool:detail_from_history",
+            "text",
+            "tool:list_photos",
+            "tool:detail_from_history",
+            "text",
+        ]
+        .into_iter()
+        .map(|s| format!("metered:{s}"))
+        .collect(),
+        vision: VisionReply::Valid,
+    });
+    let runtime = engine(&db, &base);
+    let ids: Vec<String> = p.photos.iter().map(|p| p.id.clone()).collect();
+    for expected_images in [3, 0] {
+        let consent = grant(&db, &p, "task", &base).await;
+        let task = runtime
+            .request(AgentRequest {
+                request_id: domain::id(),
+                project_id: p.id.clone(),
+                command: TaskCommand::StartConversation {
+                    goal: "查看照片后精查其中一张".into(),
+                    selected_photo_ids: ids.clone(),
+                    focus_photo_ids: ids.clone(),
+                    detail_photo_ids: ids.clone(),
+                    target_count: 1,
+                    budget: Budget {
+                        max_cloud_images: 3,
+                        ..Budget::default()
+                    },
+                    consent_id: Some(consent.id),
+                    source_board: None,
+                    continuation: None,
+                    expected_account_id: None,
+                    allow_queued_recovery: false,
+                },
+            })
+            .await
+            .unwrap();
+        runtime.run(&task.id).await.unwrap();
+        let view = agent::projection(&db, &p.id).await.unwrap();
+        let result = view.tasks.iter().find(|t| t.id == task.id).unwrap();
+        assert_eq!(result.state, "completed", "{result:?}");
+        assert_eq!(result.usage.cloud_images, expected_images);
+        assert!(
+            !result.inspected_photos.is_empty(),
+            "精查也必须投影到本轮观察记录"
+        );
+    }
+    {
+        let requests = state.lock().unwrap();
+        let images: Vec<&Value> = requests
+            .requests
+            .iter()
+            .flat_map(|r| r["input"].as_array().unwrap())
+            .filter_map(|i| i["content"].as_array())
+            .flatten()
+            .filter(|i| i["type"] == "input_image")
+            .collect();
+        assert_eq!(
+            images.len(),
+            3,
+            "普通缓存不能假冒精查，第二轮精查缓存无需重传"
+        );
+        for part in &images {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(
+                    part["image_url"]
+                        .as_str()
+                        .unwrap()
+                        .split(',')
+                        .nth(1)
+                        .unwrap(),
+                )
+                .unwrap();
+            let decoded = image::load_from_memory(&bytes).unwrap();
+            assert_eq!(
+                decoded.width(),
+                if part["detail"] == "high" { 1400 } else { 512 }
+            );
+        }
+        assert_eq!(images.iter().filter(|i| i["detail"] == "high").count(), 1);
+    }
+    let profiles: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT prompt_version FROM photo_observations ORDER BY prompt_version",
+    )
+    .fetch_all(&db.pool)
+    .await
+    .unwrap();
+    assert_eq!(profiles.len(), 2);
+    assert!(
+        profiles
+            .iter()
+            .any(|v| v.starts_with("m3-vision-detail1400-q90-v1@"))
+    );
+    assert!(
+        profiles
+            .iter()
+            .any(|v| v.starts_with("m3-vision-5-upload512-q75@"))
+    );
+    assert_eq!(
+        serde_json::to_value(db.get(&p.id).await.unwrap()).unwrap(),
+        serde_json::to_value(&p).unwrap()
+    );
+}
+
+#[tokio::test]
+async fn photo_judgment_links_actual_observation_and_retrieved_method_through_runtime() {
+    let _guard = ENV_LOCK.lock().await;
+    let temp = tempfile::tempdir().unwrap();
+    let (db, p) = setup(temp.path(), 2).await;
+    let before = serde_json::to_value(&p).unwrap();
+    let (base, state) = spawn_server(Script {
+        main: [
+            "tool:list_photos",
+            "tool:inspect_from_history",
+            "tool:judgment_knowledge",
+            "tool:judge_from_history",
+            "text",
+        ]
+        .into_iter()
+        .map(|s| format!("metered:{s}"))
+        .collect(),
+        vision: VisionReply::Valid,
+    });
+    let engine = engine(&db, &base);
+    let consent = grant(&db, &p, "task", &base).await;
+    let task = engine
+        .request(AgentRequest {
+            request_id: domain::id(),
+            project_id: p.id.clone(),
+            command: TaskCommand::StartConversation {
+                allow_queued_recovery: false,
+                expected_account_id: None,
+                goal: "这张为什么弱？请解释依据".into(),
+                selected_photo_ids: vec![],
+                focus_photo_ids: vec![],
+                detail_photo_ids: vec![],
+                target_count: 1,
+                budget: Budget {
+                    max_cloud_images: 2,
+                    ..Budget::default()
+                },
+                consent_id: Some(consent.id),
+                source_board: None,
+                continuation: None,
+            },
+        })
+        .await
+        .unwrap();
+    engine.run(&task.id).await.unwrap();
+    let view = agent::projection(&db, &p.id).await.unwrap();
+    assert_eq!(view.tasks[0].state, "completed", "{:?}", view.tasks[0]);
+    assert_eq!(view.tasks[0].photo_judgments.len(), 1);
+    let judgment = &view.tasks[0].photo_judgments[0];
+    assert_eq!(judgment["imageStatus"], "verified");
+    assert_eq!(judgment["observationCallId"], "call-inspect");
+    assert_eq!(judgment["methods"][0]["callId"], "call-judgment-method");
+    assert_eq!(judgment["methods"][0]["kind"], "original_method");
+    assert_eq!(judgment["inference"], true);
+    assert_eq!(view.tasks[0].usage.cloud_images, 2);
+    assert_eq!(
+        serde_json::to_value(db.get(&p.id).await.unwrap()).unwrap(),
+        before
+    );
+    assert_eq!(
+        state
+            .lock()
+            .unwrap()
+            .requests
+            .iter()
+            .filter(|r| r["text"]["format"].is_object())
+            .count(),
+        1
+    );
+}
+
 // 一段会话先回答摄影问题，再经过真实 HTTP 协议/工具循环查看照片并生成可审核草案。
 // 图片为测试生成的色块，模型响应来自回环夹具；不计真人摄影质量评测。
 #[tokio::test]
@@ -3407,6 +4573,7 @@ async fn unified_conversation_answers_then_inspects_and_creates_a_reviewable_dra
             goal: goal.into(),
             selected_photo_ids: vec![],
             focus_photo_ids: p.photos.iter().map(|p| p.id.clone()).collect(),
+            detail_photo_ids: vec![],
             target_count: 2,
             budget: Budget {
                 max_cloud_images: images,

@@ -11,6 +11,68 @@ use std::collections::{HashMap, HashSet};
 #[path = "canvas_tools_tests.rs"]
 mod canvas_tools_tests;
 
+/// 一张照片的画面事实是用哪一种口径问出来的。
+/// 名字与下面 SQL 里的优先级分组一一对应：分组决定选哪条，名字负责把选中的这条说清楚。
+struct DraftObservation {
+    visible: Vec<String>,
+    interpretation: String,
+    contract: &'static str,
+    prompt_version: String,
+    kind: String,
+}
+
+pub(crate) fn observation_contract(priority: i64) -> &'static str {
+    match priority {
+        0 => "current_page_tier",
+        1 => "current_detail_tier",
+        2 => "other_prompt_version",
+        _ => "other_tool",
+    }
+}
+
+/// "同一张照片只留一条观察"的优先级写在这一处：当前页面档 > 当前细节档 > 同工具的其他版本 >
+/// 其他工具，同级取最新一条。评估画面依据和界面补逐张口径都从这里挑，两处各写一遍的话，
+/// 界面上说的"这张是按哪一档问的"就可能和真正拿去比对的口径不是同一把尺子。
+/// 绑定顺序：当前页面档前缀 ×2、当前细节档前缀 ×2、照片范围、项目。
+const OBSERVATION_PRIORITY_SQL: &str = r#"
+      SELECT o.id, o.photo_id, o.observation_json, o.preview_sha256, o.prompt_version, o.kind, p.preview_path,
+        p.original_path, p.content_sha256,
+        CASE WHEN o.kind='inspect_photos' AND substr(o.prompt_version,1,length(?))=? THEN 0
+             WHEN o.kind='inspect_photos' AND substr(o.prompt_version,1,length(?))=? THEN 1
+             WHEN o.kind='inspect_photos' THEN 2 ELSE 3 END AS contract
+      FROM photo_observations o JOIN photos p ON p.id=o.photo_id AND p.content_sha256=o.photo_hash
+      JOIN json_each(?) scope ON scope.value=p.id
+      WHERE p.project_id=? AND length(CAST(o.observation_json AS BLOB))<=65536
+    "#;
+
+/// 给这批照片每张挑一条观察。`with_bodies` 决定要不要连观察正文一起取回来：评估要比事实，
+/// 界面只说"哪一档"，没必要把几百份正文搬进每次加载都跑的投影。
+pub(crate) async fn pick_observations(
+    tx: &mut Transaction<'_, Sqlite>,
+    scoped: &[String],
+    project_id: &str,
+    with_bodies: bool,
+) -> Result<Vec<sqlx::sqlite::SqliteRow>> {
+    let columns = if with_bodies {
+        "photo_id, observation_json, preview_sha256, prompt_version, kind, preview_path, contract, original_path, content_sha256"
+    } else {
+        "photo_id, contract"
+    };
+    let sql = format!(
+        "SELECT {columns} FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY photo_id ORDER BY contract, id DESC) AS pick FROM ({OBSERVATION_PRIORITY_SQL})) WHERE pick=1"
+    );
+    let scope_json = crate::command_audit::encode(&scoped)?;
+    Ok(sqlx::query(&sql)
+        .bind(format!("{}@", super::vision::VISION_PROMPT_VERSION))
+        .bind(format!("{}@", super::vision::VISION_PROMPT_VERSION))
+        .bind(format!("{}@", super::vision::DETAIL_PROMPT_VERSION))
+        .bind(format!("{}@", super::vision::DETAIL_PROMPT_VERSION))
+        .bind(&scope_json)
+        .bind(project_id)
+        .fetch_all(&mut **tx)
+        .await?)
+}
+
 pub(crate) async fn execute(
     tx: &mut Transaction<'_, Sqlite>,
     task: &mut Task,
@@ -22,6 +84,7 @@ pub(crate) async fn execute(
     let canonical = super::policy::ToolRegistry::canonical(&call.name);
     let name = canonical.as_deref().unwrap_or(call.name.as_str());
     match name {
+        "explain_photo_judgment" => super::photo_judgment::explain(tx, task, a).await,
         "read_creative_context" | "fork_creative_draft" => {
             return super::creative::execute(tx, task, call).await;
         }
@@ -101,7 +164,7 @@ pub(crate) async fn execute(
             data.truncate(limit);
             Ok(json!({"photos":data,"remaining":total.saturating_sub(limit),"mock":true}))
         }
-        "inspect_photos" | "compare_photos" => {
+        "inspect_photos" | "compare_photos" | "inspect_photo_detail" => {
             let ids: Vec<String> =
                 serde_json::from_value(a["photo_ids"].clone()).map_err(serialization)?;
             let mut data = photos(tx, task).await?;
@@ -118,15 +181,23 @@ pub(crate) async fn execute(
                         .bind(&task.project_id)
                         .fetch_optional(&mut **tx)
                         .await?;
+                        // 图像版本跟着观察走：核对过或原先记录过的指纹原样落库；
+                        // 无从得知时留空，写上当前的指纹会把"没核对"洗成"已核对"。
+                        let version = prefetch
+                            .image_versions
+                            .iter()
+                            .find(|v| v.photo_id == *photo_id);
+                        let preview_sha256 = version.and_then(|v| v.preview_sha256.clone());
                         if let Some(hash) = hash {
-                            provenance.push(json!({"photo_id":photo_id,"photo_hash":hash,"model_id":prefetch.model_id,"prompt_version":prefetch.cache_version}));
-                            sqlx::query("INSERT INTO photo_observations(photo_id,photo_hash,model_id,prompt_version,kind,observation_json,created_at) VALUES(?,?,?,?,?,?,?)")
+                            provenance.push(json!({"photo_id":photo_id,"photo_hash":hash,"model_id":prefetch.model_id,"prompt_version":prefetch.cache_version,"preview_sha256":preview_sha256,"pixelVersion":version.map(|v| v.status.as_str()).unwrap_or("unrecorded")}));
+                            sqlx::query("INSERT INTO photo_observations(photo_id,photo_hash,model_id,prompt_version,kind,observation_json,preview_sha256,created_at) VALUES(?,?,?,?,?,?,?,?)")
                                 .bind(photo_id)
                                 .bind(&hash)
                                 .bind(&prefetch.model_id)
                                 .bind(&prefetch.cache_version)
-                                .bind(call.name.as_str())
+                                .bind(if call.name=="inspect_photo_detail" {"inspect_photos"}else{call.name.as_str()})
                                 .bind(observation.to_string())
+                                .bind(preview_sha256)
                                 .bind(domain::timestamp())
                                 .execute(&mut **tx)
                                 .await?;
@@ -141,9 +212,24 @@ pub(crate) async fn execute(
                         })
                         .collect();
                     let uploaded = prefetch.uploaded;
-                    let cached = (prefetch.observations.len() as u32).saturating_sub(uploaded);
+                    // 看过画面的只有拿到观察这些张：上传数里得扣掉模型漏答的那几张，
+                    // 否则丢一张就被算成一次缓存命中，看着像"没花钱也已经看过了"。
+                    let observed: Vec<&String> =
+                        prefetch.observations.iter().map(|(id, _)| id).collect();
+                    // 两份名单互不相交：一份是"出去了没人看"，一份是"根本没出去"，
+                    // 请求里的照片正好等于"看过 + 这两份"，不重复也不遗漏。
+                    let unobserved = prefetch.dropped.clone();
+                    // 没送出去的每张各带一个原因：是原图不在这台机器上，还是原图内容
+                    // 已经和库里的记录对不上，用户能做的事完全不同。
+                    let unreadable_photos: Vec<Value> = prefetch
+                        .unreadable_reasons
+                        .iter()
+                        .map(|(id, reason)| json!({"photo_id": id, "reason": reason}))
+                        .collect();
+                    let cached = (prefetch.observations.len() as u32)
+                        .saturating_sub(uploaded.saturating_sub(prefetch.dropped.len() as u32));
                     Ok(
-                        json!({"photos":data,"mode":"vision_observed","uploaded_images":uploaded,"cache_hits":cached,"observations":observations,"provenance":provenance,"uncertainty":"主观解读与不确定性由模型标注；服务端已校验 photo_id 均属请求集合"}),
+                        json!({"photos":data,"mode":"vision_observed","uploaded_images":uploaded,"cache_hits":cached,"observations":observations,"provenance":provenance,"requested_photo_ids":ids,"observed_photo_ids":observed,"unobserved_photo_ids":unobserved,"unreadable_photo_ids":prefetch.unreadable,"unreadable_photos":unreadable_photos,"preview_rebuilt_photo_ids":prefetch.rebuilt,"coverageNotice":"只有 observed_photo_ids 里的照片实际读过画面；unobserved_photo_ids 已经上传但没有得到观察，不能当成看过，也不要为它写单张判断依据；unreadable_photo_ids 是本地预览读不出来、一个字节都没送出去的，既没占额度也没被看过，每张的原因见 unreadable_photos（original_missing=原图不在这台机器上，original_unreadable=原图也解不开，original_changed=原图内容与库里记录不一致因此不用它重算，rebuild_failed=重算失败，rebuild_over_limit=这张没排上重算）。preview_rebuilt_photo_ids 是本地预览坏了但已按原图只读重算出像素并真的看过的那些张，可以照常引用；图库里那份缓存文件本轮没有改写。","resolutionPolicy":if call.name=="inspect_photo_detail" {"preview1400-high-v1"}else{"preview512"},"uncertainty":"主观解读与不确定性由模型标注；服务端已校验 photo_id 均属请求集合","ladderHint":"顺序判断只认这份 requested_photo_ids 的先后；画面细节按概览→抽样检查→按顺序比较逐级收窄，别一次传整批。"}),
                     )
                 }
                 None => Ok(
@@ -241,7 +327,14 @@ pub(crate) async fn execute(
         "evaluate_draft" => {
             // 结构化本地评估：内容哈希完全重复、观察事实相邻相似、评分/状态分布与观察覆盖。
             // 叙事判断仍由策展模型结合本证据进行；不触发上传、不修改正式状态。
-            let items = store::items(tx, a["draft_id"].as_str().unwrap()).await?;
+            let draft_id = a["draft_id"].as_str().unwrap();
+            let items = store::items(tx, draft_id).await?;
+            // 口径要说"对着哪一版算的"，所以把方案当时的版本号一并记进回执；取不到就当没记过。
+            let draft_revision: Option<i64> =
+                sqlx::query_scalar("SELECT revision FROM drafts WHERE id=?")
+                    .bind(draft_id)
+                    .fetch_optional(&mut **tx)
+                    .await?;
             let facts = photos(tx, task).await?;
             let draft_ids: Vec<String> = items.iter().map(|i| i.photo_id.clone()).collect();
             // 1) 完全重复：草案内 content_sha256 相同的照片组。
@@ -272,28 +365,57 @@ pub(crate) async fn execute(
                 .filter(|id| draft_ids.contains(id))
                 .cloned()
                 .collect();
-            let observations: HashMap<String, (Vec<String>, String)> = if scoped.is_empty() {
+            let mut omitted_observations = Vec::new();
+            let mut original_checks = super::vision::MAX_ORIGINAL_CHECKS;
+            // 每张只留一条，留哪一条的规矩写在 `OBSERVATION_PRIORITY_SQL`：同一张照片可能同时存着
+            // 当前页面档、更大尺寸的细节档、以及历史提示词版本留下的记录。这几种"画面事实"是在
+            // 不同问法下答出来的，谁的编号大就听谁的，等于悄悄拿两种口径的字符串比相同程度。
+            let observations: HashMap<String, DraftObservation> = if scoped.is_empty() {
                 HashMap::new()
             } else {
-                let scope_json = crate::command_audit::encode(&scoped)?;
-                let rows = sqlx::query(
-                    r#"
-                    SELECT o.photo_id, o.observation_json FROM photo_observations o
-                    JOIN (SELECT MAX(e.id) AS id FROM photo_observations e
-                          JOIN photos p ON p.id=e.photo_id AND p.content_sha256=e.photo_hash
-                          JOIN json_each(?) scope ON scope.value=p.id
-                          WHERE p.project_id=? GROUP BY e.photo_id) latest ON latest.id=o.id
-                    WHERE length(CAST(o.observation_json AS BLOB))<=65536
-                    "#,
-                )
-                .bind(&scope_json)
-                .bind(&task.project_id)
-                .fetch_all(&mut **tx)
-                .await?;
-                rows.iter()
-                    .filter_map(|row| {
+                let rows = pick_observations(tx, &scoped, &task.project_id, true).await?;
+                let mut observations = HashMap::new();
+                for row in &rows {
+                    let photo: String = row.get("photo_id");
+                    let stored: Option<String> = row.get("preview_sha256");
+                    let path: String = row.get("preview_path");
+                    let version: String = row.get("prompt_version");
+                    let contract = observation_contract(row.get::<i64, _>("contract"));
+                    let kind: String = row.get("kind");
+                    let status = super::vision::current_preview_status_for_version(
+                        stored.as_deref(),
+                        &path,
+                        &version,
+                    )
+                    .await;
+                    if status != "verified" {
+                        // 没记指纹那一类本地永远翻不过来，不必再花名额去哈希原图。
+                        let original = if status == "unrecorded" {
+                            None
+                        } else {
+                            Some(
+                                super::vision::original_status(
+                                    &row.get::<String, _>("original_path"),
+                                    &row.get::<String, _>("content_sha256"),
+                                    &mut original_checks,
+                                )
+                                .await,
+                            )
+                        };
+                        let mut entry =
+                            json!({"photo_id":photo,"pixel_version":status,"contract":contract});
+                        if let Some(original) = original {
+                            entry["original_status"] = json!(original);
+                        }
+                        omitted_observations.push(entry);
+                        continue;
+                    }
+                    let parsed = (|| {
                         let raw: String = row.get("observation_json");
                         let value = serde_json::from_str::<Value>(&raw).ok()?;
+                        if !super::vision::valid_cached_observation(&value, &photo) {
+                            return None;
+                        }
                         let visible: Vec<String> = value["visible_facts"]
                             .as_array()?
                             .iter()
@@ -308,29 +430,54 @@ pub(crate) async fn execute(
                             .chars()
                             .take(160)
                             .collect::<String>();
-                        Some((row.get::<String, _>("photo_id"), (visible, interpretation)))
-                    })
-                    .collect()
+                        Some(DraftObservation {
+                            visible,
+                            interpretation,
+                            contract,
+                            prompt_version: row.get("prompt_version"),
+                            kind,
+                        })
+                    })();
+                    if let Some(evidence) = parsed {
+                        observations.insert(photo, evidence);
+                    }
+                }
+                observations
             };
             // 3) 相邻相似：按草案顺序的相邻两张，visible_facts Jaccard >= 0.6。
+            //    两种口径答出来的事实照样算，但要把各自口径带上，别让读者以为比的是同一把尺子。
+            let mut cross_contract_pairs = 0usize;
             let mut similar_adjacent: Vec<Value> = vec![];
             for pair in items.windows(2) {
-                let (Some((left, _)), Some((right, _))) = (
+                let (Some(left), Some(right)) = (
                     observations.get(&pair[0].photo_id),
                     observations.get(&pair[1].photo_id),
                 ) else {
                     continue;
                 };
-                let set_a: HashSet<&String> = left.iter().collect();
-                let set_b: HashSet<&String> = right.iter().collect();
+                let set_a: HashSet<&String> = left.visible.iter().collect();
+                let set_b: HashSet<&String> = right.visible.iter().collect();
                 let shared: Vec<&String> = set_a.intersection(&set_b).cloned().collect();
                 let union = set_a.union(&set_b).count();
                 if union > 0 && shared.len() as f64 / union as f64 >= 0.6 {
-                    similar_adjacent.push(json!({
+                    let same_contract = left.contract == right.contract;
+                    if !same_contract {
+                        cross_contract_pairs += 1;
+                    }
+                    // 每一对都得留在这份名单里：本地兜底去重读的就是这里的 photo_ids，
+                    // 少列一对就少排除一张，选片结果会跟着变。所以省体积只能省在赘述上——
+                    // 共用的是哪几条事实改成"共用几条"（正文本来就在 item_facts 的逐张里），
+                    // 两边同一口径时不再把同一个口径名写两遍。
+                    let mut row = json!({
                         "positions": [pair[0].position, pair[1].position],
                         "photo_ids": [pair[0].photo_id, pair[1].photo_id],
-                        "shared_facts": shared.iter().take(3).map(|s| s.to_string()).collect::<Vec<_>>(),
-                    }));
+                        "shared_fact_count": shared.len(),
+                        "same_contract": same_contract,
+                    });
+                    if !same_contract {
+                        row["contracts"] = json!([left.contract, right.contract]);
+                    }
+                    similar_adjacent.push(row);
                 }
             }
             // 4) 人工备注中的重复组提示（保留旧通道，作为 human_hint）。
@@ -392,17 +539,31 @@ pub(crate) async fn execute(
                 .iter()
                 .take(12)
                 .filter_map(|i| {
-                    let (visible, interpretation) = observations.get(&i.photo_id)?;
+                    let evidence = observations.get(&i.photo_id)?;
                     Some(json!({
                         "photo_id": i.photo_id,
                         "position": i.position,
-                        "top_facts": visible.iter().take(3).collect::<Vec<_>>(),
-                        "interpretation": interpretation,
+                        "top_facts": evidence.visible.iter().take(3).collect::<Vec<_>>(),
+                        "interpretation": evidence.interpretation,
+                        "evidence_contract": evidence.contract,
+                        "evidence_prompt_version": evidence.prompt_version,
+                        "evidence_tool": evidence.kind,
                     }))
                 })
                 .collect();
+            let contract_count = |want: &'static str| {
+                items
+                    .iter()
+                    .filter(|i| {
+                        observations
+                            .get(&i.photo_id)
+                            .is_some_and(|e| e.contract == want)
+                    })
+                    .count()
+            };
             Ok(json!({
-                "draft_id": a["draft_id"],
+                "draft_id": draft_id,
+                "draft_revision": draft_revision,
                 "valid": true,
                 "count": items.len(),
                 "identical_groups": identical,
@@ -414,10 +575,14 @@ pub(crate) async fn execute(
                     "rated": rated.len(),
                     "avg_rating": avg_rating,
                     "status_mix": {"keep": status_count("keep"), "undecided": status_count("undecided"), "reject": status_count("reject")},
+                    "evidence_contracts": {"current_page_tier": contract_count("current_page_tier"), "current_detail_tier": contract_count("current_detail_tier"), "other_prompt_version": contract_count("other_prompt_version"), "other_tool": contract_count("other_tool")},
+                    "cross_contract_adjacent_pairs": cross_contract_pairs,
                 },
                 "item_facts": item_facts,
+                "omitted_visual_evidence": omitted_observations,
+                "visual_evidence_policy": "Only observations matching the current preview pixels are used; no images were uploaded. Per photo one row is chosen by a fixed priority (current page tier, then current detail tier, then the same tool under another prompt version, then other tools), and each row states which one was used.",
                 "mode": "structured_local_evaluation",
-                "uncertainty": "重复性与结构指标为本地确定性计算（内容哈希与观察事实比对）；观察缓存可能来自历史模型版本且未观察照片不参与相似性比对；叙事判断由策展模型结合 item_facts 进行，人工评审保留最终决定。",
+                "uncertainty": "重复性与结构指标为本地确定性计算（内容哈希与观察事实比对）；每张观察取的口径写在 evidence_contracts 里，同一张照片只留一条，优先当前页面档，跨口径的相邻相似对在 same_contract=false 里点明并带上两边口径，不能当成同一把尺子的比较；相邻相似对按方案顺序完整列出、不截断，但每对只报共用几条事实（shared_fact_count）而不抄文字，文字只在 item_facts 里，那里只带前 12 张、每张最多 3 条，第 12 张之后要看正文得回逐张口径或重新问；未观察照片不参与相似性比对；叙事判断由策展模型结合 item_facts 进行，人工评审保留最终决定。",
             }))
         }
         "request_feedback" => {
@@ -697,7 +862,7 @@ pub async fn execute_canvas_tool(
     }
 }
 
-// G4 补充：group_nodes / create_sequence_draft / evaluate_sequence
+// G4 补充：group_nodes / create_sequence_draft
 pub async fn execute_canvas_tool_extended(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     name: &str,
@@ -805,53 +970,19 @@ pub async fn execute_canvas_tool_extended(
                 .execute(&mut **tx)
                 .await?;
             }
-            Ok(json!({"draft_id": draft_id, "title": title, "photo_count": photo_ids.len()}))
-        }
-        "evaluate_sequence" => {
-            let ids: Vec<String> = sqlx::query_scalar(
-                "SELECT photo_id FROM sequence_items WHERE project_id=? ORDER BY position",
-            )
-            .bind(&task.project_id)
-            .fetch_all(&mut **tx)
-            .await?;
-            if ids.is_empty() {
-                return Ok(json!({"empty": true, "message": "作品序列为空"}));
-            }
-            // 读取照片元数据做基本评估
-            let photos = super::tools::photos(tx, task).await?;
-            let total = ids.len();
-            let rated: Vec<&Value> = photos
-                .iter()
-                .filter(|p| p["rating"].as_i64().unwrap_or(0) > 0)
-                .collect();
-            let avg_rating = if !rated.is_empty() {
-                rated
-                    .iter()
-                    .map(|p| p["rating"].as_f64().unwrap_or(0.0))
-                    .sum::<f64>()
-                    / rated.len() as f64
-            } else {
-                0.0
-            };
-            // 相邻同名检测（简化重复性）
-            let names: Vec<String> = ids
-                .iter()
-                .filter_map(|id| {
-                    photos
-                        .iter()
-                        .find(|p| p["photo_id"] == *id)
-                        .and_then(|p| p["name"].as_str().map(String::from))
-                })
-                .collect();
-            let duplicates = names.windows(2).filter(|w| w[0] == w[1]).count();
-            Ok(json!({
-                "total_photos": total,
-                "avg_rating": (avg_rating * 10.0).round() / 10.0,
-                "adjacent_duplicates": duplicates,
-                "rated_count": rated.len(),
-                "diversity_score": if total > 1 { 1.0 - (duplicates as f64 / total as f64) } else { 1.0 },
-                "note": "基于元数据的结构化评估；视觉节奏需人工判断"
-            }))
+            // 草案与它的画面依据回执必须落在同一条事务里：另开连接写回执会在 WAL 下
+            // 等这条事务的写锁，画布工具直接卡死。
+            let mut scope = task.clone();
+            let recorded = super::recheck::record(&mut *tx, &mut scope, &draft_id)
+                .await
+                .is_ok();
+            let result = json!({
+                "draft_id": draft_id,
+                "title": title,
+                "photo_count": photo_ids.len(),
+                "visual_basis": if recorded { "recorded" } else { "not_recorded" }
+            });
+            Ok(result)
         }
         _ => Err(crate::domain::AppError::new(
             "PERMISSION_DENIED",

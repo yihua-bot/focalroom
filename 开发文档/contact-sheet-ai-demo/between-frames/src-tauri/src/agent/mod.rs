@@ -18,9 +18,11 @@ pub mod memory;
 pub mod memory_control;
 pub mod memory_scope;
 mod memory_search;
+pub(crate) mod memory_trace;
 pub mod model_binding;
 pub mod openai;
 pub mod org;
+pub(crate) mod photo_judgment;
 mod photo_search;
 pub mod policy;
 pub(crate) mod preference_proposal;
@@ -29,6 +31,8 @@ pub mod promotion;
 pub mod proposals;
 pub mod provider;
 pub mod quality;
+pub(crate) mod receipts;
+pub(crate) mod recheck;
 pub(crate) mod revision_observations;
 pub mod router;
 pub mod runtime;
@@ -42,6 +46,7 @@ pub mod types;
 pub mod upload_compress;
 pub mod vision;
 mod vision_recovery;
+pub(crate) mod visual_overview;
 pub(crate) use drafts::human as apply_human_draft;
 pub use selection_revision_context::SelectionContextPage;
 
@@ -97,8 +102,18 @@ impl CommandHandler<'_> {
         cost_limit: u32,
         output_limit: u32,
         rate: pricing::RateCard,
+        memory: &serde_json::Value,
     ) -> Result<()> {
-        execution::attempt(self.store, id, input, cost_limit, output_limit, rate).await
+        execution::attempt(
+            self.store,
+            id,
+            input,
+            cost_limit,
+            output_limit,
+            rate,
+            memory,
+        )
+        .await
     }
     pub(crate) async fn agent_elapsed(&self, id: &str, elapsed: u64) -> Result<()> {
         execution::elapsed(self.store, id, elapsed).await
@@ -149,7 +164,7 @@ pub const MODEL_ID: &str = "metadata-mock-1";
 pub const PROVIDER_OPENAI: &str = "openai";
 pub fn prompt_version(provider: &str) -> &'static str {
     if provider == PROVIDER_OPENAI {
-        "m3-openai-9"
+        "m3-openai-17"
     } else {
         PROMPT_VERSION
     }

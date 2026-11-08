@@ -40,9 +40,19 @@ async fn cache_observation(db: &Store, photo: &str, visible: Vec<&str>) {
         "interpretation": "本地缓存观察，供重复性比对",
         "uncertainty": "模型描述可能有误"
     });
-    sqlx::query("INSERT INTO photo_observations(photo_id,photo_hash,model_id,prompt_version,kind,observation_json,created_at) SELECT id,content_sha256,'test-model',?,'inspect_photos',?,CURRENT_TIMESTAMP FROM photos WHERE id=?")
+    // 评估只认对得上当前预览像素的观察，所以夹具也要按真实写入的方式把那份字节指纹记上；
+    // 不记就等于在测"版本未记录"那条分支，而不是测相似性比对本身。
+    let path: String = sqlx::query_scalar("SELECT preview_path FROM photos WHERE id=?")
+        .bind(photo)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    let (_, pixel) =
+        agent::upload_compress::compress_and_fingerprint(std::path::Path::new(&path)).unwrap();
+    sqlx::query("INSERT INTO photo_observations(photo_id,photo_hash,model_id,prompt_version,kind,observation_json,created_at,preview_sha256) SELECT id,content_sha256,'test-model',?,'inspect_photos',?,CURRENT_TIMESTAMP,? FROM photos WHERE id=?")
         .bind(format!("{}@{}", agent::vision::VISION_PROMPT_VERSION, "a".repeat(64)))
         .bind(value.to_string())
+        .bind(pixel)
         .bind(photo)
         .execute(&db.pool)
         .await
@@ -201,7 +211,12 @@ async fn structured_evaluation_reports_duplicates_similarity_and_metrics() {
     assert_eq!(similar.len(), 1, "相邻高相似应命中：{similar:?}");
     assert_eq!(similar[0]["positions"], json!([2, 3]));
     assert_eq!(similar[0]["photo_ids"], json!([p2, p3]));
-    assert!(similar[0]["shared_facts"].as_array().unwrap().len() >= 2);
+    assert_eq!(similar[0]["shared_fact_count"], 3);
+    assert_eq!(similar[0]["same_contract"], true);
+    assert!(
+        similar[0]["contracts"].is_null(),
+        "两张同一口径时不必点名，读者不会以为比的是两把尺子"
+    );
     // 人工重复提示独立成组。
     let hints = reply["human_hint_groups"].as_array().unwrap();
     assert_eq!(hints.len(), 1);

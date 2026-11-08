@@ -148,7 +148,8 @@ pub(crate) async fn validate(
             != Some(receipt.identity.clone())
         || receipt.identity.account_id.is_none()
         || receipt.prefetch.model_id != receipt.identity.model_id
-        || receipt.prefetch.cache_version != receipt.identity.cache_version()
+        || receipt.prefetch.cache_version
+            != super::vision::cache_version_for_tool(&receipt.identity, &call.name)
         || uuid::Uuid::parse_str(&receipt.request_id).is_err()
         || !(128..=task.budget.max_output_tokens).contains(&receipt.output_limit)
     {
